@@ -23,8 +23,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "echo 'No tests configured'",
-    "lint": "echo 'No linter configured'",
+    "test": "vitest run",
+    "lint": "eslint src/",
     "dev": "tsc --watch"
   },
   "dependencies": {
@@ -32,6 +32,8 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
