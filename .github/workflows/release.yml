@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # NOTE: validate tests at version 0.0.0, while publish-npm stamps and ships the
+  # tagged version. Accepted trade-off: for TypeScript projects, version rarely
+  # affects build output. If version-dependent behavior is introduced, consider
+  # moving version stamping before validation.
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - run: pnpm lint
+      - run: pnpm test
+
+  publish-npm:
+    name: Publish to npm
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing requires npm 11.5.1+ for OIDC token exchange
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - name: Stamp version
+        env:
+          RAW_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION="${RAW_TAG#v}"
+          # Build metadata (+build) intentionally excluded — only release and pre-release tags accepted
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$'; then
+            echo "::error::Tag '$RAW_TAG' is not a valid semver version"
+            exit 1
+          fi
+          pnpm -r exec npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - run: pnpm build
+
+      - name: Verify packages
+        run: pnpm -r publish --dry-run --access public --no-git-checks
+
+      - name: Publish packages
+        run: pnpm -r publish --access public --no-git-checks --report-summary

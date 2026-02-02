@@ -1,0 +1,28 @@
+name: Setup
+description: Install pnpm, Node.js, and dependencies
+
+inputs:
+  registry-url:
+    description: Registry URL for publishing
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+        registry-url: ${{ inputs.registry-url }}
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash
+
+    - uses: actions/cache@v4
+      with:
+        path: .turbo
+        key: turbo-${{ runner.os }}-node22-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          turbo-${{ runner.os }}-node22-
