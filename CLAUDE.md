@@ -1,6 +1,6 @@
 # lhremote — Claude Instructions
 
-> MCP server for LinkedHelper.com automation
+> Remote automation toolkit for LinkedHelper.com
 
 ## Conventions
 
