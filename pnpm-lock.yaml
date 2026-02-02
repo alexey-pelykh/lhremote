@@ -27,7 +27,7 @@ importers:
   packages/cli:
     dependencies:
       '@lhremote/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
     devDependencies:
       '@types/node':
@@ -49,7 +49,7 @@ importers:
   packages/mcp:
     dependencies:
       '@lhremote/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
     devDependencies:
       '@types/node':

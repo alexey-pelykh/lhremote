@@ -1,4 +1,4 @@
-# lhremote: LinkedHelper Remote Control
+# lhremote: LinkedHelper Automation Toolkit
 
 [![GitHub Repo stars](https://img.shields.io/github/stars/alexey-pelykh/lhremote?style=flat&logo=github)](https://github.com/alexey-pelykh/lhremote)
 [![License](https://img.shields.io/github/license/alexey-pelykh/lhremote)](LICENSE)

@@ -1,20 +1,37 @@
 {
   "name": "@lhremote/mcp",
   "version": "0.0.0",
-  "private": true,
+  "description": "MCP server for LinkedHelper automation",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "AGPL-3.0-only",
+  "author": "Alexey Pelykh (https://github.com/alexey-pelykh)",
+  "homepage": "https://github.com/alexey-pelykh/lhremote/tree/main/packages/mcp",
+  "bugs": "https://github.com/alexey-pelykh/lhremote/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexey-pelykh/lhremote.git",
+    "directory": "packages/mcp"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
+    "test": "echo 'No tests configured'",
+    "lint": "echo 'No linter configured'",
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@lhremote/core": "workspace:*"
+    "@lhremote/core": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "catalog:",

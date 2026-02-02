@@ -1,6 +1,6 @@
 # lhremote — Claude Instructions
 
-> Remote automation toolkit for LinkedHelper.com
+> Automation toolkit for LinkedHelper.com
 
 ## Conventions
 

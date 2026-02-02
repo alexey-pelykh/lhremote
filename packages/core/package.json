@@ -1,16 +1,33 @@
 {
   "name": "@lhremote/core",
   "version": "0.0.0",
-  "private": true,
+  "description": "Core library for LinkedHelper automation",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "AGPL-3.0-only",
+  "author": "Alexey Pelykh (https://github.com/alexey-pelykh)",
+  "homepage": "https://github.com/alexey-pelykh/lhremote/tree/main/packages/core",
+  "bugs": "https://github.com/alexey-pelykh/lhremote/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexey-pelykh/lhremote.git",
+    "directory": "packages/core"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
+    "test": "echo 'No tests configured'",
+    "lint": "echo 'No linter configured'",
     "dev": "tsc --watch"
   },
   "devDependencies": {
