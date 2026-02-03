@@ -1,3 +1,4 @@
+// Types (profile, instance, account — CDP types are internal)
 export type {
   Account,
   CurrentPosition,
@@ -14,26 +15,7 @@ export type {
   StartInstanceResult,
 } from "./types/index.js";
 
-export {
-  CDPClient,
-  CDPConnectionError,
-  CDPError,
-  CDPEvaluationError,
-  CDPTimeoutError,
-  discoverInstancePort,
-  discoverTargets,
-} from "./cdp/index.js";
-
-export {
-  DatabaseClient,
-  DatabaseError,
-  DatabaseNotFoundError,
-  discoverAllDatabases,
-  discoverDatabase,
-  ProfileNotFoundError,
-  ProfileRepository,
-} from "./db/index.js";
-
+// Services
 export {
   AppLaunchError,
   AppNotFoundError,
@@ -50,3 +32,25 @@ export {
   StartInstanceError,
   type VisitAndExtractOptions,
 } from "./services/index.js";
+
+// Data access
+export {
+  DatabaseClient,
+  discoverAllDatabases,
+  discoverDatabase,
+  ProfileRepository,
+} from "./db/index.js";
+
+// Errors (DB + CDP errors can propagate through the service layer)
+export {
+  DatabaseError,
+  DatabaseNotFoundError,
+  ProfileNotFoundError,
+} from "./db/index.js";
+
+export {
+  CDPConnectionError,
+  CDPError,
+  CDPEvaluationError,
+  CDPTimeoutError,
+} from "./cdp/index.js";
