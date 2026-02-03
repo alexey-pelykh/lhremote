@@ -12,3 +12,5 @@ catalog:
   playwright-core: "^1.52.0"
   pid-port: "^2.0.1"
   ps-list: "^9.0.0"
+  better-sqlite3: "^11.9.1"
+  "@types/better-sqlite3": "^7.6.13"

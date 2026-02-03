@@ -1,0 +1,37 @@
+/**
+ * Base class for all database-related errors.
+ */
+export class DatabaseError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "DatabaseError";
+  }
+}
+
+/**
+ * Thrown when a LinkedHelper database file cannot be found at the
+ * expected location for a given account.
+ */
+export class DatabaseNotFoundError extends DatabaseError {
+  constructor(accountId: number) {
+    super(`No database found for account ${String(accountId)}`);
+    this.name = "DatabaseNotFoundError";
+  }
+}
+
+/**
+ * Thrown when a profile lookup yields no results. The person may not
+ * have been extracted by LinkedHelper yet.
+ */
+export class ProfileNotFoundError extends DatabaseError {
+  constructor(identifier: number | string) {
+    const detail =
+      typeof identifier === "number"
+        ? `id ${String(identifier)}`
+        : `public ID "${identifier}"`;
+    super(
+      `Profile not found for ${detail}. It may not have been extracted yet.`,
+    );
+    this.name = "ProfileNotFoundError";
+  }
+}

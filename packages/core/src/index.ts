@@ -22,3 +22,13 @@ export {
   discoverInstancePort,
   discoverTargets,
 } from "./cdp/index.js";
+
+export {
+  DatabaseClient,
+  DatabaseError,
+  DatabaseNotFoundError,
+  discoverAllDatabases,
+  discoverDatabase,
+  ProfileNotFoundError,
+  ProfileRepository,
+} from "./db/index.js";
