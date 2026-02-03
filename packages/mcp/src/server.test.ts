@@ -54,10 +54,22 @@ describe("createServer", () => {
     );
   });
 
-  it("does not advertise tools capability when none are registered", async () => {
+  it("advertises tools capability", async () => {
     const { client: c } = await connectPair();
 
     const capabilities = c.getServerCapabilities();
-    expect(capabilities?.tools).toBeUndefined();
+    expect(capabilities?.tools).toBeDefined();
+  });
+
+  it("lists registered tools", async () => {
+    const { client: c } = await connectPair();
+
+    const { tools } = await c.listTools();
+    const names = tools.map((t) => t.name);
+
+    expect(names).toContain("launch-app");
+    expect(names).toContain("quit-app");
+    expect(names).toContain("list-accounts");
+    expect(names).toHaveLength(3);
   });
 });

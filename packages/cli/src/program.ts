@@ -2,6 +2,12 @@ import { createRequire } from "node:module";
 
 import { Command, InvalidArgumentError } from "commander";
 
+import {
+  handleLaunchApp,
+  handleListAccounts,
+  handleQuitApp,
+} from "./handlers/index.js";
+
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json") as { version: string };
 
@@ -24,9 +30,6 @@ function parsePositiveInt(value: string): number {
 
 /**
  * Create the CLI program with all subcommands registered.
- *
- * Handlers are stubs — actual implementations will be added in
- * subsequent issues as MCP tools are implemented.
  */
 export function createProgram(): Command {
   const program = new Command()
@@ -38,18 +41,20 @@ export function createProgram(): Command {
     .command("launch-app")
     .description("Launch the LinkedHelper application")
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
-    .action(stub("launch-app"));
+    .action(handleLaunchApp);
 
   program
     .command("quit-app")
     .description("Quit the LinkedHelper application")
-    .action(stub("quit-app"));
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .action(handleQuitApp);
 
   program
     .command("list-accounts")
     .description("List LinkedHelper accounts")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
-    .action(stub("list-accounts"));
+    .action(handleListAccounts);
 
   program
     .command("start-instance")
