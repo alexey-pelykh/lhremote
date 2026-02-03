@@ -70,8 +70,8 @@ export class LauncherService {
     const result = await client.evaluate<StartInstanceResult>(
       `(async () => {
         const remote = require('@electron/remote');
-        const mws = remote.getGlobal('mainWindowService');
-        return await mws.call('startInstance', {
+        const mainWindow = remote.getGlobal('mainWindow');
+        return await mainWindow.startInstance({
           linkedInAccount: { id: ${String(accountId)}, liId: ${String(accountId)} },
           accountData: { id: ${String(accountId)}, liId: ${String(accountId)} },
           instanceId: 1,
@@ -102,8 +102,8 @@ export class LauncherService {
     await client.evaluate(
       `(async () => {
         const remote = require('@electron/remote');
-        const mws = remote.getGlobal('mainWindowService');
-        return await mws.call('stopInstance', ${String(accountId)});
+        const mainWindow = remote.getGlobal('mainWindow');
+        return await mainWindow.instanceManager.stopInstance(${String(accountId)});
       })()`,
       true,
     );
@@ -115,14 +115,17 @@ export class LauncherService {
   async getInstanceStatus(accountId: number): Promise<InstanceStatus> {
     const client = this.ensureConnected();
 
+    // NOTE: instanceManager.instances is always empty in the renderer process
+    // due to cross-process architecture (instances run as separate OS processes).
+    // This returns 'stopped' until a reliable IPC-based status query is implemented.
     const status = await client.evaluate<string>(
-      `(async () => {
+      `(() => {
         const remote = require('@electron/remote');
-        const mws = remote.getGlobal('mainWindowService');
-        const info = await mws.call('getInstanceStatus', ${String(accountId)});
-        return info?.status ?? 'stopped';
+        const mainWindow = remote.getGlobal('mainWindow');
+        const im = mainWindow.instanceManager;
+        const instance = im.instances?.[${String(accountId)}];
+        return instance?.status ?? 'stopped';
       })()`,
-      true,
     );
 
     return status as InstanceStatus;
@@ -137,9 +140,20 @@ export class LauncherService {
     const accounts = await client.evaluate<Account[]>(
       `(() => {
         const remote = require('@electron/remote');
-        const store = remote.getGlobal('electronStore');
-        const accounts = store.get('accounts') ?? [];
-        return accounts;
+        const mainWindow = remote.getGlobal('mainWindow');
+        const store = mainWindow.electronStore;
+        const raw = store.get('linked-in-accounts') ?? {};
+        return Object.keys(raw)
+          .filter(k => /^\\d+$/.test(k))
+          .map(k => {
+            const val = typeof raw[k] === 'object' && raw[k] !== null ? raw[k] : {};
+            return {
+              id: Number(k),
+              liId: val.liId ?? Number(k),
+              name: val.name ?? val.fullName ?? '',
+              email: val.email ?? undefined,
+            };
+          });
       })()`,
     );
 

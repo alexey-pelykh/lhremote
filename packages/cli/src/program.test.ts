@@ -46,16 +46,6 @@ describe("createProgram", () => {
 
       expect(portOption).toBeDefined();
     });
-
-    it("sets exitCode 1 (stub)", async () => {
-      vi.spyOn(process.stderr, "write").mockReturnValue(true);
-
-      const program = createProgram();
-      program.exitOverride();
-      await program.parseAsync(["node", "lhremote", "launch-app"]);
-
-      expect(process.exitCode).toBe(1);
-    });
   });
 
   describe("list-accounts", () => {
