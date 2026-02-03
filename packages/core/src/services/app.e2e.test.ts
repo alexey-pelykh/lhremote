@@ -2,17 +2,21 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { describeE2E, launchApp, quitApp } from "../testing/e2e-helpers.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import type { Account } from "../types/index.js";
+import type { StatusReport } from "./status.js";
 import { AppService } from "./app.js";
+import { checkStatus } from "./status.js";
 import { startInstanceWithRecovery } from "./instance-lifecycle.js";
 import { LauncherService } from "./launcher.js";
 
 // CLI handlers — tested against the same running app
+import { handleCheckStatus } from "../../../cli/src/handlers/check-status.js";
 import { handleListAccounts } from "../../../cli/src/handlers/list-accounts.js";
 import { handleQuitApp } from "../../../cli/src/handlers/quit-app.js";
 import { handleStartInstance } from "../../../cli/src/handlers/start-instance.js";
 import { handleStopInstance } from "../../../cli/src/handlers/stop-instance.js";
 
 // MCP tool registration — tested against the same running app
+import { registerCheckStatus } from "../../../mcp/src/tools/check-status.js";
 import { registerStartInstance } from "../../../mcp/src/tools/start-instance.js";
 import { registerStopInstance } from "../../../mcp/src/tools/stop-instance.js";
 import { createMockServer } from "../../../mcp/src/tools/testing/mock-server.js";
@@ -87,6 +91,37 @@ describeE2E("App lifecycle", () => {
     it("disconnect() succeeds cleanly", () => {
       launcher.disconnect();
       expect(launcher.isConnected).toBe(false);
+    });
+  });
+
+  describe("checkStatus", () => {
+    it("reports launcher as reachable", async () => {
+      const report = await checkStatus(port);
+
+      expect(report.launcher.reachable).toBe(true);
+      expect(report.launcher.port).toBe(port);
+    });
+
+    it("reports accounts", async () => {
+      const report = await checkStatus(port);
+
+      // Accounts may or may not exist — just verify structure
+      for (const instance of report.instances) {
+        expect(instance).toHaveProperty("accountId");
+        expect(instance).toHaveProperty("accountName");
+        expect(instance).toHaveProperty("cdpPort");
+      }
+    });
+
+    it("reports databases", async () => {
+      const report = await checkStatus(port);
+
+      for (const db of report.databases) {
+        expect(db).toHaveProperty("accountId");
+        expect(db).toHaveProperty("path");
+        expect(db).toHaveProperty("profileCount");
+        expect(db.profileCount).toBeGreaterThanOrEqual(0);
+      }
     });
   });
 
@@ -199,6 +234,39 @@ describeE2E("App lifecycle", () => {
       expect(stdoutSpy).toHaveBeenCalled();
     });
 
+    it("handleCheckStatus --json writes valid JSON to stdout", async () => {
+      const stdoutSpy = vi
+        .spyOn(process.stdout, "write")
+        .mockReturnValue(true);
+
+      await handleCheckStatus({ cdpPort: port, json: true });
+
+      expect(process.exitCode).toBeUndefined();
+      expect(stdoutSpy).toHaveBeenCalled();
+
+      const output = stdoutSpy.mock.calls
+        .map((call) => String(call[0]))
+        .join("");
+      const parsed = JSON.parse(output) as StatusReport;
+      expect(parsed.launcher.reachable).toBe(true);
+    });
+
+    it("handleCheckStatus prints human-friendly output", async () => {
+      const stdoutSpy = vi
+        .spyOn(process.stdout, "write")
+        .mockReturnValue(true);
+
+      await handleCheckStatus({ cdpPort: port });
+
+      expect(process.exitCode).toBeUndefined();
+      expect(stdoutSpy).toHaveBeenCalled();
+
+      const output = stdoutSpy.mock.calls
+        .map((call) => String(call[0]))
+        .join("");
+      expect(output).toContain("Launcher: reachable");
+    });
+
     it(
       "handleStartInstance starts instance and reports CDP port",
       async () => {
@@ -284,6 +352,26 @@ describeE2E("App lifecycle", () => {
         }
       }
     }, 30_000);
+
+    it("check-status tool returns status report", async () => {
+      const { server, getHandler } = createMockServer();
+      registerCheckStatus(server);
+
+      const handler = getHandler("check-status");
+      const result = (await handler({ cdpPort: port })) as {
+        isError?: boolean;
+        content: { type: string; text: string }[];
+      };
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toHaveLength(1);
+
+      const parsed = JSON.parse(
+        (result.content[0] as { text: string }).text,
+      ) as StatusReport;
+      expect(parsed.launcher.reachable).toBe(true);
+      expect(parsed.launcher.port).toBe(port);
+    });
 
     it(
       "start-instance tool starts instance and returns CDP port",

@@ -104,14 +104,12 @@ describe("createProgram", () => {
       expect(jsonOption).toBeDefined();
     });
 
-    it("sets exitCode 1 (stub)", async () => {
-      vi.spyOn(process.stderr, "write").mockReturnValue(true);
-
+    it("accepts --cdp-port option", () => {
       const program = createProgram();
-      program.exitOverride();
-      await program.parseAsync(["node", "lhremote", "check-status"]);
+      const cmd = program.commands.find((c) => c.name() === "check-status");
+      const portOption = cmd?.options.find((o) => o.long === "--cdp-port");
 
-      expect(process.exitCode).toBe(1);
+      expect(portOption).toBeDefined();
     });
   });
 });
