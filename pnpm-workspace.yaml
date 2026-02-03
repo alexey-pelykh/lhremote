@@ -15,3 +15,6 @@ catalog:
   better-sqlite3: "^11.9.1"
   "@types/better-sqlite3": "^7.6.13"
   get-port: "^7.1.0"
+  "@modelcontextprotocol/sdk": "^1.25.3"
+  zod: "^4.3.6"
+  commander: "^14.0.3"
