@@ -15,3 +15,5 @@ export type {
   StartInstanceParams,
   StartInstanceResult,
 } from "./instance.js";
+
+export type { Account } from "./account.js";
