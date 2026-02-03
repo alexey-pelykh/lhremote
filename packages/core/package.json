@@ -27,6 +27,7 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
+    "test:e2e": "vitest run --config ../../vitest.e2e.config.ts",
     "lint": "eslint src/",
     "dev": "tsc --watch"
   },
