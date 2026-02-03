@@ -33,6 +33,11 @@ export {
   startInstanceWithRecovery,
   type StartInstanceOutcome,
   type VisitAndExtractOptions,
+  checkStatus,
+  type AccountInstanceStatus,
+  type DatabaseStatus,
+  type LauncherStatus,
+  type StatusReport,
   waitForInstancePort,
 } from "./services/index.js";
 

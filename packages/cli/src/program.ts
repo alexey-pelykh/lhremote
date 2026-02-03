@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { Command, InvalidArgumentError } from "commander";
 
 import {
+  handleCheckStatus,
   handleLaunchApp,
   handleListAccounts,
   handleQuitApp,
@@ -82,8 +83,9 @@ export function createProgram(): Command {
   program
     .command("check-status")
     .description("Check LinkedHelper status")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
-    .action(stub("check-status"));
+    .action(handleCheckStatus);
 
   return program;
 }
