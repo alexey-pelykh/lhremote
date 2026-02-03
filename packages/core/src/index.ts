@@ -1,4 +1,5 @@
 export type {
+  Account,
   CurrentPosition,
   Education,
   ExternalId,
@@ -32,3 +33,20 @@ export {
   ProfileNotFoundError,
   ProfileRepository,
 } from "./db/index.js";
+
+export {
+  AppLaunchError,
+  AppNotFoundError,
+  AppService,
+  type AppServiceOptions,
+  ExtractionTimeoutError,
+  extractSlug,
+  InstanceNotRunningError,
+  InstanceService,
+  LauncherService,
+  LinkedHelperNotRunningError,
+  ProfileService,
+  ServiceError,
+  StartInstanceError,
+  type VisitAndExtractOptions,
+} from "./services/index.js";
