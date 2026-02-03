@@ -34,6 +34,12 @@
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "typescript": "catalog:",
+    "playwright-core": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "devtools-protocol": "^0.0.1577676",
+    "pid-port": "catalog:",
+    "ps-list": "catalog:"
   }
 }

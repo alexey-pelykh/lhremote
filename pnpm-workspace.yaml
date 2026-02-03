@@ -9,3 +9,6 @@ catalog:
   prettier: "^3.8.1"
   typescript-eslint: "^8.54.0"
   eslint-config-prettier: "^10.1.8"
+  playwright-core: "^1.52.0"
+  pid-port: "^2.0.1"
+  ps-list: "^9.0.0"

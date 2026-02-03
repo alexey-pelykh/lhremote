@@ -12,3 +12,13 @@ export type {
   StartInstanceParams,
   StartInstanceResult,
 } from "./types/index.js";
+
+export {
+  CDPClient,
+  CDPConnectionError,
+  CDPError,
+  CDPEvaluationError,
+  CDPTimeoutError,
+  discoverInstancePort,
+  discoverTargets,
+} from "./cdp/index.js";
