@@ -1,0 +1,63 @@
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { createServer } from "./server.js";
+
+let server: McpServer | undefined;
+let client: Client | undefined;
+
+afterEach(async () => {
+  await client?.close();
+  await server?.close();
+  client = undefined;
+  server = undefined;
+});
+
+async function connectPair() {
+  const { Client: ClientCtor } = await import(
+    "@modelcontextprotocol/sdk/client/index.js"
+  );
+  const { InMemoryTransport } = await import(
+    "@modelcontextprotocol/sdk/inMemory.js"
+  );
+
+  server = createServer();
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  client = new ClientCtor({ name: "test-client", version: "1.0.0" });
+
+  await Promise.all([
+    server.connect(serverTransport),
+    client.connect(clientTransport),
+  ]);
+
+  return { server, client };
+}
+
+describe("createServer", () => {
+  it("returns an McpServer instance", () => {
+    server = createServer();
+
+    expect(server).toBeDefined();
+    expect(server).toHaveProperty("connect");
+    expect(server).toHaveProperty("close");
+    expect(server).toHaveProperty("tool");
+  });
+
+  it("can connect and close with an in-memory transport", async () => {
+    const { client: c } = await connectPair();
+
+    const info = c.getServerVersion();
+    expect(info).toEqual(
+      expect.objectContaining({ name: "@lhremote/mcp", version: "0.0.0" }),
+    );
+  });
+
+  it("does not advertise tools capability when none are registered", async () => {
+    const { client: c } = await connectPair();
+
+    const capabilities = c.getServerCapabilities();
+    expect(capabilities?.tools).toBeUndefined();
+  });
+});

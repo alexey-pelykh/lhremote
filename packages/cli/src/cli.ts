@@ -1,3 +1,5 @@
 #!/usr/bin/env node
 
-console.log("lhremote");
+import { createProgram } from "./program.js";
+
+createProgram().parse();

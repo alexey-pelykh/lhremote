@@ -31,7 +31,9 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@lhremote/core": "workspace:^"
+    "@lhremote/core": "workspace:^",
+    "@modelcontextprotocol/sdk": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
