@@ -21,7 +21,7 @@ Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`
 
 Example: `(feat) mcp: add visit-profile tool`
 
-Reference issues: `(fix) cdp: handle reconnection (#12)`
+Do **not** add issue numbers (e.g. `(#12)`) to commit messages. GitHub links PRs to issues via `Closes #N` in the PR body, not in commits.
 
 ## Testing
 
