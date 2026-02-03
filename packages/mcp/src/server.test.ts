@@ -70,6 +70,8 @@ describe("createServer", () => {
     expect(names).toContain("launch-app");
     expect(names).toContain("quit-app");
     expect(names).toContain("list-accounts");
-    expect(names).toHaveLength(3);
+    expect(names).toContain("start-instance");
+    expect(names).toContain("stop-instance");
+    expect(names).toHaveLength(5);
   });
 });

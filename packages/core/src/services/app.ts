@@ -10,6 +10,12 @@ import { AppLaunchError, AppNotFoundError } from "./errors.js";
 /** Default delay after spawn before checking if the app is reachable (ms). */
 const DEFAULT_LAUNCH_PROBE_DELAY = 3000;
 
+/** Maximum time to wait for the process to exit after SIGTERM (ms). */
+const QUIT_GRACEFUL_TIMEOUT = 10_000;
+
+/** Maximum time to wait for the process to exit after SIGKILL (ms). */
+const QUIT_FORCE_TIMEOUT = 5_000;
+
 export interface AppServiceOptions {
   /** Delay in ms after spawn before checking if the app is reachable (default 3000). */
   launchProbeDelay?: number;
@@ -104,13 +110,26 @@ export class AppService {
   /**
    * Quit the LinkedHelper application.
    *
-   * Sends `SIGTERM` to the spawned process. If the process was not
-   * spawned by this service, attempts to close via CDP.
+   * When a child process handle is available, sends `SIGTERM` and waits
+   * for the process to exit.  If it does not exit within
+   * {@link QUIT_GRACEFUL_TIMEOUT}, escalates to `SIGKILL`.
+   *
+   * When no child process handle is available (app was launched
+   * externally), attempts to close via CDP.
    */
   async quit(): Promise<void> {
     if (this.childProcess) {
-      this.childProcess.kill("SIGTERM");
+      const child = this.childProcess;
       this.childProcess = null;
+
+      child.kill("SIGTERM");
+
+      const exited = await waitForExit(child, QUIT_GRACEFUL_TIMEOUT);
+      if (!exited) {
+        child.kill("SIGKILL");
+        await waitForExit(child, QUIT_FORCE_TIMEOUT);
+      }
+
       return;
     }
 
@@ -180,6 +199,36 @@ function getDefaultBinaryPath(): string {
     default:
       return "/opt/linked-helper/linked-helper";
   }
+}
+
+/**
+ * Wait for a child process to exit, with a timeout.
+ *
+ * @returns `true` if the process exited within the timeout, `false` otherwise.
+ */
+function waitForExit(child: ChildProcess, timeout: number): Promise<boolean> {
+  if (child.exitCode !== null) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, timeout);
+
+    const onExit = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    function cleanup() {
+      child.removeListener("exit", onExit);
+      clearTimeout(timer);
+    }
+
+    child.on("exit", onExit);
+  });
 }
 
 function assertFileExists(path: string): void {

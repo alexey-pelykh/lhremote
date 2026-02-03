@@ -30,7 +30,10 @@ export {
   ProfileService,
   ServiceError,
   StartInstanceError,
+  startInstanceWithRecovery,
+  type StartInstanceOutcome,
   type VisitAndExtractOptions,
+  waitForInstancePort,
 } from "./services/index.js";
 
 // Data access
@@ -53,4 +56,5 @@ export {
   CDPError,
   CDPEvaluationError,
   CDPTimeoutError,
+  discoverInstancePort,
 } from "./cdp/index.js";

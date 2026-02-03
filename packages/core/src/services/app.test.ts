@@ -34,13 +34,33 @@ const mockedGetPort = vi.mocked(getPort);
 const FAST_OPTIONS = { launchProbeDelay: 0 };
 
 function makeMockChild(): ChildProcess {
+  type Listener = (...args: unknown[]) => void;
+  const listeners = new Map<string, Set<Listener>>();
+
   const child = {
     unref: vi.fn(),
     kill: vi.fn(),
-    on: vi.fn(),
-    removeListener: vi.fn(),
+    on: vi.fn((event: string, handler: Listener) => {
+      if (!listeners.has(event)) listeners.set(event, new Set());
+      (listeners.get(event) as Set<Listener>).add(handler);
+      return child;
+    }),
+    removeListener: vi.fn((event: string, handler: Listener) => {
+      listeners.get(event)?.delete(handler);
+      return child;
+    }),
     pid: 12345,
+    exitCode: null as number | null,
   } as unknown as ChildProcess;
+
+  // Helper to simulate process exit from tests
+  (child as unknown as { _emitExit: (code: number) => void })._emitExit = (code: number) => {
+    (child as unknown as { exitCode: number | null }).exitCode = code;
+    for (const handler of listeners.get("exit") ?? []) {
+      handler(code, null);
+    }
+  };
+
   return child;
 }
 
@@ -244,18 +264,57 @@ describe("AppService", () => {
       vi.stubGlobal("process", { ...process, platform: "darwin", env: {} });
     });
 
-    it("sends SIGTERM to spawned process", async () => {
+    it("sends SIGTERM and waits for exit", async () => {
       const service = new AppService(9222, FAST_OPTIONS);
       mockedDiscoverTargets.mockRejectedValue(new Error("not running"));
       mockedAccessSync.mockReturnValue(undefined);
 
       const child = makeMockChild();
+      const emitExit = (child as unknown as { _emitExit: (code: number) => void })._emitExit;
+
+      // Simulate process exiting shortly after SIGTERM
+      (child.kill as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        queueMicrotask(() => emitExit(0));
+      });
       mockedSpawn.mockReturnValue(child);
 
       await service.launch();
       await service.quit();
 
       expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+    });
+
+    it("escalates to SIGKILL when process does not exit after SIGTERM", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+
+      const service = new AppService(9222, FAST_OPTIONS);
+      mockedDiscoverTargets.mockRejectedValue(new Error("not running"));
+      mockedAccessSync.mockReturnValue(undefined);
+
+      const child = makeMockChild();
+      const emitExit = (child as unknown as { _emitExit: (code: number) => void })._emitExit;
+
+      let killCount = 0;
+      (child.kill as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        killCount++;
+        // Only exit on SIGKILL (second kill call)
+        if (killCount === 2) {
+          queueMicrotask(() => emitExit(137));
+        }
+      });
+      mockedSpawn.mockReturnValue(child);
+
+      await service.launch();
+
+      const quitPromise = service.quit();
+      // Advance past the graceful timeout
+      await vi.advanceTimersByTimeAsync(11_000);
+      await quitPromise;
+
+      expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+      expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+
+      vi.useRealTimers();
     });
 
     it("falls back to CDP close when no spawned process", async () => {

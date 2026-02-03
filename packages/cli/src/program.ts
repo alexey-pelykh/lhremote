@@ -6,6 +6,8 @@ import {
   handleLaunchApp,
   handleListAccounts,
   handleQuitApp,
+  handleStartInstance,
+  handleStopInstance,
 } from "./handlers/index.js";
 
 const require = createRequire(import.meta.url);
@@ -60,13 +62,15 @@ export function createProgram(): Command {
     .command("start-instance")
     .description("Start a LinkedHelper instance")
     .argument("<accountId>", "Account ID to start", parsePositiveInt)
-    .action(stub("start-instance"));
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .action(handleStartInstance);
 
   program
     .command("stop-instance")
     .description("Stop a LinkedHelper instance")
     .argument("<accountId>", "Account ID to stop", parsePositiveInt)
-    .action(stub("stop-instance"));
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .action(handleStopInstance);
 
   program
     .command("visit-and-extract")
