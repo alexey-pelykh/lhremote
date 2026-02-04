@@ -21,6 +21,7 @@ import { handleQuitApp } from "../../../cli/src/handlers/quit-app.js";
 import { handleStartInstance } from "../../../cli/src/handlers/start-instance.js";
 import { handleStopInstance } from "../../../cli/src/handlers/stop-instance.js";
 import { handleQueryProfile } from "../../../cli/src/handlers/query-profile.js";
+import { handleCheckReplies } from "../../../cli/src/handlers/check-replies.js";
 import { handleScrapeMessagingHistory } from "../../../cli/src/handlers/scrape-messaging-history.js";
 import { handleVisitAndExtract } from "../../../cli/src/handlers/visit-and-extract.js";
 
@@ -30,6 +31,7 @@ import { registerFindApp } from "../../../mcp/src/tools/find-app.js";
 import { registerStartInstance } from "../../../mcp/src/tools/start-instance.js";
 import { registerStopInstance } from "../../../mcp/src/tools/stop-instance.js";
 import { registerQueryProfile } from "../../../mcp/src/tools/query-profile.js";
+import { registerCheckReplies } from "../../../mcp/src/tools/check-replies.js";
 import { registerScrapeMessagingHistory } from "../../../mcp/src/tools/scrape-messaging-history.js";
 import { registerVisitAndExtract } from "../../../mcp/src/tools/visit-and-extract.js";
 import { createMockServer } from "../../../mcp/src/tools/testing/mock-server.js";
@@ -657,6 +659,65 @@ describeE2E("App lifecycle", () => {
     );
 
     it(
+      "handleCheckReplies --json checks for replies and returns JSON",
+      async () => {
+        const stdoutSpy = vi
+          .spyOn(process.stdout, "write")
+          .mockReturnValue(true);
+        const stderrSpy = vi
+          .spyOn(process.stderr, "write")
+          .mockReturnValue(true);
+
+        await handleCheckReplies({ cdpPort: port, json: true });
+
+        if (process.exitCode === 1) {
+          const errOutput = stderrSpy.mock.calls
+            .map((call: unknown[]) => String(call[0]))
+            .join("");
+          throw new Error(`handleCheckReplies failed: ${errOutput}`);
+        }
+
+        expect(process.exitCode).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls
+          .map((call: unknown[]) => String(call[0]))
+          .join("");
+        const parsed = JSON.parse(output) as {
+          newMessages: unknown[];
+          totalNew: number;
+          checkedAt: string;
+        };
+        expect(Array.isArray(parsed.newMessages)).toBe(true);
+        expect(typeof parsed.totalNew).toBe("number");
+        expect(parsed.checkedAt).toBeTruthy();
+      },
+      180_000,
+    );
+
+    it(
+      "handleCheckReplies prints human-friendly output",
+      async () => {
+        const stdoutSpy = vi
+          .spyOn(process.stdout, "write")
+          .mockReturnValue(true);
+        vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleCheckReplies({ cdpPort: port });
+
+        expect(process.exitCode).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls
+          .map((call: unknown[]) => String(call[0]))
+          .join("");
+        // Should contain either "No new messages" or "new message(s) found"
+        expect(output).toMatch(/new message|No new messages/);
+      },
+      180_000,
+    );
+
+    it(
       "handleStopInstance stops running instance",
       async () => {
         const launcher = new LauncherService(port);
@@ -896,6 +957,37 @@ describeE2E("App lifecycle", () => {
         expect(typeof parsed.stats.totalMessages).toBe("number");
       },
       300_000,
+    );
+
+    it(
+      "check-replies tool checks for replies and returns results",
+      async () => {
+        assertDefined(accountId, "No accounts configured in LinkedHelper");
+
+        const { server, getHandler } = createMockServer();
+        registerCheckReplies(server);
+
+        const handler = getHandler("check-replies");
+        const result = (await handler({ cdpPort: port })) as {
+          isError?: boolean;
+          content: { type: string; text: string }[];
+        };
+
+        expect(result.isError).toBeUndefined();
+        expect(result.content).toHaveLength(1);
+
+        const parsed = JSON.parse(
+          (result.content[0] as { text: string }).text,
+        ) as {
+          newMessages: unknown[];
+          totalNew: number;
+          checkedAt: string;
+        };
+        expect(Array.isArray(parsed.newMessages)).toBe(true);
+        expect(typeof parsed.totalNew).toBe("number");
+        expect(parsed.checkedAt).toBeTruthy();
+      },
+      180_000,
     );
 
     it(

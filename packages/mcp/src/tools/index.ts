@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import { registerCheckReplies } from "./check-replies.js";
 import { registerCheckStatus } from "./check-status.js";
 import { registerFindApp } from "./find-app.js";
 import { registerLaunchApp } from "./launch-app.js";
@@ -23,5 +24,6 @@ export function registerAllTools(server: McpServer): void {
   registerQueryMessages(server);
   registerQueryProfile(server);
   registerScrapeMessagingHistory(server);
+  registerCheckReplies(server);
   registerCheckStatus(server);
 }

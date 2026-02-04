@@ -82,7 +82,8 @@ describe("createServer", () => {
     expect(names).toContain("query-profile");
     expect(names).toContain("query-messages");
     expect(names).toContain("scrape-messaging-history");
+    expect(names).toContain("check-replies");
     expect(names).toContain("check-status");
-    expect(names).toHaveLength(11);
+    expect(names).toHaveLength(12);
   });
 });
