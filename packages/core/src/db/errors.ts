@@ -20,6 +20,16 @@ export class DatabaseNotFoundError extends DatabaseError {
 }
 
 /**
+ * Thrown when a chat lookup yields no results.
+ */
+export class ChatNotFoundError extends DatabaseError {
+  constructor(chatId: number) {
+    super(`Chat not found for id ${String(chatId)}`);
+    this.name = "ChatNotFoundError";
+  }
+}
+
+/**
  * Thrown when a profile lookup yields no results. The person may not
  * have been extracted by LinkedHelper yet.
  */

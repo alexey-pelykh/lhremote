@@ -155,6 +155,47 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE chats(
+    id INTEGER PRIMARY KEY,
+    original_id INTEGER,
+    type TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+  );
+
+  CREATE TABLE messages(
+    id INTEGER PRIMARY KEY,
+    type TEXT NOT NULL,
+    subject TEXT,
+    message_text TEXT NOT NULL,
+    attachments_count INTEGER NOT NULL DEFAULT 0,
+    send_at TEXT NOT NULL,
+    original_message_id INTEGER,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+  );
+
+  CREATE TABLE chat_participants(
+    id INTEGER PRIMARY KEY,
+    chat_id INTEGER NOT NULL,
+    person_id INTEGER NOT NULL,
+    UNIQUE(chat_id, person_id),
+    FOREIGN KEY(chat_id) REFERENCES chats(id),
+    FOREIGN KEY(person_id) REFERENCES people(id)
+  );
+
+  CREATE TABLE participant_messages(
+    id INTEGER PRIMARY KEY,
+    chat_participant_id INTEGER NOT NULL,
+    message_id INTEGER NOT NULL,
+    UNIQUE(chat_participant_id, message_id),
+    FOREIGN KEY(chat_participant_id) REFERENCES chat_participants(id),
+    FOREIGN KEY(message_id) REFERENCES messages(id)
+  );
+`);
+
 // ── Mock Data (obviously synthetic, no real PII) ────────────────────
 
 const NOW = "2025-01-15T12:00:00.000Z";
@@ -287,6 +328,65 @@ db.exec(`
   VALUES (3, 'grace@example.test', 'business', '${NOW}');
   INSERT INTO person_email (person_id, email, type, actual_at)
   VALUES (3, 'grace.personal@example.test', 'personal', '${NOW}');
+`);
+
+// ── Messaging Data (chats between Ada, Charlie, Grace) ──────────────
+
+// Chat 1: Ada ↔ Grace (3 messages)
+db.exec(`
+  INSERT INTO chats (id, original_id, type, platform, created_at, updated_at)
+  VALUES (1, 1001, 'MEMBER_TO_MEMBER', 'LINKEDIN', '${NOW}', '${NOW}');
+
+  INSERT INTO chat_participants (id, chat_id, person_id)
+  VALUES (1, 1, 1), (2, 1, 3);
+
+  INSERT INTO messages (id, type, message_text, attachments_count, send_at, created_at, updated_at)
+  VALUES
+    (1, 'MEMBER_TO_MEMBER', 'Hello Grace, I enjoyed your talk on compilers.', 0,
+     '2025-01-10T09:00:00.000Z', '${NOW}', '${NOW}'),
+    (2, 'MEMBER_TO_MEMBER', 'Thank you Ada! Would love to discuss analytical engines sometime.', 0,
+     '2025-01-10T09:15:00.000Z', '${NOW}', '${NOW}'),
+    (3, 'MEMBER_TO_MEMBER', 'Let us schedule a meeting next week.', 1,
+     '2025-01-11T14:30:00.000Z', '${NOW}', '${NOW}');
+
+  INSERT INTO participant_messages (id, chat_participant_id, message_id)
+  VALUES (1, 1, 1), (2, 2, 2), (3, 1, 3);
+`);
+
+// Chat 2: Ada ↔ Charlie (1 message, InMail with subject)
+db.exec(`
+  INSERT INTO chats (id, original_id, type, platform, created_at, updated_at)
+  VALUES (2, 1002, 'MEMBER_TO_MEMBER', 'LINKEDIN', '${NOW}', '${NOW}');
+
+  INSERT INTO chat_participants (id, chat_id, person_id)
+  VALUES (3, 2, 1), (4, 2, 2);
+
+  INSERT INTO messages (id, type, subject, message_text, attachments_count, send_at, created_at, updated_at)
+  VALUES
+    (4, 'DEFAULT', 'Job Opportunity', 'Hi Charlie, we have an opening on our team.', 0,
+     '2025-01-12T10:00:00.000Z', '${NOW}', '${NOW}');
+
+  INSERT INTO participant_messages (id, chat_participant_id, message_id)
+  VALUES (4, 3, 4);
+`);
+
+// Chat 3: Grace ↔ Charlie (2 messages)
+db.exec(`
+  INSERT INTO chats (id, original_id, type, platform, created_at, updated_at)
+  VALUES (3, 1003, 'MEMBER_TO_MEMBER', 'LINKEDIN', '${NOW}', '${NOW}');
+
+  INSERT INTO chat_participants (id, chat_id, person_id)
+  VALUES (5, 3, 3), (6, 3, 2);
+
+  INSERT INTO messages (id, type, message_text, attachments_count, send_at, created_at, updated_at)
+  VALUES
+    (5, 'MEMBER_TO_MEMBER', 'Charlie, have you tried the new COBOL compiler?', 0,
+     '2025-01-13T08:00:00.000Z', '${NOW}', '${NOW}'),
+    (6, 'MEMBER_TO_MEMBER', 'Not yet, but I will check it out!', 0,
+     '2025-01-13T08:30:00.000Z', '${NOW}', '${NOW}');
+
+  INSERT INTO participant_messages (id, chat_participant_id, message_id)
+  VALUES (5, 5, 5), (6, 6, 6);
 `);
 
 // ── Write to disk ───────────────────────────────────────────────────
