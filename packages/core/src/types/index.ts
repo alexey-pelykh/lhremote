@@ -17,3 +17,12 @@ export type {
 } from "./instance.js";
 
 export type { Account } from "./account.js";
+
+export type {
+  Chat,
+  ChatParticipant,
+  ConversationThread,
+  Message,
+  MessageStats,
+  MessageSummary,
+} from "./messaging.js";

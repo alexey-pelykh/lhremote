@@ -1,12 +1,18 @@
-// Types (profile, instance, account — CDP types are internal)
+// Types (profile, messaging, instance, account — CDP types are internal)
 export type {
   Account,
+  Chat,
+  ChatParticipant,
+  ConversationThread,
   CurrentPosition,
   Education,
   ExternalId,
   ExternalIdTypeGroup,
   InstanceInfo,
   InstanceStatus,
+  Message,
+  MessageStats,
+  MessageSummary,
   MiniProfile,
   Position,
   Profile,
@@ -46,11 +52,13 @@ export {
   DatabaseClient,
   discoverAllDatabases,
   discoverDatabase,
+  MessageRepository,
   ProfileRepository,
 } from "./db/index.js";
 
 // Errors (DB + CDP errors can propagate through the service layer)
 export {
+  ChatNotFoundError,
   DatabaseError,
   DatabaseNotFoundError,
   ProfileNotFoundError,
