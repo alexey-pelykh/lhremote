@@ -99,6 +99,53 @@ describe("MessageRepository (integration)", () => {
     });
   });
 
+  describe("getMessagesSince", () => {
+    it("returns messages after a given timestamp grouped by conversation", () => {
+      // Fixture has messages at 2025-01-10, 2025-01-11, 2025-01-12, 2025-01-13
+      const conversations = repo.getMessagesSince("2025-01-12T00:00:00.000Z");
+
+      // Should include: msg 4 (2025-01-12), msg 5 (2025-01-13), msg 6 (2025-01-13)
+      const totalMessages = conversations.reduce(
+        (sum, c) => sum + c.messages.length,
+        0,
+      );
+      expect(totalMessages).toBe(3);
+
+      // Each conversation should have chatId, personId, personName
+      for (const conv of conversations) {
+        expect(conv.chatId).toBeGreaterThan(0);
+        expect(conv.personId).toBeGreaterThan(0);
+        expect(conv.personName).toBeTruthy();
+        expect(conv.messages.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("returns empty array when no messages after the cutoff", () => {
+      const conversations = repo.getMessagesSince("2099-01-01T00:00:00.000Z");
+      expect(conversations).toEqual([]);
+    });
+
+    it("returns all messages when cutoff is before earliest message", () => {
+      const conversations = repo.getMessagesSince("2000-01-01T00:00:00.000Z");
+
+      const totalMessages = conversations.reduce(
+        (sum, c) => sum + c.messages.length,
+        0,
+      );
+      // Fixture has 6 messages total
+      expect(totalMessages).toBe(6);
+    });
+
+    it("groups messages by chat and sender", () => {
+      // Get messages including chat 1 (Ada ↔ Grace, 3 messages from 2 senders)
+      const conversations = repo.getMessagesSince("2025-01-09T00:00:00.000Z");
+
+      // Chat 1 should have 2 groups (Ada sent 2, Grace sent 1)
+      const chat1Groups = conversations.filter((c) => c.chatId === 1);
+      expect(chat1Groups).toHaveLength(2);
+    });
+  });
+
   describe("cross-table consistency", () => {
     it("chat participants reference valid people with mini profiles", () => {
       const chats = repo.listChats();

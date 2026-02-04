@@ -48,3 +48,10 @@ export interface MessageStats {
   earliestMessage: string | null;
   latestMessage: string | null;
 }
+
+export interface ConversationMessages {
+  chatId: number;
+  personId: number;
+  personName: string;
+  messages: Message[];
+}

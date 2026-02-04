@@ -210,5 +210,22 @@ describeE2E("MCP tools via Claude CLI", () => {
       },
       360_000,
     );
+
+    it(
+      "check-replies checks for new replies and returns results",
+      () => {
+        const result = runClaude(
+          "Use the check-replies tool to check for new message replies. " +
+          "Report the raw JSON from the tool response, nothing else.",
+          180_000,
+        );
+
+        expect(result.is_error).toBe(false);
+        expect(result.num_turns).toBeGreaterThanOrEqual(2);
+        // The response should contain reply check results
+        expect(result.result).toMatch(/newMessages|totalNew|checkedAt/i);
+      },
+      240_000,
+    );
   });
 });

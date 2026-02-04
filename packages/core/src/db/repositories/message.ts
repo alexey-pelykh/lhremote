@@ -1,6 +1,7 @@
 import type {
   Chat,
   ChatParticipant,
+  ConversationMessages,
   ConversationThread,
   Message,
   MessageStats,
@@ -47,6 +48,19 @@ interface MessageRow {
   sender_last_name: string | null;
 }
 
+interface MessageSinceRow {
+  id: number;
+  type: string;
+  message_text: string;
+  subject: string | null;
+  send_at: string;
+  attachments_count: number;
+  sender_person_id: number;
+  sender_first_name: string;
+  sender_last_name: string | null;
+  chat_id: number;
+}
+
 interface StatsRow {
   total_messages: number;
   total_chats: number;
@@ -68,6 +82,7 @@ export class MessageRepository {
   private readonly stmtThreadMessages;
   private readonly stmtThreadMessagesBefore;
   private readonly stmtSearchMessages;
+  private readonly stmtMessagesSince;
   private readonly stmtStats;
 
   constructor(client: DatabaseClient) {
@@ -221,6 +236,26 @@ export class MessageRepository {
        LIMIT ?`,
     );
 
+    this.stmtMessagesSince = db.prepare(
+      `SELECT
+         m.id,
+         m.message_text,
+         m.type,
+         m.subject,
+         m.send_at,
+         m.attachments_count,
+         cp.person_id AS sender_person_id,
+         mp.first_name AS sender_first_name,
+         mp.last_name AS sender_last_name,
+         cp.chat_id
+       FROM messages m
+       JOIN participant_messages pm ON m.id = pm.message_id
+       JOIN chat_participants cp ON pm.chat_participant_id = cp.id
+       JOIN person_mini_profile mp ON cp.person_id = mp.person_id
+       WHERE m.send_at > ?
+       ORDER BY m.send_at ASC`,
+    );
+
     this.stmtStats = db.prepare(
       `SELECT
          COUNT(DISTINCT m.id) AS total_messages,
@@ -312,6 +347,39 @@ export class MessageRepository {
     ) as unknown as MessageRow[];
 
     return rows.map((r) => mapMessageRow(r));
+  }
+
+  /**
+   * Returns messages received after the given ISO timestamp, grouped
+   * by conversation.  Each group identifies the sender (person) and
+   * includes the list of new messages in chronological order.
+   */
+  getMessagesSince(since: string): ConversationMessages[] {
+    const rows = this.stmtMessagesSince.all(
+      since,
+    ) as unknown as MessageSinceRow[];
+
+    // Group by (chatId, senderPersonId)
+    const groups = new Map<string, ConversationMessages>();
+    for (const r of rows) {
+      const key = `${String(r.chat_id)}:${String(r.sender_person_id)}`;
+      let group = groups.get(key);
+      if (!group) {
+        const name = r.sender_last_name
+          ? `${r.sender_first_name} ${r.sender_last_name}`
+          : r.sender_first_name;
+        group = {
+          chatId: r.chat_id,
+          personId: r.sender_person_id,
+          personName: name,
+          messages: [],
+        };
+        groups.set(key, group);
+      }
+      group.messages.push(mapMessageRow(r));
+    }
+
+    return [...groups.values()];
   }
 
   /**

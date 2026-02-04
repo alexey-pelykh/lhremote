@@ -1,3 +1,4 @@
+export { handleCheckReplies } from "./check-replies.js";
 export { handleCheckStatus } from "./check-status.js";
 export { handleFindApp } from "./find-app.js";
 export { handleQueryMessages } from "./query-messages.js";

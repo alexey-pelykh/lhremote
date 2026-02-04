@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { Command, InvalidArgumentError } from "commander";
 
 import {
+  handleCheckReplies,
   handleCheckStatus,
   handleFindApp,
   handleLaunchApp,
@@ -127,6 +128,14 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleScrapeMessagingHistory);
+
+  program
+    .command("check-replies")
+    .description("Check for new message replies from LinkedIn")
+    .option("--since <timestamp>", "Only show replies after this ISO timestamp")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCheckReplies);
 
   program
     .command("check-status")

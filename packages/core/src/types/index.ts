@@ -21,6 +21,7 @@ export type { Account } from "./account.js";
 export type {
   Chat,
   ChatParticipant,
+  ConversationMessages,
   ConversationThread,
   Message,
   MessageStats,

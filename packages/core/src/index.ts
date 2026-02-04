@@ -3,6 +3,7 @@ export type {
   Account,
   Chat,
   ChatParticipant,
+  ConversationMessages,
   ConversationThread,
   CurrentPosition,
   Education,
