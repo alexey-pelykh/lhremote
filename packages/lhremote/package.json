@@ -1,42 +1,42 @@
 {
-  "name": "@lhremote/cli",
+  "name": "lhremote",
   "version": "0.0.0",
-  "description": "CLI for LinkedHelper automation",
+  "description": "LinkedHelper automation toolkit — CLI & MCP server",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "license": "AGPL-3.0-only",
   "author": "Alexey Pelykh (https://github.com/alexey-pelykh)",
-  "homepage": "https://github.com/alexey-pelykh/lhremote/tree/main/packages/cli",
+  "homepage": "https://github.com/alexey-pelykh/lhremote",
   "bugs": "https://github.com/alexey-pelykh/lhremote/issues",
   "repository": {
     "type": "git",
     "url": "https://github.com/alexey-pelykh/lhremote.git",
-    "directory": "packages/cli"
-  },
-  "exports": {
-    ".": {
-      "types": "./dist/program.d.ts",
-      "import": "./dist/program.js"
-    }
+    "directory": "packages/lhremote"
   },
   "bin": {
-    "lhremote-cli": "./dist/cli.js"
+    "lhremote": "./dist/cli.js"
   },
+  "keywords": [
+    "linkedhelper",
+    "linkedin",
+    "automation",
+    "mcp",
+    "cli"
+  ],
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "test:e2e": "vitest run --config ../../vitest.e2e.config.ts",
     "lint": "eslint src/",
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@lhremote/core": "workspace:^",
-    "commander": "catalog:"
+    "@lhremote/cli": "workspace:^",
+    "@lhremote/mcp": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "catalog:",
