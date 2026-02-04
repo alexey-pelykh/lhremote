@@ -80,7 +80,8 @@ describe("createServer", () => {
     expect(names).toContain("stop-instance");
     expect(names).toContain("visit-and-extract");
     expect(names).toContain("query-profile");
+    expect(names).toContain("query-messages");
     expect(names).toContain("check-status");
-    expect(names).toHaveLength(9);
+    expect(names).toHaveLength(10);
   });
 });
