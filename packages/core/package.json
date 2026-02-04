@@ -4,7 +4,7 @@
   "description": "Core library for LinkedHelper automation",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "license": "AGPL-3.0-only",
   "author": "Alexey Pelykh (https://github.com/alexey-pelykh)",
@@ -32,7 +32,6 @@
     "dev": "tsc --watch"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "catalog:",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "playwright-core": "catalog:",
@@ -40,7 +39,6 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "better-sqlite3": "catalog:",
     "devtools-protocol": "^0.0.1577676",
     "get-port": "catalog:",
     "pid-port": "catalog:",

@@ -13,7 +13,12 @@ describe("DatabaseClient (integration)", () => {
 
   it("opens the fixture database in read-only mode", () => {
     client = new DatabaseClient(FIXTURE_PATH);
-    expect(client.db.readonly).toBe(true);
+    const { db } = client;
+
+    // Verify read-only by attempting a write
+    expect(() =>
+      db.exec("INSERT INTO people (id) VALUES (9999)"),
+    ).toThrow(/readonly/i);
   });
 
   it("reads data from the real schema", () => {

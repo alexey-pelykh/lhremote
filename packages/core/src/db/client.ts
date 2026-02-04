@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 
 /**
  * Read-only SQLite client for querying a LinkedHelper database.
@@ -7,10 +7,10 @@ import Database from "better-sqlite3";
  * journaling, so concurrent reads do not block writes.
  */
 export class DatabaseClient {
-  readonly db: Database.Database;
+  readonly db: DatabaseSync;
 
   constructor(dbPath: string) {
-    this.db = new Database(dbPath, { readonly: true });
+    this.db = new DatabaseSync(dbPath, { readOnly: true });
   }
 
   close(): void {
