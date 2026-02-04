@@ -1,12 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, launchApp, quitApp } from "../testing/e2e-helpers.js";
+import { describeE2E, launchApp, quitApp, retryAsync } from "../testing/e2e-helpers.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import type { Account } from "../types/index.js";
+import type { Account, Profile } from "../types/index.js";
 import type { StatusReport } from "./status.js";
 import { AppService } from "./app.js";
 import { checkStatus } from "./status.js";
-import { startInstanceWithRecovery } from "./instance-lifecycle.js";
+import { startInstanceWithRecovery, waitForInstanceShutdown } from "./instance-lifecycle.js";
 import { LauncherService } from "./launcher.js";
+import { InstanceService } from "./instance.js";
+import { ProfileService } from "./profile.js";
+import { DatabaseClient, discoverDatabase } from "../db/index.js";
+import { killInstanceProcesses } from "../cdp/index.js";
 
 // CLI handlers — tested against the same running app
 import { handleCheckStatus } from "../../../cli/src/handlers/check-status.js";
@@ -14,12 +18,41 @@ import { handleListAccounts } from "../../../cli/src/handlers/list-accounts.js";
 import { handleQuitApp } from "../../../cli/src/handlers/quit-app.js";
 import { handleStartInstance } from "../../../cli/src/handlers/start-instance.js";
 import { handleStopInstance } from "../../../cli/src/handlers/stop-instance.js";
+import { handleVisitAndExtract } from "../../../cli/src/handlers/visit-and-extract.js";
 
 // MCP tool registration — tested against the same running app
 import { registerCheckStatus } from "../../../mcp/src/tools/check-status.js";
 import { registerStartInstance } from "../../../mcp/src/tools/start-instance.js";
 import { registerStopInstance } from "../../../mcp/src/tools/stop-instance.js";
+import { registerVisitAndExtract } from "../../../mcp/src/tools/visit-and-extract.js";
 import { createMockServer } from "../../../mcp/src/tools/testing/mock-server.js";
+
+/** Type-narrowing assertion — fails the test with `message` when `value` is nullish. */
+function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {
+  expect(value, message).toBeDefined();
+  expect(value, message).not.toBeNull();
+}
+
+/**
+ * Stop the instance gracefully, falling back to SIGKILL if that fails.
+ */
+async function forceStopInstance(
+  launcher: LauncherService,
+  accountId: number | undefined,
+  launcherPort: number,
+): Promise<void> {
+  if (accountId === undefined) return;
+
+  try {
+    await launcher.stopInstance(accountId);
+    await waitForInstanceShutdown(launcherPort);
+    return;
+  } catch {
+    // Graceful stop failed — escalate to OS kill
+  }
+
+  await killInstanceProcesses(launcherPort);
+}
 
 describeE2E("App lifecycle", () => {
   let app: AppService;
@@ -51,7 +84,11 @@ describeE2E("App lifecycle", () => {
     });
 
     it("discovers CDP targets", async () => {
-      const targets = await discoverTargets(port);
+      const targets = await retryAsync(async () => {
+        const t = await discoverTargets(port);
+        if (t.length === 0) throw new Error("No CDP targets yet");
+        return t;
+      });
       expect(targets.length).toBeGreaterThan(0);
       for (const t of targets) {
         console.log(`  target: type=${t.type} title=${t.title} url=${t.url}`);
@@ -64,7 +101,7 @@ describeE2E("App lifecycle", () => {
 
     beforeAll(async () => {
       launcher = new LauncherService(port);
-      await launcher.connect();
+      await retryAsync(() => launcher.connect(), { retries: 3, delay: 1_000 });
     }, 15_000);
 
     afterAll(() => {
@@ -96,7 +133,11 @@ describeE2E("App lifecycle", () => {
 
   describe("checkStatus", () => {
     it("reports launcher as reachable", async () => {
-      const report = await checkStatus(port);
+      const report = await retryAsync(async () => {
+        const r = await checkStatus(port);
+        if (!r.launcher.reachable) throw new Error("Launcher not reachable yet");
+        return r;
+      });
 
       expect(report.launcher.reachable).toBe(true);
       expect(report.launcher.port).toBe(port);
@@ -140,20 +181,12 @@ describeE2E("App lifecycle", () => {
     }, 15_000);
 
     afterAll(async () => {
-      if (accountId !== undefined) {
-        try {
-          await launcher.stopInstance(accountId);
-        } catch {
-          // Ignore — may not be running
-        }
-      }
+      await forceStopInstance(launcher, accountId, port);
       launcher.disconnect();
     }, 30_000);
 
     it("starts an instance and returns port", async () => {
-      if (accountId === undefined) {
-        return; // No accounts configured — skip
-      }
+      assertDefined(accountId, "No accounts configured in LinkedHelper");
 
       const result = await startInstanceWithRecovery(
         launcher,
@@ -167,9 +200,7 @@ describeE2E("App lifecycle", () => {
     }, 60_000);
 
     it("is idempotent — second call returns already_running", async () => {
-      if (accountId === undefined) {
-        return; // No accounts configured — skip
-      }
+      assertDefined(accountId, "No accounts configured in LinkedHelper");
 
       const result = await startInstanceWithRecovery(
         launcher,
@@ -183,9 +214,7 @@ describeE2E("App lifecycle", () => {
     }, 60_000);
 
     it("instance can be stopped after start", async () => {
-      if (accountId === undefined) {
-        return; // No accounts configured — skip
-      }
+      assertDefined(accountId, "No accounts configured in LinkedHelper");
 
       await launcher.stopInstance(accountId);
 
@@ -194,8 +223,92 @@ describeE2E("App lifecycle", () => {
     }, 30_000);
   });
 
+  describe("ProfileService visit-and-extract", () => {
+    let launcher: LauncherService;
+    let accountId: number | undefined;
+    let instancePort: number | null = null;
+
+    beforeAll(async () => {
+      launcher = new LauncherService(port);
+      await launcher.connect();
+
+      const accounts = await launcher.listAccounts();
+      if (accounts.length > 0) {
+        accountId = (accounts[0] as Account).id;
+        const outcome = await startInstanceWithRecovery(
+          launcher,
+          accountId,
+          port,
+        );
+        if (outcome.status !== "timeout") {
+          instancePort = outcome.port;
+        }
+      }
+    }, 60_000);
+
+    afterAll(async () => {
+      await forceStopInstance(launcher, accountId, port);
+      launcher.disconnect();
+    }, 30_000);
+
+    it(
+      "visits a LinkedIn profile and extracts structured data",
+      async () => {
+        assertDefined(accountId, "No accounts configured in LinkedHelper");
+        assertDefined(instancePort, "Instance failed to start — no CDP port");
+
+        const instance = new InstanceService(instancePort);
+        let db: DatabaseClient | null = null;
+        try {
+          await instance.connect();
+
+          const dbPath = discoverDatabase(accountId);
+          db = new DatabaseClient(dbPath);
+
+          const profileService = new ProfileService(instance, db);
+          const profile = await profileService.visitAndExtract(
+            "https://www.linkedin.com/in/williamhgates",
+          );
+
+          expect(profile).toHaveProperty("id");
+          expect(profile.miniProfile).toHaveProperty("firstName");
+          expect(typeof profile.miniProfile.firstName).toBe("string");
+          expect(profile.miniProfile.firstName.length).toBeGreaterThan(0);
+          expect(profile).toHaveProperty("positions");
+          expect(Array.isArray(profile.positions)).toBe(true);
+          expect(profile).toHaveProperty("education");
+          expect(Array.isArray(profile.education)).toBe(true);
+          expect(profile).toHaveProperty("skills");
+          expect(Array.isArray(profile.skills)).toBe(true);
+          expect(profile).toHaveProperty("emails");
+          expect(Array.isArray(profile.emails)).toBe(true);
+        } finally {
+          instance.disconnect();
+          db?.close();
+        }
+      },
+      120_000,
+    );
+  });
+
   describe("CLI handlers", () => {
     const originalExitCode = process.exitCode;
+
+    afterAll(async () => {
+      // Force-stop any instance left running by tests in this block
+      const launcher = new LauncherService(port);
+      try {
+        await launcher.connect();
+        const accounts = await launcher.listAccounts();
+        if (accounts.length > 0) {
+          await forceStopInstance(launcher, (accounts[0] as Account).id, port);
+        }
+      } catch {
+        // Best-effort cleanup
+      } finally {
+        launcher.disconnect();
+      }
+    }, 30_000);
 
     beforeEach(() => {
       process.exitCode = undefined;
@@ -275,9 +388,7 @@ describeE2E("App lifecycle", () => {
         const accounts = await launcher.listAccounts();
         launcher.disconnect();
 
-        if (accounts.length === 0) {
-          return; // No accounts configured — skip
-        }
+        expect(accounts.length, "No accounts configured in LinkedHelper").toBeGreaterThan(0);
         const accountId = (accounts[0] as Account).id;
 
         const stdoutSpy = vi
@@ -299,6 +410,84 @@ describeE2E("App lifecycle", () => {
     );
 
     it(
+      "handleVisitAndExtract --json extracts profile data",
+      async () => {
+        const launcher = new LauncherService(port);
+        await launcher.connect();
+        const accounts = await launcher.listAccounts();
+        launcher.disconnect();
+
+        expect(accounts.length, "No accounts configured in LinkedHelper").toBeGreaterThan(0);
+
+        // Instance should already be running from handleStartInstance test above
+        const stdoutSpy = vi
+          .spyOn(process.stdout, "write")
+          .mockReturnValue(true);
+        const stderrSpy = vi
+          .spyOn(process.stderr, "write")
+          .mockReturnValue(true);
+
+        await handleVisitAndExtract(
+          "https://www.linkedin.com/in/williamhgates",
+          { cdpPort: port, json: true },
+        );
+
+        // Fail loudly if the handler errored — don't let errors pass silently
+        if (process.exitCode === 1) {
+          const errOutput = stderrSpy.mock.calls
+            .map((call) => String(call[0]))
+            .join("");
+          throw new Error(`handleVisitAndExtract failed: ${errOutput}`);
+        }
+
+        expect(process.exitCode).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls
+          .map((call) => String(call[0]))
+          .join("");
+        const parsed = JSON.parse(output) as Profile;
+        expect(parsed.miniProfile).toHaveProperty("firstName");
+        expect(typeof parsed.miniProfile.firstName).toBe("string");
+        expect(parsed.miniProfile.firstName.length).toBeGreaterThan(0);
+        expect(Array.isArray(parsed.positions)).toBe(true);
+        expect(Array.isArray(parsed.skills)).toBe(true);
+      },
+      120_000,
+    );
+
+    it(
+      "handleVisitAndExtract prints human-friendly output",
+      async () => {
+        const launcher = new LauncherService(port);
+        await launcher.connect();
+        const accounts = await launcher.listAccounts();
+        launcher.disconnect();
+
+        expect(accounts.length, "No accounts configured in LinkedHelper").toBeGreaterThan(0);
+
+        const stdoutSpy = vi
+          .spyOn(process.stdout, "write")
+          .mockReturnValue(true);
+
+        await handleVisitAndExtract(
+          "https://www.linkedin.com/in/williamhgates",
+          { cdpPort: port },
+        );
+
+        expect(process.exitCode).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls
+          .map((call) => String(call[0]))
+          .join("");
+        // Should contain a name and position/education counts
+        expect(output).toMatch(/Positions: \d+, Education: \d+/);
+      },
+      120_000,
+    );
+
+    it(
       "handleStopInstance stops running instance",
       async () => {
         const launcher = new LauncherService(port);
@@ -306,9 +495,7 @@ describeE2E("App lifecycle", () => {
         const accounts = await launcher.listAccounts();
         launcher.disconnect();
 
-        if (accounts.length === 0) {
-          return; // No accounts configured — skip
-        }
+        expect(accounts.length, "No accounts configured in LinkedHelper").toBeGreaterThan(0);
         const accountId = (accounts[0] as Account).id;
 
         const stdoutSpy = vi
@@ -341,15 +528,14 @@ describeE2E("App lifecycle", () => {
     }, 15_000);
 
     afterAll(async () => {
-      if (accountId !== undefined) {
-        const launcher = new LauncherService(port);
-        try {
-          await launcher.connect();
-          await launcher.stopInstance(accountId);
-          launcher.disconnect();
-        } catch {
-          // Ignore cleanup errors
-        }
+      const launcher = new LauncherService(port);
+      try {
+        await launcher.connect();
+        await forceStopInstance(launcher, accountId, port);
+      } catch {
+        // Best-effort cleanup
+      } finally {
+        launcher.disconnect();
       }
     }, 30_000);
 
@@ -376,9 +562,7 @@ describeE2E("App lifecycle", () => {
     it(
       "start-instance tool starts instance and returns CDP port",
       async () => {
-        if (accountId === undefined) {
-          return; // No accounts configured — skip
-        }
+        assertDefined(accountId, "No accounts configured in LinkedHelper");
 
         const { server, getHandler } = createMockServer();
         registerStartInstance(server);
@@ -401,11 +585,42 @@ describeE2E("App lifecycle", () => {
     );
 
     it(
+      "visit-and-extract tool extracts profile data",
+      async () => {
+        assertDefined(accountId, "No accounts configured in LinkedHelper");
+
+        // Instance should already be running from start-instance test above
+        const { server, getHandler } = createMockServer();
+        registerVisitAndExtract(server);
+
+        const handler = getHandler("visit-and-extract");
+        const result = (await handler({
+          profileUrl: "https://www.linkedin.com/in/williamhgates",
+          cdpPort: port,
+        })) as {
+          isError?: boolean;
+          content: { type: string; text: string }[];
+        };
+
+        expect(result.isError).toBeUndefined();
+        expect(result.content).toHaveLength(1);
+
+        const parsed = JSON.parse(
+          (result.content[0] as { text: string }).text,
+        ) as Profile;
+        expect(parsed.miniProfile).toHaveProperty("firstName");
+        expect(typeof parsed.miniProfile.firstName).toBe("string");
+        expect(parsed.miniProfile.firstName.length).toBeGreaterThan(0);
+        expect(Array.isArray(parsed.positions)).toBe(true);
+        expect(Array.isArray(parsed.skills)).toBe(true);
+      },
+      120_000,
+    );
+
+    it(
       "stop-instance tool stops running instance",
       async () => {
-        if (accountId === undefined) {
-          return; // No accounts configured — skip
-        }
+        assertDefined(accountId, "No accounts configured in LinkedHelper");
 
         const { server, getHandler } = createMockServer();
         registerStopInstance(server);

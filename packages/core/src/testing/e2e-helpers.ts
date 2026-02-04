@@ -2,6 +2,7 @@ import { describe } from "vitest";
 import { AppService, type AppServiceOptions } from "../services/app.js";
 import { AppNotFoundError } from "../services/errors.js";
 import { discoverTargets } from "../cdp/discovery.js";
+import { LauncherService } from "../services/launcher.js";
 
 const linkedHelperAvailable = (() => {
   try {
@@ -32,9 +33,15 @@ export interface LaunchedApp {
 }
 
 /**
- * Launch LinkedHelper and wait for the CDP endpoint to become available.
+ * Launch LinkedHelper and wait for the launcher to become fully ready.
  *
- * @param options.timeout Maximum ms to wait for CDP readiness (default 30 000).
+ * Readiness is verified in two phases:
+ * 1. The CDP HTTP endpoint (`/json/list`) returns at least one target.
+ * 2. A full `LauncherService` connection succeeds and can query accounts,
+ *    confirming the Electron renderer, `@electron/remote`, and the
+ *    electron-store are all operational.
+ *
+ * @param options.timeout Maximum ms to wait for full readiness (default 30 000).
  */
 export async function launchApp(options?: {
   timeout?: number;
@@ -48,14 +55,29 @@ export async function launchApp(options?: {
   const port = app.cdpPort;
   const deadline = Date.now() + timeout;
 
+  // Phase 1: Wait for CDP HTTP endpoint to expose targets
   while (Date.now() < deadline) {
     try {
-      await discoverTargets(port);
-      return { app, port };
+      const targets = await discoverTargets(port);
+      if (targets.length > 0) break;
     } catch {
       // Not ready yet
     }
     await new Promise<void>((r) => setTimeout(r, 250));
+  }
+
+  // Phase 2: Wait for full launcher readiness (WebSocket + renderer loaded)
+  while (Date.now() < deadline) {
+    const launcher = new LauncherService(port);
+    try {
+      await launcher.connect();
+      await launcher.listAccounts();
+      launcher.disconnect();
+      return { app, port };
+    } catch {
+      launcher.disconnect();
+    }
+    await new Promise<void>((r) => setTimeout(r, 500));
   }
 
   // Clean up on timeout
@@ -66,7 +88,7 @@ export async function launchApp(options?: {
   }
 
   throw new Error(
-    `LinkedHelper CDP endpoint did not become available on port ${String(port)} within ${String(timeout)}ms`,
+    `LinkedHelper launcher did not become fully ready on port ${String(port)} within ${String(timeout)}ms`,
   );
 }
 
@@ -79,4 +101,32 @@ export async function quitApp(app: AppService): Promise<void> {
   } catch {
     // Swallow errors during cleanup
   }
+}
+
+/**
+ * Retry an async operation with configurable attempts and delay.
+ *
+ * Useful in E2E tests where CDP endpoints may be transiently
+ * unavailable during the LinkedHelper app lifecycle.
+ */
+export async function retryAsync<T>(
+  fn: () => Promise<T>,
+  options?: { retries?: number; delay?: number },
+): Promise<T> {
+  const retries = options?.retries ?? 3;
+  const delay = options?.delay ?? 500;
+  let lastError: unknown;
+
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (i < retries) {
+        await new Promise<void>((r) => setTimeout(r, delay));
+      }
+    }
+  }
+
+  throw lastError;
 }

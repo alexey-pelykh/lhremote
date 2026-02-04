@@ -18,7 +18,11 @@ const DEFAULT_LAUNCHER_PORT = 9222;
  * 1. Find the launcher PID by looking for a process listening on `launcherPort`.
  * 2. Find child processes of the launcher.
  * 3. Among those children, find one listening on a TCP port that is NOT the
- *    launcher port — that is the instance's CDP port.
+ *    launcher port and that responds to the CDP `/json/list` endpoint.
+ *
+ * The instance process may listen on multiple ports (e.g. a web content
+ * server and a CDP debugging server).  We probe each candidate with an
+ * HTTP fetch to `/json/list` to ensure we return the actual CDP port.
  *
  * @param launcherPort - The known launcher CDP port (default 9222).
  * @returns The dynamic instance CDP port, or `null` if no running instance was found.
@@ -36,14 +40,10 @@ export async function discoverInstancePort(
     return null;
   }
 
-  for (const pid of childPids) {
-    const port = await findListeningPort(pid, launcherPort);
-    if (port !== null) {
-      return port;
-    }
-  }
-
-  return null;
+  const results = await Promise.all(
+    childPids.map((pid) => findCdpPort(pid, launcherPort)),
+  );
+  return results.find((port) => port !== null) ?? null;
 }
 
 /**
@@ -73,21 +73,76 @@ async function findChildPids(parentPid: number): Promise<number[]> {
 }
 
 /**
- * Find a TCP listening port for the given PID, excluding `excludePort`.
+ * Find the CDP debugging port for the given PID.
+ *
+ * Tries each listening port (excluding `excludePort`) with an HTTP fetch
+ * to `/json/list`.  Returns the first port that responds successfully.
  */
-async function findListeningPort(
+async function findCdpPort(
   pid: number,
   excludePort: number,
 ): Promise<number | null> {
+  let ports: Set<number>;
   try {
-    const ports = await pidToPorts(pid);
-    for (const port of ports) {
-      if (port !== excludePort) {
-        return port;
-      }
-    }
-    return null;
+    ports = await pidToPorts(pid);
   } catch {
     return null;
+  }
+
+  const candidates = [...ports].filter((p) => p !== excludePort);
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  try {
+    return await Promise.any(
+      candidates.map(async (port) => {
+        if (await isCdpPort(port)) {
+          return port;
+        }
+        throw new Error("not CDP");
+      }),
+    );
+  } catch {
+    // AggregateError — no candidate port responded to CDP
+    return null;
+  }
+}
+
+/**
+ * Find and forcefully kill all instance child processes of the launcher.
+ *
+ * Use as a last resort when graceful `stopInstance()` fails and
+ * the instance process needs to be terminated at the OS level.
+ */
+export async function killInstanceProcesses(
+  launcherPort: number,
+): Promise<void> {
+  const launcherPid = await findPidListeningOn(launcherPort);
+  if (launcherPid === null) {
+    return;
+  }
+
+  const childPids = await findChildPids(launcherPid);
+  for (const pid of childPids) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Process may already be dead
+    }
+  }
+}
+
+/**
+ * Check whether a port exposes a CDP `/json/list` endpoint.
+ */
+async function isCdpPort(port: number): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${String(port)}/json/list`,
+    );
+    return response.ok;
+  } catch {
+    return false;
   }
 }
