@@ -4,6 +4,7 @@ import {
   LinkedHelperNotRunningError,
   ServiceError,
   StartInstanceError,
+  WrongPortError,
 } from "./errors.js";
 import { LauncherService } from "./launcher.js";
 
@@ -28,10 +29,11 @@ vi.mock("../cdp/index.js", async (importOriginal) => {
       });
     }),
     CDPConnectionError: original.CDPConnectionError,
+    CDPEvaluationError: original.CDPEvaluationError,
   };
 });
 
-import { CDPConnectionError } from "../cdp/index.js";
+import { CDPConnectionError, CDPEvaluationError } from "../cdp/index.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -183,6 +185,68 @@ describe("LauncherService", () => {
       const accounts = await service.listAccounts();
 
       expect(accounts).toEqual([]);
+    });
+
+    it("throws WrongPortError when require is not defined", async () => {
+      await service.connect();
+      mockEvaluate.mockRejectedValue(
+        new CDPEvaluationError("ReferenceError: require is not defined"),
+      );
+
+      await expect(service.listAccounts()).rejects.toThrow(WrongPortError);
+      await expect(service.listAccounts()).rejects.toThrow(
+        /appears to be a LinkedHelper instance/,
+      );
+    });
+  });
+
+  describe("wrong port detection", () => {
+    it("throws WrongPortError from startInstance", async () => {
+      await service.connect();
+      mockEvaluate.mockRejectedValue(
+        new CDPEvaluationError("ReferenceError: require is not defined"),
+      );
+
+      await expect(service.startInstance(42)).rejects.toThrow(WrongPortError);
+    });
+
+    it("throws WrongPortError from stopInstance", async () => {
+      await service.connect();
+      mockEvaluate.mockRejectedValue(
+        new CDPEvaluationError("ReferenceError: require is not defined"),
+      );
+
+      await expect(service.stopInstance(42)).rejects.toThrow(WrongPortError);
+    });
+
+    it("throws WrongPortError from getInstanceStatus", async () => {
+      await service.connect();
+      mockEvaluate.mockRejectedValue(
+        new CDPEvaluationError("ReferenceError: require is not defined"),
+      );
+
+      await expect(service.getInstanceStatus(42)).rejects.toThrow(
+        WrongPortError,
+      );
+    });
+
+    it("does not catch unrelated CDPEvaluationErrors", async () => {
+      await service.connect();
+      mockEvaluate.mockRejectedValue(
+        new CDPEvaluationError("TypeError: Cannot read property 'get' of undefined"),
+      );
+
+      await expect(service.listAccounts()).rejects.toThrow(CDPEvaluationError);
+      await expect(service.listAccounts()).rejects.not.toThrow(WrongPortError);
+    });
+
+    it("includes the port number in the error message", async () => {
+      await service.connect();
+      mockEvaluate.mockRejectedValue(
+        new CDPEvaluationError("ReferenceError: require is not defined"),
+      );
+
+      await expect(service.listAccounts()).rejects.toThrow(/9222/);
     });
   });
 });

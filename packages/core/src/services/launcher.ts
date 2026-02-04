@@ -1,4 +1,4 @@
-import { CDPClient, CDPConnectionError } from "../cdp/index.js";
+import { CDPClient, CDPConnectionError, CDPEvaluationError } from "../cdp/index.js";
 import type {
   Account,
   InstanceStatus,
@@ -8,6 +8,7 @@ import {
   LinkedHelperNotRunningError,
   ServiceError,
   StartInstanceError,
+  WrongPortError,
 } from "./errors.js";
 
 /** Default CDP port for the LinkedHelper launcher process. */
@@ -67,7 +68,8 @@ export class LauncherService {
   async startInstance(accountId: number): Promise<void> {
     const client = this.ensureConnected();
 
-    const result = await client.evaluate<StartInstanceResult>(
+    const result = await this.launcherEvaluate<StartInstanceResult>(
+      client,
       `(async () => {
         try {
           const remote = require('@electron/remote');
@@ -104,7 +106,8 @@ export class LauncherService {
   async stopInstance(accountId: number): Promise<void> {
     const client = this.ensureConnected();
 
-    await client.evaluate(
+    await this.launcherEvaluate(
+      client,
       `(async () => {
         const remote = require('@electron/remote');
         const mainWindow = remote.getGlobal('mainWindow');
@@ -123,7 +126,8 @@ export class LauncherService {
     // NOTE: instanceManager.instances is always empty in the renderer process
     // due to cross-process architecture (instances run as separate OS processes).
     // This returns 'stopped' until a reliable IPC-based status query is implemented.
-    const status = await client.evaluate<string>(
+    const status = await this.launcherEvaluate<string>(
+      client,
       `(() => {
         const remote = require('@electron/remote');
         const mainWindow = remote.getGlobal('mainWindow');
@@ -145,7 +149,8 @@ export class LauncherService {
   async listAccounts(): Promise<Account[]> {
     const client = this.ensureConnected();
 
-    const accounts = await client.evaluate<Account[]>(
+    const accounts = await this.launcherEvaluate<Account[]>(
+      client,
       `(() => {
         const remote = require('@electron/remote');
         const mainWindow = remote.getGlobal('mainWindow');
@@ -181,5 +186,23 @@ export class LauncherService {
       throw new ServiceError("LauncherService is not connected");
     }
     return this.client;
+  }
+
+  private async launcherEvaluate<T = unknown>(
+    client: CDPClient,
+    expression: string,
+    awaitPromise = false,
+  ): Promise<T> {
+    try {
+      return await client.evaluate<T>(expression, awaitPromise);
+    } catch (error) {
+      if (
+        error instanceof CDPEvaluationError &&
+        error.message.includes("require is not defined")
+      ) {
+        throw new WrongPortError(this.port);
+      }
+      throw error;
+    }
   }
 }

@@ -66,6 +66,20 @@ export class InstanceNotRunningError extends ServiceError {
 }
 
 /**
+ * Thrown when the CDP port appears to belong to a LinkedHelper instance
+ * (webview) rather than the launcher process.
+ */
+export class WrongPortError extends ServiceError {
+  constructor(port: number) {
+    super(
+      `CDP port ${String(port)} appears to be a LinkedHelper instance, not the launcher. ` +
+        `Use the launcher port instead (default: 9222).`,
+    );
+    this.name = "WrongPortError";
+  }
+}
+
+/**
  * Thrown when profile extraction times out waiting for data
  * to appear in the database.
  */
