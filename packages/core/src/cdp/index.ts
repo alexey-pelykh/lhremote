@@ -1,6 +1,9 @@
 export { CDPClient } from "./client.js";
 export { discoverTargets } from "./discovery.js";
-export { discoverInstancePort } from "./instance-discovery.js";
+export {
+  discoverInstancePort,
+  killInstanceProcesses,
+} from "./instance-discovery.js";
 export {
   CDPConnectionError,
   CDPError,

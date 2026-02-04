@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { discoverInstancePort } from "./instance-discovery.js";
 
 vi.mock("pid-port", () => ({
@@ -14,6 +14,13 @@ import { pidToPorts, portToPid } from "pid-port";
 import psList from "ps-list";
 
 describe("discoverInstancePort", () => {
+  beforeEach(() => {
+    // Mock fetch to simulate a responding CDP endpoint
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("[]", { status: 200 }),
+    );
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -95,6 +102,43 @@ describe("discoverInstancePort", () => {
   it("should return null when psList throws", async () => {
     vi.mocked(portToPid).mockResolvedValue(12345 as never);
     vi.mocked(psList).mockRejectedValue(new Error("failed"));
+
+    const port = await discoverInstancePort(9222);
+    expect(port).toBeNull();
+  });
+
+  it("should skip ports that do not respond to CDP", async () => {
+    vi.mocked(portToPid).mockResolvedValue(12345 as never);
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 12346, name: "electron", ppid: 12345 },
+    ]);
+    vi.mocked(pidToPorts).mockResolvedValue(
+      new Set([50000, 50001]) as never,
+    );
+
+    // Port 50000 rejects (not CDP), port 50001 responds
+    vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes(":50000/")) {
+        throw new Error("ECONNREFUSED");
+      }
+      return new Response("[]", { status: 200 });
+    });
+
+    const port = await discoverInstancePort(9222);
+    expect(port).toBe(50001);
+  });
+
+  it("should return null when no port responds to CDP", async () => {
+    vi.mocked(portToPid).mockResolvedValue(12345 as never);
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 12346, name: "electron", ppid: 12345 },
+    ]);
+    vi.mocked(pidToPorts).mockResolvedValue(new Set([50000]) as never);
+
+    vi.mocked(globalThis.fetch).mockRejectedValue(
+      new Error("ECONNREFUSED"),
+    );
 
     const port = await discoverInstancePort(9222);
     expect(port).toBeNull();
