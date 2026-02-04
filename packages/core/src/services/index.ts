@@ -1,5 +1,5 @@
 export { AppService, type AppServiceOptions } from "./app.js";
-export { InstanceService } from "./instance.js";
+export { InstanceService, type ActionResult } from "./instance.js";
 export {
   startInstanceWithRecovery,
   waitForInstancePort,
@@ -16,6 +16,7 @@ export {
 } from "./status.js";
 export { ProfileService, extractSlug, type VisitAndExtractOptions } from "./profile.js";
 export {
+  ActionExecutionError,
   AppLaunchError,
   AppNotFoundError,
   ExtractionTimeoutError,

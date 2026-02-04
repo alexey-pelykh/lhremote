@@ -80,6 +80,23 @@ export class WrongPortError extends ServiceError {
 }
 
 /**
+ * Thrown when a LinkedHelper action execution fails.
+ */
+export class ActionExecutionError extends ServiceError {
+  /** The action type that was attempted (e.g., 'MessageToPerson'). */
+  readonly actionType: string;
+
+  constructor(actionType: string, message?: string, options?: ErrorOptions) {
+    super(
+      message ?? `Action '${actionType}' failed`,
+      options,
+    );
+    this.name = "ActionExecutionError";
+    this.actionType = actionType;
+  }
+}
+
+/**
  * Thrown when profile extraction times out waiting for data
  * to appear in the database.
  */

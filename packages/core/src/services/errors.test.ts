@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ActionExecutionError,
   AppLaunchError,
   AppNotFoundError,
   ExtractionTimeoutError,
@@ -78,6 +79,26 @@ describe("Service errors", () => {
   it("should allow custom message for InstanceNotRunningError", () => {
     const error = new InstanceNotRunningError("LinkedIn target not found");
     expect(error.message).toBe("LinkedIn target not found");
+  });
+
+  it("should set correct name for ActionExecutionError", () => {
+    const error = new ActionExecutionError("MessageToPerson");
+    expect(error.name).toBe("ActionExecutionError");
+    expect(error.actionType).toBe("MessageToPerson");
+    expect(error.message).toContain("MessageToPerson");
+    expect(error).toBeInstanceOf(ServiceError);
+  });
+
+  it("should allow custom message for ActionExecutionError", () => {
+    const error = new ActionExecutionError("InMail", "rate limited");
+    expect(error.message).toBe("rate limited");
+    expect(error.actionType).toBe("InMail");
+  });
+
+  it("should support cause via ErrorOptions for ActionExecutionError", () => {
+    const cause = new TypeError("CDP failed");
+    const error = new ActionExecutionError("InMail", "action failed", { cause });
+    expect(error.cause).toBe(cause);
   });
 
   it("should set correct name for ExtractionTimeoutError", () => {

@@ -23,6 +23,8 @@ export type {
 
 // Services
 export {
+  ActionExecutionError,
+  type ActionResult,
   AppLaunchError,
   AppNotFoundError,
   AppService,

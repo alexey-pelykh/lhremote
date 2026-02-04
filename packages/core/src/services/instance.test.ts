@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CdpTarget } from "../types/cdp.js";
-import { ServiceError } from "./errors.js";
+import { ActionExecutionError, ServiceError } from "./errors.js";
 import { InstanceService } from "./instance.js";
 
 /** Per-instance mock method sets, keyed by the target ID passed to connect(). */
@@ -229,24 +229,85 @@ describe("InstanceService", () => {
     });
   });
 
+  describe("executeAction", () => {
+    it("evaluates the given action on the UI client only", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      await service.executeAction("ScrapeMessagingHistory");
+
+      const liClient = getClientMocks("LI1");
+      const uiClient = getClientMocks("UI1");
+
+      expect(uiClient.evaluate).toHaveBeenCalledWith(
+        expect.stringContaining("ScrapeMessagingHistory"),
+        true,
+      );
+      expect(liClient.evaluate).not.toHaveBeenCalled();
+    });
+
+    it("passes config to the action", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      await service.executeAction("SomeAction", { key: "value" });
+
+      const uiClient = getClientMocks("UI1");
+      const script = uiClient.evaluate.mock.calls[0]?.[0] as string;
+      expect(script).toContain('"SomeAction"');
+      expect(script).toContain('"key"');
+      expect(script).toContain('"value"');
+    });
+
+    it("returns ActionResult with success on completion", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const result = await service.executeAction("ScrapeMessagingHistory");
+
+      expect(result).toEqual({
+        success: true,
+        actionType: "ScrapeMessagingHistory",
+      });
+    });
+
+    it("throws ActionExecutionError when evaluation fails", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      const cause = new Error("mainWindowService not found on window");
+      uiClient.evaluate.mockRejectedValueOnce(cause);
+
+      const error = await service.executeAction("BadAction").catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ActionExecutionError);
+      expect(error).toMatchObject({
+        actionType: "BadAction",
+        message: expect.stringContaining("mainWindowService not found"),
+      });
+      expect((error as ActionExecutionError).cause).toBe(cause);
+    });
+
+    it("throws ServiceError when not connected", async () => {
+      await expect(service.executeAction("SomeAction")).rejects.toThrow(
+        ServiceError,
+      );
+    });
+  });
+
   describe("triggerExtraction", () => {
-    it("evaluates SaveCurrentProfile on the UI client only", async () => {
+    it("delegates to executeAction with SaveCurrentProfile", async () => {
       mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
       await service.connect();
 
       await service.triggerExtraction();
 
-      const liClient = getClientMocks("LI1");
       const uiClient = getClientMocks("UI1");
 
-      // UI client should have received the extraction call
       expect(uiClient.evaluate).toHaveBeenCalledWith(
         expect.stringContaining("SaveCurrentProfile"),
         true,
       );
-
-      // LinkedIn client should NOT have received any evaluate call
-      expect(liClient.evaluate).not.toHaveBeenCalled();
     });
 
     it("throws ServiceError when not connected", async () => {

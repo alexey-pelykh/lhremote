@@ -1,6 +1,18 @@
 import { CDPClient, discoverTargets } from "../cdp/index.js";
 import type { CdpTarget } from "../types/cdp.js";
-import { InstanceNotRunningError, ServiceError } from "./errors.js";
+import { ActionExecutionError, InstanceNotRunningError, ServiceError } from "./errors.js";
+
+/**
+ * Result of a LinkedHelper action execution.
+ */
+export interface ActionResult {
+  /** Whether the action completed successfully. */
+  success: boolean;
+  /** The action type that was executed. */
+  actionType: string;
+  /** Error message if the action failed. */
+  error?: string;
+}
 
 /** Maximum time to wait for both CDP targets to appear (ms). */
 const CONNECT_TIMEOUT = 30_000;
@@ -102,22 +114,47 @@ export class InstanceService {
   }
 
   /**
+   * Execute a LinkedHelper action via the instance UI.
+   *
+   * This tells LinkedHelper to run the given action type with the
+   * provided configuration object. The call resolves when the action
+   * completes (which may take minutes for long-running actions like
+   * ScrapeMessagingHistory).
+   *
+   * @param actionName  The action type (e.g., 'SaveCurrentProfile', 'ScrapeMessagingHistory').
+   * @param config      Action configuration object (default: `{}`).
+   */
+  async executeAction(
+    actionName: string,
+    config: Record<string, unknown> = {},
+  ): Promise<ActionResult> {
+    const client = this.ensureUiClient();
+
+    try {
+      await client.evaluate(
+        `(async () => {
+        const mws = window.mainWindowService;
+        if (!mws) throw new Error('mainWindowService not found on window');
+        return await mws.call('executeSingleAction', ${JSON.stringify(actionName)}, ${JSON.stringify(config)});
+      })()`,
+        true,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ActionExecutionError(actionName, `Action '${actionName}' failed: ${message}`, { cause: error });
+    }
+
+    return { success: true, actionType: actionName };
+  }
+
+  /**
    * Trigger the SaveCurrentProfile action via the instance UI.
    *
    * This tells LinkedHelper to extract data from the currently
    * displayed LinkedIn profile and save it to the database.
    */
   async triggerExtraction(): Promise<void> {
-    const client = this.ensureUiClient();
-
-    await client.evaluate(
-      `(async () => {
-        const mws = window.mainWindowService;
-        if (!mws) throw new Error('mainWindowService not found on window');
-        return await mws.call('executeSingleAction', 'SaveCurrentProfile', {});
-      })()`,
-      true,
-    );
+    await this.executeAction("SaveCurrentProfile");
   }
 
   /** Whether both clients are currently connected. */
