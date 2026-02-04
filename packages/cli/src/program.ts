@@ -9,18 +9,11 @@ import {
   handleQuitApp,
   handleStartInstance,
   handleStopInstance,
+  handleVisitAndExtract,
 } from "./handlers/index.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json") as { version: string };
-
-/** Stub handler that reports the command as not yet implemented. */
-function stub(name: string): () => void {
-  return () => {
-    process.stderr.write(`${name}: not yet implemented\n`);
-    process.exitCode = 1;
-  };
-}
 
 /** Parse a string as a positive integer, throwing on invalid input. */
 function parsePositiveInt(value: string): number {
@@ -77,8 +70,9 @@ export function createProgram(): Command {
     .command("visit-and-extract")
     .description("Visit a LinkedIn profile and extract data")
     .argument("<profileUrl>", "LinkedIn profile URL")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
-    .action(stub("visit-and-extract"));
+    .action(handleVisitAndExtract);
 
   program
     .command("check-status")

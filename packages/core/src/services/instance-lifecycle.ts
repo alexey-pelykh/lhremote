@@ -2,8 +2,16 @@ import { discoverInstancePort } from "../cdp/index.js";
 import type { LauncherService } from "./launcher.js";
 import { StartInstanceError } from "./errors.js";
 
-/** Maximum time to wait for the instance CDP port to become available (ms). */
-const PORT_DISCOVERY_TIMEOUT = 15_000;
+/**
+ * Maximum time to wait for the instance CDP port to become available (ms).
+ *
+ * LinkedHelper instances are full Electron apps that load LinkedIn on startup,
+ * so the CDP endpoint may not be ready for 30+ seconds after the process starts.
+ */
+const PORT_DISCOVERY_TIMEOUT = 45_000;
+
+/** Maximum time to wait for the instance CDP port to disappear after stop (ms). */
+const PORT_SHUTDOWN_TIMEOUT = 15_000;
 
 /** Interval between port discovery attempts (ms). */
 const PORT_DISCOVERY_INTERVAL = 1_000;
@@ -63,6 +71,10 @@ export async function startInstanceWithRecovery(
 
 /**
  * Poll for the instance CDP port until available or timeout.
+ *
+ * The underlying `discoverInstancePort` verifies each candidate port
+ * responds to the CDP `/json/list` endpoint, so the returned port is
+ * guaranteed to be a working CDP port.
  */
 export async function waitForInstancePort(
   launcherPort: number,
@@ -78,6 +90,26 @@ export async function waitForInstancePort(
   }
 
   return null;
+}
+
+/**
+ * Poll until no instance CDP port is discoverable, or timeout.
+ *
+ * Use after `stopInstance()` to ensure the process has fully exited
+ * before starting a new instance.
+ */
+export async function waitForInstanceShutdown(
+  launcherPort: number,
+): Promise<void> {
+  const deadline = Date.now() + PORT_SHUTDOWN_TIMEOUT;
+
+  while (Date.now() < deadline) {
+    const port = await discoverInstancePort(launcherPort);
+    if (port === null) {
+      return;
+    }
+    await sleep(PORT_DISCOVERY_INTERVAL);
+  }
 }
 
 function sleep(ms: number): Promise<void> {

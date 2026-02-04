@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CdpTarget } from "../types/cdp.js";
-import { InstanceNotRunningError, ServiceError } from "./errors.js";
+import { ServiceError } from "./errors.js";
 import { InstanceService } from "./instance.js";
 
 /** Per-instance mock method sets, keyed by the target ID passed to connect(). */
@@ -94,6 +94,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -105,7 +106,7 @@ describe("InstanceService", () => {
   });
 
   describe("connect", () => {
-    it("discovers targets and connects to both", async () => {
+    it("discovers targets and connects to both on first poll", async () => {
       mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
 
       await service.connect();
@@ -116,37 +117,67 @@ describe("InstanceService", () => {
       expect(clientsByTargetId.has("UI1")).toBe(true);
     });
 
+    it("polls until both targets appear", async () => {
+      vi.useFakeTimers();
+
+      mockedDiscoverTargets
+        .mockResolvedValueOnce([UI_TARGET])
+        .mockResolvedValueOnce([UI_TARGET])
+        .mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+
+      const connectPromise = service.connect();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await connectPromise;
+
+      expect(service.isConnected).toBe(true);
+      expect(mockedDiscoverTargets.mock.calls.length).toBeGreaterThanOrEqual(3);
+
+      vi.useRealTimers();
+    });
+
     it("throws InstanceNotRunningError when no LinkedIn target", async () => {
+      vi.useFakeTimers();
+
       mockedDiscoverTargets.mockResolvedValue([UI_TARGET]);
 
-      await expect(service.connect()).rejects.toThrow(
-        InstanceNotRunningError,
-      );
-      await expect(service.connect()).rejects.toThrow(
+      const promise = service.connect();
+      const assertion = expect(promise).rejects.toThrow(
         /LinkedIn webview target not found/,
       );
+      await vi.advanceTimersByTimeAsync(31_000);
+      await assertion;
+
+      vi.useRealTimers();
     });
 
     it("throws InstanceNotRunningError when no UI target", async () => {
+      vi.useFakeTimers();
+
       mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET]);
 
-      await expect(service.connect()).rejects.toThrow(
-        InstanceNotRunningError,
-      );
-      await expect(service.connect()).rejects.toThrow(
+      const promise = service.connect();
+      const assertion = expect(promise).rejects.toThrow(
         /Instance UI target not found/,
       );
+      await vi.advanceTimersByTimeAsync(31_000);
+      await assertion;
+
+      vi.useRealTimers();
     });
 
     it("throws InstanceNotRunningError when no targets at all", async () => {
+      vi.useFakeTimers();
+
       mockedDiscoverTargets.mockResolvedValue([]);
 
-      await expect(service.connect()).rejects.toThrow(
-        InstanceNotRunningError,
-      );
-      await expect(service.connect()).rejects.toThrow(
+      const promise = service.connect();
+      const assertion = expect(promise).rejects.toThrow(
         /LinkedIn webview target not found.*0 CDP target/,
       );
+      await vi.advanceTimersByTimeAsync(31_000);
+      await assertion;
+
+      vi.useRealTimers();
     });
   });
 

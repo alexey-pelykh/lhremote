@@ -3,6 +3,7 @@ export { InstanceService } from "./instance.js";
 export {
   startInstanceWithRecovery,
   waitForInstancePort,
+  waitForInstanceShutdown,
   type StartInstanceOutcome,
 } from "./instance-lifecycle.js";
 export { LauncherService } from "./launcher.js";

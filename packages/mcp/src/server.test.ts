@@ -72,7 +72,8 @@ describe("createServer", () => {
     expect(names).toContain("list-accounts");
     expect(names).toContain("start-instance");
     expect(names).toContain("stop-instance");
+    expect(names).toContain("visit-and-extract");
     expect(names).toContain("check-status");
-    expect(names).toHaveLength(6);
+    expect(names).toHaveLength(7);
   });
 });
