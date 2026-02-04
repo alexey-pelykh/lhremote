@@ -72,6 +72,7 @@ describe("createServer", () => {
     const { tools } = await c.listTools();
     const names = tools.map((t) => t.name);
 
+    expect(names).toContain("find-app");
     expect(names).toContain("launch-app");
     expect(names).toContain("quit-app");
     expect(names).toContain("list-accounts");
@@ -79,6 +80,6 @@ describe("createServer", () => {
     expect(names).toContain("stop-instance");
     expect(names).toContain("visit-and-extract");
     expect(names).toContain("check-status");
-    expect(names).toHaveLength(7);
+    expect(names).toHaveLength(8);
   });
 });

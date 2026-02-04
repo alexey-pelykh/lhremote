@@ -4,6 +4,7 @@ import { Command, InvalidArgumentError } from "commander";
 
 import {
   handleCheckStatus,
+  handleFindApp,
   handleLaunchApp,
   handleListAccounts,
   handleQuitApp,
@@ -32,6 +33,12 @@ export function createProgram(): Command {
     .name("lhremote")
     .description("CLI for LinkedHelper automation")
     .version(version);
+
+  program
+    .command("find-app")
+    .description("Detect running LinkedHelper instances")
+    .option("--json", "Output as JSON")
+    .action(handleFindApp);
 
   program
     .command("launch-app")

@@ -62,4 +62,6 @@ export {
   CDPEvaluationError,
   CDPTimeoutError,
   discoverInstancePort,
+  findApp,
+  type DiscoveredApp,
 } from "./cdp/index.js";

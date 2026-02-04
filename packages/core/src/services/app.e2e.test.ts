@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeE2E, launchApp, quitApp, retryAsync } from "../testing/e2e-helpers.js";
+import { findApp, type DiscoveredApp } from "../cdp/app-discovery.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import type { Account, Profile } from "../types/index.js";
 import type { StatusReport } from "./status.js";
@@ -14,6 +15,7 @@ import { killInstanceProcesses } from "../cdp/index.js";
 
 // CLI handlers — tested against the same running app
 import { handleCheckStatus } from "../../../cli/src/handlers/check-status.js";
+import { handleFindApp } from "../../../cli/src/handlers/find-app.js";
 import { handleListAccounts } from "../../../cli/src/handlers/list-accounts.js";
 import { handleQuitApp } from "../../../cli/src/handlers/quit-app.js";
 import { handleStartInstance } from "../../../cli/src/handlers/start-instance.js";
@@ -22,6 +24,7 @@ import { handleVisitAndExtract } from "../../../cli/src/handlers/visit-and-extra
 
 // MCP tool registration — tested against the same running app
 import { registerCheckStatus } from "../../../mcp/src/tools/check-status.js";
+import { registerFindApp } from "../../../mcp/src/tools/find-app.js";
 import { registerStartInstance } from "../../../mcp/src/tools/start-instance.js";
 import { registerStopInstance } from "../../../mcp/src/tools/stop-instance.js";
 import { registerVisitAndExtract } from "../../../mcp/src/tools/visit-and-extract.js";
@@ -93,6 +96,30 @@ describeE2E("App lifecycle", () => {
       for (const t of targets) {
         console.log(`  target: type=${t.type} title=${t.title} url=${t.url}`);
       }
+    });
+  });
+
+  describe("findApp", () => {
+    it("discovers the running LinkedHelper process", async () => {
+      const apps = await findApp();
+
+      expect(apps.length).toBeGreaterThan(0);
+
+      const connectable = apps.filter((a) => a.connectable);
+      expect(connectable.length).toBeGreaterThan(0);
+
+      for (const app of connectable) {
+        expect(app.pid).toBeGreaterThan(0);
+        expect(app.cdpPort).toBeGreaterThan(0);
+      }
+    });
+
+    it("finds a process whose CDP port matches the launched port", async () => {
+      const apps = await findApp();
+
+      const match = apps.find((a) => a.cdpPort === port);
+      assertDefined(match, `Expected findApp to discover port ${String(port)}`);
+      expect(match.connectable).toBe(true);
     });
   });
 
@@ -364,6 +391,45 @@ describeE2E("App lifecycle", () => {
       expect(parsed.launcher.reachable).toBe(true);
     });
 
+    it("handleFindApp --json writes valid JSON to stdout", async () => {
+      const stdoutSpy = vi
+        .spyOn(process.stdout, "write")
+        .mockReturnValue(true);
+
+      await handleFindApp({ json: true });
+
+      expect(process.exitCode).toBeUndefined();
+      expect(stdoutSpy).toHaveBeenCalled();
+
+      const output = stdoutSpy.mock.calls
+        .map((call) => String(call[0]))
+        .join("");
+      const parsed = JSON.parse(output) as DiscoveredApp[];
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed.length).toBeGreaterThan(0);
+
+      const match = parsed.find((a) => a.cdpPort === port);
+      assertDefined(match, `Expected findApp to discover port ${String(port)}`);
+      expect(match.connectable).toBe(true);
+    });
+
+    it("handleFindApp prints human-friendly output", async () => {
+      const stdoutSpy = vi
+        .spyOn(process.stdout, "write")
+        .mockReturnValue(true);
+
+      await handleFindApp({});
+
+      expect(process.exitCode).toBeUndefined();
+      expect(stdoutSpy).toHaveBeenCalled();
+
+      const output = stdoutSpy.mock.calls
+        .map((call) => String(call[0]))
+        .join("");
+      expect(output).toMatch(/PID \d+/);
+      expect(output).toContain("connectable");
+    });
+
     it("handleCheckStatus prints human-friendly output", async () => {
       const stdoutSpy = vi
         .spyOn(process.stdout, "write")
@@ -538,6 +604,29 @@ describeE2E("App lifecycle", () => {
         launcher.disconnect();
       }
     }, 30_000);
+
+    it("find-app tool discovers running instances", async () => {
+      const { server, getHandler } = createMockServer();
+      registerFindApp(server);
+
+      const handler = getHandler("find-app");
+      const result = (await handler({})) as {
+        isError?: boolean;
+        content: { type: string; text: string }[];
+      };
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toHaveLength(1);
+
+      const parsed = JSON.parse(
+        (result.content[0] as { text: string }).text,
+      ) as DiscoveredApp[];
+      expect(parsed.length).toBeGreaterThan(0);
+
+      const match = parsed.find((a) => a.cdpPort === port);
+      assertDefined(match, `Expected findApp to discover port ${String(port)}`);
+      expect(match.connectable).toBe(true);
+    });
 
     it("check-status tool returns status report", async () => {
       const { server, getHandler } = createMockServer();
