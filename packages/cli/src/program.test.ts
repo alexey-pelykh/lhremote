@@ -33,6 +33,7 @@ describe("createProgram", () => {
     const program = createProgram();
     const commandNames = program.commands.map((c) => c.name());
 
+    expect(commandNames).toContain("find-app");
     expect(commandNames).toContain("launch-app");
     expect(commandNames).toContain("quit-app");
     expect(commandNames).toContain("list-accounts");
@@ -40,7 +41,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("stop-instance");
     expect(commandNames).toContain("visit-and-extract");
     expect(commandNames).toContain("check-status");
-    expect(commandNames).toHaveLength(7);
+    expect(commandNames).toHaveLength(8);
   });
 
   describe("launch-app", () => {

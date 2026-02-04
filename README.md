@@ -13,6 +13,7 @@ This project is brought to you by [Alexey Pelykh](https://github.com/alexey-pely
 
 lhremote lets AI assistants (Claude, etc.) control LinkedHelper through the [Model Context Protocol](https://modelcontextprotocol.io). It can:
 
+- Detect running LinkedHelper instances and their CDP connection details
 - Launch and quit the LinkedHelper application
 - List configured LinkedIn accounts
 - Start and stop LinkedHelper instances
@@ -53,7 +54,7 @@ Add to your Claude Desktop configuration (`claude_desktop_config.json`):
 
 Once configured, Claude can use the tools directly. A typical workflow:
 
-1. **launch-app** - Launch LinkedHelper with CDP enabled
+1. **find-app** - Detect a running LinkedHelper instance (or **launch-app** to start one)
 2. **list-accounts** - See available LinkedIn accounts
 3. **start-instance** - Start an instance for an account
 4. **visit-and-extract** - Visit a profile and get structured data
@@ -65,6 +66,7 @@ Once configured, Claude can use the tools directly. A typical workflow:
 The `lhremote` command provides the same functionality as the MCP server:
 
 ```sh
+lhremote find-app [--json]
 lhremote launch-app [--cdp-port <port>]
 lhremote quit-app [--cdp-port <port>]
 lhremote list-accounts [--cdp-port <port>] [--json]
@@ -75,6 +77,14 @@ lhremote check-status [--cdp-port <port>] [--json]
 ```
 
 ## MCP Tools
+
+### find-app
+
+Detect running LinkedHelper application instances and their CDP connection details. Useful when the app is already running and you need to discover which port to connect on.
+
+*No parameters.*
+
+Returns an array of discovered instances, each with `pid`, `cdpPort`, and `connectable` status.
 
 ### launch-app
 
