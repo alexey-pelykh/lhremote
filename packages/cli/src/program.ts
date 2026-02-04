@@ -9,6 +9,7 @@ import {
   handleListAccounts,
   handleQueryMessages,
   handleQueryProfile,
+  handleScrapeMessagingHistory,
   handleQuitApp,
   handleStartInstance,
   handleStopInstance,
@@ -117,6 +118,15 @@ export function createProgram(): Command {
     .option("--public-id <slug>", "Look up by LinkedIn public ID")
     .option("--json", "Output as JSON")
     .action(handleQueryProfile);
+
+  program
+    .command("scrape-messaging-history")
+    .description(
+      "Scrape messaging history from LinkedIn into the local database",
+    )
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleScrapeMessagingHistory);
 
   program
     .command("check-status")

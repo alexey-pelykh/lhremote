@@ -33,12 +33,14 @@ const CONNECT_POLL_INTERVAL = 1_000;
 export class InstanceService {
   private readonly port: number;
   private readonly host: string;
+  private readonly timeout: number | undefined;
   private linkedInClient: CDPClient | null = null;
   private uiClient: CDPClient | null = null;
 
-  constructor(port: number, options?: { host?: string }) {
+  constructor(port: number, options?: { host?: string; timeout?: number }) {
     this.port = port;
     this.host = options?.host ?? "127.0.0.1";
+    this.timeout = options?.timeout;
   }
 
   /**
@@ -80,10 +82,14 @@ export class InstanceService {
       );
     }
 
-    const liClient = new CDPClient(this.port, { host: this.host });
+    const clientOptions = this.timeout !== undefined
+      ? { host: this.host, timeout: this.timeout }
+      : { host: this.host };
+
+    const liClient = new CDPClient(this.port, clientOptions);
     await liClient.connect(linkedInTarget.id);
 
-    const ui = new CDPClient(this.port, { host: this.host });
+    const ui = new CDPClient(this.port, clientOptions);
     await ui.connect(uiTarget.id);
 
     this.linkedInClient = liClient;
