@@ -7,6 +7,9 @@
 # MCP configuration with credentials
 .mcp.json.local
 
+# Build output (CI: gh-pages, etc.)
+build/gh-pages/
+
 ## Origin: https://github.com/github/gitignore/blob/main/Node.gitignore
 # Logs
 logs
