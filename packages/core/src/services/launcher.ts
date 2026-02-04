@@ -69,21 +69,26 @@ export class LauncherService {
 
     const result = await client.evaluate<StartInstanceResult>(
       `(async () => {
-        const remote = require('@electron/remote');
-        const mainWindow = remote.getGlobal('mainWindow');
-        return await mainWindow.startInstance({
-          linkedInAccount: { id: ${String(accountId)}, liId: ${String(accountId)} },
-          accountData: { id: ${String(accountId)}, liId: ${String(accountId)} },
-          instanceId: 1,
-          proxy: null,
-          license: null,
-          userId: null,
-          frontendSettings: {},
-          lhAccount: {},
-          zoomDefault: 0.9,
-          shouldBringToFront: true,
-          shouldStartRunningCampaigns: false,
-        });
+        try {
+          const remote = require('@electron/remote');
+          const mainWindow = remote.getGlobal('mainWindow');
+          await mainWindow.startInstance({
+            linkedInAccount: { id: ${String(accountId)}, liId: ${String(accountId)} },
+            accountData: { id: ${String(accountId)}, liId: ${String(accountId)} },
+            instanceId: 1,
+            proxy: null,
+            license: null,
+            userId: null,
+            frontendSettings: {},
+            lhAccount: {},
+            zoomDefault: 0.9,
+            shouldBringToFront: true,
+            shouldStartRunningCampaigns: false,
+          });
+          return { success: true };
+        } catch (e) {
+          return { success: false, error: e.message };
+        }
       })()`,
       true,
     );
@@ -133,6 +138,9 @@ export class LauncherService {
 
   /**
    * List all accounts configured in the LinkedHelper Electron store.
+   *
+   * Accounts are discovered from the `linkedInPasswords` store key whose
+   * entries use the format `userId:li:accountId`.
    */
   async listAccounts(): Promise<Account[]> {
     const client = this.ensureConnected();
@@ -142,18 +150,21 @@ export class LauncherService {
         const remote = require('@electron/remote');
         const mainWindow = remote.getGlobal('mainWindow');
         const store = mainWindow.electronStore;
-        const raw = store.get('linked-in-accounts') ?? {};
-        return Object.keys(raw)
-          .filter(k => /^\\d+$/.test(k))
+        const passwords = store.get('linkedInPasswords') ?? {};
+        return Object.keys(passwords)
           .map(k => {
-            const val = typeof raw[k] === 'object' && raw[k] !== null ? raw[k] : {};
+            const parts = k.split(':li:');
+            if (parts.length !== 2) return null;
+            const accountId = Number(parts[1]);
+            if (Number.isNaN(accountId)) return null;
             return {
-              id: Number(k),
-              liId: val.liId ?? Number(k),
-              name: val.name ?? val.fullName ?? '',
-              email: val.email ?? undefined,
+              id: accountId,
+              liId: accountId,
+              name: '',
+              email: undefined,
             };
-          });
+          })
+          .filter(a => a !== null);
       })()`,
     );
 

@@ -2,6 +2,12 @@ import { CDPClient, discoverTargets } from "../cdp/index.js";
 import type { CdpTarget } from "../types/cdp.js";
 import { InstanceNotRunningError, ServiceError } from "./errors.js";
 
+/** Maximum time to wait for both CDP targets to appear (ms). */
+const CONNECT_TIMEOUT = 30_000;
+
+/** Interval between target discovery polls (ms). */
+const CONNECT_POLL_INTERVAL = 1_000;
+
 /**
  * Controls a running LinkedHelper instance via CDP.
  *
@@ -26,13 +32,30 @@ export class InstanceService {
   /**
    * Connect to both instance CDP targets (LinkedIn page and UI).
    *
-   * @throws {InstanceNotRunningError} if the expected targets are not found.
+   * The instance may still be loading LinkedIn after startup, so this
+   * method polls until both targets appear or the timeout is reached.
+   *
+   * @throws {InstanceNotRunningError} if the expected targets are not found within the timeout.
    */
   async connect(): Promise<void> {
-    const targets = await discoverTargets(this.port, this.host);
+    const deadline = Date.now() + CONNECT_TIMEOUT;
 
-    const linkedInTarget = targets.find(isLinkedInTarget);
-    const uiTarget = targets.find(isUiTarget);
+    let targets: CdpTarget[] = [];
+    let linkedInTarget: CdpTarget | undefined;
+    let uiTarget: CdpTarget | undefined;
+
+    while (Date.now() < deadline) {
+      targets = await discoverTargets(this.port, this.host);
+
+      linkedInTarget = targets.find(isLinkedInTarget);
+      uiTarget = targets.find(isUiTarget);
+
+      if (linkedInTarget && uiTarget) {
+        break;
+      }
+
+      await new Promise<void>((resolve) => setTimeout(resolve, CONNECT_POLL_INTERVAL));
+    }
 
     if (!linkedInTarget) {
       throw new InstanceNotRunningError(
@@ -89,8 +112,8 @@ export class InstanceService {
 
     await client.evaluate(
       `(async () => {
-        const remote = require('@electron/remote');
-        const mws = remote.getGlobal('mainWindowService');
+        const mws = window.mainWindowService;
+        if (!mws) throw new Error('mainWindowService not found on window');
         return await mws.call('executeSingleAction', 'SaveCurrentProfile', {});
       })()`,
       true,

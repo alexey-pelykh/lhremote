@@ -14,6 +14,7 @@ import type { LauncherService } from "./launcher.js";
 import {
   startInstanceWithRecovery,
   waitForInstancePort,
+  waitForInstanceShutdown,
 } from "./instance-lifecycle.js";
 
 function createMockLauncher(
@@ -94,7 +95,7 @@ describe("startInstanceWithRecovery", () => {
     vi.mocked(discoverInstancePort).mockResolvedValue(null);
 
     const resultPromise = startInstanceWithRecovery(launcher, 42, 9222);
-    await vi.advanceTimersByTimeAsync(16_000);
+    await vi.advanceTimersByTimeAsync(46_000);
     const result = await resultPromise;
 
     expect(result).toEqual({ status: "timeout" });
@@ -162,9 +163,51 @@ describe("waitForInstancePort", () => {
     vi.mocked(discoverInstancePort).mockResolvedValue(null);
 
     const resultPromise = waitForInstancePort(9222);
-    await vi.advanceTimersByTimeAsync(16_000);
+    await vi.advanceTimersByTimeAsync(46_000);
     const result = await resultPromise;
 
     expect(result).toBeNull();
+  });
+});
+
+describe("waitForInstanceShutdown", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("resolves immediately when no instance port is found", async () => {
+    vi.mocked(discoverInstancePort).mockResolvedValue(null);
+
+    await waitForInstanceShutdown(9222);
+
+    expect(discoverInstancePort).toHaveBeenCalledTimes(1);
+  });
+
+  it("polls until port disappears", async () => {
+    vi.mocked(discoverInstancePort)
+      .mockResolvedValueOnce(55123)
+      .mockResolvedValueOnce(55123)
+      .mockResolvedValue(null);
+
+    await waitForInstanceShutdown(9222);
+
+    expect(discoverInstancePort).toHaveBeenCalledTimes(3);
+  });
+
+  it("resolves after timeout even if port persists", async () => {
+    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
+
+    const promise = waitForInstanceShutdown(9222);
+    await vi.advanceTimersByTimeAsync(46_000);
+    await promise;
+
+    // Should have polled multiple times then given up
+    expect(vi.mocked(discoverInstancePort).mock.calls.length).toBeGreaterThan(1);
   });
 });

@@ -6,6 +6,7 @@ import { registerListAccounts } from "./list-accounts.js";
 import { registerQuitApp } from "./quit-app.js";
 import { registerStartInstance } from "./start-instance.js";
 import { registerStopInstance } from "./stop-instance.js";
+import { registerVisitAndExtract } from "./visit-and-extract.js";
 
 export function registerAllTools(server: McpServer): void {
   registerLaunchApp(server);
@@ -13,5 +14,6 @@ export function registerAllTools(server: McpServer): void {
   registerListAccounts(server);
   registerStartInstance(server);
   registerStopInstance(server);
+  registerVisitAndExtract(server);
   registerCheckStatus(server);
 }
