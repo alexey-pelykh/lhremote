@@ -1,8 +1,13 @@
+import { createRequire } from "node:module";
+
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createServer } from "./server.js";
+
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json") as { version: string };
 
 let server: McpServer | undefined;
 let client: Client | undefined;
@@ -50,7 +55,7 @@ describe("createServer", () => {
 
     const info = c.getServerVersion();
     expect(info).toEqual(
-      expect.objectContaining({ name: "@lhremote/mcp", version: "0.0.0" }),
+      expect.objectContaining({ name: "@lhremote/mcp", version }),
     );
   });
 
