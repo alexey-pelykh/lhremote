@@ -7,6 +7,7 @@ import {
   handleFindApp,
   handleLaunchApp,
   handleListAccounts,
+  handleQueryMessages,
   handleQueryProfile,
   handleQuitApp,
   handleStartInstance,
@@ -22,6 +23,17 @@ function parsePositiveInt(value: string): number {
   const n = Number(value);
   if (!Number.isInteger(n) || n <= 0) {
     throw new InvalidArgumentError(`Expected a positive integer, got "${value}".`);
+  }
+  return n;
+}
+
+/** Parse a string as a non-negative integer, throwing on invalid input. */
+function parseNonNegativeInt(value: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new InvalidArgumentError(
+      `Expected a non-negative integer, got "${value}".`,
+    );
   }
   return n;
 }
@@ -86,6 +98,17 @@ export function createProgram(): Command {
     )
     .option("--json", "Output as JSON")
     .action(handleVisitAndExtract);
+
+  program
+    .command("query-messages")
+    .description("Query messaging history from the local database")
+    .option("--person-id <id>", "Filter by person ID", parsePositiveInt)
+    .option("--chat-id <id>", "Show specific conversation thread", parsePositiveInt)
+    .option("--search <text>", "Search message text")
+    .option("--limit <n>", "Max results (default: 20)", parsePositiveInt)
+    .option("--offset <n>", "Pagination offset (default: 0)", parseNonNegativeInt)
+    .option("--json", "Output as JSON")
+    .action(handleQueryMessages);
 
   program
     .command("query-profile")

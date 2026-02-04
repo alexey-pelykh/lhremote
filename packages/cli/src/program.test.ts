@@ -41,8 +41,9 @@ describe("createProgram", () => {
     expect(commandNames).toContain("stop-instance");
     expect(commandNames).toContain("visit-and-extract");
     expect(commandNames).toContain("query-profile");
+    expect(commandNames).toContain("query-messages");
     expect(commandNames).toContain("check-status");
-    expect(commandNames).toHaveLength(9);
+    expect(commandNames).toHaveLength(10);
   });
 
   describe("launch-app", () => {

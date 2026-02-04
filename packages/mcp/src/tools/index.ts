@@ -7,6 +7,7 @@ import { registerListAccounts } from "./list-accounts.js";
 import { registerQuitApp } from "./quit-app.js";
 import { registerStartInstance } from "./start-instance.js";
 import { registerStopInstance } from "./stop-instance.js";
+import { registerQueryMessages } from "./query-messages.js";
 import { registerQueryProfile } from "./query-profile.js";
 import { registerVisitAndExtract } from "./visit-and-extract.js";
 
@@ -18,6 +19,7 @@ export function registerAllTools(server: McpServer): void {
   registerStartInstance(server);
   registerStopInstance(server);
   registerVisitAndExtract(server);
+  registerQueryMessages(server);
   registerQueryProfile(server);
   registerCheckStatus(server);
 }

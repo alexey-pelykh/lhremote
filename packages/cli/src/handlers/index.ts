@@ -1,5 +1,6 @@
 export { handleCheckStatus } from "./check-status.js";
 export { handleFindApp } from "./find-app.js";
+export { handleQueryMessages } from "./query-messages.js";
 export { handleQueryProfile } from "./query-profile.js";
 export { handleLaunchApp } from "./launch-app.js";
 export { handleListAccounts } from "./list-accounts.js";

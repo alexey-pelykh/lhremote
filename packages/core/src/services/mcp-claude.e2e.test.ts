@@ -177,5 +177,21 @@ describeE2E("MCP tools via Claude CLI", () => {
       },
       120_000,
     );
+
+    it(
+      "query-messages lists conversations from the local database",
+      () => {
+        const result = runClaude(
+          "Use the query-messages tool with no filters to list conversations. " +
+          "Report the raw JSON from the tool response, nothing else.",
+        );
+
+        expect(result.is_error).toBe(false);
+        expect(result.num_turns).toBeGreaterThanOrEqual(2);
+        // The response should contain conversation data
+        expect(result.result).toMatch(/conversations|chatId|participants|messages/i);
+      },
+      120_000,
+    );
   });
 });
