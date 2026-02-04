@@ -1,6 +1,11 @@
+import { createRequire } from "node:module";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createProgram } from "./program.js";
+
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json") as { version: string };
 
 describe("createProgram", () => {
   const originalExitCode = process.exitCode;
@@ -21,7 +26,7 @@ describe("createProgram", () => {
 
   it("reads version from package.json", () => {
     const program = createProgram();
-    expect(program.version()).toBe("0.0.0");
+    expect(program.version()).toBe(version);
   });
 
   it("registers all expected subcommands", () => {
