@@ -1,5 +1,7 @@
 # lhremote: LinkedHelper Automation Toolkit
 
+[![npm version](https://img.shields.io/npm/v/lhremote?logo=npm)](https://www.npmjs.com/package/lhremote)
+[![npm downloads](https://img.shields.io/npm/dm/lhremote?logo=npm)](https://www.npmjs.com/package/lhremote)
 [![GitHub Repo stars](https://img.shields.io/github/stars/alexey-pelykh/lhremote?style=flat&logo=github)](https://github.com/alexey-pelykh/lhremote)
 [![License](https://img.shields.io/github/license/alexey-pelykh/lhremote)](LICENSE)
 
