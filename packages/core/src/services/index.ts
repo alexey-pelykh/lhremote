@@ -23,4 +23,5 @@ export {
   LinkedHelperNotRunningError,
   ServiceError,
   StartInstanceError,
+  WrongPortError,
 } from "./errors.js";
