@@ -193,5 +193,22 @@ describeE2E("MCP tools via Claude CLI", () => {
       },
       120_000,
     );
+
+    it(
+      "scrape-messaging-history scrapes and returns stats",
+      () => {
+        const result = runClaude(
+          "Use the scrape-messaging-history tool to scrape messaging history. " +
+          "Report the raw JSON from the tool response, nothing else.",
+          300_000,
+        );
+
+        expect(result.is_error).toBe(false);
+        expect(result.num_turns).toBeGreaterThanOrEqual(2);
+        // The response should contain scrape results with stats
+        expect(result.result).toMatch(/ScrapeMessagingHistory|totalChats|totalMessages|stats/i);
+      },
+      360_000,
+    );
   });
 });

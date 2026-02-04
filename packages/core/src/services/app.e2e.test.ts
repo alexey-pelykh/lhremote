@@ -21,6 +21,7 @@ import { handleQuitApp } from "../../../cli/src/handlers/quit-app.js";
 import { handleStartInstance } from "../../../cli/src/handlers/start-instance.js";
 import { handleStopInstance } from "../../../cli/src/handlers/stop-instance.js";
 import { handleQueryProfile } from "../../../cli/src/handlers/query-profile.js";
+import { handleScrapeMessagingHistory } from "../../../cli/src/handlers/scrape-messaging-history.js";
 import { handleVisitAndExtract } from "../../../cli/src/handlers/visit-and-extract.js";
 
 // MCP tool registration — tested against the same running app
@@ -29,6 +30,7 @@ import { registerFindApp } from "../../../mcp/src/tools/find-app.js";
 import { registerStartInstance } from "../../../mcp/src/tools/start-instance.js";
 import { registerStopInstance } from "../../../mcp/src/tools/stop-instance.js";
 import { registerQueryProfile } from "../../../mcp/src/tools/query-profile.js";
+import { registerScrapeMessagingHistory } from "../../../mcp/src/tools/scrape-messaging-history.js";
 import { registerVisitAndExtract } from "../../../mcp/src/tools/visit-and-extract.js";
 import { createMockServer } from "../../../mcp/src/tools/testing/mock-server.js";
 
@@ -595,6 +597,66 @@ describeE2E("App lifecycle", () => {
     });
 
     it(
+      "handleScrapeMessagingHistory --json scrapes and returns stats",
+      async () => {
+        const stdoutSpy = vi
+          .spyOn(process.stdout, "write")
+          .mockReturnValue(true);
+        const stderrSpy = vi
+          .spyOn(process.stderr, "write")
+          .mockReturnValue(true);
+
+        await handleScrapeMessagingHistory({ cdpPort: port, json: true });
+
+        if (process.exitCode === 1) {
+          const errOutput = stderrSpy.mock.calls
+            .map((call) => String(call[0]))
+            .join("");
+          throw new Error(`handleScrapeMessagingHistory failed: ${errOutput}`);
+        }
+
+        expect(process.exitCode).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls
+          .map((call) => String(call[0]))
+          .join("");
+        const parsed = JSON.parse(output) as {
+          success: boolean;
+          actionType: string;
+          stats: { totalChats: number; totalMessages: number };
+        };
+        expect(parsed.success).toBe(true);
+        expect(parsed.actionType).toBe("ScrapeMessagingHistory");
+        expect(typeof parsed.stats.totalChats).toBe("number");
+        expect(typeof parsed.stats.totalMessages).toBe("number");
+      },
+      300_000,
+    );
+
+    it(
+      "handleScrapeMessagingHistory prints human-friendly output",
+      async () => {
+        const stdoutSpy = vi
+          .spyOn(process.stdout, "write")
+          .mockReturnValue(true);
+        vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleScrapeMessagingHistory({ cdpPort: port });
+
+        expect(process.exitCode).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls
+          .map((call) => String(call[0]))
+          .join("");
+        expect(output).toMatch(/conversations/);
+        expect(output).toMatch(/messages/);
+      },
+      300_000,
+    );
+
+    it(
       "handleStopInstance stops running instance",
       async () => {
         const launcher = new LauncherService(port);
@@ -803,6 +865,38 @@ describeE2E("App lifecycle", () => {
       expect(parsed.id).toBe(profile1.id);
       expect(parsed.miniProfile.firstName).toBe(profile1.miniProfile.firstName);
     });
+
+    it(
+      "scrape-messaging-history tool scrapes and returns stats",
+      async () => {
+        assertDefined(accountId, "No accounts configured in LinkedHelper");
+
+        const { server, getHandler } = createMockServer();
+        registerScrapeMessagingHistory(server);
+
+        const handler = getHandler("scrape-messaging-history");
+        const result = (await handler({ cdpPort: port })) as {
+          isError?: boolean;
+          content: { type: string; text: string }[];
+        };
+
+        expect(result.isError).toBeUndefined();
+        expect(result.content).toHaveLength(1);
+
+        const parsed = JSON.parse(
+          (result.content[0] as { text: string }).text,
+        ) as {
+          success: boolean;
+          actionType: string;
+          stats: { totalChats: number; totalMessages: number };
+        };
+        expect(parsed.success).toBe(true);
+        expect(parsed.actionType).toBe("ScrapeMessagingHistory");
+        expect(typeof parsed.stats.totalChats).toBe("number");
+        expect(typeof parsed.stats.totalMessages).toBe("number");
+      },
+      300_000,
+    );
 
     it(
       "stop-instance tool stops running instance",

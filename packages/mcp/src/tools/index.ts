@@ -9,6 +9,7 @@ import { registerStartInstance } from "./start-instance.js";
 import { registerStopInstance } from "./stop-instance.js";
 import { registerQueryMessages } from "./query-messages.js";
 import { registerQueryProfile } from "./query-profile.js";
+import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
 import { registerVisitAndExtract } from "./visit-and-extract.js";
 
 export function registerAllTools(server: McpServer): void {
@@ -21,5 +22,6 @@ export function registerAllTools(server: McpServer): void {
   registerVisitAndExtract(server);
   registerQueryMessages(server);
   registerQueryProfile(server);
+  registerScrapeMessagingHistory(server);
   registerCheckStatus(server);
 }
