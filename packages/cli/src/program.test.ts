@@ -40,8 +40,9 @@ describe("createProgram", () => {
     expect(commandNames).toContain("start-instance");
     expect(commandNames).toContain("stop-instance");
     expect(commandNames).toContain("visit-and-extract");
+    expect(commandNames).toContain("query-profile");
     expect(commandNames).toContain("check-status");
-    expect(commandNames).toHaveLength(8);
+    expect(commandNames).toHaveLength(9);
   });
 
   describe("launch-app", () => {

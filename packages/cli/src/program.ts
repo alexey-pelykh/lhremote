@@ -7,6 +7,7 @@ import {
   handleFindApp,
   handleLaunchApp,
   handleListAccounts,
+  handleQueryProfile,
   handleQuitApp,
   handleStartInstance,
   handleStopInstance,
@@ -80,6 +81,14 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleVisitAndExtract);
+
+  program
+    .command("query-profile")
+    .description("Look up a cached profile from the local database")
+    .option("--person-id <id>", "Look up by internal person ID", parsePositiveInt)
+    .option("--public-id <slug>", "Look up by LinkedIn public ID")
+    .option("--json", "Output as JSON")
+    .action(handleQueryProfile);
 
   program
     .command("check-status")
