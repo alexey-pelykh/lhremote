@@ -29,6 +29,7 @@
     "dist"
   ],
   "scripts": {
+    "prepack": "cp ../../README.md .",
     "build": "tsc",
     "test": "vitest run",
     "lint": "eslint src/",
