@@ -54,12 +54,12 @@ Add to your Claude Desktop configuration (`claude_desktop_config.json`):
 
 Once configured, Claude can use the tools directly. A typical workflow:
 
-1. **find-app** - Detect a running LinkedHelper instance (or **launch-app** to start one)
-2. **list-accounts** - See available LinkedIn accounts
-3. **start-instance** - Start an instance for an account
-4. **visit-and-extract** - Visit a profile and get structured data
-5. **stop-instance** - Stop the instance when done
-6. **quit-app** - Quit LinkedHelper
+1. **`find-app`** - Detect a running LinkedHelper instance (or **`launch-app`** to start one)
+2. **`list-accounts`** - See available LinkedIn accounts
+3. **`start-instance`** - Start an instance for an account
+4. **`visit-and-extract`** - Visit a profile and get structured data
+5. **`stop-instance`** - Stop the instance when done
+6. **`quit-app`** - Quit LinkedHelper
 
 ## CLI Usage
 
@@ -78,7 +78,7 @@ lhremote check-status [--cdp-port <port>] [--json]
 
 ## MCP Tools
 
-### find-app
+### `find-app`
 
 Detect running LinkedHelper application instances and their CDP connection details. Useful when the app is already running and you need to discover which port to connect on.
 
@@ -86,7 +86,7 @@ Detect running LinkedHelper application instances and their CDP connection detai
 
 Returns an array of discovered instances, each with `pid`, `cdpPort`, and `connectable` status.
 
-### launch-app
+### `launch-app`
 
 Launch the LinkedHelper application with remote debugging enabled.
 
@@ -94,7 +94,7 @@ Launch the LinkedHelper application with remote debugging enabled.
 |-----------|------|----------|---------|-------------|
 | `cdpPort` | number | No | auto-select | CDP port to use |
 
-### quit-app
+### `quit-app`
 
 Quit the LinkedHelper application.
 
@@ -102,7 +102,7 @@ Quit the LinkedHelper application.
 |-----------|------|----------|---------|-------------|
 | `cdpPort` | number | No | 9222 | CDP port |
 
-### list-accounts
+### `list-accounts`
 
 List available LinkedHelper accounts. Returns account ID, LinkedIn ID, name, and email for each account.
 
@@ -110,7 +110,7 @@ List available LinkedHelper accounts. Returns account ID, LinkedIn ID, name, and
 |-----------|------|----------|---------|-------------|
 | `cdpPort` | number | No | 9222 | CDP port |
 
-### start-instance
+### `start-instance`
 
 Start a LinkedHelper instance for a LinkedIn account. Required before `visit-and-extract`.
 
@@ -119,7 +119,7 @@ Start a LinkedHelper instance for a LinkedIn account. Required before `visit-and
 | `accountId` | number | No | auto-select if single account | Account ID |
 | `cdpPort` | number | No | 9222 | CDP port |
 
-### stop-instance
+### `stop-instance`
 
 Stop a running LinkedHelper instance.
 
@@ -128,7 +128,7 @@ Stop a running LinkedHelper instance.
 | `accountId` | number | No | auto-select if single account | Account ID |
 | `cdpPort` | number | No | 9222 | CDP port |
 
-### visit-and-extract
+### `visit-and-extract`
 
 Visit a LinkedIn profile via LinkedHelper and extract all available data (name, positions, education, skills, emails). Requires a running instance.
 
@@ -137,7 +137,7 @@ Visit a LinkedIn profile via LinkedHelper and extract all available data (name, 
 | `profileUrl` | string | Yes | - | LinkedIn profile URL (e.g., `https://www.linkedin.com/in/username`) |
 | `cdpPort` | number | No | 9222 | CDP port |
 
-### check-status
+### `check-status`
 
 Check LinkedHelper connection status, running instances, and database health.
 
