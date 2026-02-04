@@ -363,4 +363,46 @@ describe("handleVisitAndExtract", () => {
     expect(LauncherService).toHaveBeenCalledWith(9222);
     expect(discoverInstancePort).toHaveBeenCalledWith(9222);
   });
+
+  it("passes pollTimeout to ProfileService.visitAndExtract", async () => {
+    vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+    const mockVisitAndExtract = vi.fn().mockResolvedValue(MOCK_PROFILE);
+    mockLauncher();
+    mockInstance();
+    mockDb();
+    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
+    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
+    vi.mocked(ProfileService).mockImplementation(function () {
+      return {
+        visitAndExtract: mockVisitAndExtract,
+      } as unknown as ProfileService;
+    });
+
+    await handleVisitAndExtract(PROFILE_URL, { pollTimeout: 60000 });
+
+    expect(mockVisitAndExtract).toHaveBeenCalledWith(PROFILE_URL, {
+      pollTimeout: 60000,
+    });
+  });
+
+  it("does not pass pollTimeout when not specified", async () => {
+    vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+    const mockVisitAndExtract = vi.fn().mockResolvedValue(MOCK_PROFILE);
+    mockLauncher();
+    mockInstance();
+    mockDb();
+    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
+    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
+    vi.mocked(ProfileService).mockImplementation(function () {
+      return {
+        visitAndExtract: mockVisitAndExtract,
+      } as unknown as ProfileService;
+    });
+
+    await handleVisitAndExtract(PROFILE_URL, {});
+
+    expect(mockVisitAndExtract).toHaveBeenCalledWith(PROFILE_URL, {});
+  });
 });

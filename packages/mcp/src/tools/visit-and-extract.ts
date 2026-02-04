@@ -31,8 +31,16 @@ export function registerVisitAndExtract(server: McpServer): void {
         .optional()
         .default(9222)
         .describe("CDP port (default: 9222)"),
+      timeout: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe(
+          "Extraction timeout in milliseconds (default: 30000). Increase for complex profiles or slow networks.",
+        ),
     },
-    async ({ profileUrl, cdpPort }) => {
+    async ({ profileUrl, cdpPort, timeout }) => {
       // Validate LinkedIn URL format
       if (!isLinkedInProfileUrl(profileUrl)) {
         return {
@@ -145,7 +153,9 @@ export function registerVisitAndExtract(server: McpServer): void {
 
         // Run visit-and-extract workflow
         const profileService = new ProfileService(instance, db);
-        const profile = await profileService.visitAndExtract(profileUrl);
+        const profile = await profileService.visitAndExtract(profileUrl, {
+          ...(timeout !== undefined && { pollTimeout: timeout }),
+        });
 
         return {
           content: [

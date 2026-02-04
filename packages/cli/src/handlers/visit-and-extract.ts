@@ -10,7 +10,7 @@ import {
 
 export async function handleVisitAndExtract(
   profileUrl: string,
-  options: { cdpPort?: number; json?: boolean },
+  options: { cdpPort?: number; pollTimeout?: number; json?: boolean },
 ): Promise<void> {
   if (!isLinkedInProfileUrl(profileUrl)) {
     process.stderr.write(
@@ -72,7 +72,11 @@ export async function handleVisitAndExtract(
     db = new DatabaseClient(dbPath);
 
     const profileService = new ProfileService(instance, db);
-    const profile = await profileService.visitAndExtract(profileUrl);
+    const profile = await profileService.visitAndExtract(profileUrl, {
+      ...(options.pollTimeout !== undefined && {
+        pollTimeout: options.pollTimeout,
+      }),
+    });
 
     if (options.json) {
       process.stdout.write(JSON.stringify(profile, null, 2) + "\n");

@@ -79,6 +79,11 @@ export function createProgram(): Command {
     .description("Visit a LinkedIn profile and extract data")
     .argument("<profileUrl>", "LinkedIn profile URL")
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option(
+      "--poll-timeout <ms>",
+      "Extraction timeout in milliseconds (default: 30000)",
+      parsePositiveInt,
+    )
     .option("--json", "Output as JSON")
     .action(handleVisitAndExtract);
 

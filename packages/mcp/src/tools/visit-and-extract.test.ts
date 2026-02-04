@@ -494,6 +494,30 @@ describe("registerVisitAndExtract", () => {
     const handler = getHandler("visit-and-extract");
     await handler({ profileUrl: PROFILE_URL, cdpPort: 9222 });
 
-    expect(mockVisitAndExtract).toHaveBeenCalledWith(PROFILE_URL);
+    expect(mockVisitAndExtract).toHaveBeenCalledWith(PROFILE_URL, {});
+  });
+
+  it("passes timeout to ProfileService.visitAndExtract as pollTimeout", async () => {
+    const { server, getHandler } = createMockServer();
+    registerVisitAndExtract(server);
+
+    const mockVisitAndExtract = vi.fn().mockResolvedValue(MOCK_PROFILE);
+    mockLauncher();
+    mockInstance();
+    mockDb();
+    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
+    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
+    vi.mocked(ProfileService).mockImplementation(function () {
+      return {
+        visitAndExtract: mockVisitAndExtract,
+      } as unknown as ProfileService;
+    });
+
+    const handler = getHandler("visit-and-extract");
+    await handler({ profileUrl: PROFILE_URL, cdpPort: 9222, timeout: 60000 });
+
+    expect(mockVisitAndExtract).toHaveBeenCalledWith(PROFILE_URL, {
+      pollTimeout: 60000,
+    });
   });
 });
