@@ -106,7 +106,7 @@ export function extractSlug(profileUrl: string): string {
       `Invalid LinkedIn profile URL: ${profileUrl} (expected /in/{slug})`,
     );
   }
-  return slug;
+  return decodeURIComponent(slug);
 }
 
 function delay(ms: number): Promise<void> {

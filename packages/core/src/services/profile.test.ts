@@ -76,6 +76,28 @@ describe("extractSlug", () => {
     );
   });
 
+  it("decodes percent-encoded Unicode slug", () => {
+    expect(
+      extractSlug(
+        "https://www.linkedin.com/in/caf%C3%A9-d%C3%A9veloppeur-123456",
+      ),
+    ).toBe("café-développeur-123456");
+  });
+
+  it("decodes percent-encoded slug with trailing slash", () => {
+    expect(
+      extractSlug(
+        "https://www.linkedin.com/in/caf%C3%A9-d%C3%A9veloppeur-123456/",
+      ),
+    ).toBe("café-développeur-123456");
+  });
+
+  it("passes through already-decoded Unicode slug", () => {
+    expect(
+      extractSlug("https://www.linkedin.com/in/café-développeur-123456"),
+    ).toBe("café-développeur-123456");
+  });
+
   it("throws on URL without /in/ segment", () => {
     expect(() => extractSlug("https://www.linkedin.com/company/test")).toThrow(
       /Invalid LinkedIn profile URL/,
