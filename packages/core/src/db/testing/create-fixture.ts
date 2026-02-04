@@ -5,15 +5,14 @@
  * Run: npx tsx src/db/testing/create-fixture.ts
  */
 
-import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import Database from "better-sqlite3";
+import { DatabaseSync, backup } from "node:sqlite";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = join(__dirname, "fixture.db");
 
-const db = new Database("");
+const db = new DatabaseSync(":memory:");
 
 // ── Schema (matches real LinkedHelper DDL) ──────────────────────────
 
@@ -292,7 +291,7 @@ db.exec(`
 
 // ── Write to disk ───────────────────────────────────────────────────
 
-writeFileSync(FIXTURE_PATH, db.serialize());
+await backup(db, FIXTURE_PATH);
 db.close();
 
 console.log(`Fixture written to ${FIXTURE_PATH}`);

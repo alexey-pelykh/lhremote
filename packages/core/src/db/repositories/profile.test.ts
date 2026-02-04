@@ -1,4 +1,4 @@
-import type Database from "better-sqlite3";
+import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { DatabaseClient } from "../client.js";
@@ -7,7 +7,7 @@ import { openFixture } from "../testing/open-fixture.js";
 import { ProfileRepository } from "./profile.js";
 
 describe("ProfileRepository", () => {
-  let db: Database.Database;
+  let db: DatabaseSync;
   let client: DatabaseClient;
   let repo: ProfileRepository;
 
