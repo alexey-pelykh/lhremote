@@ -6,6 +6,9 @@ export type {
   MiniProfile,
   Position,
   Profile,
+  ProfileSearchOptions,
+  ProfileSearchResult,
+  ProfileSummary,
   Skill,
 } from "./profile.js";
 

@@ -41,11 +41,12 @@ describe("createProgram", () => {
     expect(commandNames).toContain("stop-instance");
     expect(commandNames).toContain("visit-and-extract");
     expect(commandNames).toContain("query-profile");
+    expect(commandNames).toContain("query-profiles");
     expect(commandNames).toContain("query-messages");
     expect(commandNames).toContain("scrape-messaging-history");
     expect(commandNames).toContain("check-replies");
     expect(commandNames).toContain("check-status");
-    expect(commandNames).toHaveLength(12);
+    expect(commandNames).toHaveLength(13);
   });
 
   describe("launch-app", () => {

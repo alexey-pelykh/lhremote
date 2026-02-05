@@ -10,6 +10,7 @@ import {
   handleListAccounts,
   handleQueryMessages,
   handleQueryProfile,
+  handleQueryProfiles,
   handleScrapeMessagingHistory,
   handleQuitApp,
   handleStartInstance,
@@ -119,6 +120,16 @@ export function createProgram(): Command {
     .option("--public-id <slug>", "Look up by LinkedIn public ID")
     .option("--json", "Output as JSON")
     .action(handleQueryProfile);
+
+  program
+    .command("query-profiles")
+    .description("Search for profiles in the local database")
+    .option("--query <text>", "Search name or headline")
+    .option("--company <name>", "Filter by company")
+    .option("--limit <n>", "Max results (default: 20)", parsePositiveInt)
+    .option("--offset <n>", "Pagination offset (default: 0)", parseNonNegativeInt)
+    .option("--json", "Output as JSON")
+    .action(handleQueryProfiles);
 
   program
     .command("scrape-messaging-history")

@@ -152,4 +152,131 @@ describe("ProfileRepository (integration)", () => {
       expect(profile.currentPosition?.company).toBe(currentPos?.company);
     });
   });
+
+  describe("search", () => {
+    it("returns all profiles when no filters provided", () => {
+      const result = repo.search({});
+
+      expect(result.total).toBe(3);
+      expect(result.profiles).toHaveLength(3);
+      // Verify all known test profiles are present
+      const names = result.profiles.map((p) => p.firstName);
+      expect(names).toContain("Ada");
+      expect(names).toContain("Charlie");
+      expect(names).toContain("Grace");
+    });
+
+    it("filters by first name", () => {
+      const result = repo.search({ query: "Ada" });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.firstName).toBe("Ada");
+      expect(result.profiles[0]?.lastName).toBe("Lovelace");
+    });
+
+    it("filters by last name", () => {
+      const result = repo.search({ query: "Hopper" });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.firstName).toBe("Grace");
+    });
+
+    it("filters by headline content", () => {
+      const result = repo.search({ query: "Compiler" });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles[0]?.firstName).toBe("Grace");
+      expect(result.profiles[0]?.headline).toContain("Compiler");
+    });
+
+    it("filters by company name", () => {
+      const result = repo.search({ company: "Babbage" });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles[0]?.company).toBe("Babbage Industries");
+    });
+
+    it("combines query and company filters with AND logic", () => {
+      // Grace works at COBOL Systems, Ada at Babbage
+      const result = repo.search({ query: "Grace", company: "COBOL" });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles[0]?.firstName).toBe("Grace");
+
+      // Query for Grace but company filter for Babbage should return empty
+      const noMatch = repo.search({ query: "Grace", company: "Babbage" });
+      expect(noMatch.total).toBe(0);
+    });
+
+    it("returns correct ProfileSummary fields", () => {
+      const result = repo.search({ query: "Ada" });
+      const profile = result.profiles[0];
+
+      expect(profile?.id).toBe(1);
+      expect(profile?.firstName).toBe("Ada");
+      expect(profile?.lastName).toBe("Lovelace");
+      expect(profile?.headline).toBe("Principal Analytical Engine Programmer");
+      expect(profile?.company).toBe("Babbage Industries");
+      expect(profile?.title).toBe("Lead Programmer");
+    });
+
+    it("handles profiles without current position", () => {
+      // Charlie has no current position in the fixture
+      const result = repo.search({ query: "Charlie" });
+
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.company).toBeNull();
+      expect(result.profiles[0]?.title).toBeNull();
+    });
+
+    it("applies limit parameter", () => {
+      const result = repo.search({ limit: 2 });
+
+      // Total should still reflect all matching records
+      expect(result.total).toBe(3);
+      // But only limit records returned
+      expect(result.profiles).toHaveLength(2);
+    });
+
+    it("applies offset parameter for pagination", () => {
+      const page1 = repo.search({ limit: 2, offset: 0 });
+      const page2 = repo.search({ limit: 2, offset: 2 });
+
+      expect(page1.profiles).toHaveLength(2);
+      expect(page2.profiles).toHaveLength(1);
+      // Ensure no overlap
+      const page1Ids = page1.profiles.map((p) => p.id);
+      const page2Ids = page2.profiles.map((p) => p.id);
+      expect(page1Ids.some((id) => page2Ids.includes(id))).toBe(false);
+    });
+
+    it("returns empty when no matches found", () => {
+      const result = repo.search({ query: "NonexistentPerson" });
+
+      expect(result.total).toBe(0);
+      expect(result.profiles).toHaveLength(0);
+    });
+
+    it("performs case-insensitive LIKE matching", () => {
+      // Search with different cases
+      const lower = repo.search({ query: "ada" });
+      const upper = repo.search({ query: "ADA" });
+      const mixed = repo.search({ query: "AdA" });
+
+      // SQLite LIKE is case-insensitive for ASCII by default
+      expect(lower.total).toBe(1);
+      expect(upper.total).toBe(1);
+      expect(mixed.total).toBe(1);
+    });
+
+    it("matches partial strings", () => {
+      // Partial first name
+      const partial = repo.search({ query: "rac" }); // matches "Grace"
+
+      expect(partial.total).toBe(1);
+      expect(partial.profiles[0]?.firstName).toBe("Grace");
+    });
+  });
 });

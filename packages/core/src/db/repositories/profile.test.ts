@@ -149,4 +149,89 @@ describe("ProfileRepository", () => {
       );
     });
   });
+
+  describe("search", () => {
+    it("returns all profiles when no filters specified", () => {
+      const result = repo.search({});
+
+      expect(result.total).toBe(3);
+      expect(result.profiles).toHaveLength(3);
+    });
+
+    it("searches by name query", () => {
+      const result = repo.search({ query: "Ada" });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.firstName).toBe("Ada");
+      expect(result.profiles[0]?.lastName).toBe("Lovelace");
+    });
+
+    it("searches by headline query", () => {
+      const result = repo.search({ query: "Compiler" });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.firstName).toBe("Grace");
+    });
+
+    it("filters by company", () => {
+      const result = repo.search({ company: "Babbage" });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.firstName).toBe("Ada");
+      expect(result.profiles[0]?.company).toBe("Babbage Industries");
+    });
+
+    it("combines query and company filters", () => {
+      const result = repo.search({ query: "Grace", company: "COBOL" });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.firstName).toBe("Grace");
+    });
+
+    it("returns empty when no matches", () => {
+      const result = repo.search({ query: "Nonexistent" });
+
+      expect(result.total).toBe(0);
+      expect(result.profiles).toHaveLength(0);
+    });
+
+    it("respects limit parameter", () => {
+      const result = repo.search({ limit: 2 });
+
+      expect(result.total).toBe(3);
+      expect(result.profiles).toHaveLength(2);
+    });
+
+    it("respects offset parameter", () => {
+      const result = repo.search({ limit: 2, offset: 1 });
+
+      expect(result.total).toBe(3);
+      expect(result.profiles).toHaveLength(2);
+    });
+
+    it("returns profile summary with correct fields", () => {
+      const result = repo.search({ query: "Ada" });
+
+      expect(result.profiles[0]).toEqual({
+        id: 1,
+        firstName: "Ada",
+        lastName: "Lovelace",
+        headline: "Principal Analytical Engine Programmer",
+        company: "Babbage Industries",
+        title: "Lead Programmer",
+      });
+    });
+
+    it("handles profiles without current position", () => {
+      const result = repo.search({ query: "Charlie" });
+
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.company).toBeNull();
+      expect(result.profiles[0]?.title).toBeNull();
+    });
+  });
 });
