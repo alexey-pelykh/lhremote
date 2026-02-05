@@ -23,6 +23,7 @@ import { handleStopInstance } from "../../../cli/src/handlers/stop-instance.js";
 import { handleQueryProfile } from "../../../cli/src/handlers/query-profile.js";
 import { handleCheckReplies } from "../../../cli/src/handlers/check-replies.js";
 import { handleScrapeMessagingHistory } from "../../../cli/src/handlers/scrape-messaging-history.js";
+import { handleSendMessage } from "../../../cli/src/handlers/send-message.js";
 import { handleVisitAndExtract } from "../../../cli/src/handlers/visit-and-extract.js";
 
 // MCP tool registration — tested against the same running app
@@ -33,8 +34,26 @@ import { registerStopInstance } from "../../../mcp/src/tools/stop-instance.js";
 import { registerQueryProfile } from "../../../mcp/src/tools/query-profile.js";
 import { registerCheckReplies } from "../../../mcp/src/tools/check-replies.js";
 import { registerScrapeMessagingHistory } from "../../../mcp/src/tools/scrape-messaging-history.js";
+import { registerSendMessage } from "../../../mcp/src/tools/send-message.js";
 import { registerVisitAndExtract } from "../../../mcp/src/tools/visit-and-extract.js";
 import { createMockServer } from "../../../mcp/src/tools/testing/mock-server.js";
+
+/**
+ * Configuration for send-message E2E tests.
+ *
+ * Set E2E_SEND_MESSAGE_PERSON_ID to enable send-message tests.
+ * The person must be a 1st-degree connection in your LinkedIn account.
+ *
+ * Optionally set E2E_SEND_MESSAGE_TEXT to customize the test message.
+ */
+const sendMessageConfig = {
+  personId: process.env["E2E_SEND_MESSAGE_PERSON_ID"]
+    ? Number(process.env["E2E_SEND_MESSAGE_PERSON_ID"])
+    : undefined,
+  message:
+    process.env["E2E_SEND_MESSAGE_TEXT"] ??
+    "Hi {firstName}, this is an automated test message. Please ignore.",
+};
 
 /** Type-narrowing assertion — fails the test with `message` when `value` is nullish. */
 function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {
@@ -717,6 +736,82 @@ describeE2E("App lifecycle", () => {
       180_000,
     );
 
+    it.skipIf(sendMessageConfig.personId === undefined)(
+      "handleSendMessage --json sends message and returns JSON",
+      async () => {
+        assertDefined(
+          sendMessageConfig.personId,
+          "E2E_SEND_MESSAGE_PERSON_ID not configured",
+        );
+
+        const stdoutSpy = vi
+          .spyOn(process.stdout, "write")
+          .mockReturnValue(true);
+        const stderrSpy = vi
+          .spyOn(process.stderr, "write")
+          .mockReturnValue(true);
+
+        await handleSendMessage(
+          sendMessageConfig.personId,
+          sendMessageConfig.message,
+          { cdpPort: port, json: true },
+        );
+
+        if (process.exitCode === 1) {
+          const errOutput = stderrSpy.mock.calls
+            .map((call) => String(call[0]))
+            .join("");
+          throw new Error(`handleSendMessage failed: ${errOutput}`);
+        }
+
+        expect(process.exitCode).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls
+          .map((call) => String(call[0]))
+          .join("");
+        const parsed = JSON.parse(output) as {
+          success: boolean;
+          personId: number;
+          actionType: string;
+        };
+        expect(parsed.success).toBe(true);
+        expect(parsed.personId).toBe(sendMessageConfig.personId);
+        expect(parsed.actionType).toBe("MessageToPerson");
+      },
+      120_000,
+    );
+
+    it.skipIf(sendMessageConfig.personId === undefined)(
+      "handleSendMessage prints human-friendly output",
+      async () => {
+        assertDefined(
+          sendMessageConfig.personId,
+          "E2E_SEND_MESSAGE_PERSON_ID not configured",
+        );
+
+        const stdoutSpy = vi
+          .spyOn(process.stdout, "write")
+          .mockReturnValue(true);
+        vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleSendMessage(
+          sendMessageConfig.personId,
+          sendMessageConfig.message,
+          { cdpPort: port },
+        );
+
+        expect(process.exitCode).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls
+          .map((call) => String(call[0]))
+          .join("");
+        expect(output).toContain(`Message sent to person ${String(sendMessageConfig.personId)}`);
+      },
+      120_000,
+    );
+
     it(
       "handleStopInstance stops running instance",
       async () => {
@@ -988,6 +1083,45 @@ describeE2E("App lifecycle", () => {
         expect(parsed.checkedAt).toBeTruthy();
       },
       180_000,
+    );
+
+    it.skipIf(sendMessageConfig.personId === undefined)(
+      "send-message tool sends message and returns result",
+      async () => {
+        assertDefined(accountId, "No accounts configured in LinkedHelper");
+        assertDefined(
+          sendMessageConfig.personId,
+          "E2E_SEND_MESSAGE_PERSON_ID not configured",
+        );
+
+        const { server, getHandler } = createMockServer();
+        registerSendMessage(server);
+
+        const handler = getHandler("send-message");
+        const result = (await handler({
+          personId: sendMessageConfig.personId,
+          message: sendMessageConfig.message,
+          cdpPort: port,
+        })) as {
+          isError?: boolean;
+          content: { type: string; text: string }[];
+        };
+
+        expect(result.isError).toBeUndefined();
+        expect(result.content).toHaveLength(1);
+
+        const parsed = JSON.parse(
+          (result.content[0] as { text: string }).text,
+        ) as {
+          success: boolean;
+          personId: number;
+          actionType: string;
+        };
+        expect(parsed.success).toBe(true);
+        expect(parsed.personId).toBe(sendMessageConfig.personId);
+        expect(parsed.actionType).toBe("MessageToPerson");
+      },
+      120_000,
     );
 
     it(
