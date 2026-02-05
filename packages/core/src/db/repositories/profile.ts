@@ -6,10 +6,23 @@ import type {
   MiniProfile,
   Position,
   Profile,
+  ProfileSearchOptions,
+  ProfileSearchResult,
+  ProfileSummary,
   Skill,
 } from "../../types/index.js";
 import type { DatabaseClient } from "../client.js";
 import { ProfileNotFoundError } from "../errors.js";
+
+interface ProfileSearchRow {
+  id: number;
+  first_name: string;
+  last_name: string | null;
+  headline: string | null;
+  company: string | null;
+  title: string | null;
+  total: number;
+}
 
 interface MiniProfileRow {
   first_name: string;
@@ -78,6 +91,7 @@ export class ProfileRepository {
   private readonly stmtEducation;
   private readonly stmtSkills;
   private readonly stmtEmails;
+  private readonly stmtSearch;
 
   constructor(client: DatabaseClient) {
     const { db } = client;
@@ -129,6 +143,24 @@ export class ProfileRepository {
     this.stmtEmails = db.prepare(
       `SELECT email FROM person_email WHERE person_id = ?`,
     );
+
+    this.stmtSearch = db.prepare(
+      `SELECT
+         p.id,
+         mp.first_name,
+         mp.last_name,
+         mp.headline,
+         cp.company,
+         cp.position AS title,
+         COUNT(*) OVER() AS total
+       FROM people p
+       LEFT JOIN person_mini_profile mp ON p.id = mp.person_id
+       LEFT JOIN person_current_position cp ON p.id = cp.person_id
+       WHERE (? IS NULL OR mp.first_name LIKE ? OR mp.last_name LIKE ? OR mp.headline LIKE ?)
+         AND (? IS NULL OR cp.company LIKE ?)
+       ORDER BY mp.first_name, mp.last_name
+       LIMIT ? OFFSET ?`,
+    );
   }
 
   /**
@@ -153,6 +185,40 @@ export class ProfileRepository {
       | undefined;
     if (!row) throw new ProfileNotFoundError(slug);
     return this.assembleProfile(row.id);
+  }
+
+  /**
+   * Search for profiles by name, headline, or company.
+   */
+  search(options: ProfileSearchOptions = {}): ProfileSearchResult {
+    const { query, company, limit = 20, offset = 0 } = options;
+
+    const queryPattern = query ? `%${query}%` : null;
+    const companyPattern = company ? `%${company}%` : null;
+
+    const rows = this.stmtSearch.all(
+      queryPattern,
+      queryPattern,
+      queryPattern,
+      queryPattern,
+      companyPattern,
+      companyPattern,
+      limit,
+      offset,
+    ) as unknown as ProfileSearchRow[];
+
+    const total = rows.length > 0 ? (rows[0] as ProfileSearchRow).total : 0;
+
+    const profiles: ProfileSummary[] = rows.map((r) => ({
+      id: r.id,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      headline: r.headline,
+      company: r.company,
+      title: r.title,
+    }));
+
+    return { profiles, total };
   }
 
   private assembleProfile(personId: number): Profile {

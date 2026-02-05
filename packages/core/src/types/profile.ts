@@ -55,3 +55,37 @@ export interface Profile {
   skills: Skill[];
   emails: string[];
 }
+
+/**
+ * Options for searching profiles in the local database.
+ */
+export interface ProfileSearchOptions {
+  /** Match against first_name, last_name, headline */
+  query?: string;
+  /** Match against current position company */
+  company?: string;
+  /** Maximum number of results (default 20) */
+  limit?: number;
+  /** Pagination offset (default 0) */
+  offset?: number;
+}
+
+/**
+ * Summary of a profile for search results.
+ */
+export interface ProfileSummary {
+  id: number;
+  firstName: string;
+  lastName: string | null;
+  headline: string | null;
+  company: string | null;
+  title: string | null;
+}
+
+/**
+ * Result of a profile search operation.
+ */
+export interface ProfileSearchResult {
+  profiles: ProfileSummary[];
+  total: number;
+}
