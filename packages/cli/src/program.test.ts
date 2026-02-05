@@ -44,9 +44,10 @@ describe("createProgram", () => {
     expect(commandNames).toContain("query-profiles");
     expect(commandNames).toContain("query-messages");
     expect(commandNames).toContain("scrape-messaging-history");
+    expect(commandNames).toContain("send-message");
     expect(commandNames).toContain("check-replies");
     expect(commandNames).toContain("check-status");
-    expect(commandNames).toHaveLength(13);
+    expect(commandNames).toHaveLength(14);
   });
 
   describe("launch-app", () => {
@@ -121,6 +122,45 @@ describe("createProgram", () => {
       const portOption = cmd?.options.find((o) => o.long === "--cdp-port");
 
       expect(portOption).toBeDefined();
+    });
+  });
+
+  describe("send-message", () => {
+    it("requires person-id and message arguments", () => {
+      const program = createProgram();
+      const cmd = program.commands.find((c) => c.name() === "send-message");
+      const args = cmd?.registeredArguments;
+
+      expect(args).toHaveLength(2);
+      expect(args?.[0]?.required).toBe(true);
+      expect(args?.[1]?.required).toBe(true);
+    });
+
+    it("accepts --json option", () => {
+      const program = createProgram();
+      const cmd = program.commands.find((c) => c.name() === "send-message");
+      const jsonOption = cmd?.options.find((o) => o.long === "--json");
+
+      expect(jsonOption).toBeDefined();
+    });
+
+    it("accepts --cdp-port option", () => {
+      const program = createProgram();
+      const cmd = program.commands.find((c) => c.name() === "send-message");
+      const portOption = cmd?.options.find((o) => o.long === "--cdp-port");
+
+      expect(portOption).toBeDefined();
+    });
+
+    it("rejects non-numeric person-id", async () => {
+      vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+      const program = createProgram();
+      program.exitOverride().configureOutput({ writeErr: () => {} });
+
+      await expect(
+        program.parseAsync(["node", "lhremote", "send-message", "abc", "Hello"]),
+      ).rejects.toThrow();
     });
   });
 });

@@ -5,6 +5,7 @@ export { handleQueryMessages } from "./query-messages.js";
 export { handleQueryProfile } from "./query-profile.js";
 export { handleQueryProfiles } from "./query-profiles.js";
 export { handleScrapeMessagingHistory } from "./scrape-messaging-history.js";
+export { handleSendMessage } from "./send-message.js";
 export { handleLaunchApp } from "./launch-app.js";
 export { handleListAccounts } from "./list-accounts.js";
 export { handleQuitApp } from "./quit-app.js";

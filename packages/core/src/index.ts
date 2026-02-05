@@ -79,3 +79,11 @@ export {
   findApp,
   type DiscoveredApp,
 } from "./cdp/index.js";
+
+// Utilities
+export {
+  parseMessageTemplate,
+  TEMPLATE_VARIABLES,
+  type MessageTemplateSegment,
+  type TemplateVariable,
+} from "./utils/message-template.js";

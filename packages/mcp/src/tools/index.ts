@@ -12,6 +12,7 @@ import { registerQueryMessages } from "./query-messages.js";
 import { registerQueryProfile } from "./query-profile.js";
 import { registerQueryProfiles } from "./query-profiles.js";
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
+import { registerSendMessage } from "./send-message.js";
 import { registerVisitAndExtract } from "./visit-and-extract.js";
 
 export function registerAllTools(server: McpServer): void {
@@ -26,6 +27,7 @@ export function registerAllTools(server: McpServer): void {
   registerQueryProfile(server);
   registerQueryProfiles(server);
   registerScrapeMessagingHistory(server);
+  registerSendMessage(server);
   registerCheckReplies(server);
   registerCheckStatus(server);
 }

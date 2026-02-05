@@ -12,6 +12,7 @@ import {
   handleQueryProfile,
   handleQueryProfiles,
   handleScrapeMessagingHistory,
+  handleSendMessage,
   handleQuitApp,
   handleStartInstance,
   handleStopInstance,
@@ -139,6 +140,15 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleScrapeMessagingHistory);
+
+  program
+    .command("send-message")
+    .description("Send a direct LinkedIn message to a 1st-degree connection")
+    .argument("<person-id>", "Target person's internal ID", parsePositiveInt)
+    .argument("<message>", "Message text (use {firstName} etc. for variables)")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleSendMessage);
 
   program
     .command("check-replies")
