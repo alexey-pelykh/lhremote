@@ -12,42 +12,76 @@ export const TEMPLATE_VARIABLES = [
 export type TemplateVariable = (typeof TEMPLATE_VARIABLES)[number];
 
 /**
- * A single message template segment in LinkedHelper's format.
- *
- * The `valueParts` array contains literal text segments, and `variables`
- * contains the variable names that appear between those segments.
- *
- * For a message "Hi {firstName}, from {company}!", the structure would be:
- * - valueParts: ["Hi ", ", from ", "!"]
- * - variables: ["firstName", "company"]
+ * A text node in the message template tree.
  */
-export interface MessageTemplateSegment {
-  valueParts: string[];
-  variables: TemplateVariable[];
+export interface TextNode {
+  type: "text";
+  value: string;
+}
+
+/**
+ * A variable node in the message template tree.
+ */
+export interface VarNode {
+  type: "var";
+  name: TemplateVariable;
+}
+
+/**
+ * A group node containing child nodes.
+ */
+export interface GroupNode {
+  type: "group";
+  children: Array<TextNode | VarNode>;
+}
+
+/**
+ * A variant node wrapping a group.
+ */
+export interface VariantNode {
+  type: "variant";
+  child: GroupNode;
+}
+
+/**
+ * The root message template structure with variants.
+ */
+export interface MessageTemplate {
+  type: "variants";
+  variants: VariantNode[];
 }
 
 /**
  * Parse a user-friendly message template string into LinkedHelper's format.
  *
- * Converts `{variableName}` placeholders into the `valueParts` + `variables`
- * structure expected by LinkedHelper's MessageToPerson action.
+ * Converts `{variableName}` placeholders into the nested tree structure
+ * expected by LinkedHelper's MessageToPerson action.
  *
  * @example
  * ```ts
  * parseMessageTemplate("Hi {firstName}, great to connect!")
- * // Returns: [{
- * //   valueParts: ["Hi ", ", great to connect!"],
- * //   variables: ["firstName"]
- * // }]
+ * // Returns: {
+ * //   type: "variants",
+ * //   variants: [{
+ * //     type: "variant",
+ * //     child: {
+ * //       type: "group",
+ * //       children: [
+ * //         { type: "text", value: "Hi " },
+ * //         { type: "var", name: "firstName" },
+ * //         { type: "text", value: ", great to connect!" }
+ * //       ]
+ * //     }
+ * //   }]
+ * // }
  * ```
  *
  * @param text - Message text with optional `{variable}` placeholders
- * @returns Array with a single MessageTemplateSegment
+ * @returns MessageTemplate in LinkedHelper's expected format
  * @throws Error if an unknown variable is used
  */
-export function parseMessageTemplate(text: string): MessageTemplateSegment[] {
-  const valueParts: string[] = [];
-  const variables: TemplateVariable[] = [];
+export function parseMessageTemplate(text: string): MessageTemplate {
+  const children: Array<TextNode | VarNode> = [];
 
   // Match {variableName} patterns
   const regex = /\{([^}]+)\}/g;
@@ -55,8 +89,11 @@ export function parseMessageTemplate(text: string): MessageTemplateSegment[] {
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
-    // Add the literal text before this variable
-    valueParts.push(text.slice(lastIndex, match.index));
+    // Add the literal text before this variable (if any)
+    const textBefore = text.slice(lastIndex, match.index);
+    if (textBefore) {
+      children.push({ type: "text", value: textBefore });
+    }
 
     // Validate and add the variable
     const varName = match[1] as string;
@@ -66,13 +103,27 @@ export function parseMessageTemplate(text: string): MessageTemplateSegment[] {
           `Valid variables are: ${TEMPLATE_VARIABLES.join(", ")}`,
       );
     }
-    variables.push(varName as TemplateVariable);
+    children.push({ type: "var", name: varName as TemplateVariable });
 
     lastIndex = regex.lastIndex;
   }
 
   // Add any remaining text after the last variable
-  valueParts.push(text.slice(lastIndex));
+  const textAfter = text.slice(lastIndex);
+  if (textAfter) {
+    children.push({ type: "text", value: textAfter });
+  }
 
-  return [{ valueParts, variables }];
+  return {
+    type: "variants",
+    variants: [
+      {
+        type: "variant",
+        child: {
+          type: "group",
+          children,
+        },
+      },
+    ],
+  };
 }

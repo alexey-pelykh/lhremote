@@ -84,6 +84,10 @@ export {
 export {
   parseMessageTemplate,
   TEMPLATE_VARIABLES,
-  type MessageTemplateSegment,
+  type GroupNode,
+  type MessageTemplate,
   type TemplateVariable,
+  type TextNode,
+  type VarNode,
+  type VariantNode,
 } from "./utils/message-template.js";

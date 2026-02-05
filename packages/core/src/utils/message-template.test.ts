@@ -3,30 +3,46 @@ import { describe, expect, it } from "vitest";
 import {
   parseMessageTemplate,
   TEMPLATE_VARIABLES,
-  type MessageTemplateSegment,
+  type MessageTemplate,
 } from "./message-template.js";
 
 describe("parseMessageTemplate", () => {
   it("parses plain text without variables", () => {
     const result = parseMessageTemplate("Hello, nice to meet you!");
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: ["Hello, nice to meet you!"],
-        variables: [],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [{ type: "text", value: "Hello, nice to meet you!" }],
+          },
+        },
+      ],
+    });
   });
 
   it("parses single variable", () => {
     const result = parseMessageTemplate("Hi {firstName}!");
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: ["Hi ", "!"],
-        variables: ["firstName"],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [
+              { type: "text", value: "Hi " },
+              { type: "var", name: "firstName" },
+              { type: "text", value: "!" },
+            ],
+          },
+        },
+      ],
+    });
   });
 
   it("parses multiple variables", () => {
@@ -34,12 +50,26 @@ describe("parseMessageTemplate", () => {
       "Hi {firstName}, I see you work at {company} as {position}.",
     );
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: ["Hi ", ", I see you work at ", " as ", "."],
-        variables: ["firstName", "company", "position"],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [
+              { type: "text", value: "Hi " },
+              { type: "var", name: "firstName" },
+              { type: "text", value: ", I see you work at " },
+              { type: "var", name: "company" },
+              { type: "text", value: " as " },
+              { type: "var", name: "position" },
+              { type: "text", value: "." },
+            ],
+          },
+        },
+      ],
+    });
   });
 
   it("parses all supported variables", () => {
@@ -47,67 +77,122 @@ describe("parseMessageTemplate", () => {
       "{firstName} {lastName} at {company} - {position} in {location}",
     );
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: ["", " ", " at ", " - ", " in ", ""],
-        variables: ["firstName", "lastName", "company", "position", "location"],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [
+              { type: "var", name: "firstName" },
+              { type: "text", value: " " },
+              { type: "var", name: "lastName" },
+              { type: "text", value: " at " },
+              { type: "var", name: "company" },
+              { type: "text", value: " - " },
+              { type: "var", name: "position" },
+              { type: "text", value: " in " },
+              { type: "var", name: "location" },
+            ],
+          },
+        },
+      ],
+    });
   });
 
   it("handles empty string", () => {
     const result = parseMessageTemplate("");
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: [""],
-        variables: [],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [],
+          },
+        },
+      ],
+    });
   });
 
   it("handles leading variable", () => {
     const result = parseMessageTemplate("{firstName}, how are you?");
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: ["", ", how are you?"],
-        variables: ["firstName"],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [
+              { type: "var", name: "firstName" },
+              { type: "text", value: ", how are you?" },
+            ],
+          },
+        },
+      ],
+    });
   });
 
   it("handles trailing variable", () => {
     const result = parseMessageTemplate("Hello {firstName}");
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: ["Hello ", ""],
-        variables: ["firstName"],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [
+              { type: "text", value: "Hello " },
+              { type: "var", name: "firstName" },
+            ],
+          },
+        },
+      ],
+    });
   });
 
   it("handles adjacent variables", () => {
     const result = parseMessageTemplate("{firstName}{lastName}");
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: ["", "", ""],
-        variables: ["firstName", "lastName"],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [
+              { type: "var", name: "firstName" },
+              { type: "var", name: "lastName" },
+            ],
+          },
+        },
+      ],
+    });
   });
 
   it("handles variable-only message", () => {
     const result = parseMessageTemplate("{firstName}");
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: ["", ""],
-        variables: ["firstName"],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [{ type: "var", name: "firstName" }],
+          },
+        },
+      ],
+    });
   });
 
   it("preserves newlines and whitespace", () => {
@@ -115,12 +200,25 @@ describe("parseMessageTemplate", () => {
       "Hi {firstName},\n\nHope this finds you well.\n\nBest regards",
     );
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: ["Hi ", ",\n\nHope this finds you well.\n\nBest regards"],
-        variables: ["firstName"],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [
+              { type: "text", value: "Hi " },
+              { type: "var", name: "firstName" },
+              {
+                type: "text",
+                value: ",\n\nHope this finds you well.\n\nBest regards",
+              },
+            ],
+          },
+        },
+      ],
+    });
   });
 
   it("throws error for unknown variable", () => {
@@ -140,12 +238,25 @@ describe("parseMessageTemplate", () => {
       "{firstName}, {firstName}, {firstName}!",
     );
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: ["", ", ", ", ", "!"],
-        variables: ["firstName", "firstName", "firstName"],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [
+              { type: "var", name: "firstName" },
+              { type: "text", value: ", " },
+              { type: "var", name: "firstName" },
+              { type: "text", value: ", " },
+              { type: "var", name: "firstName" },
+              { type: "text", value: "!" },
+            ],
+          },
+        },
+      ],
+    });
   });
 
   it("handles special characters in text", () => {
@@ -153,25 +264,45 @@ describe("parseMessageTemplate", () => {
       "Hi {firstName}! Questions? Email: test@example.com (24/7)",
     );
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: [
-          "Hi ",
-          "! Questions? Email: test@example.com (24/7)",
-        ],
-        variables: ["firstName"],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [
+              { type: "text", value: "Hi " },
+              { type: "var", name: "firstName" },
+              {
+                type: "text",
+                value: "! Questions? Email: test@example.com (24/7)",
+              },
+            ],
+          },
+        },
+      ],
+    });
   });
 
   it("handles unicode characters", () => {
     const result = parseMessageTemplate("Bonjour {firstName}! \u{1F44B}");
 
-    expect(result).toEqual<MessageTemplateSegment[]>([
-      {
-        valueParts: ["Bonjour ", "! \u{1F44B}"],
-        variables: ["firstName"],
-      },
-    ]);
+    expect(result).toEqual<MessageTemplate>({
+      type: "variants",
+      variants: [
+        {
+          type: "variant",
+          child: {
+            type: "group",
+            children: [
+              { type: "text", value: "Bonjour " },
+              { type: "var", name: "firstName" },
+              { type: "text", value: "! \u{1F44B}" },
+            ],
+          },
+        },
+      ],
+    });
   });
 });

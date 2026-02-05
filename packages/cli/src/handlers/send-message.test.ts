@@ -118,12 +118,24 @@ describe("handleSendMessage", () => {
 
     expect(executeAction).toHaveBeenCalledWith("MessageToPerson", {
       personIds: [12345],
-      messageTemplate: [
-        {
-          valueParts: ["Hi ", ", from ", "!"],
-          variables: ["firstName", "company"],
-        },
-      ],
+      messageTemplate: {
+        type: "variants",
+        variants: [
+          {
+            type: "variant",
+            child: {
+              type: "group",
+              children: [
+                { type: "text", value: "Hi " },
+                { type: "var", name: "firstName" },
+                { type: "text", value: ", from " },
+                { type: "var", name: "company" },
+                { type: "text", value: "!" },
+              ],
+            },
+          },
+        ],
+      },
     });
   });
 
@@ -270,12 +282,18 @@ describe("handleSendMessage", () => {
 
     expect(executeAction).toHaveBeenCalledWith("MessageToPerson", {
       personIds: [12345],
-      messageTemplate: [
-        {
-          valueParts: ["Hello, nice to connect!"],
-          variables: [],
-        },
-      ],
+      messageTemplate: {
+        type: "variants",
+        variants: [
+          {
+            type: "variant",
+            child: {
+              type: "group",
+              children: [{ type: "text", value: "Hello, nice to connect!" }],
+            },
+          },
+        ],
+      },
     });
   });
 
