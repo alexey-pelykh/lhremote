@@ -102,3 +102,80 @@ export interface ListCampaignsOptions {
 export interface GetResultsOptions {
   limit?: number;
 }
+
+/**
+ * Configuration for creating a new campaign.
+ */
+export interface CampaignConfig {
+  /** Campaign name. */
+  name: string;
+  /** LinkedIn account ID (default: 1). */
+  liAccountId?: number;
+  /** Actions to include in the campaign. */
+  actions: CampaignActionConfig[];
+}
+
+/**
+ * Configuration for a single action within a campaign.
+ */
+export interface CampaignActionConfig {
+  /** Display name for the action. */
+  name: string;
+  /** Optional description. */
+  description?: string;
+  /** Action type identifier (e.g., 'VisitAndExtract', 'MessageToPerson'). */
+  actionType: string;
+  /** Milliseconds between action executions (default: 60000). */
+  coolDown?: number;
+  /** Maximum results per iteration (default: 10, -1 for unlimited). */
+  maxActionResultsPerIteration?: number;
+  /** Action-specific settings. */
+  actionSettings?: ActionSettings;
+}
+
+/**
+ * Runner state of the LinkedHelper main window.
+ */
+export type RunnerState = "idle" | "campaigns" | "stopping-campaigns";
+
+/**
+ * People counts for a campaign action by processing state.
+ */
+export interface ActionPeopleCounts {
+  /** Action ID. */
+  actionId: number;
+  /** Number of people queued (state=1). */
+  queued: number;
+  /** Number of people processed (state=2). */
+  processed: number;
+  /** Number of successful executions (state=3). */
+  successful: number;
+  /** Number of failed executions (state=4). */
+  failed: number;
+}
+
+/**
+ * Real-time campaign execution status.
+ */
+export interface CampaignStatus {
+  /** Campaign database record state. */
+  campaignState: CampaignState;
+  /** Whether the campaign is currently paused. */
+  isPaused: boolean;
+  /** Main window runner state. */
+  runnerState: RunnerState;
+  /** Per-action people counts. */
+  actionCounts: ActionPeopleCounts[];
+}
+
+/**
+ * Aggregated results from a campaign run.
+ */
+export interface CampaignRunResult {
+  /** Campaign ID. */
+  campaignId: number;
+  /** All action results from the database. */
+  results: CampaignActionResult[];
+  /** Per-action people counts (live from CDP). */
+  actionCounts: ActionPeopleCounts[];
+}
