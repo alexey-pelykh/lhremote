@@ -295,6 +295,58 @@ describe("InstanceService", () => {
     });
   });
 
+  describe("evaluateUI", () => {
+    it("evaluates expression on the UI client only", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce({ result: 42 });
+
+      const result = await service.evaluateUI("1 + 1");
+
+      expect(uiClient.evaluate).toHaveBeenCalledWith("1 + 1", true);
+      expect(result).toEqual({ result: 42 });
+
+      const liClient = getClientMocks("LI1");
+      expect(liClient.evaluate).not.toHaveBeenCalled();
+    });
+
+    it("defaults awaitPromise to true", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      await service.evaluateUI("expr");
+
+      const uiClient = getClientMocks("UI1");
+      expect(uiClient.evaluate).toHaveBeenCalledWith("expr", true);
+    });
+
+    it("respects awaitPromise=false", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      await service.evaluateUI("expr", false);
+
+      const uiClient = getClientMocks("UI1");
+      expect(uiClient.evaluate).toHaveBeenCalledWith("expr", false);
+    });
+
+    it("throws ServiceError when not connected", async () => {
+      await expect(service.evaluateUI("expr")).rejects.toThrow(ServiceError);
+    });
+
+    it("propagates errors from CDP client", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockRejectedValueOnce(new Error("CDP failure"));
+
+      await expect(service.evaluateUI("bad")).rejects.toThrow("CDP failure");
+    });
+  });
+
   describe("triggerExtraction", () => {
     it("delegates to executeAction with SaveCurrentProfile", async () => {
       mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);

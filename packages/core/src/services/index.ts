@@ -15,10 +15,13 @@ export {
   type StatusReport,
 } from "./status.js";
 export { ProfileService, extractSlug, type VisitAndExtractOptions } from "./profile.js";
+export { CampaignService } from "./campaign.js";
 export {
   ActionExecutionError,
   AppLaunchError,
   AppNotFoundError,
+  CampaignExecutionError,
+  CampaignTimeoutError,
   ExtractionTimeoutError,
   InstanceNotRunningError,
   LinkedHelperNotRunningError,

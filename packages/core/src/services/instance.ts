@@ -163,6 +163,24 @@ export class InstanceService {
     await this.executeAction("SaveCurrentProfile");
   }
 
+  /**
+   * Evaluate a JavaScript expression in the LinkedHelper UI context.
+   *
+   * Provides access to `window.mainWindowService.mainWindow.source.*`
+   * and other LinkedHelper internal APIs that are only available on
+   * the UI target.
+   *
+   * @param expression  JavaScript source to evaluate.
+   * @param awaitPromise Whether to await a Promise result (default `true`).
+   */
+  async evaluateUI<T = unknown>(
+    expression: string,
+    awaitPromise = true,
+  ): Promise<T> {
+    const client = this.ensureUiClient();
+    return client.evaluate<T>(expression, awaitPromise);
+  }
+
   /** Whether both clients are currently connected. */
   get isConnected(): boolean {
     return (

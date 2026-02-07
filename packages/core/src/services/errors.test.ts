@@ -3,6 +3,8 @@ import {
   ActionExecutionError,
   AppLaunchError,
   AppNotFoundError,
+  CampaignExecutionError,
+  CampaignTimeoutError,
   ExtractionTimeoutError,
   InstanceNotRunningError,
   LinkedHelperNotRunningError,
@@ -110,5 +112,37 @@ describe("Service errors", () => {
     expect(error.message).toContain("30000ms");
     expect(error.message).toContain("linkedin.com/in/test");
     expect(error).toBeInstanceOf(ServiceError);
+  });
+
+  it("should set correct name for CampaignExecutionError", () => {
+    const error = new CampaignExecutionError("create failed", 42);
+    expect(error.name).toBe("CampaignExecutionError");
+    expect(error.message).toBe("create failed");
+    expect(error.campaignId).toBe(42);
+    expect(error).toBeInstanceOf(ServiceError);
+  });
+
+  it("should allow CampaignExecutionError without campaignId", () => {
+    const error = new CampaignExecutionError("create failed");
+    expect(error.campaignId).toBeUndefined();
+  });
+
+  it("should support cause for CampaignExecutionError", () => {
+    const cause = new Error("CDP timeout");
+    const error = new CampaignExecutionError("failed", 1, { cause });
+    expect(error.cause).toBe(cause);
+  });
+
+  it("should set correct name for CampaignTimeoutError", () => {
+    const error = new CampaignTimeoutError("runner did not reach idle", 42);
+    expect(error.name).toBe("CampaignTimeoutError");
+    expect(error.message).toContain("idle");
+    expect(error.campaignId).toBe(42);
+    expect(error).toBeInstanceOf(ServiceError);
+  });
+
+  it("should allow CampaignTimeoutError without campaignId", () => {
+    const error = new CampaignTimeoutError("timeout");
+    expect(error.campaignId).toBeUndefined();
   });
 });

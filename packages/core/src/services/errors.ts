@@ -108,3 +108,31 @@ export class ExtractionTimeoutError extends ServiceError {
     this.name = "ExtractionTimeoutError";
   }
 }
+
+/**
+ * Thrown when a campaign operation fails during execution
+ * (create, start, stop, or other CDP-based operations).
+ */
+export class CampaignExecutionError extends ServiceError {
+  readonly campaignId: number | undefined;
+
+  constructor(message: string, campaignId?: number, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "CampaignExecutionError";
+    this.campaignId = campaignId;
+  }
+}
+
+/**
+ * Thrown when a campaign operation times out waiting for
+ * a state transition (e.g., runner not reaching idle).
+ */
+export class CampaignTimeoutError extends ServiceError {
+  readonly campaignId: number | undefined;
+
+  constructor(message: string, campaignId?: number, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "CampaignTimeoutError";
+    this.campaignId = campaignId;
+  }
+}
