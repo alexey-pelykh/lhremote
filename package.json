@@ -10,7 +10,7 @@
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
-    "test:e2e": "turbo run test:e2e",
+    "test:e2e": "turbo run test:e2e --concurrency=1",
     "lint": "turbo run lint",
     "dev": "turbo run dev"
   },

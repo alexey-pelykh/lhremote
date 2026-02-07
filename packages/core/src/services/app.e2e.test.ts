@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { describeE2E, launchApp, quitApp, retryAsync } from "../testing/e2e-helpers.js";
 import { findApp, type DiscoveredApp } from "../cdp/app-discovery.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import type { Account, Profile } from "../types/index.js";
+import type { Account, CampaignSummary, Profile } from "../types/index.js";
 import type { StatusReport } from "./status.js";
 import { AppService } from "./app.js";
 import { checkStatus } from "./status.js";
@@ -10,7 +10,7 @@ import { startInstanceWithRecovery, waitForInstanceShutdown } from "./instance-l
 import { LauncherService } from "./launcher.js";
 import { InstanceService } from "./instance.js";
 import { ProfileService } from "./profile.js";
-import { DatabaseClient, discoverDatabase } from "../db/index.js";
+import { CampaignRepository, DatabaseClient, discoverDatabase } from "../db/index.js";
 import { killInstanceProcesses } from "../cdp/index.js";
 
 // CLI handlers — tested against the same running app
@@ -195,6 +195,124 @@ describeE2E("App lifecycle", () => {
         expect(db).toHaveProperty("path");
         expect(db).toHaveProperty("profileCount");
         expect(db.profileCount).toBeGreaterThanOrEqual(0);
+      }
+    });
+  });
+
+  describe("CampaignRepository", () => {
+    let launcher: LauncherService;
+    let accountId: number | undefined;
+    let dbClient: DatabaseClient | null = null;
+    let repo: CampaignRepository | null = null;
+
+    beforeAll(async () => {
+      launcher = new LauncherService(port);
+      await retryAsync(() => launcher.connect(), { retries: 3, delay: 1_000 });
+
+      const accounts = await launcher.listAccounts();
+      launcher.disconnect();
+
+      if (accounts.length > 0) {
+        accountId = (accounts[0] as Account).id;
+        const dbPath = discoverDatabase(accountId);
+        dbClient = new DatabaseClient(dbPath);
+        repo = new CampaignRepository(dbClient);
+      }
+    }, 15_000);
+
+    afterAll(() => {
+      dbClient?.close();
+    });
+
+    it("listCampaigns() returns campaigns with expected shape", () => {
+      assertDefined(repo, "No accounts configured in LinkedHelper");
+
+      const campaigns = repo.listCampaigns({ includeArchived: true });
+
+      // Real database should have at least one campaign
+      expect(campaigns.length).toBeGreaterThan(0);
+
+      for (const campaign of campaigns) {
+        expect(campaign).toHaveProperty("id");
+        expect(campaign).toHaveProperty("name");
+        expect(typeof campaign.name).toBe("string");
+        expect(campaign).toHaveProperty("state");
+        expect(["active", "paused", "archived", "invalid"]).toContain(campaign.state);
+        expect(campaign).toHaveProperty("liAccountId");
+        expect(typeof campaign.actionCount).toBe("number");
+        expect(campaign.actionCount).toBeGreaterThanOrEqual(0);
+        expect(campaign).toHaveProperty("createdAt");
+      }
+    });
+
+    it("getCampaign() returns full campaign details", () => {
+      assertDefined(repo, "No accounts configured in LinkedHelper");
+
+      const campaigns = repo.listCampaigns({ includeArchived: true });
+      expect(campaigns.length, "No campaigns found in database").toBeGreaterThan(0);
+
+      const campaign = repo.getCampaign((campaigns[0] as CampaignSummary).id);
+
+      expect(campaign).toHaveProperty("id");
+      expect(campaign).toHaveProperty("name");
+      expect(campaign).toHaveProperty("state");
+      expect(typeof campaign.isPaused).toBe("boolean");
+      expect(typeof campaign.isArchived).toBe("boolean");
+      expect(campaign.isValid === null || typeof campaign.isValid === "boolean").toBe(true);
+      expect(campaign).toHaveProperty("createdAt");
+    });
+
+    it("getCampaignActions() returns actions with parsed config", () => {
+      assertDefined(repo, "No accounts configured in LinkedHelper");
+
+      // Find a campaign that has actions
+      const campaigns = repo.listCampaigns({ includeArchived: true });
+      const withActions = campaigns.find((c) => c.actionCount > 0);
+
+      if (!withActions) {
+        console.log("  skipping: no campaigns with actions found");
+        return;
+      }
+
+      const actions = repo.getCampaignActions(withActions.id);
+
+      expect(actions.length).toBeGreaterThan(0);
+      for (const action of actions) {
+        expect(action).toHaveProperty("id");
+        expect(action).toHaveProperty("campaignId");
+        expect(action.campaignId).toBe(withActions.id);
+        expect(action).toHaveProperty("name");
+        expect(typeof action.name).toBe("string");
+        expect(action).toHaveProperty("config");
+        expect(action.config).toHaveProperty("actionType");
+        expect(typeof action.config.actionType).toBe("string");
+        expect(action.config).toHaveProperty("actionSettings");
+        expect(typeof action.config.actionSettings).toBe("object");
+        expect(action).toHaveProperty("versionId");
+      }
+    });
+
+    it("getResults() returns results with expected shape", () => {
+      assertDefined(repo, "No accounts configured in LinkedHelper");
+
+      // Find a campaign that has actions (likely has results too)
+      const campaigns = repo.listCampaigns({ includeArchived: true });
+      const withActions = campaigns.find((c) => c.actionCount > 0);
+
+      if (!withActions) {
+        console.log("  skipping: no campaigns with actions found");
+        return;
+      }
+
+      const results = repo.getResults(withActions.id, { limit: 10 });
+
+      // Results may be empty if campaign hasn't run — just verify shape
+      for (const result of results) {
+        expect(result).toHaveProperty("id");
+        expect(result).toHaveProperty("actionVersionId");
+        expect(result).toHaveProperty("personId");
+        expect(typeof result.result).toBe("number");
+        expect(result).toHaveProperty("createdAt");
       }
     });
   });

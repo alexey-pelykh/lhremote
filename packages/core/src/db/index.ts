@@ -1,9 +1,14 @@
-export { DatabaseClient } from "./client.js";
+export { DatabaseClient, type DatabaseClientOptions } from "./client.js";
 export { discoverAllDatabases, discoverDatabase } from "./discovery.js";
 export {
+  CampaignNotFoundError,
   ChatNotFoundError,
   DatabaseError,
   DatabaseNotFoundError,
   ProfileNotFoundError,
 } from "./errors.js";
-export { MessageRepository, ProfileRepository } from "./repositories/index.js";
+export {
+  CampaignRepository,
+  MessageRepository,
+  ProfileRepository,
+} from "./repositories/index.js";

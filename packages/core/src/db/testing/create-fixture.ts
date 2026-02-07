@@ -389,6 +389,206 @@ db.exec(`
   VALUES (5, 5, 5), (6, 6, 6);
 `);
 
+// ── Campaign Schema ──────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE campaigns(
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    type INTEGER NOT NULL DEFAULT 1,
+    is_paused INTEGER,
+    is_archived INTEGER,
+    is_valid INTEGER,
+    li_account_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+  );
+
+  CREATE TABLE actions(
+    id INTEGER PRIMARY KEY,
+    campaign_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    startAt DATETIME,
+    postpone_reason TEXT,
+    postpone_reason_data TEXT,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    FOREIGN KEY(campaign_id) REFERENCES campaigns(id)
+  );
+  CREATE INDEX actions_campaign_idx ON actions(campaign_id);
+
+  CREATE TABLE action_configs(
+    id INTEGER PRIMARY KEY,
+    actionType TEXT NOT NULL,
+    actionSettings TEXT NOT NULL DEFAULT '{}',
+    coolDown INTEGER NOT NULL DEFAULT 60000,
+    maxActionResultsPerIteration INTEGER NOT NULL DEFAULT 10,
+    isDraft INTEGER,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+  );
+
+  CREATE TABLE action_versions(
+    id INTEGER PRIMARY KEY,
+    action_id INTEGER NOT NULL,
+    config_id INTEGER NOT NULL,
+    exclude_list_id INTEGER,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    FOREIGN KEY(action_id) REFERENCES actions(id),
+    FOREIGN KEY(config_id) REFERENCES action_configs(id)
+  );
+  CREATE INDEX action_versions_action_idx ON action_versions(action_id);
+
+  CREATE TABLE action_target_people(
+    id INTEGER PRIMARY KEY,
+    action_id INTEGER NOT NULL,
+    action_version_id INTEGER NOT NULL,
+    person_id INTEGER NOT NULL,
+    state INTEGER NOT NULL DEFAULT 1,
+    li_account_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    FOREIGN KEY(action_id) REFERENCES actions(id),
+    FOREIGN KEY(action_version_id) REFERENCES action_versions(id),
+    FOREIGN KEY(person_id) REFERENCES people(id)
+  );
+  CREATE INDEX action_target_people_action_idx ON action_target_people(action_id);
+  CREATE INDEX action_target_people_person_idx ON action_target_people(person_id);
+
+  CREATE TABLE person_in_campaigns_history(
+    id INTEGER PRIMARY KEY,
+    campaign_id INTEGER NOT NULL,
+    person_id INTEGER NOT NULL,
+    action_target_people_id INTEGER,
+    result_status INTEGER,
+    result_id INTEGER,
+    result_action_version_id INTEGER,
+    result_action_iteration_id INTEGER,
+    result_created_at DATETIME,
+    result_data TEXT,
+    result_data_message TEXT,
+    result_code TEXT,
+    result_is_exception INTEGER,
+    result_who_to_blame TEXT,
+    result_is_retryable INTEGER,
+    result_flag_recipient_replied INTEGER,
+    result_flag_sender_messaged INTEGER,
+    result_invited_platform TEXT,
+    result_messaged_platform TEXT,
+    add_to_target_date DATETIME,
+    add_to_target_or_result_saved_date DATETIME,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    FOREIGN KEY(campaign_id) REFERENCES campaigns(id),
+    FOREIGN KEY(person_id) REFERENCES people(id)
+  );
+  CREATE INDEX person_in_campaigns_history_campaign_idx ON person_in_campaigns_history(campaign_id);
+  CREATE INDEX person_in_campaigns_history_person_idx ON person_in_campaigns_history(person_id);
+
+  CREATE TABLE action_results(
+    id INTEGER PRIMARY KEY,
+    action_version_id INTEGER NOT NULL,
+    person_id INTEGER NOT NULL,
+    result INTEGER NOT NULL,
+    platform TEXT,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    UNIQUE(action_version_id, person_id),
+    FOREIGN KEY(action_version_id) REFERENCES action_versions(id),
+    FOREIGN KEY(person_id) REFERENCES people(id)
+  );
+  CREATE INDEX action_results_version_idx ON action_results(action_version_id);
+  CREATE INDEX action_results_person_idx ON action_results(person_id);
+
+  CREATE TABLE action_result_flags(
+    id INTEGER PRIMARY KEY,
+    action_result_id INTEGER NOT NULL,
+    flag_name TEXT NOT NULL,
+    flag_value INTEGER,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    FOREIGN KEY(action_result_id) REFERENCES action_results(id)
+  );
+  CREATE INDEX action_result_flags_result_idx ON action_result_flags(action_result_id);
+
+  CREATE TABLE action_result_messages(
+    id INTEGER PRIMARY KEY,
+    action_result_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    message_id INTEGER,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    FOREIGN KEY(action_result_id) REFERENCES action_results(id)
+  );
+  CREATE INDEX action_result_messages_result_idx ON action_result_messages(action_result_id);
+`);
+
+// ── Campaign Mock Data ───────────────────────────────────────────────
+
+// Campaign 1: Active campaign with MessageToPerson action
+db.exec(`
+  INSERT INTO campaigns (id, name, description, type, is_paused, is_archived, is_valid, li_account_id, created_at, updated_at)
+  VALUES (1, 'Outreach Campaign', 'Test outreach campaign', 1, 0, 0, 1, 1, '${NOW}', '${NOW}');
+
+  INSERT INTO action_configs (id, actionType, actionSettings, coolDown, maxActionResultsPerIteration, isDraft)
+  VALUES (1, 'MessageToPerson', '{"messageTemplate":{"type":"variants","variants":[{"type":"variant","child":{"type":"group","children":[{"type":"text","value":"Hello "},{"type":"var","name":"firstName"}]}}]},"rejectIfReplied":false}', 60000, 10, 0);
+
+  INSERT INTO actions (id, campaign_id, name, description, created_at, updated_at)
+  VALUES (1, 1, 'Send Welcome Message', 'First touch message', '${NOW}', '${NOW}');
+
+  INSERT INTO action_versions (id, action_id, config_id, created_at, updated_at)
+  VALUES (1, 1, 1, '${NOW}', '${NOW}');
+
+  INSERT INTO action_target_people (id, action_id, action_version_id, person_id, state, li_account_id, created_at, updated_at)
+  VALUES
+    (1, 1, 1, 1, 2, 1, '${NOW}', '${NOW}'),
+    (2, 1, 1, 3, 1, 1, '${NOW}', '${NOW}');
+
+  INSERT INTO person_in_campaigns_history (id, campaign_id, person_id, action_target_people_id, result_status, result_id, result_action_version_id, add_to_target_date, add_to_target_or_result_saved_date, created_at, updated_at)
+  VALUES
+    (1, 1, 1, 1, 1, 1, 1, '${NOW}', '${NOW}', '${NOW}', '${NOW}'),
+    (2, 1, 3, 2, -999, NULL, NULL, '${NOW}', '${NOW}', '${NOW}', '${NOW}');
+
+  INSERT INTO action_results (id, action_version_id, person_id, result, platform, created_at, updated_at)
+  VALUES (1, 1, 1, 1, 'LINKEDIN', '2025-01-15T12:30:00.000Z', '${NOW}');
+
+  INSERT INTO action_result_flags (id, action_result_id, flag_name, flag_value)
+  VALUES (1, 1, 'message_sent', 1);
+
+  INSERT INTO action_result_messages (id, action_result_id, type, message_id)
+  VALUES (1, 1, 'Sent', 1);
+`);
+
+// Campaign 2: Paused campaign
+db.exec(`
+  INSERT INTO campaigns (id, name, description, type, is_paused, is_archived, is_valid, li_account_id, created_at, updated_at)
+  VALUES (2, 'Follow-up Campaign', 'Paused follow-up', 1, 1, 0, 1, 1, '2025-01-14T10:00:00.000Z', '${NOW}');
+
+  INSERT INTO action_configs (id, actionType, actionSettings, coolDown, maxActionResultsPerIteration, isDraft)
+  VALUES (2, 'VisitAndExtract', '{"extractProfile":true}', 30000, 20, 0);
+
+  INSERT INTO actions (id, campaign_id, name, description, created_at, updated_at)
+  VALUES (2, 2, 'Visit Profile', 'Extract profile data', '${NOW}', '${NOW}');
+
+  INSERT INTO action_versions (id, action_id, config_id, created_at, updated_at)
+  VALUES (2, 2, 2, '${NOW}', '${NOW}');
+`);
+
+// Campaign 3: Archived campaign
+db.exec(`
+  INSERT INTO campaigns (id, name, description, type, is_paused, is_archived, is_valid, li_account_id, created_at, updated_at)
+  VALUES (3, 'Old Campaign', 'Archived old campaign', 1, 0, 1, 1, 1, '2025-01-01T10:00:00.000Z', '${NOW}');
+`);
+
+// Campaign 4: Invalid campaign
+db.exec(`
+  INSERT INTO campaigns (id, name, description, type, is_paused, is_archived, is_valid, li_account_id, created_at, updated_at)
+  VALUES (4, 'Invalid Campaign', 'Invalid configuration', 1, 0, 0, 0, 1, '2025-01-13T10:00:00.000Z', '${NOW}');
+`);
+
 // ── Write to disk ───────────────────────────────────────────────────
 
 await backup(db, FIXTURE_PATH);

@@ -5,5 +5,6 @@ export default defineConfig({
     include: ["**/*.e2e.test.ts"],
     exclude: ["**/node_modules/**", "**/dist/**"],
     passWithNoTests: true,
+    fileParallelism: false,
   },
 });

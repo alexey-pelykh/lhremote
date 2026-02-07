@@ -30,3 +30,16 @@ export type {
   MessageStats,
   MessageSummary,
 } from "./messaging.js";
+
+export type {
+  ActionConfig,
+  CampaignActionResult,
+  ActionSettings,
+  ActionTargetPerson,
+  Campaign,
+  CampaignAction,
+  CampaignState,
+  CampaignSummary,
+  GetResultsOptions,
+  ListCampaignsOptions,
+} from "./campaign.js";

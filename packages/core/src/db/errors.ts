@@ -45,3 +45,13 @@ export class ProfileNotFoundError extends DatabaseError {
     this.name = "ProfileNotFoundError";
   }
 }
+
+/**
+ * Thrown when a campaign lookup yields no results.
+ */
+export class CampaignNotFoundError extends DatabaseError {
+  constructor(campaignId: number) {
+    super(`Campaign not found for id ${String(campaignId)}`);
+    this.name = "CampaignNotFoundError";
+  }
+}

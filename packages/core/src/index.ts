@@ -1,6 +1,14 @@
-// Types (profile, messaging, instance, account — CDP types are internal)
+// Types (profile, messaging, instance, account, campaign — CDP types are internal)
 export type {
   Account,
+  ActionConfig,
+  CampaignActionResult,
+  ActionSettings,
+  ActionTargetPerson,
+  Campaign,
+  CampaignAction,
+  CampaignState,
+  CampaignSummary,
   Chat,
   ChatParticipant,
   ConversationMessages,
@@ -9,8 +17,10 @@ export type {
   Education,
   ExternalId,
   ExternalIdTypeGroup,
+  GetResultsOptions,
   InstanceInfo,
   InstanceStatus,
+  ListCampaignsOptions,
   Message,
   MessageStats,
   MessageSummary,
@@ -55,7 +65,9 @@ export {
 
 // Data access
 export {
+  CampaignRepository,
   DatabaseClient,
+  type DatabaseClientOptions,
   discoverAllDatabases,
   discoverDatabase,
   MessageRepository,
@@ -64,6 +76,7 @@ export {
 
 // Errors (DB + CDP errors can propagate through the service layer)
 export {
+  CampaignNotFoundError,
   ChatNotFoundError,
   DatabaseError,
   DatabaseNotFoundError,
