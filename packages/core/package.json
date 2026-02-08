@@ -42,6 +42,7 @@
     "devtools-protocol": "^0.0.1577676",
     "get-port": "catalog:",
     "pid-port": "catalog:",
-    "ps-list": "catalog:"
+    "ps-list": "catalog:",
+    "yaml": "catalog:"
   }
 }

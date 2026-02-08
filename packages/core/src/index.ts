@@ -83,6 +83,15 @@ export {
   ProfileRepository,
 } from "./db/index.js";
 
+// Formats
+export {
+  CampaignFormatError,
+  parseCampaignJson,
+  parseCampaignYaml,
+  serializeCampaignJson,
+  serializeCampaignYaml,
+} from "./formats/index.js";
+
 // Errors (DB + CDP errors can propagate through the service layer)
 export {
   CampaignNotFoundError,

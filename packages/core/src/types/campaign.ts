@@ -109,6 +109,8 @@ export interface GetResultsOptions {
 export interface CampaignConfig {
   /** Campaign name. */
   name: string;
+  /** Optional description. */
+  description?: string;
   /** LinkedIn account ID (default: 1). */
   liAccountId?: number;
   /** Actions to include in the campaign. */
