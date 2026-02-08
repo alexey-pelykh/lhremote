@@ -92,6 +92,17 @@ export {
   serializeCampaignYaml,
 } from "./formats/index.js";
 
+// Data (action types catalog)
+export {
+  type ActionCategory,
+  type ActionType,
+  type ActionTypeCatalog,
+  type ActionTypeInfo,
+  type ConfigFieldSchema,
+  getActionTypeCatalog,
+  getActionTypeInfo,
+} from "./data/index.js";
+
 // Errors (DB + CDP errors can propagate through the service layer)
 export {
   CampaignNotFoundError,
