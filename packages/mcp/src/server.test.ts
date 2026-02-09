@@ -87,10 +87,11 @@ describe("createServer", () => {
     expect(names).toContain("campaign-delete");
     expect(names).toContain("campaign-export");
     expect(names).toContain("campaign-get");
+    expect(names).toContain("campaign-list");
     expect(names).toContain("campaign-status");
     expect(names).toContain("check-replies");
     expect(names).toContain("check-status");
     expect(names).toContain("describe-actions");
-    expect(names).toHaveLength(19);
+    expect(names).toHaveLength(20);
   });
 });
