@@ -463,7 +463,7 @@ describe("registerCampaignStatus", () => {
       return {
         connect: vi
           .fn()
-          .mockRejectedValue(new InstanceNotRunningError(55123)),
+          .mockRejectedValue(new InstanceNotRunningError("Instance not running on port 55123")),
         disconnect: vi.fn(),
       } as unknown as InstanceService;
     });
