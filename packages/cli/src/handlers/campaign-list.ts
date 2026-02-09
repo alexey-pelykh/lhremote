@@ -28,7 +28,7 @@ export async function handleCampaignList(options: {
       allCampaigns.push(...campaigns);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      process.stderr.write(`${message}\n`);
+      process.stderr.write(`Error in database at ${dbPath}: ${message}\n`);
       process.exitCode = 1;
       return;
     } finally {
