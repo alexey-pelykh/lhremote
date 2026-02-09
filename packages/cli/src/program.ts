@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { Command, InvalidArgumentError } from "commander";
 
 import {
+  handleCampaignList,
   handleCheckReplies,
   handleCheckStatus,
   handleFindApp,
@@ -88,6 +89,13 @@ export function createProgram(): Command {
     .argument("<accountId>", "Account ID to stop", parsePositiveInt)
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .action(handleStopInstance);
+
+  program
+    .command("campaign-list")
+    .description("List LinkedHelper campaigns")
+    .option("--include-archived", "Include archived campaigns")
+    .option("--json", "Output as JSON")
+    .action(handleCampaignList);
 
   program
     .command("visit-and-extract")
