@@ -22,7 +22,7 @@ lhremote lets AI assistants (Claude, etc.) control LinkedHelper through the [Mod
 
 ## Prerequisites
 
-- **Node.js** >= 22
+- **Node.js** >= 24
 - **LinkedHelper** desktop application (requires a paid subscription)
 
 ## Installation
