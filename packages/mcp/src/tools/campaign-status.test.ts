@@ -23,6 +23,7 @@ import {
   DatabaseClient,
   discoverDatabase,
   discoverInstancePort,
+  InstanceNotRunningError,
   InstanceService,
   LauncherService,
   LinkedHelperNotRunningError,
@@ -362,6 +363,125 @@ describe("registerCampaignStatus", () => {
         {
           type: "text",
           text: "Failed to get campaign status: Failed to get status for campaign 15: UI error",
+        },
+      ],
+    });
+  });
+
+  it("returns error when no accounts found", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCampaignStatus(server);
+
+    mockLauncher({
+      listAccounts: vi.fn().mockResolvedValue([]),
+    });
+
+    const handler = getHandler("campaign-status");
+    const result = await handler({
+      campaignId: 15,
+      includeResults: false,
+      limit: 20,
+      cdpPort: 9222,
+    });
+
+    expect(result).toEqual({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: "No accounts found.",
+        },
+      ],
+    });
+  });
+
+  it("returns error when multiple accounts found", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCampaignStatus(server);
+
+    mockLauncher({
+      listAccounts: vi.fn().mockResolvedValue([
+        { id: 1, liId: 1, name: "Alice" } as Account,
+        { id: 2, liId: 2, name: "Bob" } as Account,
+      ]),
+    });
+
+    const handler = getHandler("campaign-status");
+    const result = await handler({
+      campaignId: 15,
+      includeResults: false,
+      limit: 20,
+      cdpPort: 9222,
+    });
+
+    expect(result).toEqual({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: "Multiple accounts found. Cannot determine which instance to use.",
+        },
+      ],
+    });
+  });
+
+  it("returns error when no instance port discovered", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCampaignStatus(server);
+
+    mockLauncher();
+    vi.mocked(discoverInstancePort).mockResolvedValue(null);
+
+    const handler = getHandler("campaign-status");
+    const result = await handler({
+      campaignId: 15,
+      includeResults: false,
+      limit: 20,
+      cdpPort: 9222,
+    });
+
+    expect(result).toEqual({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: "No LinkedHelper instance is running. Use start-instance first.",
+        },
+      ],
+    });
+  });
+
+  it("returns error when instance is not running", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCampaignStatus(server);
+
+    mockLauncher();
+    mockDb();
+    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
+    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
+    vi.mocked(InstanceService).mockImplementation(function () {
+      return {
+        connect: vi
+          .fn()
+          .mockRejectedValue(new InstanceNotRunningError(55123)),
+        disconnect: vi.fn(),
+      } as unknown as InstanceService;
+    });
+
+    const handler = getHandler("campaign-status");
+    const result = await handler({
+      campaignId: 15,
+      includeResults: false,
+      limit: 20,
+      cdpPort: 9222,
+    });
+
+    expect(result).toEqual({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: "No LinkedHelper instance is running. Use start-instance first.",
         },
       ],
     });
