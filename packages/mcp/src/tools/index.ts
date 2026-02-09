@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { registerCheckReplies } from "./check-replies.js";
 import { registerCheckStatus } from "./check-status.js";
+import { registerDescribeActions } from "./describe-actions.js";
 import { registerFindApp } from "./find-app.js";
 import { registerLaunchApp } from "./launch-app.js";
 import { registerListAccounts } from "./list-accounts.js";
@@ -28,4 +29,5 @@ export function registerAllTools(server: McpServer): void {
   registerScrapeMessagingHistory(server);
   registerCheckReplies(server);
   registerCheckStatus(server);
+  registerDescribeActions(server);
 }

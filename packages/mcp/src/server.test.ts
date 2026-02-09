@@ -85,6 +85,7 @@ describe("createServer", () => {
     expect(names).toContain("scrape-messaging-history");
     expect(names).toContain("check-replies");
     expect(names).toContain("check-status");
-    expect(names).toHaveLength(13);
+    expect(names).toContain("describe-actions");
+    expect(names).toHaveLength(14);
   });
 });
