@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { registerCampaignCreate } from "./campaign-create.js";
+import { registerCampaignDelete } from "./campaign-delete.js";
 import { registerCampaignGet } from "./campaign-get.js";
 import { registerCheckReplies } from "./check-replies.js";
 import { registerCheckStatus } from "./check-status.js";
@@ -19,6 +20,7 @@ import { registerVisitAndExtract } from "./visit-and-extract.js";
 
 export function registerAllTools(server: McpServer): void {
   registerCampaignCreate(server);
+  registerCampaignDelete(server);
   registerCampaignGet(server);
   registerFindApp(server);
   registerLaunchApp(server);
