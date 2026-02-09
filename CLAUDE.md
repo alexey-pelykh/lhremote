@@ -36,6 +36,21 @@ Do **not** add issue numbers (e.g. `(#12)`) to commit messages. GitHub links PRs
 - Test helper `src/cdp/testing/launch-chromium.ts` manages Chromium lifecycle.
 - Chromium is installed in CI via `npx playwright-core install chromium --with-deps`.
 
+## Infrastructure
+
+- **Monorepo**: pnpm workspace with 4 packages: `core`, `mcp`, `cli`, `lhremote`
+- **Toolchain**: pnpm 9.15.4, Node 24, Turbo (cached via `.turbo/`)
+- **CI**: GitHub Actions (`ci.yml`) — `build`, `lint`, `test` on ubuntu/macos/windows matrix
+  - GH Pages docs built via pandoc on every CI run, published on push to main
+  - Composite setup action: `.github/actions/setup/action.yml` (pnpm + node + playwright chromium + turbo cache)
+  - Concurrency: cancel-in-progress for PRs, not for main
+- **Release**: GitHub Actions (`release.yml`) — triggered by GitHub Release publish
+  - Validates (build+lint+test), stamps version from tag, publishes to npm (OIDC trusted publishing)
+  - Concurrency group `release`, never cancels in-progress
+
 ## Task Tracking
 
-**Issues**: https://github.com/alexey-pelykh/lhremote/issues
+- **Issues**: https://github.com/alexey-pelykh/lhremote/issues
+- **Milestones**: used for grouping related issues into campaigns/phases
+- **Labels**: default GitHub set (bug, enhancement, documentation, etc.)
+- No GitHub Projects
