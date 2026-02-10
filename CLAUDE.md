@@ -33,7 +33,7 @@ Do **not** add issue numbers (e.g. `(#12)`) to commit messages. GitHub links PRs
 
 - Tier 1 and 2 run together via `pnpm test` — no separate commands needed.
 - Integration tests use `*.integration.test.ts` suffix.
-- Test helper `src/cdp/testing/launch-chromium.ts` manages Chromium lifecycle.
+- Test helper `packages/core/src/cdp/testing/launch-chromium.ts` manages Chromium lifecycle.
 - Chromium is installed in CI via `npx playwright-core install chromium --with-deps`.
 
 ## Infrastructure
