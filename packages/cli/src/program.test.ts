@@ -44,13 +44,18 @@ describe("createProgram", () => {
     expect(commandNames).toContain("query-profiles");
     expect(commandNames).toContain("query-messages");
     expect(commandNames).toContain("scrape-messaging-history");
+    expect(commandNames).toContain("campaign-create");
+    expect(commandNames).toContain("campaign-delete");
+    expect(commandNames).toContain("campaign-export");
+    expect(commandNames).toContain("campaign-get");
     expect(commandNames).toContain("campaign-list");
     expect(commandNames).toContain("campaign-start");
+    expect(commandNames).toContain("campaign-status");
     expect(commandNames).toContain("campaign-stop");
     expect(commandNames).toContain("check-replies");
     expect(commandNames).toContain("check-status");
     expect(commandNames).toContain("describe-actions");
-    expect(commandNames).toHaveLength(17);
+    expect(commandNames).toHaveLength(22);
   });
 
   describe("launch-app", () => {
