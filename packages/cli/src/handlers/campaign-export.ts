@@ -22,6 +22,14 @@ export async function handleCampaignExport(
   const cdpPort = options.cdpPort ?? 9222;
   const format = options.format ?? "yaml";
 
+  if (format !== "yaml" && format !== "json") {
+    process.stderr.write(
+      `Unsupported format "${format}". Use "yaml" or "json".\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   // Connect to launcher to find account
   const launcher = new LauncherService(cdpPort);
   let accountId: number;
@@ -73,7 +81,7 @@ export async function handleCampaignExport(
         `Campaign ${String(campaignId)} exported to ${options.output}\n`,
       );
     } else {
-      process.stdout.write(config);
+      process.stdout.write(config.endsWith("\n") ? config : `${config}\n`);
     }
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {

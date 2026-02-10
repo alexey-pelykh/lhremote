@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 
-import { Command, InvalidArgumentError } from "commander";
+import { Command, InvalidArgumentError, Option } from "commander";
 
 import {
   handleCampaignCreate,
@@ -135,7 +135,11 @@ export function createProgram(): Command {
     .command("campaign-export")
     .description("Export a campaign configuration as YAML or JSON")
     .argument("<campaignId>", "Campaign ID to export", parsePositiveInt)
-    .option("--format <format>", "Export format: yaml or json (default: yaml)")
+    .addOption(
+      new Option("--format <format>", "Export format")
+        .choices(["yaml", "json"])
+        .default("yaml"),
+    )
     .option("--output <path>", "Output file path (default: stdout)")
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .action(handleCampaignExport);
