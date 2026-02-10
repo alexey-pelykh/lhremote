@@ -45,9 +45,11 @@ describe("createProgram", () => {
     expect(commandNames).toContain("query-messages");
     expect(commandNames).toContain("scrape-messaging-history");
     expect(commandNames).toContain("campaign-list");
+    expect(commandNames).toContain("campaign-start");
+    expect(commandNames).toContain("campaign-stop");
     expect(commandNames).toContain("check-replies");
     expect(commandNames).toContain("check-status");
-    expect(commandNames).toHaveLength(14);
+    expect(commandNames).toHaveLength(16);
   });
 
   describe("launch-app", () => {

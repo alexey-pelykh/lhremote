@@ -4,6 +4,8 @@ import { Command, InvalidArgumentError } from "commander";
 
 import {
   handleCampaignList,
+  handleCampaignStart,
+  handleCampaignStop,
   handleCheckReplies,
   handleCheckStatus,
   handleFindApp,
@@ -96,6 +98,24 @@ export function createProgram(): Command {
     .option("--include-archived", "Include archived campaigns")
     .option("--json", "Output as JSON")
     .action(handleCampaignList);
+
+  program
+    .command("campaign-start")
+    .description("Start a campaign with specified target persons")
+    .argument("<campaignId>", "Campaign ID to start", parsePositiveInt)
+    .option("--person-ids <ids>", "Comma-separated person IDs")
+    .option("--person-ids-file <path>", "File containing person IDs")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignStart);
+
+  program
+    .command("campaign-stop")
+    .description("Stop a running campaign")
+    .argument("<campaignId>", "Campaign ID to stop", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignStop);
 
   program
     .command("visit-and-extract")
