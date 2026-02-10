@@ -30,16 +30,20 @@ export function handleDescribeActions(options: {
   const validCategories = ["people", "messaging", "engagement", "crm", "workflow"] as const;
   type ValidCategory = (typeof validCategories)[number];
 
+  function isValidCategory(value: string): value is ValidCategory {
+    return (validCategories as readonly string[]).includes(value);
+  }
+
   let category: ValidCategory | undefined;
   if (options.category !== undefined) {
-    if (!validCategories.includes(options.category as ValidCategory)) {
+    if (!isValidCategory(options.category)) {
       process.stderr.write(
         `Invalid category: ${options.category}. Valid categories: ${validCategories.join(", ")}\n`,
       );
       process.exitCode = 1;
       return;
     }
-    category = options.category as ValidCategory;
+    category = options.category;
   }
 
   const catalog = getActionTypeCatalog(category);
