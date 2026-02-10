@@ -13,7 +13,7 @@ catalog:
   pid-port: "^2.0.1"
   ps-list: "^9.0.0"
   get-port: "^7.1.0"
-  "@modelcontextprotocol/sdk": "^1.25.3"
+  "@modelcontextprotocol/sdk": "^1.26.0"
   zod: "^4.3.6"
   commander: "^14.0.3"
   yaml: "^2.7.1"
