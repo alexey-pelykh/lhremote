@@ -18,6 +18,7 @@ jobs:
   # moving version stamping before validation.
   validate:
     name: Validate
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +29,7 @@ jobs:
 
   publish-npm:
     name: Publish to npm
+    timeout-minutes: 10
     needs: validate
     runs-on: ubuntu-latest
     environment: npm-publish

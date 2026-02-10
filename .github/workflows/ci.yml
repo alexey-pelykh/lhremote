@@ -16,6 +16,7 @@ concurrency:
 jobs:
   ci:
     name: Build, Lint & Test (${{ matrix.os }})
+    timeout-minutes: 15
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -35,6 +36,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   package:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
 
     permissions:
@@ -64,6 +66,7 @@ jobs:
           path: build/gh-pages
 
   publish-github-pages:
+    timeout-minutes: 10
     if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
 
     runs-on: ubuntu-latest
