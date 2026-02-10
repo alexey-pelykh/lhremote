@@ -2,6 +2,7 @@ export { handleCampaignList } from "./campaign-list.js";
 export { handleCampaignStart } from "./campaign-start.js";
 export { handleCampaignStop } from "./campaign-stop.js";
 export { handleCheckReplies } from "./check-replies.js";
+export { handleDescribeActions } from "./describe-actions.js";
 export { handleCheckStatus } from "./check-status.js";
 export { handleFindApp } from "./find-app.js";
 export { handleQueryMessages } from "./query-messages.js";

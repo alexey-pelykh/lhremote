@@ -8,6 +8,7 @@ import {
   handleCampaignStop,
   handleCheckReplies,
   handleCheckStatus,
+  handleDescribeActions,
   handleFindApp,
   handleLaunchApp,
   handleListAccounts,
@@ -116,6 +117,14 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignStop);
+
+  program
+    .command("describe-actions")
+    .description("List available LinkedHelper action types")
+    .option("--category <category>", "Filter by category (people, messaging, engagement, crm, workflow)")
+    .option("--type <type>", "Get details for a specific action type")
+    .option("--json", "Output as JSON")
+    .action(handleDescribeActions);
 
   program
     .command("visit-and-extract")
