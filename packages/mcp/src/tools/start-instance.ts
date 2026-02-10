@@ -10,7 +10,7 @@ import { z } from "zod";
 export function registerStartInstance(server: McpServer): void {
   server.tool(
     "start-instance",
-    "Start a LinkedHelper instance for a LinkedIn account. Required before visit-and-extract.",
+    "Start a LinkedHelper instance for a LinkedIn account. Required before campaign or query operations.",
     {
       accountId: z
         .number()
