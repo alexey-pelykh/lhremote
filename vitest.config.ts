@@ -6,6 +6,7 @@ export default defineConfig({
     exclude: ["**/node_modules/**", "**/dist/**", "**/*.e2e.test.ts"],
     coverage: {
       provider: "v8",
+      all: true,
       reporter: ["text", "lcov"],
       reportsDirectory: "coverage",
       include: ["packages/*/src/**/*.ts"],
