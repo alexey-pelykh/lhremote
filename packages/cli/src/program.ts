@@ -3,8 +3,13 @@ import { createRequire } from "node:module";
 import { Command, InvalidArgumentError } from "commander";
 
 import {
+  handleCampaignCreate,
+  handleCampaignDelete,
+  handleCampaignExport,
+  handleCampaignGet,
   handleCampaignList,
   handleCampaignStart,
+  handleCampaignStatus,
   handleCampaignStop,
   handleCheckReplies,
   handleCheckStatus,
@@ -99,6 +104,51 @@ export function createProgram(): Command {
     .option("--include-archived", "Include archived campaigns")
     .option("--json", "Output as JSON")
     .action(handleCampaignList);
+
+  program
+    .command("campaign-create")
+    .description("Create a new campaign from YAML or JSON configuration")
+    .option("--file <path>", "Path to campaign configuration file")
+    .option("--yaml <config>", "Inline YAML campaign configuration")
+    .option("--json-input <config>", "Inline JSON campaign configuration")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignCreate);
+
+  program
+    .command("campaign-get")
+    .description("Get detailed campaign information")
+    .argument("<campaignId>", "Campaign ID", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignGet);
+
+  program
+    .command("campaign-delete")
+    .description("Delete (archive) a campaign")
+    .argument("<campaignId>", "Campaign ID to delete", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignDelete);
+
+  program
+    .command("campaign-export")
+    .description("Export a campaign configuration as YAML or JSON")
+    .argument("<campaignId>", "Campaign ID to export", parsePositiveInt)
+    .option("--format <format>", "Export format: yaml or json (default: yaml)")
+    .option("--output <path>", "Output file path (default: stdout)")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .action(handleCampaignExport);
+
+  program
+    .command("campaign-status")
+    .description("Check campaign execution status")
+    .argument("<campaignId>", "Campaign ID to check", parsePositiveInt)
+    .option("--include-results", "Include execution results")
+    .option("--limit <n>", "Max results to show (default: 20)", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignStatus);
 
   program
     .command("campaign-start")

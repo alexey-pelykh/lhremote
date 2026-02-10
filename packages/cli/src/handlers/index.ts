@@ -1,5 +1,10 @@
+export { handleCampaignCreate } from "./campaign-create.js";
+export { handleCampaignDelete } from "./campaign-delete.js";
+export { handleCampaignExport } from "./campaign-export.js";
+export { handleCampaignGet } from "./campaign-get.js";
 export { handleCampaignList } from "./campaign-list.js";
 export { handleCampaignStart } from "./campaign-start.js";
+export { handleCampaignStatus } from "./campaign-status.js";
 export { handleCampaignStop } from "./campaign-stop.js";
 export { handleCheckReplies } from "./check-replies.js";
 export { handleDescribeActions } from "./describe-actions.js";
