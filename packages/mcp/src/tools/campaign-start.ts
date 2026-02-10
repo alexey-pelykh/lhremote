@@ -27,6 +27,7 @@ export function registerCampaignStart(server: McpServer): void {
         .describe("Campaign ID"),
       personIds: z
         .array(z.number().int().positive())
+        .nonempty()
         .describe("Person IDs to target"),
       cdpPort: z
         .number()
@@ -185,7 +186,7 @@ export function registerCampaignStart(server: McpServer): void {
             content: [
               {
                 type: "text" as const,
-                text: `Campaign runner did not reach idle state: ${error.message}`,
+                text: `Campaign start timed out: ${error.message}`,
               },
             ],
           };

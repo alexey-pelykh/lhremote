@@ -11,13 +11,12 @@ import {
 } from "@lhremote/core";
 
 export async function handleCampaignStop(
-  campaignIdArg: string,
+  campaignId: number,
   options: {
     cdpPort?: number;
     json?: boolean;
   },
 ): Promise<void> {
-  const campaignId = Number(campaignIdArg);
   const cdpPort = options.cdpPort ?? 9222;
 
   // Connect to launcher
@@ -79,7 +78,7 @@ export async function handleCampaignStop(
       };
       process.stdout.write(JSON.stringify(response, null, 2) + "\n");
     } else {
-      process.stdout.write(`Campaign ${String(campaignId)} stopped.\n`);
+      process.stdout.write(`Campaign ${String(campaignId)} paused.\n`);
     }
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {

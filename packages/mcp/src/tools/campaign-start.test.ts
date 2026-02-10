@@ -264,7 +264,7 @@ describe("registerCampaignStart", () => {
       content: [
         {
           type: "text",
-          text: "Campaign runner did not reach idle state: Campaign runner did not reach idle state within 60000ms",
+          text: "Campaign start timed out: Campaign runner did not reach idle state within 60000ms",
         },
       ],
     });

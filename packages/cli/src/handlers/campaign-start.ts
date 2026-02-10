@@ -43,7 +43,7 @@ function readPersonIdsFile(filePath: string): number[] {
 }
 
 export async function handleCampaignStart(
-  campaignIdArg: string,
+  campaignId: number,
   options: {
     personIds?: string;
     personIdsFile?: string;
@@ -51,8 +51,16 @@ export async function handleCampaignStart(
     json?: boolean;
   },
 ): Promise<void> {
-  const campaignId = Number(campaignIdArg);
   const cdpPort = options.cdpPort ?? 9222;
+
+  // Reject conflicting options
+  if (options.personIds && options.personIdsFile) {
+    process.stderr.write(
+      "Use only one of --person-ids or --person-ids-file.\n",
+    );
+    process.exitCode = 1;
+    return;
+  }
 
   // Parse person IDs from options
   let personIds: number[];
@@ -156,9 +164,7 @@ export async function handleCampaignStart(
     if (error instanceof CampaignNotFoundError) {
       process.stderr.write(`Campaign ${String(campaignId)} not found.\n`);
     } else if (error instanceof CampaignTimeoutError) {
-      process.stderr.write(
-        `Campaign runner did not reach idle state: ${error.message}\n`,
-      );
+      process.stderr.write(`Campaign start timed out: ${error.message}\n`);
     } else if (error instanceof CampaignExecutionError) {
       process.stderr.write(`Failed to start campaign: ${error.message}\n`);
     } else {
