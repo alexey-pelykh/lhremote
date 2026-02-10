@@ -39,7 +39,6 @@ describe("createProgram", () => {
     expect(commandNames).toContain("list-accounts");
     expect(commandNames).toContain("start-instance");
     expect(commandNames).toContain("stop-instance");
-    expect(commandNames).toContain("visit-and-extract");
     expect(commandNames).toContain("query-profile");
     expect(commandNames).toContain("query-profiles");
     expect(commandNames).toContain("query-messages");
@@ -55,7 +54,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("check-replies");
     expect(commandNames).toContain("check-status");
     expect(commandNames).toContain("describe-actions");
-    expect(commandNames).toHaveLength(22);
+    expect(commandNames).toHaveLength(21);
   });
 
   describe("launch-app", () => {
@@ -97,21 +96,6 @@ describe("createProgram", () => {
       await expect(
         program.parseAsync(["node", "lhremote", "start-instance", "abc"]),
       ).rejects.toThrow();
-    });
-  });
-
-  describe("visit-and-extract", () => {
-    it("requires profileUrl argument and accepts --json", () => {
-      const program = createProgram();
-      const cmd = program.commands.find(
-        (c) => c.name() === "visit-and-extract",
-      );
-      const args = cmd?.registeredArguments;
-      const jsonOption = cmd?.options.find((o) => o.long === "--json");
-
-      expect(args).toHaveLength(1);
-      expect(args?.[0]?.required).toBe(true);
-      expect(jsonOption).toBeDefined();
     });
   });
 

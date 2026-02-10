@@ -24,7 +24,6 @@ import {
   handleQuitApp,
   handleStartInstance,
   handleStopInstance,
-  handleVisitAndExtract,
 } from "./handlers/index.js";
 
 const require = createRequire(import.meta.url);
@@ -179,19 +178,6 @@ export function createProgram(): Command {
     .option("--type <type>", "Get details for a specific action type")
     .option("--json", "Output as JSON")
     .action(handleDescribeActions);
-
-  program
-    .command("visit-and-extract")
-    .description("Visit a LinkedIn profile and extract data")
-    .argument("<profileUrl>", "LinkedIn profile URL")
-    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
-    .option(
-      "--poll-timeout <ms>",
-      "Extraction timeout in milliseconds (default: 30000)",
-      parsePositiveInt,
-    )
-    .option("--json", "Output as JSON")
-    .action(handleVisitAndExtract);
 
   program
     .command("query-messages")

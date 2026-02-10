@@ -78,7 +78,6 @@ describe("createServer", () => {
     expect(names).toContain("list-accounts");
     expect(names).toContain("start-instance");
     expect(names).toContain("stop-instance");
-    expect(names).toContain("visit-and-extract");
     expect(names).toContain("query-profile");
     expect(names).toContain("query-profiles");
     expect(names).toContain("query-messages");
@@ -94,6 +93,6 @@ describe("createServer", () => {
     expect(names).toContain("check-replies");
     expect(names).toContain("check-status");
     expect(names).toContain("describe-actions");
-    expect(names).toHaveLength(22);
+    expect(names).toHaveLength(21);
   });
 });

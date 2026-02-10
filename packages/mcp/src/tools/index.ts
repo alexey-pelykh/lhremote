@@ -21,8 +21,6 @@ import { registerQueryMessages } from "./query-messages.js";
 import { registerQueryProfile } from "./query-profile.js";
 import { registerQueryProfiles } from "./query-profiles.js";
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
-import { registerVisitAndExtract } from "./visit-and-extract.js";
-
 export function registerAllTools(server: McpServer): void {
   registerCampaignCreate(server);
   registerCampaignDelete(server);
@@ -38,7 +36,6 @@ export function registerAllTools(server: McpServer): void {
   registerListAccounts(server);
   registerStartInstance(server);
   registerStopInstance(server);
-  registerVisitAndExtract(server);
   registerQueryMessages(server);
   registerQueryProfile(server);
   registerQueryProfiles(server);
