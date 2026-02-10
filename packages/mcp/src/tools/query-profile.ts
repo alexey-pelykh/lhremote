@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   DatabaseClient,
   discoverAllDatabases,
+  errorMessage,
   ProfileNotFoundError,
   ProfileRepository,
 } from "@lhremote/core";
@@ -72,8 +73,7 @@ export function registerQueryProfile(server: McpServer): void {
           if (error instanceof ProfileNotFoundError) {
             continue;
           }
-          const message =
-            error instanceof Error ? error.message : String(error);
+          const message = errorMessage(error);
           return {
             isError: true,
             content: [

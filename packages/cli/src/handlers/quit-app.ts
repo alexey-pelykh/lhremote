@@ -1,4 +1,4 @@
-import { AppService } from "@lhremote/core";
+import { AppService, errorMessage } from "@lhremote/core";
 
 export async function handleQuitApp(options: {
   cdpPort?: number;
@@ -8,7 +8,7 @@ export async function handleQuitApp(options: {
   try {
     await app.quit();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;

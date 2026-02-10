@@ -9,6 +9,8 @@ import type {
 } from "../types/index.js";
 import type { DatabaseClient } from "../db/index.js";
 import { CampaignRepository } from "../db/index.js";
+import { delay } from "../utils/delay.js";
+import { errorMessage } from "../utils/error-message.js";
 import type { InstanceService } from "./instance.js";
 import { CampaignExecutionError, CampaignTimeoutError } from "./errors.js";
 
@@ -82,7 +84,7 @@ export class CampaignService {
       return this.campaignRepo.getCampaign(result.id);
     } catch (error) {
       if (error instanceof CampaignExecutionError) throw error;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       throw new CampaignExecutionError(
         `Failed to create campaign: ${message}`,
         undefined,
@@ -127,7 +129,7 @@ export class CampaignService {
       );
     } catch (error) {
       if (error instanceof CampaignExecutionError) throw error;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       throw new CampaignExecutionError(
         `Failed to delete campaign ${String(campaignId)}: ${message}`,
         campaignId,
@@ -169,7 +171,7 @@ export class CampaignService {
         })()`,
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       throw new CampaignExecutionError(
         `Failed to unpause campaign ${String(campaignId)}: ${message}`,
         campaignId,
@@ -194,7 +196,7 @@ export class CampaignService {
       }
     } catch (error) {
       if (error instanceof CampaignExecutionError) throw error;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       throw new CampaignExecutionError(
         `Failed to start campaign runner: ${message}`,
         campaignId,
@@ -231,7 +233,7 @@ export class CampaignService {
       );
     } catch (error) {
       if (error instanceof CampaignExecutionError) throw error;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       throw new CampaignExecutionError(
         `Failed to stop campaign ${String(campaignId)}: ${message}`,
         campaignId,
@@ -357,8 +359,4 @@ export class CampaignService {
       }),
     );
   }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

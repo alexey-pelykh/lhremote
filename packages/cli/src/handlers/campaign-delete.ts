@@ -6,6 +6,7 @@ import {
   DatabaseClient,
   discoverDatabase,
   discoverInstancePort,
+  errorMessage,
   InstanceService,
   LauncherService,
 } from "@lhremote/core";
@@ -40,7 +41,7 @@ export async function handleCampaignDelete(
     }
     accountId = (accounts[0] as Account).id;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
@@ -88,7 +89,7 @@ export async function handleCampaignDelete(
     } else if (error instanceof CampaignExecutionError) {
       process.stderr.write(`Failed to delete campaign: ${error.message}\n`);
     } else {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;

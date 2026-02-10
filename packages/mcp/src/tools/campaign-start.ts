@@ -8,6 +8,7 @@ import {
   DatabaseClient,
   discoverDatabase,
   discoverInstancePort,
+  errorMessage,
   InstanceNotRunningError,
   InstanceService,
   LauncherService,
@@ -55,8 +56,7 @@ export function registerCampaignStart(server: McpServer): void {
             ],
           };
         }
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [
@@ -95,8 +95,7 @@ export function registerCampaignStart(server: McpServer): void {
         }
         accountId = (accounts[0] as Account).id;
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [
@@ -202,8 +201,7 @@ export function registerCampaignStart(server: McpServer): void {
             ],
           };
         }
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [

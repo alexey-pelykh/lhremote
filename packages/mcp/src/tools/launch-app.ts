@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { AppLaunchError, AppNotFoundError, AppService } from "@lhremote/core";
+import { AppLaunchError, AppNotFoundError, AppService, errorMessage } from "@lhremote/core";
 import { z } from "zod";
 
 export function registerLaunchApp(server: McpServer): void {
@@ -29,8 +29,7 @@ export function registerLaunchApp(server: McpServer): void {
             content: [{ type: "text", text: error.message }],
           };
         }
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [

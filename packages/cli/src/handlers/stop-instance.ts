@@ -1,4 +1,4 @@
-import { LauncherService } from "@lhremote/core";
+import { errorMessage, LauncherService } from "@lhremote/core";
 
 export async function handleStopInstance(
   accountIdArg: string,
@@ -11,7 +11,7 @@ export async function handleStopInstance(
   try {
     await launcher.connect();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
@@ -23,7 +23,7 @@ export async function handleStopInstance(
       `Instance stopped for account ${String(accountId)}\n`,
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
   } finally {

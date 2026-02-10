@@ -1,6 +1,7 @@
 import {
   DatabaseClient,
   discoverAllDatabases,
+  errorMessage,
   ProfileRepository,
   type ProfileSearchResult,
 } from "@lhremote/core";
@@ -38,7 +39,7 @@ export async function handleQueryProfiles(options: {
       allProfiles.push(...result.profiles);
       totalCount += result.total;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       process.stderr.write(`${message}\n`);
       process.exitCode = 1;
       return;

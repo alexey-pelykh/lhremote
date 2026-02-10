@@ -1,4 +1,5 @@
 import { discoverInstancePort } from "../cdp/index.js";
+import { delay } from "../utils/delay.js";
 import type { LauncherService } from "./launcher.js";
 import { StartInstanceError } from "./errors.js";
 
@@ -54,7 +55,7 @@ export async function startInstanceWithRecovery(
 
       // Stale state — crash recovery
       await launcher.stopInstance(accountId);
-      await sleep(CRASH_RECOVERY_DELAY);
+      await delay(CRASH_RECOVERY_DELAY);
       await launcher.startInstance(accountId);
     } else {
       throw error;
@@ -86,7 +87,7 @@ export async function waitForInstancePort(
     if (port !== null) {
       return port;
     }
-    await sleep(PORT_DISCOVERY_INTERVAL);
+    await delay(PORT_DISCOVERY_INTERVAL);
   }
 
   return null;
@@ -108,10 +109,6 @@ export async function waitForInstanceShutdown(
     if (port === null) {
       return;
     }
-    await sleep(PORT_DISCOVERY_INTERVAL);
+    await delay(PORT_DISCOVERY_INTERVAL);
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

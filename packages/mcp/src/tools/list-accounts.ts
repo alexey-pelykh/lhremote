@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { LauncherService, LinkedHelperNotRunningError } from "@lhremote/core";
+import { errorMessage, LauncherService, LinkedHelperNotRunningError } from "@lhremote/core";
 import { z } from "zod";
 
 export function registerListAccounts(server: McpServer): void {
@@ -32,8 +32,7 @@ export function registerListAccounts(server: McpServer): void {
             ],
           };
         }
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [
@@ -53,8 +52,7 @@ export function registerListAccounts(server: McpServer): void {
           ],
         };
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [

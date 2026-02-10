@@ -1,4 +1,4 @@
-import { checkStatus } from "@lhremote/core";
+import { checkStatus, errorMessage } from "@lhremote/core";
 
 export async function handleCheckStatus(options: {
   cdpPort?: number;
@@ -49,7 +49,7 @@ export async function handleCheckStatus(options: {
       }
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
   }

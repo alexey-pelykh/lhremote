@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { findApp } from "@lhremote/core";
+import { errorMessage, findApp } from "@lhremote/core";
 
 export function registerFindApp(server: McpServer): void {
   server.tool(
@@ -27,8 +27,7 @@ export function registerFindApp(server: McpServer): void {
           ],
         };
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [

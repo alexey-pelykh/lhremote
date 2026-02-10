@@ -1,4 +1,5 @@
 import {
+  errorMessage,
   LauncherService,
   startInstanceWithRecovery,
 } from "@lhremote/core";
@@ -14,7 +15,7 @@ export async function handleStartInstance(
   try {
     await launcher.connect();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
@@ -44,7 +45,7 @@ export async function handleStartInstance(
       `Instance ${verb} for account ${String(accountId)} on CDP port ${String(outcome.port)}\n`,
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
   } finally {

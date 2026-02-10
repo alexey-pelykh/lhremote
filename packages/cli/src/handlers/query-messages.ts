@@ -5,6 +5,7 @@ import {
   ChatNotFoundError,
   DatabaseClient,
   discoverAllDatabases,
+  errorMessage,
   MessageRepository,
 } from "@lhremote/core";
 
@@ -77,7 +78,7 @@ export async function handleQueryMessages(options: {
       if (error instanceof ChatNotFoundError) {
         continue;
       }
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       process.stderr.write(`${message}\n`);
       process.exitCode = 1;
       return;

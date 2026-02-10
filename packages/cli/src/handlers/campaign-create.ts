@@ -9,6 +9,7 @@ import {
   DatabaseClient,
   discoverDatabase,
   discoverInstancePort,
+  errorMessage,
   InstanceService,
   LauncherService,
   parseCampaignJson,
@@ -65,7 +66,7 @@ export async function handleCampaignCreate(options: {
         `Invalid campaign configuration: ${error.message}\n`,
       );
     } else {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       process.stderr.write(
         `Failed to parse campaign configuration: ${message}\n`,
       );
@@ -95,7 +96,7 @@ export async function handleCampaignCreate(options: {
     }
     accountId = (accounts[0] as Account).id;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
@@ -136,7 +137,7 @@ export async function handleCampaignCreate(options: {
     if (error instanceof CampaignExecutionError) {
       process.stderr.write(`Failed to create campaign: ${error.message}\n`);
     } else {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;

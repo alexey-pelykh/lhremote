@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   type Account,
+  errorMessage,
   LauncherService,
   LinkedHelperNotRunningError,
 } from "@lhremote/core";
@@ -44,8 +45,7 @@ export function registerStopInstance(server: McpServer): void {
             ],
           };
         }
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [
@@ -98,8 +98,7 @@ export function registerStopInstance(server: McpServer): void {
           ],
         };
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [

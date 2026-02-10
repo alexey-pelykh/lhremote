@@ -1,5 +1,7 @@
 import { CDPClient, discoverTargets } from "../cdp/index.js";
 import type { CdpTarget } from "../types/cdp.js";
+import { delay } from "../utils/delay.js";
+import { errorMessage } from "../utils/error-message.js";
 import { ActionExecutionError, InstanceNotRunningError, ServiceError } from "./errors.js";
 
 /**
@@ -68,7 +70,7 @@ export class InstanceService {
         break;
       }
 
-      await new Promise<void>((resolve) => setTimeout(resolve, CONNECT_POLL_INTERVAL));
+      await delay(CONNECT_POLL_INTERVAL);
     }
 
     if (!linkedInTarget) {
@@ -146,7 +148,7 @@ export class InstanceService {
         true,
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       throw new ActionExecutionError(actionName, `Action '${actionName}' failed: ${message}`, { cause: error });
     }
 

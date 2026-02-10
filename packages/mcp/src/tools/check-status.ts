@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { checkStatus } from "@lhremote/core";
+import { checkStatus, errorMessage } from "@lhremote/core";
 import { z } from "zod";
 
 export function registerCheckStatus(server: McpServer): void {
@@ -25,8 +25,7 @@ export function registerCheckStatus(server: McpServer): void {
           ],
         };
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [

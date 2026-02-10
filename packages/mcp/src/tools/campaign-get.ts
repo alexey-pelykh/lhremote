@@ -5,6 +5,7 @@ import {
   CampaignRepository,
   DatabaseClient,
   discoverDatabase,
+  errorMessage,
   LauncherService,
   LinkedHelperNotRunningError,
 } from "@lhremote/core";
@@ -46,8 +47,7 @@ export function registerCampaignGet(server: McpServer): void {
             ],
           };
         }
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [
@@ -86,8 +86,7 @@ export function registerCampaignGet(server: McpServer): void {
         }
         accountId = (accounts[0] as Account).id;
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [
@@ -132,8 +131,7 @@ export function registerCampaignGet(server: McpServer): void {
             ],
           };
         }
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         return {
           isError: true,
           content: [

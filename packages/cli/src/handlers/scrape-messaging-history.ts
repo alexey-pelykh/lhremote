@@ -4,6 +4,7 @@ import {
   DatabaseClient,
   discoverDatabase,
   discoverInstancePort,
+  errorMessage,
   InstanceService,
   LauncherService,
   MessageRepository,
@@ -36,7 +37,7 @@ export async function handleScrapeMessagingHistory(options: {
     }
     accountId = (accounts[0] as Account).id;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
@@ -87,7 +88,7 @@ export async function handleScrapeMessagingHistory(options: {
       printStats(stats);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
   } finally {

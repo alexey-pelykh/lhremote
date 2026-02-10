@@ -118,3 +118,6 @@ export {
   findApp,
   type DiscoveredApp,
 } from "./cdp/index.js";
+
+// Utilities
+export { delay, errorMessage, isCdpPort } from "./utils/index.js";

@@ -1,4 +1,5 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { errorMessage } from "@lhremote/core";
 
 import { createServer } from "./server.js";
 
@@ -14,7 +15,7 @@ export async function runStdioServer(): Promise<void> {
   try {
     await server.connect(transport);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`Failed to start MCP server: ${message}\n`);
     process.exit(1);
   }
@@ -25,7 +26,7 @@ export async function runStdioServer(): Promise<void> {
     server
       .close()
       .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         process.stderr.write(`Error during shutdown: ${message}\n`);
       })
       .finally(() => {

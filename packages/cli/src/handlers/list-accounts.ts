@@ -1,4 +1,4 @@
-import { LauncherService } from "@lhremote/core";
+import { errorMessage, LauncherService } from "@lhremote/core";
 
 export async function handleListAccounts(options: {
   cdpPort?: number;
@@ -9,7 +9,7 @@ export async function handleListAccounts(options: {
   try {
     await launcher.connect();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
@@ -31,7 +31,7 @@ export async function handleListAccounts(options: {
       }
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
   } finally {

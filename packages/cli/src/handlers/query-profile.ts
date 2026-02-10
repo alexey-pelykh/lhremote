@@ -2,6 +2,7 @@ import {
   type Profile,
   DatabaseClient,
   discoverAllDatabases,
+  errorMessage,
   ProfileNotFoundError,
   ProfileRepository,
 } from "@lhremote/core";
@@ -43,7 +44,7 @@ export async function handleQueryProfile(options: {
       if (error instanceof ProfileNotFoundError) {
         continue;
       }
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       process.stderr.write(`${message}\n`);
       process.exitCode = 1;
       return;

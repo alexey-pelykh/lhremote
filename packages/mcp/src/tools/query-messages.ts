@@ -3,6 +3,7 @@ import {
   ChatNotFoundError,
   DatabaseClient,
   discoverAllDatabases,
+  errorMessage,
   MessageRepository,
 } from "@lhremote/core";
 import { z } from "zod";
@@ -112,8 +113,7 @@ export function registerQueryMessages(server: McpServer): void {
           if (error instanceof ChatNotFoundError) {
             continue;
           }
-          const message =
-            error instanceof Error ? error.message : String(error);
+          const message = errorMessage(error);
           return {
             isError: true,
             content: [

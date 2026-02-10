@@ -1,4 +1,4 @@
-import { findApp } from "@lhremote/core";
+import { errorMessage, findApp } from "@lhremote/core";
 
 export async function handleFindApp(options: {
   json?: boolean;
@@ -25,7 +25,7 @@ export async function handleFindApp(options: {
       );
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
   }

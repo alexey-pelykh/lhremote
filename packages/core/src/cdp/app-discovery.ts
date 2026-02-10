@@ -1,5 +1,6 @@
 import { pidToPorts } from "pid-port";
 import psList from "ps-list";
+import { isCdpPort } from "../utils/cdp-port.js";
 
 /**
  * Known LinkedHelper binary names across platforms.
@@ -72,18 +73,4 @@ async function probeProcess(pid: number): Promise<DiscoveredApp> {
   // Process is running but no CDP port detected (or none responding)
   const firstPort = [...ports][0] ?? null;
   return { pid, cdpPort: firstPort, connectable: false };
-}
-
-/**
- * Check whether a port exposes a CDP `/json/list` endpoint.
- */
-async function isCdpPort(port: number): Promise<boolean> {
-  try {
-    const response = await fetch(
-      `http://127.0.0.1:${String(port)}/json/list`,
-    );
-    return response.ok;
-  } catch {
-    return false;
-  }
 }

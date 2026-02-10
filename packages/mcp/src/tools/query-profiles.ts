@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   DatabaseClient,
   discoverAllDatabases,
+  errorMessage,
   ProfileRepository,
   type ProfileSearchResult,
 } from "@lhremote/core";
@@ -64,8 +65,7 @@ export function registerQueryProfiles(server: McpServer): void {
           allProfiles.push(...result.profiles);
           totalCount += result.total;
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
+          const message = errorMessage(error);
           return {
             isError: true,
             content: [

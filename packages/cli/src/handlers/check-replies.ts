@@ -4,6 +4,7 @@ import {
   DatabaseClient,
   discoverDatabase,
   discoverInstancePort,
+  errorMessage,
   InstanceService,
   LauncherService,
   MessageRepository,
@@ -40,7 +41,7 @@ export async function handleCheckReplies(options: {
     }
     accountId = (accounts[0] as Account).id;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
@@ -98,7 +99,7 @@ export async function handleCheckReplies(options: {
       printReplies(conversations, totalNew);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
   } finally {

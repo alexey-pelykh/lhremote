@@ -3,6 +3,7 @@ import {
   type CampaignSummary,
   DatabaseClient,
   discoverAllDatabases,
+  errorMessage,
 } from "@lhremote/core";
 
 export async function handleCampaignList(options: {
@@ -27,7 +28,7 @@ export async function handleCampaignList(options: {
       const campaigns = repo.listCampaigns({ includeArchived });
       allCampaigns.push(...campaigns);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       process.stderr.write(`Error in database at ${dbPath}: ${message}\n`);
       process.exitCode = 1;
       return;

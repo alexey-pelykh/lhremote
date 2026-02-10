@@ -4,6 +4,7 @@ import {
   CampaignRepository,
   DatabaseClient,
   discoverDatabase,
+  errorMessage,
   LauncherService,
 } from "@lhremote/core";
 
@@ -37,7 +38,7 @@ export async function handleCampaignGet(
     }
     accountId = (accounts[0] as Account).id;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
@@ -85,7 +86,7 @@ export async function handleCampaignGet(
     if (error instanceof CampaignNotFoundError) {
       process.stderr.write(`Campaign ${String(campaignId)} not found.\n`);
     } else {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;

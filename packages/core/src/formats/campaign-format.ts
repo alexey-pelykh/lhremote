@@ -1,5 +1,6 @@
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
+import { errorMessage } from "../utils/error-message.js";
 import type {
   Campaign,
   CampaignAction,
@@ -62,7 +63,7 @@ export function parseCampaignYaml(yamlString: string): CampaignConfig {
   try {
     doc = parseYaml(yamlString);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     throw new CampaignFormatError(`Invalid YAML: ${message}`);
   }
   return parseCampaignDocument(doc);
@@ -79,7 +80,7 @@ export function parseCampaignJson(jsonString: string): CampaignConfig {
   try {
     doc = JSON.parse(jsonString) as unknown;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     throw new CampaignFormatError(`Invalid JSON: ${message}`);
   }
   return parseCampaignDocument(doc);
