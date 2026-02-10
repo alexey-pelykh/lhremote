@@ -17,18 +17,13 @@ import { z } from "zod";
 export function registerCampaignDelete(server: McpServer): void {
   server.tool(
     "campaign-delete",
-    "Delete or archive a campaign. Archived campaigns are hidden but retained in database.",
+    "Delete (archive) a campaign. The campaign is hidden but retained in database.",
     {
       campaignId: z
         .number()
         .int()
         .positive()
         .describe("Campaign ID"),
-      archive: z
-        .boolean()
-        .optional()
-        .default(true)
-        .describe("Archive instead of delete (default: true)"),
       cdpPort: z
         .number()
         .int()

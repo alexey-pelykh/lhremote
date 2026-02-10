@@ -112,7 +112,6 @@ describe("registerCampaignDelete", () => {
     const handler = getHandler("campaign-delete");
     const result = await handler({
       campaignId: 15,
-      archive: true,
       cdpPort: 9222,
     });
 
@@ -148,7 +147,6 @@ describe("registerCampaignDelete", () => {
     const handler = getHandler("campaign-delete");
     const result = await handler({
       campaignId: 999,
-      archive: true,
       cdpPort: 9222,
     });
 
@@ -179,7 +177,6 @@ describe("registerCampaignDelete", () => {
     const handler = getHandler("campaign-delete");
     const result = await handler({
       campaignId: 15,
-      archive: true,
       cdpPort: 9222,
     });
 
@@ -208,7 +205,6 @@ describe("registerCampaignDelete", () => {
     const handler = getHandler("campaign-delete");
     const result = await handler({
       campaignId: 15,
-      archive: true,
       cdpPort: 9222,
     });
 
@@ -248,7 +244,6 @@ describe("registerCampaignDelete", () => {
     const handler = getHandler("campaign-delete");
     const result = await handler({
       campaignId: 15,
-      archive: true,
       cdpPort: 9222,
     });
 
