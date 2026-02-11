@@ -526,6 +526,27 @@ db.exec(`
   CREATE INDEX action_result_messages_result_idx ON action_result_messages(action_result_id);
 `);
 
+db.exec(`
+  CREATE TABLE collections(
+    id INTEGER PRIMARY KEY,
+    li_account_id INTEGER NOT NULL,
+    name TEXT,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+  );
+
+  CREATE TABLE collection_people_versions(
+    id INTEGER PRIMARY KEY,
+    collection_id INTEGER NOT NULL,
+    version_operation_status TEXT NOT NULL,
+    additional_data TEXT,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    FOREIGN KEY(collection_id) REFERENCES collections(id)
+  );
+  CREATE INDEX collection_people_versions_collection_idx ON collection_people_versions(collection_id);
+`);
+
 // ── Campaign Mock Data ───────────────────────────────────────────────
 
 // Campaign 1: Active campaign with MessageToPerson action

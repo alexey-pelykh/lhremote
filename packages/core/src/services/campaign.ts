@@ -82,6 +82,7 @@ export class CampaignService {
       );
 
       this.campaignRepo.fixIsValid(result.id);
+      this.campaignRepo.createActionExcludeLists(result.id, liAccountId);
       return this.campaignRepo.getCampaign(result.id);
     } catch (error) {
       if (error instanceof CampaignExecutionError) throw error;

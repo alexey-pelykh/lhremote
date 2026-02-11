@@ -89,6 +89,9 @@ export class CampaignRepository {
   // Write statements (prepared lazily to avoid issues with read-only mode)
   private writeStatements: {
     fixIsValid: PreparedStatement;
+    insertCollection: PreparedStatement;
+    insertCollectionPeopleVersion: PreparedStatement;
+    setActionVersionExcludeList: PreparedStatement;
     resetTargetPeople: PreparedStatement;
     resetHistory: PreparedStatement;
     deleteResultFlags: PreparedStatement;
@@ -292,6 +295,18 @@ export class CampaignRepository {
       fixIsValid: db.prepare(
         `UPDATE campaigns SET is_valid = 1 WHERE id = ?`,
       ),
+      insertCollection: db.prepare(
+        `INSERT INTO collections (li_account_id, name, created_at, updated_at)
+         VALUES (?, NULL, datetime('now'), datetime('now'))`,
+      ),
+      insertCollectionPeopleVersion: db.prepare(
+        `INSERT INTO collection_people_versions
+           (collection_id, version_operation_status, additional_data, created_at, updated_at)
+         VALUES (?, 'addToTarget', NULL, datetime('now'), datetime('now'))`,
+      ),
+      setActionVersionExcludeList: db.prepare(
+        `UPDATE action_versions SET exclude_list_id = ? WHERE action_id = ?`,
+      ),
       resetTargetPeople: db.prepare(
         `UPDATE action_target_people SET state = 1
          WHERE action_id = ? AND person_id = ?`,
@@ -349,6 +364,50 @@ export class CampaignRepository {
   fixIsValid(campaignId: number): void {
     const stmts = this.getWriteStatements();
     stmts.fixIsValid.run(campaignId);
+  }
+
+  /**
+   * Create action-level exclude lists after programmatic campaign creation.
+   *
+   * The `createCampaign()` API creates campaign-level exclude lists but
+   * skips action-level ones due to a code path bug. The LH UI crashes
+   * with "Expected excludeListId but got null" when opening campaigns
+   * missing these. This creates the full exclude list chain for each
+   * action: collection -> collection_people_versions -> action_versions.
+   */
+  createActionExcludeLists(campaignId: number, liAccountId: number): void {
+    const actions = this.getCampaignActions(campaignId);
+    if (actions.length === 0) return;
+
+    const stmts = this.getWriteStatements();
+
+    this.client.db.exec("BEGIN");
+    try {
+      for (const action of actions) {
+        // 1. Create a collection for this action's exclude list
+        stmts.insertCollection.run(liAccountId);
+        const collectionId = (
+          this.client.db
+            .prepare("SELECT last_insert_rowid() AS id")
+            .get() as { id: number }
+        ).id;
+
+        // 2. Create a collection_people_versions entry
+        stmts.insertCollectionPeopleVersion.run(collectionId);
+        const cpvId = (
+          this.client.db
+            .prepare("SELECT last_insert_rowid() AS id")
+            .get() as { id: number }
+        ).id;
+
+        // 3. Set exclude_list_id on all action_versions for this action
+        stmts.setActionVersionExcludeList.run(cpvId, action.id);
+      }
+      this.client.db.exec("COMMIT");
+    } catch (e) {
+      this.client.db.exec("ROLLBACK");
+      throw e;
+    }
   }
 
   /**
