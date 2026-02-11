@@ -99,6 +99,12 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
           "Skip person if they were messaged after a previous campaign message.",
         default: false,
       },
+      textInputMethod: {
+        type: "string",
+        required: false,
+        description:
+          'How to input text — "insert", "type", or "random".',
+      },
     },
     example: {
       messageTemplate: {

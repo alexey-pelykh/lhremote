@@ -180,6 +180,7 @@ describe("getActionTypeInfo", () => {
     if (field === undefined) throw new Error("Expected field");
     expect(field.required).toBe(true);
     expect(info.configSchema).toHaveProperty("rejectIfReplied");
+    expect(info.configSchema).toHaveProperty("textInputMethod");
   });
 
   it("returns correct fields for Waiter", () => {
