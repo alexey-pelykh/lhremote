@@ -389,6 +389,35 @@ describe("getActionTypeInfo", () => {
     });
   });
 
+  it("returns correct fields for EndorseSkills", () => {
+    const info = getActionTypeInfo("EndorseSkills");
+    expect(info).toBeDefined();
+    if (info === undefined) throw new Error("Expected info");
+    expect(info.category).toBe("engagement");
+    expect(info.configSchema).toHaveProperty("skillNames");
+    expect(info.configSchema).toHaveProperty("limit");
+    expect(info.configSchema).toHaveProperty("skipIfNotEndorsable");
+    const skillNamesField = info.configSchema["skillNames"];
+    expect(skillNamesField).toBeDefined();
+    if (skillNamesField === undefined) throw new Error("Expected field");
+    expect(skillNamesField.type).toBe("array");
+    expect(skillNamesField.required).toBe(false);
+    const limitField = info.configSchema["limit"];
+    expect(limitField).toBeDefined();
+    if (limitField === undefined) throw new Error("Expected field");
+    expect(limitField.type).toBe("number");
+    expect(limitField.required).toBe(false);
+    const skipField = info.configSchema["skipIfNotEndorsable"];
+    expect(skipField).toBeDefined();
+    if (skipField === undefined) throw new Error("Expected field");
+    expect(skipField.type).toBe("boolean");
+    expect(skipField.required).toBe(true);
+    expect(info.example).toEqual({
+      limit: 3,
+      skipIfNotEndorsable: true,
+    });
+  });
+
   it("returns frozen objects", () => {
     const info = getActionTypeInfo("VisitAndExtract");
     expect(info).toBeDefined();

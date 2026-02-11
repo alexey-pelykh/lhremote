@@ -276,12 +276,25 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
     description: "Endorse skills listed on a LinkedIn profile.",
     category: "engagement",
     configSchema: {
-      maxSkills: {
+      skillNames: {
+        type: "array",
+        required: false,
+        description:
+          "Specific skill names to endorse (mutually exclusive with limit).",
+      },
+      limit: {
         type: "number",
         required: false,
-        description: "Maximum number of skills to endorse.",
+        description:
+          "Max number of skills to endorse (mutually exclusive with skillNames).",
+      },
+      skipIfNotEndorsable: {
+        type: "boolean",
+        required: true,
+        description: "Skip if person has no endorsable skills.",
       },
     },
+    example: { limit: 3, skipIfNotEndorsable: true },
   },
   {
     name: "CheckForReplies",
