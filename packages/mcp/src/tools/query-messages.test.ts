@@ -4,20 +4,22 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    DatabaseClient: vi.fn(),
+    resolveAccount: vi.fn(),
+    withDatabase: vi.fn(),
     MessageRepository: vi.fn(),
-    discoverAllDatabases: vi.fn(),
   };
 });
 
 import {
   type Chat,
   type ConversationThread,
+  type DatabaseContext,
   type Message,
   ChatNotFoundError,
-  DatabaseClient,
+  LinkedHelperNotRunningError,
   MessageRepository,
-  discoverAllDatabases,
+  resolveAccount,
+  withDatabase,
 } from "@lhremote/core";
 
 import { registerQueryMessages } from "./query-messages.js";
@@ -54,14 +56,6 @@ const MOCK_THREAD: ConversationThread = {
   messages: [MOCK_MESSAGE],
 };
 
-function mockDb() {
-  const close = vi.fn();
-  vi.mocked(DatabaseClient).mockImplementation(function () {
-    return { close, db: {} } as unknown as DatabaseClient;
-  });
-  return { close };
-}
-
 function mockRepo(overrides?: {
   listChats?: Chat[];
   thread?: ConversationThread;
@@ -91,10 +85,10 @@ function mockRepoChatNotFound() {
 }
 
 function setupSuccessPath() {
-  vi.mocked(discoverAllDatabases).mockReturnValue(
-    new Map([[1, "/path/to/db"]]),
+  vi.mocked(resolveAccount).mockResolvedValue(1);
+  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
+    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
   );
-  mockDb();
   mockRepo();
 }
 
@@ -126,7 +120,7 @@ describe("registerQueryMessages", () => {
     setupSuccessPath();
 
     const handler = getHandler("query-messages");
-    const result = await handler({});
+    const result = await handler({ cdpPort: 9222 });
 
     expect(result).toEqual({
       content: [
@@ -148,7 +142,7 @@ describe("registerQueryMessages", () => {
     setupSuccessPath();
 
     const handler = getHandler("query-messages");
-    const result = await handler({ personId: 456 });
+    const result = await handler({ personId: 456, cdpPort: 9222 });
 
     expect(result).toEqual({
       content: [
@@ -170,7 +164,7 @@ describe("registerQueryMessages", () => {
     setupSuccessPath();
 
     const handler = getHandler("query-messages");
-    const result = await handler({ chatId: 123 });
+    const result = await handler({ chatId: 123, cdpPort: 9222 });
 
     expect(result).toEqual({
       content: [
@@ -188,7 +182,7 @@ describe("registerQueryMessages", () => {
     setupSuccessPath();
 
     const handler = getHandler("query-messages");
-    const result = await handler({ search: "reaching out" });
+    const result = await handler({ search: "reaching out", cdpPort: 9222 });
 
     expect(result).toEqual({
       content: [
@@ -204,36 +198,18 @@ describe("registerQueryMessages", () => {
     });
   });
 
-  it("returns error when no databases found", async () => {
+  it("returns error when chat not found", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryMessages(server);
-    vi.mocked(discoverAllDatabases).mockReturnValue(new Map());
 
-    const handler = getHandler("query-messages");
-    const result = await handler({});
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "No LinkedHelper databases found.",
-        },
-      ],
-    });
-  });
-
-  it("returns error when chat not found in any database", async () => {
-    const { server, getHandler } = createMockServer();
-    registerQueryMessages(server);
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
+      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
     );
-    mockDb();
     mockRepoChatNotFound();
 
     const handler = getHandler("query-messages");
-    const result = await handler({ chatId: 999 });
+    const result = await handler({ chatId: 999, cdpPort: 9222 });
 
     expect(result).toEqual({
       isError: true,
@@ -246,43 +222,14 @@ describe("registerQueryMessages", () => {
     });
   });
 
-  it("closes database after successful query", async () => {
-    const { server, getHandler } = createMockServer();
-    registerQueryMessages(server);
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
-    const { close } = mockDb();
-    mockRepo();
-
-    const handler = getHandler("query-messages");
-    await handler({});
-
-    expect(close).toHaveBeenCalledOnce();
-  });
-
-  it("closes database after failed lookup", async () => {
-    const { server, getHandler } = createMockServer();
-    registerQueryMessages(server);
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
-    const { close } = mockDb();
-    mockRepoChatNotFound();
-
-    const handler = getHandler("query-messages");
-    await handler({ chatId: 999 });
-
-    expect(close).toHaveBeenCalledOnce();
-  });
-
   it("returns error on unexpected database failure", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryMessages(server);
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
+
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
+      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
     );
-    mockDb();
     vi.mocked(MessageRepository).mockImplementation(function () {
       return {
         listChats: vi.fn().mockImplementation(() => {
@@ -292,7 +239,7 @@ describe("registerQueryMessages", () => {
     });
 
     const handler = getHandler("query-messages");
-    const result = await handler({});
+    const result = await handler({ cdpPort: 9222 });
 
     expect(result).toEqual({
       isError: true,
@@ -300,6 +247,28 @@ describe("registerQueryMessages", () => {
         {
           type: "text",
           text: "Failed to query messages: database locked",
+        },
+      ],
+    });
+  });
+
+  it("returns error when LinkedHelper is not running", async () => {
+    const { server, getHandler } = createMockServer();
+    registerQueryMessages(server);
+
+    vi.mocked(resolveAccount).mockRejectedValue(
+      new LinkedHelperNotRunningError(9222),
+    );
+
+    const handler = getHandler("query-messages");
+    const result = await handler({ cdpPort: 9222 });
+
+    expect(result).toEqual({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: "LinkedHelper is not running. Use launch-app first.",
         },
       ],
     });
@@ -315,6 +284,7 @@ describe("registerQueryMessages", () => {
       chatId: 123,
       search: "hello",
       personId: 456,
+      cdpPort: 9222,
     });
 
     expect(result).toEqual({
@@ -333,7 +303,11 @@ describe("registerQueryMessages", () => {
     setupSuccessPath();
 
     const handler = getHandler("query-messages");
-    const result = await handler({ search: "reaching out", personId: 456 });
+    const result = await handler({
+      search: "reaching out",
+      personId: 456,
+      cdpPort: 9222,
+    });
 
     expect(result).toEqual({
       content: [

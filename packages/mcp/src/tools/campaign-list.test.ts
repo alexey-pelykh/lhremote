@@ -4,21 +4,19 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    LauncherService: vi.fn(),
-    DatabaseClient: vi.fn(),
+    resolveAccount: vi.fn(),
+    withDatabase: vi.fn(),
     CampaignRepository: vi.fn(),
-    discoverDatabase: vi.fn(),
   };
 });
 
 import {
-  type Account,
   type CampaignSummary,
   CampaignRepository,
-  DatabaseClient,
-  discoverDatabase,
-  LauncherService,
+  type DatabaseContext,
   LinkedHelperNotRunningError,
+  resolveAccount,
+  withDatabase,
 } from "@lhremote/core";
 
 import { registerCampaignList } from "./campaign-list.js";
@@ -45,29 +43,6 @@ const MOCK_CAMPAIGNS: CampaignSummary[] = [
   },
 ];
 
-function mockLauncher(overrides: Record<string, unknown> = {}) {
-  const disconnect = vi.fn();
-  vi.mocked(LauncherService).mockImplementation(function () {
-    return {
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect,
-      listAccounts: vi
-        .fn()
-        .mockResolvedValue([{ id: 1, liId: 1, name: "Alice" } as Account]),
-      ...overrides,
-    } as unknown as LauncherService;
-  });
-  return { disconnect };
-}
-
-function mockDb() {
-  const close = vi.fn();
-  vi.mocked(DatabaseClient).mockImplementation(function () {
-    return { close, db: {} } as unknown as DatabaseClient;
-  });
-  return { close };
-}
-
 function mockCampaignRepo(campaigns: CampaignSummary[] = MOCK_CAMPAIGNS) {
   vi.mocked(CampaignRepository).mockImplementation(function () {
     return {
@@ -77,10 +52,11 @@ function mockCampaignRepo(campaigns: CampaignSummary[] = MOCK_CAMPAIGNS) {
 }
 
 function setupSuccessPath(campaigns?: CampaignSummary[]) {
-  mockLauncher();
-  mockDb();
+  vi.mocked(resolveAccount).mockResolvedValue(1);
+  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
+    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
+  );
   mockCampaignRepo(campaigns);
-  vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
 }
 
 describe("registerCampaignList", () => {
@@ -148,9 +124,11 @@ describe("registerCampaignList", () => {
   it("passes includeArchived option to repository", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignList(server);
-    mockLauncher();
-    mockDb();
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
+
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
+      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
+    );
 
     const listCampaigns = vi.fn().mockReturnValue([]);
     vi.mocked(CampaignRepository).mockImplementation(function () {
@@ -167,12 +145,9 @@ describe("registerCampaignList", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignList(server);
 
-    vi.mocked(LauncherService).mockImplementation(function () {
-      return {
-        connect: vi.fn().mockRejectedValue(new LinkedHelperNotRunningError(9222)),
-        disconnect: vi.fn(),
-      } as unknown as LauncherService;
-    });
+    vi.mocked(resolveAccount).mockRejectedValue(
+      new LinkedHelperNotRunningError(9222),
+    );
 
     const handler = getHandler("campaign-list");
     const result = await handler({ includeArchived: false, cdpPort: 9222 });
@@ -192,12 +167,9 @@ describe("registerCampaignList", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignList(server);
 
-    vi.mocked(LauncherService).mockImplementation(function () {
-      return {
-        connect: vi.fn().mockRejectedValue(new Error("connection refused")),
-        disconnect: vi.fn(),
-      } as unknown as LauncherService;
-    });
+    vi.mocked(resolveAccount).mockRejectedValue(
+      new Error("connection refused"),
+    );
 
     const handler = getHandler("campaign-list");
     const result = await handler({ includeArchived: false, cdpPort: 9222 });
@@ -211,41 +183,5 @@ describe("registerCampaignList", () => {
         },
       ],
     });
-  });
-
-  it("closes database after success", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignList(server);
-
-    mockLauncher();
-    const { close: dbClose } = mockDb();
-    mockCampaignRepo();
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
-
-    const handler = getHandler("campaign-list");
-    await handler({ includeArchived: false, cdpPort: 9222 });
-
-    expect(dbClose).toHaveBeenCalledOnce();
-  });
-
-  it("closes database after error", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignList(server);
-
-    mockLauncher();
-    const { close: dbClose } = mockDb();
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        listCampaigns: vi.fn().mockImplementation(() => {
-          throw new Error("db error");
-        }),
-      } as unknown as CampaignRepository;
-    });
-
-    const handler = getHandler("campaign-list");
-    await handler({ includeArchived: false, cdpPort: 9222 });
-
-    expect(dbClose).toHaveBeenCalledOnce();
   });
 });

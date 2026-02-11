@@ -4,30 +4,24 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    LauncherService: vi.fn(),
-    InstanceService: vi.fn(),
-    DatabaseClient: vi.fn(),
+    resolveAccount: vi.fn(),
+    withInstanceDatabase: vi.fn(),
     CampaignService: vi.fn(),
-    discoverInstancePort: vi.fn(),
-    discoverDatabase: vi.fn(),
     parseCampaignYaml: vi.fn(),
     parseCampaignJson: vi.fn(),
   };
 });
 
 import {
-  type Account,
   type Campaign,
   CampaignExecutionError,
   CampaignFormatError,
   CampaignService,
-  DatabaseClient,
-  discoverDatabase,
-  discoverInstancePort,
-  InstanceService,
-  LauncherService,
+  type InstanceDatabaseContext,
   parseCampaignJson,
   parseCampaignYaml,
+  resolveAccount,
+  withInstanceDatabase,
 } from "@lhremote/core";
 
 import { registerCampaignCreate } from "./campaign-create.js";
@@ -63,41 +57,6 @@ const MOCK_CAMPAIGN: Campaign = {
   createdAt: "2025-01-01T00:00:00.000Z",
 };
 
-function mockLauncher(overrides: Record<string, unknown> = {}) {
-  const disconnect = vi.fn();
-  vi.mocked(LauncherService).mockImplementation(function () {
-    return {
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect,
-      listAccounts: vi
-        .fn()
-        .mockResolvedValue([{ id: 1, liId: 1, name: "Alice" } as Account]),
-      ...overrides,
-    } as unknown as LauncherService;
-  });
-  return { disconnect };
-}
-
-function mockInstance(overrides: Record<string, unknown> = {}) {
-  const disconnect = vi.fn();
-  vi.mocked(InstanceService).mockImplementation(function () {
-    return {
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect,
-      ...overrides,
-    } as unknown as InstanceService;
-  });
-  return { disconnect };
-}
-
-function mockDb() {
-  const close = vi.fn();
-  vi.mocked(DatabaseClient).mockImplementation(function () {
-    return { close, db: {} } as unknown as DatabaseClient;
-  });
-  return { close };
-}
-
 function mockCampaignService(campaign: Campaign = MOCK_CAMPAIGN) {
   vi.mocked(CampaignService).mockImplementation(function () {
     return {
@@ -107,12 +66,16 @@ function mockCampaignService(campaign: Campaign = MOCK_CAMPAIGN) {
 }
 
 function setupSuccessPath() {
-  mockLauncher();
-  mockInstance();
-  mockDb();
+  vi.mocked(resolveAccount).mockResolvedValue(1);
+  vi.mocked(withInstanceDatabase).mockImplementation(
+    async (_cdpPort, _accountId, callback) =>
+      callback({
+        accountId: 1,
+        instance: {},
+        db: {},
+      } as unknown as InstanceDatabaseContext),
+  );
   mockCampaignService();
-  vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-  vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
   vi.mocked(parseCampaignYaml).mockReturnValue(PARSED_CONFIG);
   vi.mocked(parseCampaignJson).mockReturnValue(PARSED_CONFIG);
 }
@@ -241,11 +204,15 @@ describe("registerCampaignCreate", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignCreate(server);
 
-    mockLauncher();
-    mockInstance();
-    mockDb();
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withInstanceDatabase).mockImplementation(
+      async (_cdpPort, _accountId, callback) =>
+        callback({
+          accountId: 1,
+          instance: {},
+          db: {},
+        } as unknown as InstanceDatabaseContext),
+    );
     vi.mocked(parseCampaignYaml).mockReturnValue(PARSED_CONFIG);
     vi.mocked(CampaignService).mockImplementation(function () {
       return {
@@ -273,47 +240,5 @@ describe("registerCampaignCreate", () => {
         },
       ],
     });
-  });
-
-  it("disconnects instance and closes db after success", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignCreate(server);
-
-    mockLauncher();
-    const { disconnect: instanceDisconnect } = mockInstance();
-    const { close: dbClose } = mockDb();
-    mockCampaignService();
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
-    vi.mocked(parseCampaignYaml).mockReturnValue(PARSED_CONFIG);
-
-    const handler = getHandler("campaign-create");
-    await handler({ config: YAML_CONFIG, format: "yaml", cdpPort: 9222 });
-
-    expect(instanceDisconnect).toHaveBeenCalledOnce();
-    expect(dbClose).toHaveBeenCalledOnce();
-  });
-
-  it("disconnects instance and closes db after error", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignCreate(server);
-
-    mockLauncher();
-    const { disconnect: instanceDisconnect } = mockInstance();
-    const { close: dbClose } = mockDb();
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
-    vi.mocked(parseCampaignYaml).mockReturnValue(PARSED_CONFIG);
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        create: vi.fn().mockRejectedValue(new Error("test error")),
-      } as unknown as CampaignService;
-    });
-
-    const handler = getHandler("campaign-create");
-    await handler({ config: YAML_CONFIG, format: "yaml", cdpPort: 9222 });
-
-    expect(instanceDisconnect).toHaveBeenCalledOnce();
-    expect(dbClose).toHaveBeenCalledOnce();
   });
 });

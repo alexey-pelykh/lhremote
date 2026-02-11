@@ -1,12 +1,10 @@
 import {
-  type Account,
   ActionNotFoundError,
   CampaignNotFoundError,
   CampaignRepository,
-  DatabaseClient,
-  discoverDatabase,
   errorMessage,
-  LauncherService,
+  resolveAccount,
+  withDatabase,
 } from "@lhremote/core";
 
 export async function handleCampaignStatistics(
@@ -20,91 +18,68 @@ export async function handleCampaignStatistics(
 ): Promise<void> {
   const cdpPort = options.cdpPort ?? 9222;
 
-  // Connect to launcher to find account
-  const launcher = new LauncherService(cdpPort);
   let accountId: number;
-
   try {
-    await launcher.connect();
-    const accounts = await launcher.listAccounts();
-    if (accounts.length === 0) {
-      process.stderr.write("No accounts found.\n");
-      process.exitCode = 1;
-      return;
-    }
-    if (accounts.length > 1) {
-      process.stderr.write(
-        "Multiple accounts found. Cannot determine which instance to use.\n",
-      );
-      process.exitCode = 1;
-      return;
-    }
-    accountId = (accounts[0] as Account).id;
+    accountId = await resolveAccount(cdpPort);
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
-  } finally {
-    launcher.disconnect();
   }
 
-  // Open database (read-only) and get statistics
-  let db: DatabaseClient | null = null;
-
   try {
-    const dbPath = discoverDatabase(accountId);
-    db = new DatabaseClient(dbPath);
+    await withDatabase(accountId, ({ db }) => {
+      const repo = new CampaignRepository(db);
+      const statsOptions: { actionId?: number; maxErrors?: number } = {};
+      if (options.actionId !== undefined) statsOptions.actionId = options.actionId;
+      if (options.maxErrors !== undefined) statsOptions.maxErrors = options.maxErrors;
+      const statistics = repo.getStatistics(campaignId, statsOptions);
 
-    const repo = new CampaignRepository(db);
-    const statsOptions: { actionId?: number; maxErrors?: number } = {};
-    if (options.actionId !== undefined) statsOptions.actionId = options.actionId;
-    if (options.maxErrors !== undefined) statsOptions.maxErrors = options.maxErrors;
-    const statistics = repo.getStatistics(campaignId, statsOptions);
-
-    if (options.json) {
-      process.stdout.write(JSON.stringify(statistics, null, 2) + "\n");
-    } else {
-      process.stdout.write(`Campaign #${String(campaignId)} Statistics\n`);
-      process.stdout.write(
-        `Totals: ${String(statistics.totals.successful)} successful, ` +
-        `${String(statistics.totals.replied)} replied, ` +
-        `${String(statistics.totals.failed)} failed, ` +
-        `${String(statistics.totals.skipped)} skipped ` +
-        `(${String(statistics.totals.total)} total, ` +
-        `${String(statistics.totals.successRate)}% success rate)\n`,
-      );
-
-      for (const action of statistics.actions) {
+      if (options.json) {
+        process.stdout.write(JSON.stringify(statistics, null, 2) + "\n");
+      } else {
+        process.stdout.write(`Campaign #${String(campaignId)} Statistics\n`);
         process.stdout.write(
-          `\n  Action #${String(action.actionId)} — ${action.actionName} (${action.actionType})\n`,
-        );
-        process.stdout.write(
-          `    ${String(action.successful)} successful, ` +
-          `${String(action.replied)} replied, ` +
-          `${String(action.failed)} failed, ` +
-          `${String(action.skipped)} skipped ` +
-          `(${String(action.total)} total, ` +
-          `${String(action.successRate)}% success rate)\n`,
+          `Totals: ${String(statistics.totals.successful)} successful, ` +
+          `${String(statistics.totals.replied)} replied, ` +
+          `${String(statistics.totals.failed)} failed, ` +
+          `${String(statistics.totals.skipped)} skipped ` +
+          `(${String(statistics.totals.total)} total, ` +
+          `${String(statistics.totals.successRate)}% success rate)\n`,
         );
 
-        if (action.firstResultAt) {
+        for (const action of statistics.actions) {
           process.stdout.write(
-            `    Timeline: ${action.firstResultAt} — ${action.lastResultAt ?? action.firstResultAt}\n`,
+            `\n  Action #${String(action.actionId)} — ${action.actionName} (${action.actionType})\n`,
           );
-        }
+          process.stdout.write(
+            `    ${String(action.successful)} successful, ` +
+            `${String(action.replied)} replied, ` +
+            `${String(action.failed)} failed, ` +
+            `${String(action.skipped)} skipped ` +
+            `(${String(action.total)} total, ` +
+            `${String(action.successRate)}% success rate)\n`,
+          );
 
-        if (action.topErrors.length > 0) {
-          process.stdout.write("    Top errors:\n");
-          for (const err of action.topErrors) {
-            const exceptionLabel = err.isException ? " (exception)" : "";
+          if (action.firstResultAt) {
             process.stdout.write(
-              `      Code ${String(err.code)}: ${String(err.count)}x — blame: ${err.whoToBlame}${exceptionLabel}\n`,
+              `    Timeline: ${action.firstResultAt} — ${action.lastResultAt ?? action.firstResultAt}\n`,
             );
+          }
+
+          if (action.topErrors.length > 0) {
+            process.stdout.write("    Top errors:\n");
+            for (const err of action.topErrors) {
+              const exceptionLabel = err.isException ? " (exception)" : "";
+              process.stdout.write(
+                `      Code ${String(err.code)}: ${String(err.count)}x — blame: ${err.whoToBlame}${exceptionLabel}\n`,
+              );
+            }
           }
         }
       }
-    }
+    });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
       process.stderr.write(`Campaign ${String(campaignId)} not found.\n`);
@@ -117,7 +92,5 @@ export async function handleCampaignStatistics(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
-  } finally {
-    db?.close();
   }
 }

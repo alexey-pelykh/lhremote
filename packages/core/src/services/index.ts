@@ -17,6 +17,16 @@ export {
 
 export { CampaignService } from "./campaign.js";
 export {
+  AccountResolutionError,
+  resolveAccount,
+} from "./account-resolution.js";
+export {
+  withDatabase,
+  withInstanceDatabase,
+  type DatabaseContext,
+  type InstanceDatabaseContext,
+} from "./instance-context.js";
+export {
   ActionExecutionError,
   AppLaunchError,
   AppNotFoundError,

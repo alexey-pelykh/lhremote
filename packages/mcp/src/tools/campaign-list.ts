@@ -1,14 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  type Account,
   CampaignRepository,
-  DatabaseClient,
-  discoverDatabase,
-  errorMessage,
-  LauncherService,
-  LinkedHelperNotRunningError,
+  resolveAccount,
+  withDatabase,
 } from "@lhremote/core";
 import { z } from "zod";
+import { mcpCatchAll, mcpSuccess } from "../helpers.js";
 
 export function registerCampaignList(server: McpServer): void {
   server.tool(
@@ -29,111 +26,28 @@ export function registerCampaignList(server: McpServer): void {
         .describe("CDP port (default: 9222)"),
     },
     async ({ includeArchived, cdpPort }) => {
-      // Connect to launcher to find account
-      const launcher = new LauncherService(cdpPort);
-
-      try {
-        await launcher.connect();
-      } catch (error) {
-        if (error instanceof LinkedHelperNotRunningError) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: "LinkedHelper is not running. Use launch-app first.",
-              },
-            ],
-          };
-        }
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to connect to LinkedHelper: ${message}`,
-            },
-          ],
-        };
-      }
-
       let accountId: number;
       try {
-        const accounts = await launcher.listAccounts();
-        if (accounts.length === 0) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: "No accounts found.",
-              },
-            ],
-          };
-        }
-        if (accounts.length > 1) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: "Multiple accounts found. Cannot determine which instance to use.",
-              },
-            ],
-          };
-        }
-        accountId = (accounts[0] as Account).id;
+        accountId = await resolveAccount(cdpPort);
       } catch (error) {
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to list accounts: ${message}`,
-            },
-          ],
-        };
-      } finally {
-        launcher.disconnect();
+        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }
 
-      // Discover and open database
-      let db: DatabaseClient | null = null;
-
       try {
-        const dbPath = discoverDatabase(accountId);
-        db = new DatabaseClient(dbPath);
+        return await withDatabase(accountId, ({ db }) => {
+          const campaignRepo = new CampaignRepository(db);
+          const campaigns = campaignRepo.listCampaigns({ includeArchived });
 
-        const campaignRepo = new CampaignRepository(db);
-        const campaigns = campaignRepo.listCampaigns({ includeArchived });
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                { campaigns, total: campaigns.length },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
+          return mcpSuccess(
+            JSON.stringify(
+              { campaigns, total: campaigns.length },
+              null,
+              2,
+            ),
+          );
+        });
       } catch (error) {
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to list campaigns: ${message}`,
-            },
-          ],
-        };
-      } finally {
-        db?.close();
+        return mcpCatchAll(error, "Failed to list campaigns");
       }
     },
   );

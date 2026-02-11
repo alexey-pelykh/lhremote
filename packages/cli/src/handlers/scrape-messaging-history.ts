@@ -1,13 +1,10 @@
 import {
-  type Account,
   type MessageStats,
-  DatabaseClient,
-  discoverDatabase,
-  discoverInstancePort,
   errorMessage,
-  InstanceService,
-  LauncherService,
+  InstanceNotRunningError,
   MessageRepository,
+  resolveAccount,
+  withInstanceDatabase,
 } from "@lhremote/core";
 
 export async function handleScrapeMessagingHistory(options: {
@@ -16,84 +13,49 @@ export async function handleScrapeMessagingHistory(options: {
 }): Promise<void> {
   const cdpPort = options.cdpPort ?? 9222;
 
-  // Connect to launcher to find the running account
-  const launcher = new LauncherService(cdpPort);
-
   let accountId: number;
   try {
-    await launcher.connect();
-    const accounts = await launcher.listAccounts();
-    if (accounts.length === 0) {
-      process.stderr.write("No accounts found.\n");
-      process.exitCode = 1;
-      return;
-    }
-    if (accounts.length > 1) {
-      process.stderr.write(
-        "Multiple accounts found. Cannot determine which instance to use.\n",
-      );
-      process.exitCode = 1;
-      return;
-    }
-    accountId = (accounts[0] as Account).id;
+    accountId = await resolveAccount(cdpPort);
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
-  } finally {
-    launcher.disconnect();
   }
-
-  // Discover instance CDP port
-  const instancePort = await discoverInstancePort(cdpPort);
-  if (instancePort === null) {
-    process.stderr.write(
-      "No LinkedHelper instance is running. Use start-instance first.\n",
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  // Connect to instance, execute action, then query stats
-  // Use a 5-minute timeout — scraping messaging history is long-running
-  const instance = new InstanceService(instancePort, { timeout: 300_000 });
-  let db: DatabaseClient | null = null;
 
   try {
-    await instance.connect();
+    await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
+      process.stderr.write("Scraping messaging history from LinkedIn...\n");
 
-    process.stderr.write("Scraping messaging history from LinkedIn...\n");
+      // Execute the scrape action (may take several minutes)
+      await instance.executeAction("ScrapeMessagingHistory");
 
-    // Execute the scrape action (may take several minutes)
-    await instance.executeAction("ScrapeMessagingHistory");
+      process.stderr.write("Done.\n");
 
-    process.stderr.write("Done.\n");
+      // Query stats from the database
+      const repo = new MessageRepository(db);
+      const stats = repo.getMessageStats();
 
-    // Query stats from the database
-    const dbPath = discoverDatabase(accountId);
-    db = new DatabaseClient(dbPath);
-    const repo = new MessageRepository(db);
-    const stats = repo.getMessageStats();
-
-    if (options.json) {
-      process.stdout.write(
-        JSON.stringify(
-          { success: true, actionType: "ScrapeMessagingHistory", stats },
-          null,
-          2,
-        ) + "\n",
-      );
-    } else {
-      printStats(stats);
-    }
+      if (options.json) {
+        process.stdout.write(
+          JSON.stringify(
+            { success: true, actionType: "ScrapeMessagingHistory", stats },
+            null,
+            2,
+          ) + "\n",
+        );
+      } else {
+        printStats(stats);
+      }
+    }, { instanceTimeout: 300_000 });
   } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
+    if (error instanceof InstanceNotRunningError) {
+      process.stderr.write(`${error.message}\n`);
+    } else {
+      const message = errorMessage(error);
+      process.stderr.write(`${message}\n`);
+    }
     process.exitCode = 1;
-  } finally {
-    instance.disconnect();
-    db?.close();
   }
 }
 

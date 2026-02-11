@@ -1,13 +1,11 @@
 import {
-  type Account,
   ActionNotFoundError,
   CampaignNotFoundError,
   CampaignRepository,
-  DatabaseClient,
-  discoverDatabase,
   errorMessage,
   ExcludeListNotFoundError,
-  LauncherService,
+  resolveAccount,
+  withDatabase,
 } from "@lhremote/core";
 
 export async function handleCampaignExcludeList(
@@ -20,71 +18,49 @@ export async function handleCampaignExcludeList(
 ): Promise<void> {
   const cdpPort = options.cdpPort ?? 9222;
 
-  // Connect to launcher to find account
-  const launcher = new LauncherService(cdpPort);
   let accountId: number;
-
   try {
-    await launcher.connect();
-    const accounts = await launcher.listAccounts();
-    if (accounts.length === 0) {
-      process.stderr.write("No accounts found.\n");
-      process.exitCode = 1;
-      return;
-    }
-    if (accounts.length > 1) {
-      process.stderr.write(
-        "Multiple accounts found. Cannot determine which instance to use.\n",
-      );
-      process.exitCode = 1;
-      return;
-    }
-    accountId = (accounts[0] as Account).id;
+    accountId = await resolveAccount(cdpPort);
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
-  } finally {
-    launcher.disconnect();
   }
 
-  let db: DatabaseClient | null = null;
-
   try {
-    const dbPath = discoverDatabase(accountId);
-    db = new DatabaseClient(dbPath);
+    await withDatabase(accountId, ({ db }) => {
+      const repo = new CampaignRepository(db);
+      const entries = repo.getExcludeList(campaignId, options.actionId);
 
-    const repo = new CampaignRepository(db);
-    const entries = repo.getExcludeList(campaignId, options.actionId);
+      const level = options.actionId !== undefined ? "action" : "campaign";
+      const targetLabel =
+        options.actionId !== undefined
+          ? `action ${String(options.actionId)} in campaign ${String(campaignId)}`
+          : `campaign ${String(campaignId)}`;
 
-    const level = options.actionId !== undefined ? "action" : "campaign";
-    const targetLabel =
-      options.actionId !== undefined
-        ? `action ${String(options.actionId)} in campaign ${String(campaignId)}`
-        : `campaign ${String(campaignId)}`;
-
-    if (options.json) {
-      const response = {
-        campaignId,
-        ...(options.actionId !== undefined
-          ? { actionId: options.actionId }
-          : {}),
-        level,
-        count: entries.length,
-        personIds: entries.map((e) => e.personId),
-      };
-      process.stdout.write(JSON.stringify(response, null, 2) + "\n");
-    } else {
-      process.stdout.write(
-        `Exclude list for ${targetLabel}: ${String(entries.length)} person(s)\n`,
-      );
-      if (entries.length > 0) {
+      if (options.json) {
+        const response = {
+          campaignId,
+          ...(options.actionId !== undefined
+            ? { actionId: options.actionId }
+            : {}),
+          level,
+          count: entries.length,
+          personIds: entries.map((e) => e.personId),
+        };
+        process.stdout.write(JSON.stringify(response, null, 2) + "\n");
+      } else {
         process.stdout.write(
-          `Person IDs: ${entries.map((e) => String(e.personId)).join(", ")}\n`,
+          `Exclude list for ${targetLabel}: ${String(entries.length)} person(s)\n`,
         );
+        if (entries.length > 0) {
+          process.stdout.write(
+            `Person IDs: ${entries.map((e) => String(e.personId)).join(", ")}\n`,
+          );
+        }
       }
-    }
+    });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
       process.stderr.write(`Campaign ${String(campaignId)} not found.\n`);
@@ -99,7 +75,5 @@ export async function handleCampaignExcludeList(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
-  } finally {
-    db?.close();
   }
 }
