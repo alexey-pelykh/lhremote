@@ -2,6 +2,7 @@ import { vi } from "vitest";
 
 import type {
   DatabaseClient,
+  DatabaseContext,
   InstanceDatabaseContext,
   LauncherService,
 } from "@lhremote/core";
@@ -10,6 +11,7 @@ import {
   LauncherService as LauncherServiceCtor,
   discoverAllDatabases,
   resolveAccount,
+  withDatabase,
   withInstanceDatabase,
 } from "@lhremote/core";
 
@@ -86,4 +88,23 @@ export function mockWithInstanceDatabase(): {
     },
   );
   return { executeAction };
+}
+
+/**
+ * Mock {@link withDatabase} so the callback receives a
+ * synthetic {@link DatabaseContext}.
+ *
+ * Returns a mock `db` object for further stubbing.
+ */
+export function mockWithDatabase(): { db: Record<string, unknown> } {
+  const db = {};
+  vi.mocked(withDatabase).mockImplementation(
+    async (_accountId, callback) => {
+      return callback({
+        accountId: _accountId,
+        db,
+      } as unknown as DatabaseContext);
+    },
+  );
+  return { db };
 }
