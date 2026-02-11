@@ -12,6 +12,7 @@ export { handleCampaignRemoveAction } from "./campaign-remove-action.js";
 export { handleCampaignReorderActions } from "./campaign-reorder-actions.js";
 export { handleCampaignRetry } from "./campaign-retry.js";
 export { handleCampaignStart } from "./campaign-start.js";
+export { handleCampaignStatistics } from "./campaign-statistics.js";
 export { handleCampaignStatus } from "./campaign-status.js";
 export { handleImportPeopleFromUrls } from "./import-people-from-urls.js";
 export { handleCampaignStop } from "./campaign-stop.js";

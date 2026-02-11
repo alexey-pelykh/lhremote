@@ -50,6 +50,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("campaign-list");
     expect(commandNames).toContain("campaign-retry");
     expect(commandNames).toContain("campaign-start");
+    expect(commandNames).toContain("campaign-statistics");
     expect(commandNames).toContain("campaign-status");
     expect(commandNames).toContain("campaign-stop");
     expect(commandNames).toContain("campaign-update");
@@ -64,7 +65,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("campaign-exclude-list");
     expect(commandNames).toContain("campaign-exclude-add");
     expect(commandNames).toContain("campaign-exclude-remove");
-    expect(commandNames).toHaveLength(31);
+    expect(commandNames).toHaveLength(32);
   });
 
   describe("launch-app", () => {

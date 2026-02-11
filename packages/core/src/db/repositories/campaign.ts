@@ -1,15 +1,19 @@
 import type {
   ActionConfig,
+  ActionErrorSummary,
   ActionSettings,
+  ActionStatistics,
   CampaignActionConfig,
   CampaignActionResult,
   Campaign,
   CampaignAction,
   CampaignState,
+  CampaignStatistics,
   CampaignSummary,
   CampaignUpdateConfig,
   ExcludeListEntry,
   GetResultsOptions,
+  GetStatisticsOptions,
   ListCampaignsOptions,
 } from "../../types/index.js";
 import type { DatabaseSync } from "node:sqlite";
@@ -846,6 +850,155 @@ export class CampaignRepository {
     }
 
     return removed;
+  }
+
+  /**
+   * Get aggregated statistics for a campaign.
+   *
+   * Returns per-action result breakdowns (success/failure/skip/reply rates),
+   * top error codes with blame attribution, and processing timeline.
+   *
+   * @throws {CampaignNotFoundError} if no campaign exists with the given ID.
+   * @throws {ActionNotFoundError} if actionId is provided and not in the campaign.
+   */
+  getStatistics(
+    campaignId: number,
+    options: GetStatisticsOptions = {},
+  ): CampaignStatistics {
+    const { actionId, maxErrors = 5 } = options;
+
+    // Get actions (also validates campaign exists)
+    const actions = this.getCampaignActions(campaignId);
+
+    if (actionId !== undefined) {
+      if (!actions.some((a) => a.id === actionId)) {
+        throw new ActionNotFoundError(actionId, campaignId);
+      }
+    }
+
+    const filteredActions = actionId !== undefined
+      ? actions.filter((a) => a.id === actionId)
+      : actions;
+
+    const { db } = this.client;
+
+    const stmtActionStats = db.prepare(
+      `SELECT
+         SUM(CASE WHEN ar.result = 1 THEN 1 ELSE 0 END) AS successful,
+         SUM(CASE WHEN ar.result = 2 THEN 1 ELSE 0 END) AS replied,
+         SUM(CASE WHEN ar.result = -1 THEN 1 ELSE 0 END) AS failed,
+         SUM(CASE WHEN ar.result = -2 THEN 1 ELSE 0 END) AS skipped,
+         COUNT(*) AS total,
+         MIN(ar.created_at) AS first_result_at,
+         MAX(ar.created_at) AS last_result_at
+       FROM action_results ar
+       JOIN action_versions av ON ar.action_version_id = av.id
+       WHERE av.action_id = ?`,
+    );
+
+    const stmtTopErrors = db.prepare(
+      `SELECT
+         arf.code,
+         COUNT(*) AS cnt,
+         arf.is_exception,
+         arf.who_to_blame
+       FROM action_result_flags arf
+       JOIN action_results ar ON arf.action_result_id = ar.id
+       JOIN action_versions av ON ar.action_version_id = av.id
+       WHERE av.action_id = ? AND arf.code IS NOT NULL
+       GROUP BY arf.code, arf.is_exception, arf.who_to_blame
+       ORDER BY cnt DESC
+       LIMIT ?`,
+    );
+
+    interface ActionStatsRow {
+      successful: number;
+      replied: number;
+      failed: number;
+      skipped: number;
+      total: number;
+      first_result_at: string | null;
+      last_result_at: string | null;
+    }
+
+    interface ErrorRow {
+      code: number;
+      cnt: number;
+      is_exception: number;
+      who_to_blame: string;
+    }
+
+    const actionStats: ActionStatistics[] = [];
+    let totalSuccessful = 0;
+    let totalReplied = 0;
+    let totalFailed = 0;
+    let totalSkipped = 0;
+    let grandTotal = 0;
+
+    for (const action of filteredActions) {
+      const stats = stmtActionStats.get(
+        action.id,
+      ) as unknown as ActionStatsRow;
+
+      const successful = stats.successful ?? 0;
+      const replied = stats.replied ?? 0;
+      const failed = stats.failed ?? 0;
+      const skipped = stats.skipped ?? 0;
+      const total = stats.total ?? 0;
+      const successRate = total > 0
+        ? Math.round(((successful + replied) / total) * 1000) / 10
+        : 0;
+
+      const errorRows = stmtTopErrors.all(
+        action.id,
+        maxErrors,
+      ) as unknown as ErrorRow[];
+
+      const topErrors: ActionErrorSummary[] = errorRows.map((e) => ({
+        code: e.code,
+        count: e.cnt,
+        isException: e.is_exception === 1,
+        whoToBlame: e.who_to_blame,
+      }));
+
+      actionStats.push({
+        actionId: action.id,
+        actionName: action.name,
+        actionType: action.config.actionType,
+        successful,
+        replied,
+        failed,
+        skipped,
+        total,
+        successRate,
+        firstResultAt: stats.first_result_at,
+        lastResultAt: stats.last_result_at,
+        topErrors,
+      });
+
+      totalSuccessful += successful;
+      totalReplied += replied;
+      totalFailed += failed;
+      totalSkipped += skipped;
+      grandTotal += total;
+    }
+
+    const totalSuccessRate = grandTotal > 0
+      ? Math.round(((totalSuccessful + totalReplied) / grandTotal) * 1000) / 10
+      : 0;
+
+    return {
+      campaignId,
+      actions: actionStats,
+      totals: {
+        successful: totalSuccessful,
+        replied: totalReplied,
+        failed: totalFailed,
+        skipped: totalSkipped,
+        total: grandTotal,
+        successRate: totalSuccessRate,
+      },
+    };
   }
 
   /**

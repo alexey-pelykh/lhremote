@@ -217,3 +217,76 @@ export interface ExcludeListEntry {
   /** Internal person ID. */
   personId: number;
 }
+
+/**
+ * Per-action result breakdown in campaign statistics.
+ */
+export interface ActionStatistics {
+  /** Action ID. */
+  actionId: number;
+  /** Action name. */
+  actionName: string;
+  /** Action type identifier. */
+  actionType: string;
+  /** Number of successful results (result=1). */
+  successful: number;
+  /** Number of reply results (result=2). */
+  replied: number;
+  /** Number of failed results (result=-1). */
+  failed: number;
+  /** Number of skipped results (result=-2). */
+  skipped: number;
+  /** Total results for this action. */
+  total: number;
+  /** Success rate as a percentage (0-100). */
+  successRate: number;
+  /** Earliest result timestamp for this action. */
+  firstResultAt: string | null;
+  /** Latest result timestamp for this action. */
+  lastResultAt: string | null;
+  /** Top error codes for this action, ordered by frequency. */
+  topErrors: ActionErrorSummary[];
+}
+
+/**
+ * Summary of a single error code within action statistics.
+ */
+export interface ActionErrorSummary {
+  /** Numeric error code. */
+  code: number;
+  /** Number of occurrences. */
+  count: number;
+  /** Whether this was an exception. */
+  isException: boolean;
+  /** Blame attribution: "LH", "LinkedIn", or "Proxy". */
+  whoToBlame: string;
+}
+
+/**
+ * Options for getting campaign statistics.
+ */
+export interface GetStatisticsOptions {
+  /** Filter to a specific action ID. */
+  actionId?: number;
+  /** Maximum number of top errors per action (default: 5). */
+  maxErrors?: number;
+}
+
+/**
+ * Campaign-wide statistics with per-action breakdowns.
+ */
+export interface CampaignStatistics {
+  /** Campaign ID. */
+  campaignId: number;
+  /** Per-action statistics. */
+  actions: ActionStatistics[];
+  /** Campaign-wide totals. */
+  totals: {
+    successful: number;
+    replied: number;
+    failed: number;
+    skipped: number;
+    total: number;
+    successRate: number;
+  };
+}

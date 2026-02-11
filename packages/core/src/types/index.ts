@@ -33,7 +33,9 @@ export type {
 
 export type {
   ActionConfig,
+  ActionErrorSummary,
   ActionPeopleCounts,
+  ActionStatistics,
   CampaignActionConfig,
   CampaignActionResult,
   ActionSettings,
@@ -43,12 +45,14 @@ export type {
   CampaignConfig,
   CampaignRunResult,
   CampaignState,
+  CampaignStatistics,
   CampaignUpdateConfig,
   ExcludeListEntry,
+  GetResultsOptions,
+  GetStatisticsOptions,
   ImportPeopleResult,
   CampaignStatus,
   CampaignSummary,
-  GetResultsOptions,
   ListCampaignsOptions,
   RunnerState,
 } from "./campaign.js";

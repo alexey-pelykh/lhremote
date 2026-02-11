@@ -17,6 +17,7 @@ import {
   handleCampaignReorderActions,
   handleCampaignRetry,
   handleCampaignStart,
+  handleCampaignStatistics,
   handleCampaignStatus,
   handleCampaignStop,
   handleCampaignUpdate,
@@ -205,6 +206,16 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignStatus);
+
+  program
+    .command("campaign-statistics")
+    .description("Get per-action statistics for a campaign")
+    .argument("<campaignId>", "Campaign ID", parsePositiveInt)
+    .option("--action-id <id>", "Filter to a specific action", parsePositiveInt)
+    .option("--max-errors <n>", "Max top errors per action (default: 5)", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignStatistics);
 
   program
     .command("campaign-move-next")

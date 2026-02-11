@@ -89,6 +89,7 @@ describe("createServer", () => {
     expect(names).toContain("campaign-list");
     expect(names).toContain("campaign-retry");
     expect(names).toContain("campaign-start");
+    expect(names).toContain("campaign-statistics");
     expect(names).toContain("campaign-status");
     expect(names).toContain("campaign-stop");
     expect(names).toContain("campaign-update");
@@ -103,6 +104,6 @@ describe("createServer", () => {
     expect(names).toContain("campaign-exclude-list");
     expect(names).toContain("campaign-exclude-add");
     expect(names).toContain("campaign-exclude-remove");
-    expect(names).toHaveLength(31);
+    expect(names).toHaveLength(32);
   });
 });

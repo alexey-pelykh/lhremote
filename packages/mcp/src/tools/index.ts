@@ -15,6 +15,7 @@ import { registerCampaignReorderActions } from "./campaign-reorder-actions.js";
 import { registerCampaignRetry } from "./campaign-retry.js";
 import { registerImportPeopleFromUrls } from "./import-people-from-urls.js";
 import { registerCampaignStart } from "./campaign-start.js";
+import { registerCampaignStatistics } from "./campaign-statistics.js";
 import { registerCampaignStatus } from "./campaign-status.js";
 import { registerCampaignStop } from "./campaign-stop.js";
 import { registerCampaignUpdate } from "./campaign-update.js";
@@ -46,6 +47,7 @@ export function registerAllTools(server: McpServer): void {
   registerCampaignReorderActions(server);
   registerCampaignRetry(server);
   registerCampaignStart(server);
+  registerCampaignStatistics(server);
   registerCampaignStatus(server);
   registerCampaignStop(server);
   registerCampaignUpdate(server);
