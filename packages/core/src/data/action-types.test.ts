@@ -413,6 +413,63 @@ describe("getActionTypeInfo", () => {
     });
   });
 
+  it("returns correct fields for PersonPostsLiker", () => {
+    const info = getActionTypeInfo("PersonPostsLiker");
+    expect(info).toBeDefined();
+    if (info === undefined) throw new Error("Expected info");
+    expect(info.category).toBe("engagement");
+    expect(info.configSchema).toHaveProperty("numberOfArticles");
+    expect(info.configSchema).toHaveProperty("numberOfPosts");
+    expect(info.configSchema).toHaveProperty("maxAgeOfArticles");
+    expect(info.configSchema).toHaveProperty("maxAgeOfPosts");
+    expect(info.configSchema).toHaveProperty("textInputMethod");
+    expect(info.configSchema).toHaveProperty("skipIfNotLiked");
+    expect(info.configSchema).toHaveProperty("shouldAddComment");
+    expect(info.configSchema).toHaveProperty("messageTemplate");
+    const numberOfArticlesField = info.configSchema["numberOfArticles"];
+    expect(numberOfArticlesField).toBeDefined();
+    if (numberOfArticlesField === undefined)
+      throw new Error("Expected field");
+    expect(numberOfArticlesField.type).toBe("number");
+    expect(numberOfArticlesField.required).toBe(false);
+    const numberOfPostsField = info.configSchema["numberOfPosts"];
+    expect(numberOfPostsField).toBeDefined();
+    if (numberOfPostsField === undefined) throw new Error("Expected field");
+    expect(numberOfPostsField.type).toBe("number");
+    expect(numberOfPostsField.required).toBe(false);
+    const skipField = info.configSchema["skipIfNotLiked"];
+    expect(skipField).toBeDefined();
+    if (skipField === undefined) throw new Error("Expected field");
+    expect(skipField.type).toBe("boolean");
+    expect(skipField.required).toBe(true);
+    const messageTemplateField = info.configSchema["messageTemplate"];
+    expect(messageTemplateField).toBeDefined();
+    if (messageTemplateField === undefined)
+      throw new Error("Expected field");
+    expect(messageTemplateField.type).toBe("object");
+    expect(messageTemplateField.required).toBe(false);
+    expect(info.example).toEqual({
+      numberOfArticles: 2,
+      numberOfPosts: 2,
+      messageTemplate: {
+        type: "variants",
+        variants: [
+          {
+            type: "variant",
+            child: {
+              type: "group",
+              children: [
+                { type: "var", name: "firstName" },
+                { type: "text", value: ", thanks for sharing!" },
+              ],
+            },
+          },
+        ],
+      },
+      skipIfNotLiked: true,
+    });
+  });
+
   it("returns correct fields for EndorseSkills", () => {
     const info = getActionTypeInfo("EndorseSkills");
     expect(info).toBeDefined();
