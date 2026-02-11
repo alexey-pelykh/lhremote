@@ -3,6 +3,7 @@ export { handleCampaignDelete } from "./campaign-delete.js";
 export { handleCampaignExport } from "./campaign-export.js";
 export { handleCampaignGet } from "./campaign-get.js";
 export { handleCampaignList } from "./campaign-list.js";
+export { handleCampaignRetry } from "./campaign-retry.js";
 export { handleCampaignStart } from "./campaign-start.js";
 export { handleCampaignStatus } from "./campaign-status.js";
 export { handleImportPeopleFromUrls } from "./import-people-from-urls.js";

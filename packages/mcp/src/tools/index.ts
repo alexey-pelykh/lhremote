@@ -5,6 +5,7 @@ import { registerCampaignDelete } from "./campaign-delete.js";
 import { registerCampaignExport } from "./campaign-export.js";
 import { registerCampaignGet } from "./campaign-get.js";
 import { registerCampaignList } from "./campaign-list.js";
+import { registerCampaignRetry } from "./campaign-retry.js";
 import { registerImportPeopleFromUrls } from "./import-people-from-urls.js";
 import { registerCampaignStart } from "./campaign-start.js";
 import { registerCampaignStatus } from "./campaign-status.js";
@@ -29,6 +30,7 @@ export function registerAllTools(server: McpServer): void {
   registerCampaignExport(server);
   registerCampaignGet(server);
   registerCampaignList(server);
+  registerCampaignRetry(server);
   registerCampaignStart(server);
   registerCampaignStatus(server);
   registerCampaignStop(server);

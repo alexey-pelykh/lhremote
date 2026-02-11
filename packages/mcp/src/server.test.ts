@@ -87,6 +87,7 @@ describe("createServer", () => {
     expect(names).toContain("campaign-export");
     expect(names).toContain("campaign-get");
     expect(names).toContain("campaign-list");
+    expect(names).toContain("campaign-retry");
     expect(names).toContain("campaign-start");
     expect(names).toContain("campaign-status");
     expect(names).toContain("campaign-stop");
@@ -95,6 +96,6 @@ describe("createServer", () => {
     expect(names).toContain("check-status");
     expect(names).toContain("describe-actions");
     expect(names).toContain("import-people-from-urls");
-    expect(names).toHaveLength(23);
+    expect(names).toHaveLength(24);
   });
 });
