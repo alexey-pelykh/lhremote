@@ -161,11 +161,12 @@ describe("getActionTypeInfo", () => {
     expect(info).toBeDefined();
     if (info === undefined) throw new Error("Expected info");
     expect(info.category).toBe("people");
-    expect(info.configSchema).toHaveProperty("extractProfile");
-    const field = info.configSchema["extractProfile"];
+    expect(info.configSchema).toHaveProperty("extractCurrentOrganizations");
+    const field = info.configSchema["extractCurrentOrganizations"];
     expect(field).toBeDefined();
     if (field === undefined) throw new Error("Expected field");
     expect(field.type).toBe("boolean");
+    expect(field.required).toBe(false);
   });
 
   it("returns correct fields for MessageToPerson", () => {
@@ -198,7 +199,7 @@ describe("getActionTypeInfo", () => {
     const info = getActionTypeInfo("VisitAndExtract");
     expect(info).toBeDefined();
     if (info === undefined) throw new Error("Expected info");
-    expect(info.example).toEqual({ extractProfile: true });
+    expect(info.example).toEqual({ extractCurrentOrganizations: true });
   });
 
   it("returns correct fields for CheckForReplies", () => {

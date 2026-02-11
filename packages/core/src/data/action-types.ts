@@ -49,14 +49,13 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
     description: "Visit a LinkedIn profile and extract data (name, positions, education, skills).",
     category: "people",
     configSchema: {
-      extractProfile: {
+      extractCurrentOrganizations: {
         type: "boolean",
         required: false,
-        description: "Whether to extract full profile data after visiting.",
-        default: true,
+        description: "Extract current company info during profile visit.",
       },
     },
-    example: { extractProfile: true },
+    example: { extractCurrentOrganizations: true },
   },
   {
     name: "MessageToPerson",

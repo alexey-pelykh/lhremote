@@ -83,7 +83,7 @@ describe("handleDescribeActions", () => {
     expect(output).toContain("VisitAndExtract");
     expect(output).toContain("[people]");
     expect(output).toContain("Configuration:");
-    expect(output).toContain("extractProfile");
+    expect(output).toContain("extractCurrentOrganizations");
   });
 
   it("shows detail for a specific action type as JSON", () => {
@@ -119,7 +119,7 @@ describe("handleDescribeActions", () => {
 
     const output = getStdout();
     expect(output).toContain("Example:");
-    expect(output).toContain("extractProfile");
+    expect(output).toContain("extractCurrentOrganizations");
   });
 
   it("does not show example when not available", () => {

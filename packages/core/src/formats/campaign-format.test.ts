@@ -26,7 +26,7 @@ settings:
 actions:
   - type: VisitAndExtract
     config:
-      extractProfile: true
+      extractCurrentOrganizations: true
   - type: MessageToPerson
     config:
       messageTemplate: "Hi {firstName}"
@@ -53,7 +53,7 @@ const MOCK_ACTIONS: CampaignAction[] = [
     config: {
       id: 100,
       actionType: "VisitAndExtract",
-      actionSettings: { extractProfile: true },
+      actionSettings: { extractCurrentOrganizations: true },
       coolDown: 60000,
       maxActionResultsPerIteration: 10,
       isDraft: false,
@@ -94,7 +94,7 @@ describe("parseCampaignYaml", () => {
     expect(config.description).toBe("A test campaign");
     expect(config.actions).toHaveLength(2);
     expect(config.actions[0]?.actionType).toBe("VisitAndExtract");
-    expect(config.actions[0]?.actionSettings).toEqual({ extractProfile: true });
+    expect(config.actions[0]?.actionSettings).toEqual({ extractCurrentOrganizations: true });
     expect(config.actions[1]?.actionType).toBe("MessageToPerson");
     expect(config.actions[1]?.actionSettings).toEqual({
       messageTemplate: "Hi {firstName}",
@@ -282,7 +282,7 @@ version: "1"
 name: "Test"
 actions:
   - config:
-      extractProfile: true
+      extractCurrentOrganizations: true
 `;
     expect(() => parseCampaignYaml(yaml)).toThrow(CampaignFormatError);
     expect(() => parseCampaignYaml(yaml)).toThrow(
@@ -392,7 +392,7 @@ describe("serializeCampaignYaml", () => {
   it("includes non-empty actionSettings as config", () => {
     const yaml = serializeCampaignYaml(MOCK_CAMPAIGN, MOCK_ACTIONS);
 
-    expect(yaml).toContain("extractProfile: true");
+    expect(yaml).toContain("extractCurrentOrganizations: true");
     expect(yaml).toContain("messageTemplate:");
   });
 });
@@ -428,7 +428,7 @@ describe("round-trip", () => {
     expect(config.description).toBe("Test description");
     expect(config.actions).toHaveLength(2);
     expect(config.actions[0]?.actionType).toBe("VisitAndExtract");
-    expect(config.actions[0]?.actionSettings).toEqual({ extractProfile: true });
+    expect(config.actions[0]?.actionSettings).toEqual({ extractCurrentOrganizations: true });
     expect(config.actions[0]?.coolDown).toBe(60000);
     expect(config.actions[0]?.maxActionResultsPerIteration).toBe(10);
     expect(config.actions[1]?.actionType).toBe("MessageToPerson");
@@ -445,7 +445,7 @@ describe("round-trip", () => {
     expect(config.description).toBe("Test description");
     expect(config.actions).toHaveLength(2);
     expect(config.actions[0]?.actionType).toBe("VisitAndExtract");
-    expect(config.actions[0]?.actionSettings).toEqual({ extractProfile: true });
+    expect(config.actions[0]?.actionSettings).toEqual({ extractCurrentOrganizations: true });
     expect(config.actions[1]?.actionType).toBe("MessageToPerson");
   });
 
