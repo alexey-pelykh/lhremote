@@ -221,6 +221,34 @@ describe("getActionTypeInfo", () => {
     });
   });
 
+  it("returns correct fields for FilterContactsOutOfMyNetwork", () => {
+    const info = getActionTypeInfo("FilterContactsOutOfMyNetwork");
+    expect(info).toBeDefined();
+    if (info === undefined) throw new Error("Expected info");
+    expect(info.category).toBe("crm");
+    expect(info.configSchema).toHaveProperty("maxScrollDepth");
+    expect(info.configSchema).toHaveProperty("checkUntil");
+    expect(info.configSchema).toHaveProperty("launchAutoAcceptInvites");
+    expect(info.configSchema).toHaveProperty("launchAutoCancelInvites");
+    expect(info.configSchema).toHaveProperty("cancelInvitesOlderThan");
+    const scrollField = info.configSchema["maxScrollDepth"];
+    expect(scrollField).toBeDefined();
+    if (scrollField === undefined) throw new Error("Expected field");
+    expect(scrollField.type).toBe("number");
+    expect(scrollField.required).toBe(false);
+    const checkUntilField = info.configSchema["checkUntil"];
+    expect(checkUntilField).toBeDefined();
+    if (checkUntilField === undefined) throw new Error("Expected field");
+    expect(checkUntilField.type).toBe("string");
+    expect(info.example).toEqual({
+      maxScrollDepth: 200,
+      checkUntil: "PreviouslyFound",
+      cancelInvitesOlderThan: 2592000000,
+      launchAutoAcceptInvites: false,
+      launchAutoCancelInvites: true,
+    });
+  });
+
   it("returns frozen objects", () => {
     const info = getActionTypeInfo("VisitAndExtract");
     expect(info).toBeDefined();
