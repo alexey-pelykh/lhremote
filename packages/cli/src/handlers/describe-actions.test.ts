@@ -123,7 +123,7 @@ describe("handleDescribeActions", () => {
   });
 
   it("does not show example when not available", () => {
-    handleDescribeActions({ type: "CheckForReplies" });
+    handleDescribeActions({ type: "ScrapeMessagingHistory" });
 
     const output = getStdout();
     expect(output).not.toContain("Example:");

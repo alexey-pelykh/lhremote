@@ -220,7 +220,30 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
     name: "CheckForReplies",
     description: "Check for new message replies from contacts in the campaign.",
     category: "messaging",
-    configSchema: {},
+    configSchema: {
+      moveToSuccessfulAfterMs: {
+        type: "number",
+        required: true,
+        description:
+          "Auto-mark as successful after N milliseconds without a reply (null = never).",
+      },
+      treatMessageAcceptedAsReply: {
+        type: "boolean",
+        required: false,
+        description: "Count message acceptance as a reply.",
+      },
+      keepInQueueIfRequestIsNotAccepted: {
+        type: "boolean",
+        required: false,
+        description:
+          "Keep checking if the connection request has not yet been accepted.",
+      },
+    },
+    example: {
+      moveToSuccessfulAfterMs: 86400000,
+      treatMessageAcceptedAsReply: false,
+      keepInQueueIfRequestIsNotAccepted: true,
+    },
   },
   {
     name: "ScrapeMessagingHistory",
