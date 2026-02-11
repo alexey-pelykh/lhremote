@@ -12,7 +12,11 @@ import type {
 } from "../../types/index.js";
 import type { DatabaseSync } from "node:sqlite";
 import type { DatabaseClient } from "../client.js";
-import { CampaignNotFoundError } from "../errors.js";
+import {
+  ActionNotFoundError,
+  CampaignNotFoundError,
+  NoNextActionError,
+} from "../errors.js";
 
 type PreparedStatement = ReturnType<DatabaseSync["prepare"]>;
 
@@ -98,6 +102,10 @@ export class CampaignRepository {
     deleteResultFlags: PreparedStatement;
     deleteResultMessages: PreparedStatement;
     deleteResults: PreparedStatement;
+    markTargetSuccessful: PreparedStatement;
+    queueTarget: PreparedStatement;
+    insertTarget: PreparedStatement;
+    countTarget: PreparedStatement;
   } | null = null;
 
   constructor(private readonly client: DatabaseClient) {
@@ -380,6 +388,23 @@ export class CampaignRepository {
         `DELETE FROM action_results
          WHERE action_version_id = ? AND person_id = ?`,
       ),
+      markTargetSuccessful: db.prepare(
+        `UPDATE action_target_people SET state = 3
+         WHERE action_id = ? AND person_id = ?`,
+      ),
+      queueTarget: db.prepare(
+        `UPDATE action_target_people SET state = 1
+         WHERE action_id = ? AND person_id = ?`,
+      ),
+      insertTarget: db.prepare(
+        `INSERT INTO action_target_people
+           (action_id, action_version_id, person_id, state, li_account_id)
+         VALUES (?, ?, ?, 1, ?)`,
+      ),
+      countTarget: db.prepare(
+        `SELECT COUNT(*) AS cnt FROM action_target_people
+         WHERE action_id = ? AND person_id = ?`,
+      ),
     };
 
     return this.writeStatements;
@@ -439,6 +464,74 @@ export class CampaignRepository {
       this.client.db.exec("ROLLBACK");
       throw e;
     }
+  }
+
+  /**
+   * Move people from the current action to the next action in the chain.
+   *
+   * For each person:
+   * 1. Mark the person as successful (state=3) in the current action
+   * 2. Queue the person (state=1) in the next action's target list
+   *
+   * @throws {CampaignNotFoundError} if no campaign exists with the given ID.
+   * @throws {ActionNotFoundError} if the action does not belong to the campaign.
+   * @throws {NoNextActionError} if the action is the last in the chain.
+   */
+  moveToNextAction(
+    campaignId: number,
+    actionId: number,
+    personIds: number[],
+  ): { nextActionId: number } {
+    if (personIds.length === 0) return { nextActionId: 0 };
+
+    // Get all actions ordered by id
+    const actions = this.getCampaignActions(campaignId);
+
+    // Find the current action index
+    const currentIndex = actions.findIndex((a) => a.id === actionId);
+    if (currentIndex === -1) {
+      throw new ActionNotFoundError(actionId, campaignId);
+    }
+
+    // Find the next action
+    if (currentIndex >= actions.length - 1) {
+      throw new NoNextActionError(actionId, campaignId);
+    }
+
+    const nextAction = actions[currentIndex + 1] as (typeof actions)[0];
+    const campaign = this.getCampaign(campaignId);
+    const stmts = this.getWriteStatements();
+
+    this.client.db.exec("BEGIN");
+    try {
+      for (const personId of personIds) {
+        // 1. Mark person as successful in the current action
+        stmts.markTargetSuccessful.run(actionId, personId);
+
+        // 2. Queue person in the next action's target list
+        const { cnt } = stmts.countTarget.get(
+          nextAction.id,
+          personId,
+        ) as { cnt: number };
+
+        if (cnt > 0) {
+          stmts.queueTarget.run(nextAction.id, personId);
+        } else {
+          stmts.insertTarget.run(
+            nextAction.id,
+            nextAction.versionId,
+            personId,
+            campaign.liAccountId,
+          );
+        }
+      }
+      this.client.db.exec("COMMIT");
+    } catch (e) {
+      this.client.db.exec("ROLLBACK");
+      throw e;
+    }
+
+    return { nextActionId: nextAction.id };
   }
 
   /**

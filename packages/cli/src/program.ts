@@ -8,6 +8,7 @@ import {
   handleCampaignExport,
   handleCampaignGet,
   handleCampaignList,
+  handleCampaignMoveNext,
   handleCampaignRetry,
   handleCampaignStart,
   handleCampaignStatus,
@@ -155,6 +156,17 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignStatus);
+
+  program
+    .command("campaign-move-next")
+    .description("Move people from one action to the next in a campaign")
+    .argument("<campaignId>", "Campaign ID", parsePositiveInt)
+    .argument("<actionId>", "Action ID to move people from", parsePositiveInt)
+    .option("--person-ids <ids>", "Comma-separated person IDs")
+    .option("--person-ids-file <path>", "File containing person IDs")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignMoveNext);
 
   program
     .command("campaign-retry")

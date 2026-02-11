@@ -2,7 +2,11 @@ import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { DatabaseClient } from "../client.js";
-import { CampaignNotFoundError } from "../errors.js";
+import {
+  ActionNotFoundError,
+  CampaignNotFoundError,
+  NoNextActionError,
+} from "../errors.js";
 import { openFixture } from "../testing/open-fixture.js";
 import { CampaignRepository } from "./campaign.js";
 
@@ -26,14 +30,14 @@ describe("CampaignRepository", () => {
       const campaigns = repo.listCampaigns();
 
       // Should not include archived campaign (id=3)
-      expect(campaigns).toHaveLength(3);
+      expect(campaigns).toHaveLength(4);
       expect(campaigns.map((c) => c.id)).not.toContain(3);
     });
 
     it("includes archived campaigns when requested", () => {
       const campaigns = repo.listCampaigns({ includeArchived: true });
 
-      expect(campaigns).toHaveLength(4);
+      expect(campaigns).toHaveLength(5);
       expect(campaigns.map((c) => c.id)).toContain(3);
     });
 
@@ -543,6 +547,129 @@ describe("CampaignRepository", () => {
     it("handles campaign with no actions gracefully", () => {
       // Campaign 3 has no actions
       expect(() => repo.resetForRerun(3, [1])).not.toThrow();
+    });
+  });
+
+  describe("moveToNextAction", () => {
+    // Campaign 5 has 3 actions: action 5 (VisitAndExtract) → action 6 (Waiter) → action 7 (InvitePerson)
+    // Person 1 is queued (state=1) in action 5, person 3 is processed (state=2) in action 5
+
+    it("moves person from current action to next action", () => {
+      const result = repo.moveToNextAction(5, 5, [1]);
+
+      expect(result.nextActionId).toBe(6);
+
+      // Person 1 should be marked successful (state=3) in action 5
+      const currentTarget = db
+        .prepare(
+          "SELECT state FROM action_target_people WHERE action_id = 5 AND person_id = 1",
+        )
+        .get() as { state: number };
+      expect(currentTarget.state).toBe(3);
+
+      // Person 1 should be queued (state=1) in action 6
+      const nextTarget = db
+        .prepare(
+          "SELECT state FROM action_target_people WHERE action_id = 6 AND person_id = 1",
+        )
+        .get() as { state: number };
+      expect(nextTarget.state).toBe(1);
+    });
+
+    it("moves person from middle action to last action", () => {
+      // First insert person 1 into action 6 (middle) so we can move to action 7
+      db.exec(
+        `INSERT INTO action_target_people (action_id, action_version_id, person_id, state, li_account_id)
+         VALUES (6, 6, 1, 2, 1)`,
+      );
+
+      const result = repo.moveToNextAction(5, 6, [1]);
+
+      expect(result.nextActionId).toBe(7);
+
+      // Person 1 should be marked successful (state=3) in action 6
+      const currentTarget = db
+        .prepare(
+          "SELECT state FROM action_target_people WHERE action_id = 6 AND person_id = 1",
+        )
+        .get() as { state: number };
+      expect(currentTarget.state).toBe(3);
+
+      // Person 1 should be queued (state=1) in action 7
+      const nextTarget = db
+        .prepare(
+          "SELECT state FROM action_target_people WHERE action_id = 7 AND person_id = 1",
+        )
+        .get() as { state: number };
+      expect(nextTarget.state).toBe(1);
+    });
+
+    it("handles multiple persons in a single move", () => {
+      const result = repo.moveToNextAction(5, 5, [1, 3]);
+
+      expect(result.nextActionId).toBe(6);
+
+      // Both persons should be successful in action 5
+      const targets = db
+        .prepare(
+          "SELECT person_id, state FROM action_target_people WHERE action_id = 5",
+        )
+        .all() as Array<{ person_id: number; state: number }>;
+      const stateByPerson = new Map(targets.map((t) => [t.person_id, t.state]));
+      expect(stateByPerson.get(1)).toBe(3);
+      expect(stateByPerson.get(3)).toBe(3);
+
+      // Both should be queued in action 6
+      const nextTargets = db
+        .prepare(
+          "SELECT person_id, state FROM action_target_people WHERE action_id = 6",
+        )
+        .all() as Array<{ person_id: number; state: number }>;
+      expect(nextTargets).toHaveLength(2);
+      const nextStateByPerson = new Map(
+        nextTargets.map((t) => [t.person_id, t.state]),
+      );
+      expect(nextStateByPerson.get(1)).toBe(1);
+      expect(nextStateByPerson.get(3)).toBe(1);
+    });
+
+    it("requeues person already in next action target list", () => {
+      // Insert person 1 into action 6 with state=2 (already processed)
+      db.exec(
+        `INSERT INTO action_target_people (action_id, action_version_id, person_id, state, li_account_id)
+         VALUES (6, 6, 1, 2, 1)`,
+      );
+
+      repo.moveToNextAction(5, 5, [1]);
+
+      // Person 1 should be requeued (state=1) in action 6
+      const target = db
+        .prepare(
+          "SELECT state FROM action_target_people WHERE action_id = 6 AND person_id = 1",
+        )
+        .get() as { state: number };
+      expect(target.state).toBe(1);
+    });
+
+    it("throws NoNextActionError for last action", () => {
+      expect(() => repo.moveToNextAction(5, 7, [1])).toThrow(NoNextActionError);
+    });
+
+    it("throws ActionNotFoundError for invalid action", () => {
+      expect(() => repo.moveToNextAction(5, 999, [1])).toThrow(
+        ActionNotFoundError,
+      );
+    });
+
+    it("throws CampaignNotFoundError for missing campaign", () => {
+      expect(() => repo.moveToNextAction(999, 5, [1])).toThrow(
+        CampaignNotFoundError,
+      );
+    });
+
+    it("handles empty person list gracefully", () => {
+      const result = repo.moveToNextAction(5, 5, []);
+      expect(result.nextActionId).toBe(0);
     });
   });
 });
