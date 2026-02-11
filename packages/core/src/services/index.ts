@@ -24,6 +24,7 @@ export {
   CampaignTimeoutError,
   ExtractionTimeoutError,
   InstanceNotRunningError,
+  InvalidProfileUrlError,
   LinkedHelperNotRunningError,
   ServiceError,
   StartInstanceError,

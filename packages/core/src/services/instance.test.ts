@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CdpTarget } from "../types/cdp.js";
-import { ActionExecutionError, ServiceError } from "./errors.js";
+import { ActionExecutionError, InvalidProfileUrlError, ServiceError } from "./errors.js";
 import { InstanceService } from "./instance.js";
 
 /** Per-instance mock method sets, keyed by the target ID passed to connect(). */
@@ -220,6 +220,62 @@ describe("InstanceService", () => {
       expect(uiClient.send).not.toHaveBeenCalled();
       expect(uiClient.navigate).not.toHaveBeenCalled();
       expect(uiClient.waitForEvent).not.toHaveBeenCalled();
+    });
+
+    it("accepts a profile URL with trailing slash", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      await service.navigateToProfile("https://www.linkedin.com/in/test-user/");
+
+      const liClient = getClientMocks("LI1");
+      expect(liClient.navigate).toHaveBeenCalledWith(
+        "https://www.linkedin.com/in/test-user/",
+      );
+    });
+
+    it("rejects file:// URLs", async () => {
+      await expect(
+        service.navigateToProfile("file:///etc/passwd"),
+      ).rejects.toThrow(InvalidProfileUrlError);
+    });
+
+    it("rejects javascript: URLs", async () => {
+      await expect(
+        service.navigateToProfile("javascript:alert(1)"),
+      ).rejects.toThrow(InvalidProfileUrlError);
+    });
+
+    it("rejects non-LinkedIn URLs", async () => {
+      await expect(
+        service.navigateToProfile("https://evil.com/in/someone"),
+      ).rejects.toThrow(InvalidProfileUrlError);
+    });
+
+    it("rejects LinkedIn URLs that are not profile paths", async () => {
+      await expect(
+        service.navigateToProfile("https://www.linkedin.com/feed/"),
+      ).rejects.toThrow(InvalidProfileUrlError);
+    });
+
+    it("rejects http:// LinkedIn profile URLs", async () => {
+      await expect(
+        service.navigateToProfile("http://www.linkedin.com/in/test"),
+      ).rejects.toThrow(InvalidProfileUrlError);
+    });
+
+    it("rejects profile URL with extra path segments", async () => {
+      await expect(
+        service.navigateToProfile(
+          "https://www.linkedin.com/in/test/detail/contact-info/",
+        ),
+      ).rejects.toThrow(InvalidProfileUrlError);
+    });
+
+    it("includes the invalid URL in the error message", async () => {
+      await expect(
+        service.navigateToProfile("https://evil.com"),
+      ).rejects.toThrow(/https:\/\/evil\.com/);
     });
 
     it("throws ServiceError when not connected", async () => {

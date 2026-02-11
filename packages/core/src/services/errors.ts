@@ -97,6 +97,19 @@ export class ActionExecutionError extends ServiceError {
 }
 
 /**
+ * Thrown when a profile URL fails validation (e.g. not a LinkedIn
+ * profile path, or uses a forbidden scheme like `file://`).
+ */
+export class InvalidProfileUrlError extends ServiceError {
+  constructor(url: string) {
+    super(
+      `Invalid profile URL: ${url} — expected https://www.linkedin.com/in/<slug>`,
+    );
+    this.name = "InvalidProfileUrlError";
+  }
+}
+
+/**
  * Thrown when profile extraction times out waiting for data
  * to appear in the database.
  */

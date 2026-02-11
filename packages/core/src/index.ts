@@ -62,6 +62,7 @@ export {
   ExtractionTimeoutError,
   InstanceNotRunningError,
   InstanceService,
+  InvalidProfileUrlError,
   LauncherService,
   LinkedHelperNotRunningError,
   ServiceError,

@@ -7,6 +7,7 @@ import {
   CampaignTimeoutError,
   ExtractionTimeoutError,
   InstanceNotRunningError,
+  InvalidProfileUrlError,
   LinkedHelperNotRunningError,
   ServiceError,
   StartInstanceError,
@@ -101,6 +102,13 @@ describe("Service errors", () => {
     const cause = new TypeError("CDP failed");
     const error = new ActionExecutionError("InMail", "action failed", { cause });
     expect(error.cause).toBe(cause);
+  });
+
+  it("should set correct name for InvalidProfileUrlError", () => {
+    const error = new InvalidProfileUrlError("file:///etc/passwd");
+    expect(error.name).toBe("InvalidProfileUrlError");
+    expect(error.message).toContain("file:///etc/passwd");
+    expect(error).toBeInstanceOf(ServiceError);
   });
 
   it("should set correct name for ExtractionTimeoutError", () => {
