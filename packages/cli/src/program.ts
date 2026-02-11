@@ -11,6 +11,7 @@ import {
   handleCampaignStart,
   handleCampaignStatus,
   handleCampaignStop,
+  handleImportPeopleFromUrls,
   handleCheckReplies,
   handleCheckStatus,
   handleDescribeActions,
@@ -170,6 +171,16 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignStop);
+
+  program
+    .command("import-people-from-urls")
+    .description("Import LinkedIn profile URLs into a campaign action target list")
+    .argument("<campaignId>", "Campaign ID to import into", parsePositiveInt)
+    .option("--urls <urls>", "Comma-separated LinkedIn profile URLs")
+    .option("--urls-file <path>", "File containing LinkedIn profile URLs")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleImportPeopleFromUrls);
 
   program
     .command("describe-actions")

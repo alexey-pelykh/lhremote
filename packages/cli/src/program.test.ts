@@ -54,7 +54,8 @@ describe("createProgram", () => {
     expect(commandNames).toContain("check-replies");
     expect(commandNames).toContain("check-status");
     expect(commandNames).toContain("describe-actions");
-    expect(commandNames).toHaveLength(21);
+    expect(commandNames).toContain("import-people-from-urls");
+    expect(commandNames).toHaveLength(22);
   });
 
   describe("launch-app", () => {
