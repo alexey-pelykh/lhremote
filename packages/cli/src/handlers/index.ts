@@ -1,9 +1,12 @@
+export { handleCampaignAddAction } from "./campaign-add-action.js";
 export { handleCampaignCreate } from "./campaign-create.js";
 export { handleCampaignDelete } from "./campaign-delete.js";
 export { handleCampaignExport } from "./campaign-export.js";
 export { handleCampaignGet } from "./campaign-get.js";
 export { handleCampaignList } from "./campaign-list.js";
 export { handleCampaignMoveNext } from "./campaign-move-next.js";
+export { handleCampaignRemoveAction } from "./campaign-remove-action.js";
+export { handleCampaignReorderActions } from "./campaign-reorder-actions.js";
 export { handleCampaignRetry } from "./campaign-retry.js";
 export { handleCampaignStart } from "./campaign-start.js";
 export { handleCampaignStatus } from "./campaign-status.js";

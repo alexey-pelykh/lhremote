@@ -3,12 +3,15 @@ import { createRequire } from "node:module";
 import { Command, InvalidArgumentError, Option } from "commander";
 
 import {
+  handleCampaignAddAction,
   handleCampaignCreate,
   handleCampaignDelete,
   handleCampaignExport,
   handleCampaignGet,
   handleCampaignList,
   handleCampaignMoveNext,
+  handleCampaignRemoveAction,
+  handleCampaignReorderActions,
   handleCampaignRetry,
   handleCampaignStart,
   handleCampaignStatus,
@@ -206,6 +209,52 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignUpdate);
+
+  program
+    .command("campaign-add-action")
+    .description("Add a new action to a campaign's action chain")
+    .argument("<campaignId>", "Campaign ID", parsePositiveInt)
+    .requiredOption("--name <name>", "Display name for the action")
+    .requiredOption(
+      "--action-type <type>",
+      "Action type identifier (e.g., 'VisitAndExtract', 'MessageToPerson')",
+    )
+    .option("--description <text>", "Action description")
+    .option(
+      "--cool-down <ms>",
+      "Milliseconds between action executions",
+      parsePositiveInt,
+    )
+    .option(
+      "--max-results <n>",
+      "Maximum results per iteration (-1 for unlimited)",
+      parseInt,
+    )
+    .option("--action-settings <json>", "Action-specific settings as JSON")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignAddAction);
+
+  program
+    .command("campaign-remove-action")
+    .description("Remove an action from a campaign's action chain")
+    .argument("<campaignId>", "Campaign ID", parsePositiveInt)
+    .argument("<actionId>", "Action ID to remove", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignRemoveAction);
+
+  program
+    .command("campaign-reorder-actions")
+    .description("Reorder actions in a campaign's action chain")
+    .argument("<campaignId>", "Campaign ID", parsePositiveInt)
+    .requiredOption(
+      "--action-ids <ids>",
+      "Comma-separated action IDs in desired order",
+    )
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignReorderActions);
 
   program
     .command("import-people-from-urls")
