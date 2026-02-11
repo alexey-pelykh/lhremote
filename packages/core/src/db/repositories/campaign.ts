@@ -8,6 +8,7 @@ import type {
   CampaignState,
   CampaignSummary,
   CampaignUpdateConfig,
+  ExcludeListEntry,
   GetResultsOptions,
   ListCampaignsOptions,
 } from "../../types/index.js";
@@ -16,6 +17,7 @@ import type { DatabaseClient } from "../client.js";
 import {
   ActionNotFoundError,
   CampaignNotFoundError,
+  ExcludeListNotFoundError,
   NoNextActionError,
 } from "../errors.js";
 
@@ -110,6 +112,8 @@ export class CampaignRepository {
     queueTarget: PreparedStatement;
     insertTarget: PreparedStatement;
     countTarget: PreparedStatement;
+    insertCollectionPerson: PreparedStatement;
+    deleteCollectionPerson: PreparedStatement;
   } | null = null;
 
   constructor(private readonly client: DatabaseClient) {
@@ -421,6 +425,14 @@ export class CampaignRepository {
         `SELECT COUNT(*) AS cnt FROM action_target_people
          WHERE action_id = ? AND person_id = ?`,
       ),
+      insertCollectionPerson: db.prepare(
+        `INSERT OR IGNORE INTO collection_people (collection_id, person_id)
+         VALUES (?, ?)`,
+      ),
+      deleteCollectionPerson: db.prepare(
+        `DELETE FROM collection_people
+         WHERE collection_id = ? AND person_id = ?`,
+      ),
     };
 
     return this.writeStatements;
@@ -634,6 +646,206 @@ export class CampaignRepository {
     }
 
     return { nextActionId: nextAction.id };
+  }
+
+  /**
+   * Resolve the collection_id for an exclude list.
+   *
+   * Follows the chain: exclude_list_id → collection_people_versions → collection_id.
+   *
+   * @param level - "campaign" or "action"
+   * @param id - Campaign ID (if level is "campaign") or action ID (if level is "action")
+   * @throws {CampaignNotFoundError} if level is "campaign" and campaign does not exist.
+   * @throws {ExcludeListNotFoundError} if the exclude list chain is not found.
+   */
+  private resolveExcludeListCollectionId(
+    level: "campaign" | "action",
+    id: number,
+  ): number {
+    const { db } = this.client;
+
+    let excludeListId: number | null = null;
+
+    if (level === "campaign") {
+      const row = db
+        .prepare(
+          `SELECT exclude_list_id FROM campaign_versions
+           WHERE campaign_id = ? ORDER BY id DESC LIMIT 1`,
+        )
+        .get(id) as { exclude_list_id: number | null } | undefined;
+      excludeListId = row?.exclude_list_id ?? null;
+    } else {
+      const row = db
+        .prepare(
+          `SELECT exclude_list_id FROM action_versions
+           WHERE action_id = ? ORDER BY id DESC LIMIT 1`,
+        )
+        .get(id) as { exclude_list_id: number | null } | undefined;
+      excludeListId = row?.exclude_list_id ?? null;
+    }
+
+    if (excludeListId === null) {
+      throw new ExcludeListNotFoundError(level, id);
+    }
+
+    // Resolve CPV → collection_id
+    const cpv = db
+      .prepare(
+        `SELECT collection_id FROM collection_people_versions WHERE id = ?`,
+      )
+      .get(excludeListId) as { collection_id: number } | undefined;
+
+    if (!cpv) {
+      throw new ExcludeListNotFoundError(level, id);
+    }
+
+    return cpv.collection_id;
+  }
+
+  /**
+   * Get the exclude list for a campaign or action.
+   *
+   * @param campaignId - Campaign ID (verified to exist).
+   * @param actionId - If provided, get the action-level exclude list.
+   *   Otherwise, get the campaign-level exclude list.
+   * @throws {CampaignNotFoundError} if the campaign does not exist.
+   * @throws {ActionNotFoundError} if actionId is provided and not in the campaign.
+   * @throws {ExcludeListNotFoundError} if the exclude list chain is not found.
+   */
+  getExcludeList(
+    campaignId: number,
+    actionId?: number,
+  ): ExcludeListEntry[] {
+    // Verify campaign exists
+    this.getCampaign(campaignId);
+
+    if (actionId !== undefined) {
+      // Verify action belongs to campaign
+      const actions = this.getCampaignActions(campaignId);
+      if (!actions.some((a) => a.id === actionId)) {
+        throw new ActionNotFoundError(actionId, campaignId);
+      }
+    }
+
+    const level = actionId !== undefined ? "action" : "campaign";
+    const targetId = actionId ?? campaignId;
+    const collectionId = this.resolveExcludeListCollectionId(level, targetId);
+
+    const rows = this.client.db
+      .prepare(
+        `SELECT person_id FROM collection_people
+         WHERE collection_id = ?
+         ORDER BY person_id`,
+      )
+      .all(collectionId) as unknown as { person_id: number }[];
+
+    return rows.map((r) => ({ personId: r.person_id }));
+  }
+
+  /**
+   * Add people to a campaign or action exclude list.
+   *
+   * @param campaignId - Campaign ID (verified to exist).
+   * @param personIds - Person IDs to add.
+   * @param actionId - If provided, add to the action-level exclude list.
+   * @returns Number of people actually added (excludes already-present).
+   * @throws {CampaignNotFoundError} if the campaign does not exist.
+   * @throws {ActionNotFoundError} if actionId is provided and not in the campaign.
+   * @throws {ExcludeListNotFoundError} if the exclude list chain is not found.
+   */
+  addToExcludeList(
+    campaignId: number,
+    personIds: number[],
+    actionId?: number,
+  ): number {
+    if (personIds.length === 0) return 0;
+
+    // Verify campaign exists
+    this.getCampaign(campaignId);
+
+    if (actionId !== undefined) {
+      const actions = this.getCampaignActions(campaignId);
+      if (!actions.some((a) => a.id === actionId)) {
+        throw new ActionNotFoundError(actionId, campaignId);
+      }
+    }
+
+    const level = actionId !== undefined ? "action" : "campaign";
+    const targetId = actionId ?? campaignId;
+    const collectionId = this.resolveExcludeListCollectionId(level, targetId);
+
+    const stmts = this.getWriteStatements();
+    let added = 0;
+
+    this.client.db.exec("BEGIN");
+    try {
+      for (const personId of personIds) {
+        const result = stmts.insertCollectionPerson.run(
+          collectionId,
+          personId,
+        );
+        if (result.changes > 0) added++;
+      }
+      this.client.db.exec("COMMIT");
+    } catch (e) {
+      this.client.db.exec("ROLLBACK");
+      throw e;
+    }
+
+    return added;
+  }
+
+  /**
+   * Remove people from a campaign or action exclude list.
+   *
+   * @param campaignId - Campaign ID (verified to exist).
+   * @param personIds - Person IDs to remove.
+   * @param actionId - If provided, remove from the action-level exclude list.
+   * @returns Number of people actually removed.
+   * @throws {CampaignNotFoundError} if the campaign does not exist.
+   * @throws {ActionNotFoundError} if actionId is provided and not in the campaign.
+   * @throws {ExcludeListNotFoundError} if the exclude list chain is not found.
+   */
+  removeFromExcludeList(
+    campaignId: number,
+    personIds: number[],
+    actionId?: number,
+  ): number {
+    if (personIds.length === 0) return 0;
+
+    // Verify campaign exists
+    this.getCampaign(campaignId);
+
+    if (actionId !== undefined) {
+      const actions = this.getCampaignActions(campaignId);
+      if (!actions.some((a) => a.id === actionId)) {
+        throw new ActionNotFoundError(actionId, campaignId);
+      }
+    }
+
+    const level = actionId !== undefined ? "action" : "campaign";
+    const targetId = actionId ?? campaignId;
+    const collectionId = this.resolveExcludeListCollectionId(level, targetId);
+
+    const stmts = this.getWriteStatements();
+    let removed = 0;
+
+    this.client.db.exec("BEGIN");
+    try {
+      for (const personId of personIds) {
+        const result = stmts.deleteCollectionPerson.run(
+          collectionId,
+          personId,
+        );
+        if (result.changes > 0) removed++;
+      }
+      this.client.db.exec("COMMIT");
+    } catch (e) {
+      this.client.db.exec("ROLLBACK");
+      throw e;
+    }
+
+    return removed;
   }
 
   /**

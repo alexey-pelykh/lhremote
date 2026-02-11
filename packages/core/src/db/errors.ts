@@ -79,3 +79,13 @@ export class NoNextActionError extends DatabaseError {
     this.name = "NoNextActionError";
   }
 }
+
+/**
+ * Thrown when an exclude list is not found for a campaign or action.
+ */
+export class ExcludeListNotFoundError extends DatabaseError {
+  constructor(level: "campaign" | "action", id: number) {
+    super(`Exclude list not found for ${level} ${String(id)}`);
+    this.name = "ExcludeListNotFoundError";
+  }
+}

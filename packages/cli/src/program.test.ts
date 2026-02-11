@@ -61,7 +61,10 @@ describe("createProgram", () => {
     expect(commandNames).toContain("campaign-add-action");
     expect(commandNames).toContain("campaign-remove-action");
     expect(commandNames).toContain("campaign-reorder-actions");
-    expect(commandNames).toHaveLength(28);
+    expect(commandNames).toContain("campaign-exclude-list");
+    expect(commandNames).toContain("campaign-exclude-add");
+    expect(commandNames).toContain("campaign-exclude-remove");
+    expect(commandNames).toHaveLength(31);
   });
 
   describe("launch-app", () => {

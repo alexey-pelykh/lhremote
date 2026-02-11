@@ -6,6 +6,9 @@ import {
   handleCampaignAddAction,
   handleCampaignCreate,
   handleCampaignDelete,
+  handleCampaignExcludeAdd,
+  handleCampaignExcludeList,
+  handleCampaignExcludeRemove,
   handleCampaignExport,
   handleCampaignGet,
   handleCampaignList,
@@ -136,6 +139,49 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignDelete);
+
+  program
+    .command("campaign-exclude-list")
+    .description("View the exclude list for a campaign or action")
+    .argument("<campaignId>", "Campaign ID", parsePositiveInt)
+    .option(
+      "--action-id <id>",
+      "Action ID (shows action-level exclude list instead of campaign-level)",
+      parsePositiveInt,
+    )
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignExcludeList);
+
+  program
+    .command("campaign-exclude-add")
+    .description("Add people to a campaign or action exclude list")
+    .argument("<campaignId>", "Campaign ID", parsePositiveInt)
+    .option("--person-ids <ids>", "Comma-separated person IDs")
+    .option("--person-ids-file <path>", "File containing person IDs")
+    .option(
+      "--action-id <id>",
+      "Action ID (adds to action-level exclude list instead of campaign-level)",
+      parsePositiveInt,
+    )
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignExcludeAdd);
+
+  program
+    .command("campaign-exclude-remove")
+    .description("Remove people from a campaign or action exclude list")
+    .argument("<campaignId>", "Campaign ID", parsePositiveInt)
+    .option("--person-ids <ids>", "Comma-separated person IDs")
+    .option("--person-ids-file <path>", "File containing person IDs")
+    .option(
+      "--action-id <id>",
+      "Action ID (removes from action-level exclude list instead of campaign-level)",
+      parsePositiveInt,
+    )
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignExcludeRemove);
 
   program
     .command("campaign-export")

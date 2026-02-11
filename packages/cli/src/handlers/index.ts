@@ -1,6 +1,9 @@
 export { handleCampaignAddAction } from "./campaign-add-action.js";
 export { handleCampaignCreate } from "./campaign-create.js";
 export { handleCampaignDelete } from "./campaign-delete.js";
+export { handleCampaignExcludeAdd } from "./campaign-exclude-add.js";
+export { handleCampaignExcludeList } from "./campaign-exclude-list.js";
+export { handleCampaignExcludeRemove } from "./campaign-exclude-remove.js";
 export { handleCampaignExport } from "./campaign-export.js";
 export { handleCampaignGet } from "./campaign-get.js";
 export { handleCampaignList } from "./campaign-list.js";

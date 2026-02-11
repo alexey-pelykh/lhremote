@@ -545,6 +545,23 @@ db.exec(`
     FOREIGN KEY(collection_id) REFERENCES collections(id)
   );
   CREATE INDEX collection_people_versions_collection_idx ON collection_people_versions(collection_id);
+
+  CREATE TABLE collection_people(
+    collection_id INTEGER,
+    person_id INTEGER,
+    UNIQUE(collection_id, person_id)
+  );
+
+  CREATE TABLE campaign_versions(
+    id INTEGER PRIMARY KEY,
+    campaign_id INTEGER NOT NULL,
+    exclude_list_id INTEGER,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    FOREIGN KEY(campaign_id) REFERENCES campaigns(id),
+    FOREIGN KEY(exclude_list_id) REFERENCES collection_people_versions(id)
+  );
+  CREATE INDEX campaign_versions_campaign_idx ON campaign_versions(campaign_id);
 `);
 
 // ── Campaign Mock Data ───────────────────────────────────────────────
@@ -642,6 +659,59 @@ db.exec(`
   VALUES
     (3, 5, 1, 3, -999, '${NOW}', '${NOW}', '${NOW}', '${NOW}'),
     (4, 5, 3, 4, -999, '${NOW}', '${NOW}', '${NOW}', '${NOW}');
+`);
+
+// ── Exclude List Data ────────────────────────────────────────────────
+
+// Campaign 1: campaign-level exclude list chain
+// collection 1 → CPV 1 → campaign_version.exclude_list_id
+// collection 2 → CPV 2 → action_version 1.exclude_list_id
+db.exec(`
+  INSERT INTO collections (id, li_account_id, name, created_at, updated_at)
+  VALUES
+    (1, 1, NULL, '${NOW}', '${NOW}'),
+    (2, 1, NULL, '${NOW}', '${NOW}');
+
+  INSERT INTO collection_people_versions (id, collection_id, version_operation_status, created_at, updated_at)
+  VALUES
+    (1, 1, 'addToTarget', '${NOW}', '${NOW}'),
+    (2, 2, 'addToTarget', '${NOW}', '${NOW}');
+
+  INSERT INTO campaign_versions (id, campaign_id, exclude_list_id, created_at, updated_at)
+  VALUES (1, 1, 1, '${NOW}', '${NOW}');
+
+  UPDATE action_versions SET exclude_list_id = 2 WHERE id = 1;
+
+  INSERT INTO collection_people (collection_id, person_id)
+  VALUES (1, 2);
+`);
+
+// Campaign 5: campaign-level + action-level exclude list chains
+// collection 3 → CPV 3 → campaign_version for campaign 5
+// collection 4 → CPV 4 → action_version 5.exclude_list_id
+// collection 5 → CPV 5 → action_version 6.exclude_list_id
+// collection 6 → CPV 6 → action_version 7.exclude_list_id
+db.exec(`
+  INSERT INTO collections (id, li_account_id, name, created_at, updated_at)
+  VALUES
+    (3, 1, NULL, '${NOW}', '${NOW}'),
+    (4, 1, NULL, '${NOW}', '${NOW}'),
+    (5, 1, NULL, '${NOW}', '${NOW}'),
+    (6, 1, NULL, '${NOW}', '${NOW}');
+
+  INSERT INTO collection_people_versions (id, collection_id, version_operation_status, created_at, updated_at)
+  VALUES
+    (3, 3, 'addToTarget', '${NOW}', '${NOW}'),
+    (4, 4, 'addToTarget', '${NOW}', '${NOW}'),
+    (5, 5, 'addToTarget', '${NOW}', '${NOW}'),
+    (6, 6, 'addToTarget', '${NOW}', '${NOW}');
+
+  INSERT INTO campaign_versions (id, campaign_id, exclude_list_id, created_at, updated_at)
+  VALUES (2, 5, 3, '${NOW}', '${NOW}');
+
+  UPDATE action_versions SET exclude_list_id = 4 WHERE id = 5;
+  UPDATE action_versions SET exclude_list_id = 5 WHERE id = 6;
+  UPDATE action_versions SET exclude_list_id = 6 WHERE id = 7;
 `);
 
 // ── Write to disk ───────────────────────────────────────────────────

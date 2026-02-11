@@ -15,6 +15,7 @@ export type {
   CampaignStatus,
   CampaignSummary,
   CampaignUpdateConfig,
+  ExcludeListEntry,
   Chat,
   ChatParticipant,
   ConversationMessages,
@@ -109,6 +110,7 @@ export {
   ChatNotFoundError,
   DatabaseError,
   DatabaseNotFoundError,
+  ExcludeListNotFoundError,
   NoNextActionError,
   ProfileNotFoundError,
 } from "./db/index.js";

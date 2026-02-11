@@ -100,6 +100,9 @@ describe("createServer", () => {
     expect(names).toContain("campaign-add-action");
     expect(names).toContain("campaign-remove-action");
     expect(names).toContain("campaign-reorder-actions");
-    expect(names).toHaveLength(28);
+    expect(names).toContain("campaign-exclude-list");
+    expect(names).toContain("campaign-exclude-add");
+    expect(names).toContain("campaign-exclude-remove");
+    expect(names).toHaveLength(31);
   });
 });

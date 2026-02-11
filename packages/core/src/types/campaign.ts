@@ -209,3 +209,11 @@ export interface CampaignRunResult {
   /** Per-action people counts (live from CDP). */
   actionCounts: ActionPeopleCounts[];
 }
+
+/**
+ * An entry in an exclude list (campaign-level or action-level).
+ */
+export interface ExcludeListEntry {
+  /** Internal person ID. */
+  personId: number;
+}

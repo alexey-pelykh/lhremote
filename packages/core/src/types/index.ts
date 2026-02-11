@@ -44,6 +44,7 @@ export type {
   CampaignRunResult,
   CampaignState,
   CampaignUpdateConfig,
+  ExcludeListEntry,
   ImportPeopleResult,
   CampaignStatus,
   CampaignSummary,

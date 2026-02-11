@@ -6,6 +6,7 @@ export {
   ChatNotFoundError,
   DatabaseError,
   DatabaseNotFoundError,
+  ExcludeListNotFoundError,
   NoNextActionError,
   ProfileNotFoundError,
 } from "./errors.js";
