@@ -90,10 +90,11 @@ describe("createServer", () => {
     expect(names).toContain("campaign-start");
     expect(names).toContain("campaign-status");
     expect(names).toContain("campaign-stop");
+    expect(names).toContain("campaign-update");
     expect(names).toContain("check-replies");
     expect(names).toContain("check-status");
     expect(names).toContain("describe-actions");
     expect(names).toContain("import-people-from-urls");
-    expect(names).toHaveLength(22);
+    expect(names).toHaveLength(23);
   });
 });

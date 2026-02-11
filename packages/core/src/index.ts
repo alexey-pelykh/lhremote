@@ -14,6 +14,7 @@ export type {
   CampaignState,
   CampaignStatus,
   CampaignSummary,
+  CampaignUpdateConfig,
   Chat,
   ChatParticipant,
   ConversationMessages,

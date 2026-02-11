@@ -5,6 +5,7 @@ import type {
   CampaignRunResult,
   CampaignStatus,
   CampaignSummary,
+  CampaignUpdateConfig,
   ImportPeopleResult,
   RunnerState,
 } from "../types/index.js";
@@ -94,6 +95,17 @@ export class CampaignService {
         { cause: error },
       );
     }
+  }
+
+  /**
+   * Update a campaign's name and/or description.
+   *
+   * This is a database-only operation — no CDP call is needed.
+   *
+   * @throws {CampaignNotFoundError} if the campaign does not exist.
+   */
+  update(campaignId: number, updates: CampaignUpdateConfig): Campaign {
+    return this.campaignRepo.updateCampaign(campaignId, updates);
   }
 
   /**

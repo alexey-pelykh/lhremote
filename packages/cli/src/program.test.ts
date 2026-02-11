@@ -51,11 +51,12 @@ describe("createProgram", () => {
     expect(commandNames).toContain("campaign-start");
     expect(commandNames).toContain("campaign-status");
     expect(commandNames).toContain("campaign-stop");
+    expect(commandNames).toContain("campaign-update");
     expect(commandNames).toContain("check-replies");
     expect(commandNames).toContain("check-status");
     expect(commandNames).toContain("describe-actions");
     expect(commandNames).toContain("import-people-from-urls");
-    expect(commandNames).toHaveLength(22);
+    expect(commandNames).toHaveLength(23);
   });
 
   describe("launch-app", () => {

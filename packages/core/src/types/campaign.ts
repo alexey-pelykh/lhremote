@@ -187,6 +187,18 @@ export interface ImportPeopleResult {
 }
 
 /**
+ * Configuration for updating an existing campaign.
+ *
+ * At least one field must be provided.
+ */
+export interface CampaignUpdateConfig {
+  /** New campaign name. */
+  name?: string;
+  /** New campaign description (null to clear). */
+  description?: string | null;
+}
+
+/**
  * Aggregated results from a campaign run.
  */
 export interface CampaignRunResult {

@@ -352,6 +352,68 @@ describe("CampaignRepository", () => {
     });
   });
 
+  describe("updateCampaign", () => {
+    it("updates campaign name", () => {
+      const updated = repo.updateCampaign(1, { name: "New Name" });
+
+      expect(updated.id).toBe(1);
+      expect(updated.name).toBe("New Name");
+      expect(updated.description).toBe("Test outreach campaign");
+    });
+
+    it("updates campaign description", () => {
+      const updated = repo.updateCampaign(1, {
+        description: "New description",
+      });
+
+      expect(updated.id).toBe(1);
+      expect(updated.name).toBe("Outreach Campaign");
+      expect(updated.description).toBe("New description");
+    });
+
+    it("clears campaign description with null", () => {
+      const updated = repo.updateCampaign(1, { description: null });
+
+      expect(updated.id).toBe(1);
+      expect(updated.description).toBeNull();
+    });
+
+    it("updates both name and description", () => {
+      const updated = repo.updateCampaign(1, {
+        name: "Updated",
+        description: "Updated desc",
+      });
+
+      expect(updated.name).toBe("Updated");
+      expect(updated.description).toBe("Updated desc");
+    });
+
+    it("returns unchanged campaign when no fields provided", () => {
+      const updated = repo.updateCampaign(1, {});
+
+      expect(updated.name).toBe("Outreach Campaign");
+      expect(updated.description).toBe("Test outreach campaign");
+    });
+
+    it("throws CampaignNotFoundError for missing campaign", () => {
+      expect(() => repo.updateCampaign(999, { name: "X" })).toThrow(
+        CampaignNotFoundError,
+      );
+    });
+
+    it("preserves other campaign fields", () => {
+      const before = repo.getCampaign(1);
+      const updated = repo.updateCampaign(1, { name: "Changed" });
+
+      expect(updated.state).toBe(before.state);
+      expect(updated.liAccountId).toBe(before.liAccountId);
+      expect(updated.isPaused).toBe(before.isPaused);
+      expect(updated.isArchived).toBe(before.isArchived);
+      expect(updated.isValid).toBe(before.isValid);
+      expect(updated.createdAt).toBe(before.createdAt);
+    });
+  });
+
   describe("resetForRerun", () => {
     it("resets person state for re-run", () => {
       // Initial state: person 1 has state=2 (processed), person 3 has state=1 (queued)

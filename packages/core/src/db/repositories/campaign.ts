@@ -6,6 +6,7 @@ import type {
   CampaignAction,
   CampaignState,
   CampaignSummary,
+  CampaignUpdateConfig,
   GetResultsOptions,
   ListCampaignsOptions,
 } from "../../types/index.js";
@@ -280,6 +281,36 @@ export class CampaignRepository {
   getCampaignState(campaignId: number): CampaignState {
     const campaign = this.getCampaign(campaignId);
     return campaign.state;
+  }
+
+  /**
+   * Update a campaign's name and/or description.
+   *
+   * @throws {CampaignNotFoundError} if no campaign exists with the given ID.
+   */
+  updateCampaign(campaignId: number, updates: CampaignUpdateConfig): Campaign {
+    // Verify campaign exists
+    this.getCampaign(campaignId);
+
+    const setClauses: string[] = [];
+    const params: (string | number | null)[] = [];
+
+    if (updates.name !== undefined) {
+      setClauses.push("name = ?");
+      params.push(updates.name);
+    }
+    if (updates.description !== undefined) {
+      setClauses.push("description = ?");
+      params.push(updates.description);
+    }
+
+    if (setClauses.length > 0) {
+      params.push(campaignId);
+      const sql = `UPDATE campaigns SET ${setClauses.join(", ")} WHERE id = ?`;
+      this.client.db.prepare(sql).run(...params);
+    }
+
+    return this.getCampaign(campaignId);
   }
 
   /**

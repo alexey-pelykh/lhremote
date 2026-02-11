@@ -11,6 +11,7 @@ import {
   handleCampaignStart,
   handleCampaignStatus,
   handleCampaignStop,
+  handleCampaignUpdate,
   handleImportPeopleFromUrls,
   handleCheckReplies,
   handleCheckStatus,
@@ -171,6 +172,17 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignStop);
+
+  program
+    .command("campaign-update")
+    .description("Update a campaign's name and/or description")
+    .argument("<campaignId>", "Campaign ID to update", parsePositiveInt)
+    .option("--name <name>", "New campaign name")
+    .option("--description <text>", "New campaign description")
+    .option("--clear-description", "Clear the campaign description")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--json", "Output as JSON")
+    .action(handleCampaignUpdate);
 
   program
     .command("import-people-from-urls")

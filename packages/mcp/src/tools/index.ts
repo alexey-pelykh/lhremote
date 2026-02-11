@@ -9,6 +9,7 @@ import { registerImportPeopleFromUrls } from "./import-people-from-urls.js";
 import { registerCampaignStart } from "./campaign-start.js";
 import { registerCampaignStatus } from "./campaign-status.js";
 import { registerCampaignStop } from "./campaign-stop.js";
+import { registerCampaignUpdate } from "./campaign-update.js";
 import { registerCheckReplies } from "./check-replies.js";
 import { registerCheckStatus } from "./check-status.js";
 import { registerDescribeActions } from "./describe-actions.js";
@@ -31,6 +32,7 @@ export function registerAllTools(server: McpServer): void {
   registerCampaignStart(server);
   registerCampaignStatus(server);
   registerCampaignStop(server);
+  registerCampaignUpdate(server);
   registerFindApp(server);
   registerLaunchApp(server);
   registerQuitApp(server);

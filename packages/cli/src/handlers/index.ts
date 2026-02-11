@@ -7,6 +7,7 @@ export { handleCampaignStart } from "./campaign-start.js";
 export { handleCampaignStatus } from "./campaign-status.js";
 export { handleImportPeopleFromUrls } from "./import-people-from-urls.js";
 export { handleCampaignStop } from "./campaign-stop.js";
+export { handleCampaignUpdate } from "./campaign-update.js";
 export { handleCheckReplies } from "./check-replies.js";
 export { handleDescribeActions } from "./describe-actions.js";
 export { handleCheckStatus } from "./check-status.js";
