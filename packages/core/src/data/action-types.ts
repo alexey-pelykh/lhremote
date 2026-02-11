@@ -295,7 +295,42 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
     description:
       "Filter out contacts who are no longer in your network (e.g., withdrawn invitations, removed connections).",
     category: "crm",
-    configSchema: {},
+    configSchema: {
+      maxScrollDepth: {
+        type: "number",
+        required: false,
+        description: "Maximum scroll depth when browsing connections (min 0).",
+      },
+      checkUntil: {
+        type: "string",
+        required: false,
+        description:
+          'When to stop checking — "PreviouslyFound" or "FirstInviteDate".',
+      },
+      launchAutoAcceptInvites: {
+        type: "boolean",
+        required: false,
+        description: "Auto-accept pending invitations.",
+      },
+      launchAutoCancelInvites: {
+        type: "boolean",
+        required: false,
+        description: "Auto-cancel old pending invitations.",
+      },
+      cancelInvitesOlderThan: {
+        type: "number",
+        required: false,
+        description:
+          "Cancel invites older than N milliseconds (required when launchAutoCancelInvites is true, min 1).",
+      },
+    },
+    example: {
+      maxScrollDepth: 200,
+      checkUntil: "PreviouslyFound",
+      cancelInvitesOlderThan: 2592000000,
+      launchAutoAcceptInvites: false,
+      launchAutoCancelInvites: true,
+    },
   },
 ];
 
