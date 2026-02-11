@@ -50,6 +50,7 @@ export type {
 
 // Services
 export {
+  AccountResolutionError,
   ActionExecutionError,
   type ActionResult,
   AppLaunchError,
@@ -59,12 +60,15 @@ export {
   CampaignExecutionError,
   CampaignService,
   CampaignTimeoutError,
+  type DatabaseContext,
   ExtractionTimeoutError,
+  type InstanceDatabaseContext,
   InstanceNotRunningError,
   InstanceService,
   InvalidProfileUrlError,
   LauncherService,
   LinkedHelperNotRunningError,
+  resolveAccount,
   ServiceError,
   StartInstanceError,
   startInstanceWithRecovery,
@@ -75,6 +79,8 @@ export {
   type LauncherStatus,
   type StatusReport,
   waitForInstancePort,
+  withDatabase,
+  withInstanceDatabase,
 } from "./services/index.js";
 
 // Data access

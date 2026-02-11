@@ -4,23 +4,22 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    LauncherService: vi.fn(),
-    DatabaseClient: vi.fn(),
+    resolveAccount: vi.fn(),
+    withDatabase: vi.fn(),
     CampaignRepository: vi.fn(),
-    discoverDatabase: vi.fn(),
   };
 });
 
 import {
-  type Account,
+  AccountResolutionError,
   ActionNotFoundError,
   CampaignNotFoundError,
   CampaignRepository,
   type CampaignStatistics,
-  DatabaseClient,
-  discoverDatabase,
-  LauncherService,
+  type DatabaseContext,
   LinkedHelperNotRunningError,
+  resolveAccount,
+  withDatabase,
 } from "@lhremote/core";
 
 import { registerCampaignStatistics } from "./campaign-statistics.js";
@@ -57,29 +56,6 @@ const SAMPLE_STATISTICS: CampaignStatistics = {
   },
 };
 
-function mockLauncher(overrides: Record<string, unknown> = {}) {
-  const disconnect = vi.fn();
-  vi.mocked(LauncherService).mockImplementation(function () {
-    return {
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect,
-      listAccounts: vi
-        .fn()
-        .mockResolvedValue([{ id: 1, liId: 1, name: "Alice" } as Account]),
-      ...overrides,
-    } as unknown as LauncherService;
-  });
-  return { disconnect };
-}
-
-function mockDb() {
-  const close = vi.fn();
-  vi.mocked(DatabaseClient).mockImplementation(function () {
-    return { close, db: {} } as unknown as DatabaseClient;
-  });
-  return { close };
-}
-
 function mockCampaignRepo(
   overrides: Record<string, unknown> = {},
 ) {
@@ -94,10 +70,11 @@ function mockCampaignRepo(
 }
 
 function setupSuccessPath() {
-  mockLauncher();
-  mockDb();
+  vi.mocked(resolveAccount).mockResolvedValue(1);
+  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
+    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
+  );
   mockCampaignRepo();
-  vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
 }
 
 describe("registerCampaignStatistics", () => {
@@ -148,10 +125,11 @@ describe("registerCampaignStatistics", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
 
-    mockLauncher();
-    mockDb();
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
+      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
+    );
     const { getStatistics } = mockCampaignRepo();
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
 
     const handler = getHandler("campaign-statistics");
     await handler({
@@ -171,9 +149,10 @@ describe("registerCampaignStatistics", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
 
-    mockLauncher();
-    mockDb();
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
+      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
+    );
     vi.mocked(CampaignRepository).mockImplementation(function () {
       return {
         getStatistics: vi.fn().mockImplementation(() => {
@@ -204,9 +183,10 @@ describe("registerCampaignStatistics", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
 
-    mockLauncher();
-    mockDb();
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
+      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
+    );
     vi.mocked(CampaignRepository).mockImplementation(function () {
       return {
         getStatistics: vi.fn().mockImplementation(() => {
@@ -238,14 +218,9 @@ describe("registerCampaignStatistics", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
 
-    vi.mocked(LauncherService).mockImplementation(function () {
-      return {
-        connect: vi
-          .fn()
-          .mockRejectedValue(new LinkedHelperNotRunningError(9222)),
-        disconnect: vi.fn(),
-      } as unknown as LauncherService;
-    });
+    vi.mocked(resolveAccount).mockRejectedValue(
+      new LinkedHelperNotRunningError(9222),
+    );
 
     const handler = getHandler("campaign-statistics");
     const result = await handler({
@@ -269,12 +244,9 @@ describe("registerCampaignStatistics", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
 
-    vi.mocked(LauncherService).mockImplementation(function () {
-      return {
-        connect: vi.fn().mockRejectedValue(new Error("connection refused")),
-        disconnect: vi.fn(),
-      } as unknown as LauncherService;
-    });
+    vi.mocked(resolveAccount).mockRejectedValue(
+      new Error("connection refused"),
+    );
 
     const handler = getHandler("campaign-statistics");
     const result = await handler({
@@ -294,65 +266,13 @@ describe("registerCampaignStatistics", () => {
     });
   });
 
-  it("opens database in read-only mode", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignStatistics(server);
-
-    mockLauncher();
-    mockDb();
-    mockCampaignRepo();
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
-
-    const handler = getHandler("campaign-statistics");
-    await handler({ campaignId: 10, cdpPort: 9222, maxErrors: 5 });
-
-    // Default DatabaseClient constructor (no readOnly option) opens in read-only mode
-    expect(vi.mocked(DatabaseClient)).toHaveBeenCalledWith("/path/to/db");
-  });
-
-  it("closes database after success", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignStatistics(server);
-
-    mockLauncher();
-    const { close: dbClose } = mockDb();
-    mockCampaignRepo();
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
-
-    const handler = getHandler("campaign-statistics");
-    await handler({ campaignId: 10, cdpPort: 9222, maxErrors: 5 });
-
-    expect(dbClose).toHaveBeenCalledOnce();
-  });
-
-  it("closes database after error", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignStatistics(server);
-
-    mockLauncher();
-    const { close: dbClose } = mockDb();
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        getStatistics: vi.fn().mockImplementation(() => {
-          throw new Error("db error");
-        }),
-      } as unknown as CampaignRepository;
-    });
-
-    const handler = getHandler("campaign-statistics");
-    await handler({ campaignId: 10, cdpPort: 9222, maxErrors: 5 });
-
-    expect(dbClose).toHaveBeenCalledOnce();
-  });
-
   it("returns error when no accounts found", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
 
-    mockLauncher({
-      listAccounts: vi.fn().mockResolvedValue([]),
-    });
+    vi.mocked(resolveAccount).mockRejectedValue(
+      new AccountResolutionError("no-accounts"),
+    );
 
     const handler = getHandler("campaign-statistics");
     const result = await handler({
@@ -376,12 +296,9 @@ describe("registerCampaignStatistics", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
 
-    mockLauncher({
-      listAccounts: vi.fn().mockResolvedValue([
-        { id: 1, liId: 1, name: "Alice" },
-        { id: 2, liId: 2, name: "Bob" },
-      ]),
-    });
+    vi.mocked(resolveAccount).mockRejectedValue(
+      new AccountResolutionError("multiple-accounts"),
+    );
 
     const handler = getHandler("campaign-statistics");
     const result = await handler({
