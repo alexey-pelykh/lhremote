@@ -163,9 +163,42 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
     configSchema: {
       messageTemplate: {
         type: "object",
+        required: true,
+        description:
+          "Invitation message template with variable substitution (can be empty for no message).",
+      },
+      saveAsLeadSN: {
+        type: "boolean",
+        required: true,
+        description: "Save as lead in Sales Navigator.",
+      },
+      emailCustomFieldName: {
+        type: "string",
+        required: false,
+        description: "Custom field name for email (null if not used).",
+      },
+      textInputMethod: {
+        type: "string",
         required: false,
         description:
-          "Optional invitation note template (max 300 characters).",
+          'How to input text — "insert", "type", or "random".',
+      },
+      goOverWeeklyInvitationLimit: {
+        type: "boolean",
+        required: false,
+        description:
+          "Continue sending invitations even if the weekly invite limit is reached.",
+      },
+      extractEmailFromPAS: {
+        type: "boolean",
+        required: false,
+        description:
+          "Extract email from the People Also Searched section.",
+      },
+      invitePersonByEmail: {
+        type: "boolean",
+        required: false,
+        description: "Invite by email instead of LinkedIn.",
       },
     },
     example: {
@@ -188,6 +221,9 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
           },
         ],
       },
+      saveAsLeadSN: false,
+      extractEmailFromPAS: true,
+      emailCustomFieldName: null,
     },
   },
   {
