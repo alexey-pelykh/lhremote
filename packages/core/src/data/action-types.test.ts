@@ -256,6 +256,59 @@ describe("getActionTypeInfo", () => {
     });
   });
 
+  it("returns correct fields for InvitePerson", () => {
+    const info = getActionTypeInfo("InvitePerson");
+    expect(info).toBeDefined();
+    if (info === undefined) throw new Error("Expected info");
+    expect(info.category).toBe("people");
+    expect(info.configSchema).toHaveProperty("messageTemplate");
+    expect(info.configSchema).toHaveProperty("saveAsLeadSN");
+    expect(info.configSchema).toHaveProperty("emailCustomFieldName");
+    expect(info.configSchema).toHaveProperty("textInputMethod");
+    expect(info.configSchema).toHaveProperty("goOverWeeklyInvitationLimit");
+    expect(info.configSchema).toHaveProperty("extractEmailFromPAS");
+    expect(info.configSchema).toHaveProperty("invitePersonByEmail");
+    const messageField = info.configSchema["messageTemplate"];
+    expect(messageField).toBeDefined();
+    if (messageField === undefined) throw new Error("Expected field");
+    expect(messageField.type).toBe("object");
+    expect(messageField.required).toBe(true);
+    const saveField = info.configSchema["saveAsLeadSN"];
+    expect(saveField).toBeDefined();
+    if (saveField === undefined) throw new Error("Expected field");
+    expect(saveField.type).toBe("boolean");
+    expect(saveField.required).toBe(true);
+    const emailField = info.configSchema["emailCustomFieldName"];
+    expect(emailField).toBeDefined();
+    if (emailField === undefined) throw new Error("Expected field");
+    expect(emailField.type).toBe("string");
+    expect(emailField.required).toBe(false);
+    expect(info.example).toEqual({
+      messageTemplate: {
+        type: "variants",
+        variants: [
+          {
+            type: "variant",
+            child: {
+              type: "group",
+              children: [
+                { type: "text", value: "Hi " },
+                { type: "var", name: "firstName" },
+                {
+                  type: "text",
+                  value: ", I'd like to add you to my network.",
+                },
+              ],
+            },
+          },
+        ],
+      },
+      saveAsLeadSN: false,
+      extractEmailFromPAS: true,
+      emailCustomFieldName: null,
+    });
+  });
+
   it("returns correct fields for FilterContactsOutOfMyNetwork", () => {
     const info = getActionTypeInfo("FilterContactsOutOfMyNetwork");
     expect(info).toBeDefined();
