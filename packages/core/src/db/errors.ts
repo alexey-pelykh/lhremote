@@ -55,3 +55,27 @@ export class CampaignNotFoundError extends DatabaseError {
     this.name = "CampaignNotFoundError";
   }
 }
+
+/**
+ * Thrown when a campaign action lookup yields no results.
+ */
+export class ActionNotFoundError extends DatabaseError {
+  constructor(actionId: number, campaignId: number) {
+    super(
+      `Action ${String(actionId)} not found in campaign ${String(campaignId)}`,
+    );
+    this.name = "ActionNotFoundError";
+  }
+}
+
+/**
+ * Thrown when an action has no successor in the campaign chain.
+ */
+export class NoNextActionError extends DatabaseError {
+  constructor(actionId: number, campaignId: number) {
+    super(
+      `Action ${String(actionId)} is the last action in campaign ${String(campaignId)}`,
+    );
+    this.name = "NoNextActionError";
+  }
+}

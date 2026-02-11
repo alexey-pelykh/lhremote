@@ -610,6 +610,40 @@ db.exec(`
   VALUES (4, 'Invalid Campaign', 'Invalid configuration', 1, 0, 0, 0, 1, '2025-01-13T10:00:00.000Z', '${NOW}');
 `);
 
+// Campaign 5: Multi-action campaign for move-next testing
+db.exec(`
+  INSERT INTO campaigns (id, name, description, type, is_paused, is_archived, is_valid, li_account_id, created_at, updated_at)
+  VALUES (5, 'Multi-Action Campaign', 'Campaign with 3 actions', 1, 0, 0, 1, 1, '2025-01-12T10:00:00.000Z', '${NOW}');
+
+  INSERT INTO action_configs (id, actionType, actionSettings, coolDown, maxActionResultsPerIteration, isDraft)
+  VALUES
+    (5, 'VisitAndExtract', '{"extractCurrentOrganizations":true}', 60000, 10, 0),
+    (6, 'Waiter', '{"delay":48}', 0, -1, 0),
+    (7, 'InvitePerson', '{"messageTemplate":{"type":"variants","variants":[]},"saveAsLeadSN":false}', 60000, 10, 0);
+
+  INSERT INTO actions (id, campaign_id, name, description, created_at, updated_at)
+  VALUES
+    (5, 5, 'Visit Profile', 'Extract profile data', '${NOW}', '${NOW}'),
+    (6, 5, 'Wait 48h', 'Wait before invite', '${NOW}', '${NOW}'),
+    (7, 5, 'Send Invite', 'Invite to connect', '${NOW}', '${NOW}');
+
+  INSERT INTO action_versions (id, action_id, config_id, created_at, updated_at)
+  VALUES
+    (5, 5, 5, '${NOW}', '${NOW}'),
+    (6, 6, 6, '${NOW}', '${NOW}'),
+    (7, 7, 7, '${NOW}', '${NOW}');
+
+  INSERT INTO action_target_people (id, action_id, action_version_id, person_id, state, li_account_id, created_at, updated_at)
+  VALUES
+    (3, 5, 5, 1, 1, 1, '${NOW}', '${NOW}'),
+    (4, 5, 5, 3, 2, 1, '${NOW}', '${NOW}');
+
+  INSERT INTO person_in_campaigns_history (id, campaign_id, person_id, action_target_people_id, result_status, add_to_target_date, add_to_target_or_result_saved_date, created_at, updated_at)
+  VALUES
+    (3, 5, 1, 3, -999, '${NOW}', '${NOW}', '${NOW}', '${NOW}'),
+    (4, 5, 3, 4, -999, '${NOW}', '${NOW}', '${NOW}', '${NOW}');
+`);
+
 // ── Write to disk ───────────────────────────────────────────────────
 
 await backup(db, FIXTURE_PATH);

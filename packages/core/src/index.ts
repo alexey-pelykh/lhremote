@@ -104,10 +104,12 @@ export {
 
 // Errors (DB + CDP errors can propagate through the service layer)
 export {
+  ActionNotFoundError,
   CampaignNotFoundError,
   ChatNotFoundError,
   DatabaseError,
   DatabaseNotFoundError,
+  NoNextActionError,
   ProfileNotFoundError,
 } from "./db/index.js";
 
