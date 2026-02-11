@@ -15,12 +15,11 @@ import {
   type ConversationThread,
   type Message,
   ChatNotFoundError,
-  DatabaseClient,
   MessageRepository,
-  discoverAllDatabases,
 } from "@lhremote/core";
 
 import { handleQueryMessages } from "./query-messages.js";
+import { mockDb, mockDiscovery } from "./testing/mock-helpers.js";
 
 const MOCK_CHAT: Chat = {
   id: 123,
@@ -53,14 +52,6 @@ const MOCK_THREAD: ConversationThread = {
   messages: [MOCK_MESSAGE],
 };
 
-function mockDb() {
-  const close = vi.fn();
-  vi.mocked(DatabaseClient).mockImplementation(function () {
-    return { close, db: {} } as unknown as DatabaseClient;
-  });
-  return { close };
-}
-
 function mockRepo(overrides?: {
   listChats?: Chat[];
   thread?: ConversationThread;
@@ -90,9 +81,7 @@ function mockRepoChatNotFound() {
 }
 
 function setupSuccessPath() {
-  vi.mocked(discoverAllDatabases).mockReturnValue(
-    new Map([[1, "/path/to/db"]]),
-  );
+  mockDiscovery();
   mockDb();
   mockRepo();
 }
@@ -115,7 +104,7 @@ describe("handleQueryMessages", () => {
       .spyOn(process.stderr, "write")
       .mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(new Map());
+    mockDiscovery(new Map());
 
     await handleQueryMessages({});
 
@@ -242,9 +231,7 @@ describe("handleQueryMessages", () => {
       .spyOn(process.stdout, "write")
       .mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
+    mockDiscovery();
     mockDb();
     mockRepo({ listChats: [] });
 
@@ -259,9 +246,7 @@ describe("handleQueryMessages", () => {
       .spyOn(process.stdout, "write")
       .mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
+    mockDiscovery();
     mockDb();
     mockRepo({ searchMessages: [] });
 
@@ -278,9 +263,7 @@ describe("handleQueryMessages", () => {
       .spyOn(process.stderr, "write")
       .mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
+    mockDiscovery();
     mockDb();
     mockRepoChatNotFound();
 
@@ -293,9 +276,7 @@ describe("handleQueryMessages", () => {
   it("closes database after successful query", async () => {
     vi.spyOn(process.stdout, "write").mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
+    mockDiscovery();
     const { close } = mockDb();
     mockRepo();
 
@@ -307,9 +288,7 @@ describe("handleQueryMessages", () => {
   it("closes database after failed lookup", async () => {
     vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
+    mockDiscovery();
     const { close } = mockDb();
     mockRepoChatNotFound();
 
@@ -323,9 +302,7 @@ describe("handleQueryMessages", () => {
       .spyOn(process.stderr, "write")
       .mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
+    mockDiscovery();
     mockDb();
     vi.mocked(MessageRepository).mockImplementation(function () {
       return {

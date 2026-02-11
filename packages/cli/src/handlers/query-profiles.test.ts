@@ -12,12 +12,11 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 
 import {
   type ProfileSearchResult,
-  DatabaseClient,
   ProfileRepository,
-  discoverAllDatabases,
 } from "@lhremote/core";
 
 import { handleQueryProfiles } from "./query-profiles.js";
+import { mockDb, mockDiscovery } from "./testing/mock-helpers.js";
 
 const MOCK_SEARCH_RESULT: ProfileSearchResult = {
   profiles: [
@@ -41,14 +40,6 @@ const MOCK_SEARCH_RESULT: ProfileSearchResult = {
   total: 12,
 };
 
-function mockDb() {
-  const close = vi.fn();
-  vi.mocked(DatabaseClient).mockImplementation(function () {
-    return { close, db: {} } as unknown as DatabaseClient;
-  });
-  return { close };
-}
-
 function mockRepo(result: ProfileSearchResult = MOCK_SEARCH_RESULT) {
   vi.mocked(ProfileRepository).mockImplementation(function () {
     return {
@@ -58,9 +49,7 @@ function mockRepo(result: ProfileSearchResult = MOCK_SEARCH_RESULT) {
 }
 
 function setupSuccessPath() {
-  vi.mocked(discoverAllDatabases).mockReturnValue(
-    new Map([[1, "/path/to/db"]]),
-  );
+  mockDiscovery();
   mockDb();
   mockRepo();
 }
@@ -83,7 +72,7 @@ describe("handleQueryProfiles", () => {
       .spyOn(process.stderr, "write")
       .mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(new Map());
+    mockDiscovery(new Map());
 
     await handleQueryProfiles({});
 
@@ -181,9 +170,7 @@ describe("handleQueryProfiles", () => {
       .spyOn(process.stdout, "write")
       .mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
+    mockDiscovery();
     mockDb();
     mockRepo({ profiles: [], total: 0 });
 
@@ -200,9 +187,7 @@ describe("handleQueryProfiles", () => {
       .spyOn(process.stdout, "write")
       .mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
+    mockDiscovery();
     mockDb();
     mockRepo({
       profiles: [
@@ -228,9 +213,7 @@ describe("handleQueryProfiles", () => {
   it("closes database after search", async () => {
     vi.spyOn(process.stdout, "write").mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
+    mockDiscovery();
     const { close } = mockDb();
     mockRepo();
 
@@ -244,9 +227,7 @@ describe("handleQueryProfiles", () => {
       .spyOn(process.stderr, "write")
       .mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
+    mockDiscovery();
     mockDb();
     vi.mocked(ProfileRepository).mockImplementation(function () {
       return {
@@ -265,9 +246,7 @@ describe("handleQueryProfiles", () => {
   it("passes parameters to repository", async () => {
     vi.spyOn(process.stdout, "write").mockReturnValue(true);
 
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, "/path/to/db"]]),
-    );
+    mockDiscovery();
     mockDb();
 
     const searchFn = vi.fn().mockReturnValue({ profiles: [], total: 0 });

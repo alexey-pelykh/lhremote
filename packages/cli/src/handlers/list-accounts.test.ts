@@ -15,19 +15,7 @@ import {
 } from "@lhremote/core";
 
 import { handleListAccounts } from "./list-accounts.js";
-
-function mockLauncher(overrides: Partial<LauncherService> = {}) {
-  const disconnect = vi.fn();
-  vi.mocked(LauncherService).mockImplementation(function () {
-    return {
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect,
-      listAccounts: vi.fn().mockResolvedValue([]),
-      ...overrides,
-    } as unknown as LauncherService;
-  });
-  return { disconnect };
-}
+import { mockLauncher } from "./testing/mock-helpers.js";
 
 describe("handleListAccounts", () => {
   const originalExitCode = process.exitCode;

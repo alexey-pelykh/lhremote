@@ -16,6 +16,7 @@ import {
 } from "@lhremote/core";
 
 import { handleStartInstance } from "./start-instance.js";
+import { mockLauncher } from "./testing/mock-helpers.js";
 
 describe("handleStartInstance", () => {
   const originalExitCode = process.exitCode;
@@ -35,12 +36,7 @@ describe("handleStartInstance", () => {
       .spyOn(process.stdout, "write")
       .mockReturnValue(true);
 
-    vi.mocked(LauncherService).mockImplementation(function () {
-      return {
-        connect: vi.fn().mockResolvedValue(undefined),
-        disconnect: vi.fn(),
-      } as unknown as LauncherService;
-    });
+    mockLauncher();
     vi.mocked(startInstanceWithRecovery).mockResolvedValue({
       status: "started",
       port: 55123,
@@ -59,13 +55,10 @@ describe("handleStartInstance", () => {
       .spyOn(process.stderr, "write")
       .mockReturnValue(true);
 
-    vi.mocked(LauncherService).mockImplementation(function () {
-      return {
-        connect: vi
-          .fn()
-          .mockRejectedValue(new LinkedHelperNotRunningError(9222)),
-        disconnect: vi.fn(),
-      } as unknown as LauncherService;
+    mockLauncher({
+      connect: vi
+        .fn()
+        .mockRejectedValue(new LinkedHelperNotRunningError(9222)),
     });
 
     await handleStartInstance("42", {});
@@ -81,12 +74,7 @@ describe("handleStartInstance", () => {
       .spyOn(process.stdout, "write")
       .mockReturnValue(true);
 
-    vi.mocked(LauncherService).mockImplementation(function () {
-      return {
-        connect: vi.fn().mockResolvedValue(undefined),
-        disconnect: vi.fn(),
-      } as unknown as LauncherService;
-    });
+    mockLauncher();
     vi.mocked(startInstanceWithRecovery).mockResolvedValue({
       status: "already_running",
       port: 55123,
@@ -105,12 +93,7 @@ describe("handleStartInstance", () => {
       .spyOn(process.stderr, "write")
       .mockReturnValue(true);
 
-    vi.mocked(LauncherService).mockImplementation(function () {
-      return {
-        connect: vi.fn().mockResolvedValue(undefined),
-        disconnect: vi.fn(),
-      } as unknown as LauncherService;
-    });
+    mockLauncher();
     vi.mocked(startInstanceWithRecovery).mockRejectedValue(
       new Error("unexpected failure"),
     );
@@ -126,12 +109,7 @@ describe("handleStartInstance", () => {
   it("passes cdpPort option to LauncherService", async () => {
     vi.spyOn(process.stdout, "write").mockReturnValue(true);
 
-    vi.mocked(LauncherService).mockImplementation(function () {
-      return {
-        connect: vi.fn().mockResolvedValue(undefined),
-        disconnect: vi.fn(),
-      } as unknown as LauncherService;
-    });
+    mockLauncher();
     vi.mocked(startInstanceWithRecovery).mockResolvedValue({
       status: "started",
       port: 55123,
@@ -147,12 +125,7 @@ describe("handleStartInstance", () => {
       .spyOn(process.stderr, "write")
       .mockReturnValue(true);
 
-    vi.mocked(LauncherService).mockImplementation(function () {
-      return {
-        connect: vi.fn().mockResolvedValue(undefined),
-        disconnect: vi.fn(),
-      } as unknown as LauncherService;
-    });
+    mockLauncher();
     vi.mocked(startInstanceWithRecovery).mockResolvedValue({
       status: "timeout",
     });

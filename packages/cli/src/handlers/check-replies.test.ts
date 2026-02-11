@@ -12,7 +12,6 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 
 import {
   type ConversationMessages,
-  type InstanceDatabaseContext,
   InstanceNotRunningError,
   MessageRepository,
   resolveAccount,
@@ -20,6 +19,10 @@ import {
 } from "@lhremote/core";
 
 import { handleCheckReplies } from "./check-replies.js";
+import {
+  mockResolveAccount,
+  mockWithInstanceDatabase,
+} from "./testing/mock-helpers.js";
 
 const MOCK_CONVERSATIONS: ConversationMessages[] = [
   {
@@ -42,10 +45,6 @@ const MOCK_CONVERSATIONS: ConversationMessages[] = [
   },
 ];
 
-function mockResolveAccount(accountId = 1) {
-  vi.mocked(resolveAccount).mockResolvedValue(accountId);
-}
-
 function mockResolveAccountError(error: Error) {
   vi.mocked(resolveAccount).mockRejectedValue(error);
 }
@@ -58,28 +57,16 @@ function mockRepo(conversations: ConversationMessages[] = MOCK_CONVERSATIONS) {
   });
 }
 
-function mockWithInstanceDatabase(
+function mockInstanceWithRepo(
   conversations: ConversationMessages[] = MOCK_CONVERSATIONS,
 ) {
   mockRepo(conversations);
-  vi.mocked(withInstanceDatabase).mockImplementation(
-    async (_cdpPort, _accountId, callback) => {
-      const mockInstance = {
-        executeAction: vi.fn().mockResolvedValue(undefined),
-      };
-      const mockDb = {};
-      return callback({
-        accountId: _accountId,
-        instance: mockInstance,
-        db: mockDb,
-      } as unknown as InstanceDatabaseContext);
-    },
-  );
+  mockWithInstanceDatabase();
 }
 
 function setupSuccessPath() {
   mockResolveAccount();
-  mockWithInstanceDatabase();
+  mockInstanceWithRepo();
 }
 
 describe("handleCheckReplies", () => {
@@ -150,7 +137,7 @@ describe("handleCheckReplies", () => {
 
   it("prints 'No new messages' when empty", async () => {
     mockResolveAccount();
-    mockWithInstanceDatabase([]);
+    mockInstanceWithRepo([]);
 
     await handleCheckReplies({});
 
@@ -163,19 +150,7 @@ describe("handleCheckReplies", () => {
     vi.mocked(MessageRepository).mockImplementation(function () {
       return { getMessagesSince } as unknown as MessageRepository;
     });
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) => {
-        const mockInstance = {
-          executeAction: vi.fn().mockResolvedValue(undefined),
-        };
-        const mockDb = {};
-        return callback({
-          accountId: _accountId,
-          instance: mockInstance,
-          db: mockDb,
-        } as unknown as InstanceDatabaseContext);
-      },
-    );
+    mockWithInstanceDatabase();
 
     await handleCheckReplies({ since: "2025-01-14T00:00:00Z" });
 
@@ -188,19 +163,7 @@ describe("handleCheckReplies", () => {
     vi.mocked(MessageRepository).mockImplementation(function () {
       return { getMessagesSince } as unknown as MessageRepository;
     });
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) => {
-        const mockInstance = {
-          executeAction: vi.fn().mockResolvedValue(undefined),
-        };
-        const mockDb = {};
-        return callback({
-          accountId: _accountId,
-          instance: mockInstance,
-          db: mockDb,
-        } as unknown as InstanceDatabaseContext);
-      },
-    );
+    mockWithInstanceDatabase();
 
     await handleCheckReplies({});
 
@@ -234,7 +197,7 @@ describe("handleCheckReplies", () => {
 
   it("pluralizes message count correctly", async () => {
     mockResolveAccount();
-    mockWithInstanceDatabase([
+    mockInstanceWithRepo([
       {
         chatId: 1,
         personId: 1,
