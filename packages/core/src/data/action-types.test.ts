@@ -221,6 +221,41 @@ describe("getActionTypeInfo", () => {
     });
   });
 
+  it("returns correct fields for DataEnrichment", () => {
+    const info = getActionTypeInfo("DataEnrichment");
+    expect(info).toBeDefined();
+    if (info === undefined) throw new Error("Expected info");
+    expect(info.category).toBe("crm");
+    expect(info.configSchema).toHaveProperty("profileInfo");
+    expect(info.configSchema).toHaveProperty("phones");
+    expect(info.configSchema).toHaveProperty("emails");
+    expect(info.configSchema).toHaveProperty("socials");
+    expect(info.configSchema).toHaveProperty("companies");
+    expect(info.configSchema).toHaveProperty("actualDate");
+    const profileInfoField = info.configSchema["profileInfo"];
+    expect(profileInfoField).toBeDefined();
+    if (profileInfoField === undefined) throw new Error("Expected field");
+    expect(profileInfoField.type).toBe("object");
+    expect(profileInfoField.required).toBe(true);
+    const emailsField = info.configSchema["emails"];
+    expect(emailsField).toBeDefined();
+    if (emailsField === undefined) throw new Error("Expected field");
+    expect(emailsField.type).toBe("object");
+    expect(emailsField.required).toBe(true);
+    const actualDateField = info.configSchema["actualDate"];
+    expect(actualDateField).toBeDefined();
+    if (actualDateField === undefined) throw new Error("Expected field");
+    expect(actualDateField.type).toBe("number");
+    expect(actualDateField.required).toBe(false);
+    expect(info.example).toEqual({
+      profileInfo: { shouldEnrich: false },
+      phones: { shouldEnrich: false },
+      emails: { shouldEnrich: false, types: ["personal", "business"] },
+      socials: { shouldEnrich: false },
+      companies: { shouldEnrich: true },
+    });
+  });
+
   it("returns correct fields for FilterContactsOutOfMyNetwork", () => {
     const info = getActionTypeInfo("FilterContactsOutOfMyNetwork");
     expect(info).toBeDefined();

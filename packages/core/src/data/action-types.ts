@@ -270,7 +270,51 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
     description:
       "Enrich profile data by extracting additional information from LinkedIn.",
     category: "crm",
-    configSchema: {},
+    configSchema: {
+      profileInfo: {
+        type: "object",
+        required: true,
+        description:
+          "Enrich profile info ({shouldEnrich: boolean, actualDate?: number}).",
+      },
+      phones: {
+        type: "object",
+        required: true,
+        description:
+          "Enrich phone numbers ({shouldEnrich: boolean, actualDate?: number}).",
+      },
+      emails: {
+        type: "object",
+        required: true,
+        description:
+          'Enrich email addresses ({shouldEnrich: boolean, actualDate?: number, types: ["personal","business"]}).',
+      },
+      socials: {
+        type: "object",
+        required: true,
+        description:
+          "Enrich social profiles ({shouldEnrich: boolean, actualDate?: number}).",
+      },
+      companies: {
+        type: "object",
+        required: true,
+        description:
+          "Enrich company data ({shouldEnrich: boolean, actualDate?: number}).",
+      },
+      actualDate: {
+        type: "number",
+        required: false,
+        description:
+          "Only enrich data newer than this timestamp (min 0).",
+      },
+    },
+    example: {
+      profileInfo: { shouldEnrich: false },
+      phones: { shouldEnrich: false },
+      emails: { shouldEnrich: false, types: ["personal", "business"] },
+      socials: { shouldEnrich: false },
+      companies: { shouldEnrich: true },
+    },
   },
   {
     name: "PersonPostsLiker",
