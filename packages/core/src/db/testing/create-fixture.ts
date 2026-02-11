@@ -606,7 +606,7 @@ db.exec(`
   VALUES (2, 'Follow-up Campaign', 'Paused follow-up', 1, 1, 0, 1, 1, '2025-01-14T10:00:00.000Z', '${NOW}');
 
   INSERT INTO action_configs (id, actionType, actionSettings, coolDown, maxActionResultsPerIteration, isDraft)
-  VALUES (2, 'VisitAndExtract', '{"extractProfile":true}', 30000, 20, 0);
+  VALUES (2, 'VisitAndExtract', '{"extractCurrentOrganizations":true}', 30000, 20, 0);
 
   INSERT INTO actions (id, campaign_id, name, description, created_at, updated_at)
   VALUES (2, 2, 'Visit Profile', 'Extract profile data', '${NOW}', '${NOW}');

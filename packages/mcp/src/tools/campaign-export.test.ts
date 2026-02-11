@@ -51,7 +51,7 @@ const MOCK_ACTIONS: CampaignAction[] = [
     config: {
       id: 100,
       actionType: "VisitAndExtract",
-      actionSettings: { extractProfile: true },
+      actionSettings: { extractCurrentOrganizations: true },
       coolDown: 60000,
       maxActionResultsPerIteration: 10,
       isDraft: false,

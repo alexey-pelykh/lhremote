@@ -111,14 +111,14 @@ describe("registerDescribeActions", () => {
       description: "Visit a LinkedIn profile and extract data.",
       category: "people",
       configSchema: {
-        extractProfile: {
+        extractCurrentOrganizations: {
           type: "boolean",
           required: false,
           description: "Whether to extract full profile data.",
           default: true,
         },
       },
-      example: { extractProfile: true },
+      example: { extractCurrentOrganizations: true },
     };
 
     mockedGetActionTypeInfo.mockReturnValue(info);
