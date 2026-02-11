@@ -23,6 +23,7 @@ export type {
   ExternalId,
   ExternalIdTypeGroup,
   GetResultsOptions,
+  ImportPeopleResult,
   InstanceInfo,
   InstanceStatus,
   ListCampaignsOptions,

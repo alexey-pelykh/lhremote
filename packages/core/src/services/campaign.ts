@@ -5,6 +5,7 @@ import type {
   CampaignRunResult,
   CampaignStatus,
   CampaignSummary,
+  ImportPeopleResult,
   RunnerState,
 } from "../types/index.js";
 import type { DatabaseClient } from "../db/index.js";
@@ -90,6 +91,74 @@ export class CampaignService {
       throw new CampaignExecutionError(
         `Failed to create campaign: ${message}`,
         undefined,
+        { cause: error },
+      );
+    }
+  }
+
+  /**
+   * Import LinkedIn profile URLs into a campaign action's target list.
+   *
+   * Resolves the campaign's first action, then calls
+   * `source.people.actions.importPeopleFromUrls()` via CDP.
+   * The import is idempotent — re-importing an already-targeted person is a no-op.
+   *
+   * @throws {CampaignNotFoundError} if the campaign does not exist.
+   * @throws {CampaignExecutionError} if the campaign has no actions or the CDP call fails.
+   */
+  async importPeopleFromUrls(
+    campaignId: number,
+    linkedInUrls: string[],
+  ): Promise<ImportPeopleResult> {
+    const actions = this.campaignRepo.getCampaignActions(campaignId);
+    if (actions.length === 0) {
+      throw new CampaignExecutionError(
+        `Campaign ${String(campaignId)} has no actions`,
+        campaignId,
+      );
+    }
+
+    const firstAction = actions[0] as (typeof actions)[0];
+    const actionId = firstAction.id;
+    const urlsPayload = linkedInUrls.join("\n");
+
+    try {
+      const stats = await this.instance.evaluateUI<{
+        total: {
+          addToTarget: {
+            successful: number;
+            alreadyInQueue: number;
+            alreadyProcessed: number;
+            failed: number;
+          };
+        };
+      }>(
+        `(async function() {
+          const actions = window.mainWindowService.mainWindow.source.people.actions;
+          const [, stats] = await actions.importPeopleFromUrls(
+            ${String(actionId)},
+            0,
+            ${JSON.stringify(urlsPayload)},
+            true
+          );
+          return stats;
+        })()`,
+      );
+
+      const counts = stats.total.addToTarget;
+      return {
+        actionId,
+        successful: counts.successful,
+        alreadyInQueue: counts.alreadyInQueue,
+        alreadyProcessed: counts.alreadyProcessed,
+        failed: counts.failed,
+      };
+    } catch (error) {
+      if (error instanceof CampaignExecutionError) throw error;
+      const message = errorMessage(error);
+      throw new CampaignExecutionError(
+        `Failed to import people into campaign ${String(campaignId)}: ${message}`,
+        campaignId,
         { cause: error },
       );
     }

@@ -171,6 +171,22 @@ export interface CampaignStatus {
 }
 
 /**
+ * Result of importing people into a campaign action from LinkedIn URLs.
+ */
+export interface ImportPeopleResult {
+  /** Action ID the people were imported into. */
+  actionId: number;
+  /** Number of people successfully added. */
+  successful: number;
+  /** Number of people already in the target queue. */
+  alreadyInQueue: number;
+  /** Number of people already processed. */
+  alreadyProcessed: number;
+  /** Number of URLs that failed to import. */
+  failed: number;
+}
+
+/**
  * Aggregated results from a campaign run.
  */
 export interface CampaignRunResult {

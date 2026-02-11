@@ -43,6 +43,7 @@ export type {
   CampaignConfig,
   CampaignRunResult,
   CampaignState,
+  ImportPeopleResult,
   CampaignStatus,
   CampaignSummary,
   GetResultsOptions,
