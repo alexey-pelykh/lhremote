@@ -201,11 +201,24 @@ describe("getActionTypeInfo", () => {
     expect(info.example).toEqual({ extractProfile: true });
   });
 
-  it("returns no example when not available", () => {
+  it("returns correct fields for CheckForReplies", () => {
     const info = getActionTypeInfo("CheckForReplies");
     expect(info).toBeDefined();
     if (info === undefined) throw new Error("Expected info");
-    expect(info.example).toBeUndefined();
+    expect(info.category).toBe("messaging");
+    expect(info.configSchema).toHaveProperty("moveToSuccessfulAfterMs");
+    const moveField = info.configSchema["moveToSuccessfulAfterMs"];
+    expect(moveField).toBeDefined();
+    if (moveField === undefined) throw new Error("Expected field");
+    expect(moveField.type).toBe("number");
+    expect(moveField.required).toBe(true);
+    expect(info.configSchema).toHaveProperty("treatMessageAcceptedAsReply");
+    expect(info.configSchema).toHaveProperty("keepInQueueIfRequestIsNotAccepted");
+    expect(info.example).toEqual({
+      moveToSuccessfulAfterMs: 86400000,
+      treatMessageAcceptedAsReply: false,
+      keepInQueueIfRequestIsNotAccepted: true,
+    });
   });
 
   it("returns frozen objects", () => {
