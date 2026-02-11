@@ -340,7 +340,15 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
     name: "ScrapeMessagingHistory",
     description: "Scrape all messaging history for the LinkedIn account.",
     category: "messaging",
-    configSchema: {},
+    configSchema: {
+      delays: {
+        type: "object",
+        required: false,
+        description:
+          "Per-step delay overrides (typePersonFullName, selectFoundPerson, sleepAfterScrollChatHistory, navigateToMessagingPage, navigateToProfile).",
+      },
+    },
+    example: {},
   },
   {
     name: "Waiter",
@@ -351,7 +359,7 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
       delay: {
         type: "number",
         required: true,
-        description: "Delay in hours before proceeding to the next action.",
+        description: "Delay in hours before proceeding to the next action (min 0).",
       },
     },
     example: { delay: 24 },
@@ -482,7 +490,14 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
     name: "RemoveFromFirstConnection",
     description: "Remove a person from 1st-degree connections (unfriend).",
     category: "people",
-    configSchema: {},
+    configSchema: {
+      delays: {
+        type: "object",
+        required: false,
+        description:
+          "Per-step delay overrides (navigateToProfile, clickOnMoreButton, clickOnRemoveConnectionButton).",
+      },
+    },
   },
   {
     name: "FilterContactsOutOfMyNetwork",

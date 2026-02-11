@@ -123,7 +123,7 @@ describe("handleDescribeActions", () => {
   });
 
   it("does not show example when not available", () => {
-    handleDescribeActions({ type: "ScrapeMessagingHistory" });
+    handleDescribeActions({ type: "RemoveFromFirstConnection" });
 
     const output = getStdout();
     expect(output).not.toContain("Example:");

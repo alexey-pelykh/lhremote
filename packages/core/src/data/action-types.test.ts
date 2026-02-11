@@ -194,6 +194,35 @@ describe("getActionTypeInfo", () => {
     if (field === undefined) throw new Error("Expected field");
     expect(field.required).toBe(true);
     expect(field.type).toBe("number");
+    expect(field.description).toContain("min 0");
+    expect(info.example).toEqual({ delay: 24 });
+  });
+
+  it("returns correct fields for ScrapeMessagingHistory", () => {
+    const info = getActionTypeInfo("ScrapeMessagingHistory");
+    expect(info).toBeDefined();
+    if (info === undefined) throw new Error("Expected info");
+    expect(info.category).toBe("messaging");
+    expect(info.configSchema).toHaveProperty("delays");
+    const delaysField = info.configSchema["delays"];
+    expect(delaysField).toBeDefined();
+    if (delaysField === undefined) throw new Error("Expected field");
+    expect(delaysField.type).toBe("object");
+    expect(delaysField.required).toBe(false);
+    expect(info.example).toEqual({});
+  });
+
+  it("returns correct fields for RemoveFromFirstConnection", () => {
+    const info = getActionTypeInfo("RemoveFromFirstConnection");
+    expect(info).toBeDefined();
+    if (info === undefined) throw new Error("Expected info");
+    expect(info.category).toBe("people");
+    expect(info.configSchema).toHaveProperty("delays");
+    const delaysField = info.configSchema["delays"];
+    expect(delaysField).toBeDefined();
+    if (delaysField === undefined) throw new Error("Expected field");
+    expect(delaysField.type).toBe("object");
+    expect(delaysField.required).toBe(false);
   });
 
   it("returns example when available", () => {
