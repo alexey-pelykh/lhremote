@@ -212,6 +212,36 @@ describe("CampaignRepository", () => {
     });
   });
 
+  describe("fixIsValid", () => {
+    it("sets is_valid to 1 for a campaign with NULL is_valid", () => {
+      // Insert a campaign with is_valid = NULL (as created by the API)
+      db.exec(
+        `INSERT INTO campaigns (id, name, type, is_valid, li_account_id)
+         VALUES (99, 'API-Created Campaign', 1, NULL, 1)`,
+      );
+
+      const before = repo.getCampaign(99);
+      expect(before.isValid).toBeNull();
+      expect(before.state).toBe("active");
+
+      repo.fixIsValid(99);
+
+      const after = repo.getCampaign(99);
+      expect(after.isValid).toBe(true);
+      expect(after.state).toBe("active");
+    });
+
+    it("sets is_valid to 1 for a campaign with is_valid = 0", () => {
+      const before = repo.getCampaign(4);
+      expect(before.isValid).toBe(false);
+
+      repo.fixIsValid(4);
+
+      const after = repo.getCampaign(4);
+      expect(after.isValid).toBe(true);
+    });
+  });
+
   describe("resetForRerun", () => {
     it("resets person state for re-run", () => {
       // Initial state: person 1 has state=2 (processed), person 3 has state=1 (queued)

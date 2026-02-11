@@ -26,6 +26,7 @@ const mockListCampaigns = vi.fn();
 const mockGetCampaign = vi.fn();
 const mockGetCampaignActions = vi.fn();
 const mockGetResults = vi.fn();
+const mockFixIsValid = vi.fn();
 const mockResetForRerun = vi.fn();
 
 vi.mock("../db/index.js", async (importOriginal) => {
@@ -36,6 +37,7 @@ vi.mock("../db/index.js", async (importOriginal) => {
       this.getCampaign = mockGetCampaign;
       this.getCampaignActions = mockGetCampaignActions;
       this.getResults = mockGetResults;
+      this.fixIsValid = mockFixIsValid;
       this.resetForRerun = mockResetForRerun;
     }),
     CampaignNotFoundError: original.CampaignNotFoundError,
@@ -181,6 +183,19 @@ describe("CampaignService", () => {
       const cdpExpr = mockEvaluateUI.mock.calls[0]?.[0] as string;
       expect(cdpExpr).toContain('"coolDown":60000');
       expect(cdpExpr).toContain('"maxActionResultsPerIteration":10');
+    });
+
+    it("fixes is_valid after CDP creation", async () => {
+      mockEvaluateUI.mockResolvedValueOnce({ id: 5 });
+      mockGetCampaign.mockReturnValue({ ...MOCK_CAMPAIGN, id: 5 });
+
+      await service.create({
+        name: "New Campaign",
+        actions: [{ name: "Visit", actionType: "VisitAndExtract" }],
+      });
+
+      expect(mockFixIsValid).toHaveBeenCalledWith(5);
+      expect(mockFixIsValid).toHaveBeenCalledBefore(mockGetCampaign);
     });
 
     it("throws CampaignExecutionError when CDP call fails", async () => {

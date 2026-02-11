@@ -88,6 +88,7 @@ export class CampaignRepository {
 
   // Write statements (prepared lazily to avoid issues with read-only mode)
   private writeStatements: {
+    fixIsValid: PreparedStatement;
     resetTargetPeople: PreparedStatement;
     resetHistory: PreparedStatement;
     deleteResultFlags: PreparedStatement;
@@ -288,6 +289,9 @@ export class CampaignRepository {
     const { db } = this.client;
 
     this.writeStatements = {
+      fixIsValid: db.prepare(
+        `UPDATE campaigns SET is_valid = 1 WHERE id = ?`,
+      ),
       resetTargetPeople: db.prepare(
         `UPDATE action_target_people SET state = 1
          WHERE action_id = ? AND person_id = ?`,
@@ -333,6 +337,18 @@ export class CampaignRepository {
     };
 
     return this.writeStatements;
+  }
+
+  /**
+   * Fix the is_valid flag after programmatic campaign creation.
+   *
+   * Campaigns created via `createCampaign()` have `is_valid = NULL`,
+   * making them invisible in the LinkedHelper UI. This sets
+   * `is_valid = 1` to match the behavior of the UI campaign editor.
+   */
+  fixIsValid(campaignId: number): void {
+    const stmts = this.getWriteStatements();
+    stmts.fixIsValid.run(campaignId);
   }
 
   /**
