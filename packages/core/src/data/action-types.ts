@@ -404,14 +404,73 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
   },
   {
     name: "PersonPostsLiker",
-    description: "Like recent posts published by a LinkedIn profile.",
+    description: "Like and comment on posts and articles by a LinkedIn profile.",
     category: "engagement",
     configSchema: {
-      maxPosts: {
+      numberOfArticles: {
         type: "number",
         required: false,
-        description: "Maximum number of recent posts to like.",
+        description:
+          "Number of articles to like. At least one of numberOfArticles or numberOfPosts must be > 0.",
       },
+      numberOfPosts: {
+        type: "number",
+        required: false,
+        description:
+          "Number of posts to like. At least one of numberOfArticles or numberOfPosts must be > 0.",
+      },
+      maxAgeOfArticles: {
+        type: "number",
+        required: false,
+        description: "Maximum age of articles in days (min 0).",
+      },
+      maxAgeOfPosts: {
+        type: "number",
+        required: false,
+        description: "Maximum age of posts in days (min 0).",
+      },
+      textInputMethod: {
+        type: "string",
+        required: false,
+        description:
+          'How to input comment text — "insert", "type", or "random".',
+      },
+      skipIfNotLiked: {
+        type: "boolean",
+        required: true,
+        description: "Skip if nothing was liked.",
+      },
+      shouldAddComment: {
+        type: "boolean",
+        required: false,
+        description: "Also add a comment to liked posts/articles.",
+      },
+      messageTemplate: {
+        type: "object",
+        required: false,
+        description:
+          "Comment text template (required when shouldAddComment is true). Uses variable substitution.",
+      },
+    },
+    example: {
+      numberOfArticles: 2,
+      numberOfPosts: 2,
+      messageTemplate: {
+        type: "variants",
+        variants: [
+          {
+            type: "variant",
+            child: {
+              type: "group",
+              children: [
+                { type: "var", name: "firstName" },
+                { type: "text", value: ", thanks for sharing!" },
+              ],
+            },
+          },
+        ],
+      },
+      skipIfNotLiked: true,
     },
   },
   {
