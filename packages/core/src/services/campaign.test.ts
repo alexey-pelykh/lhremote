@@ -29,6 +29,7 @@ const mockGetResults = vi.fn();
 const mockFixIsValid = vi.fn();
 const mockCreateActionExcludeLists = vi.fn();
 const mockResetForRerun = vi.fn();
+const mockAddAction = vi.fn();
 
 vi.mock("../db/index.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../db/index.js")>();
@@ -41,12 +42,14 @@ vi.mock("../db/index.js", async (importOriginal) => {
       this.fixIsValid = mockFixIsValid;
       this.createActionExcludeLists = mockCreateActionExcludeLists;
       this.resetForRerun = mockResetForRerun;
+      this.addAction = mockAddAction;
     }),
     CampaignNotFoundError: original.CampaignNotFoundError,
+    ActionNotFoundError: original.ActionNotFoundError,
   };
 });
 
-import { CampaignNotFoundError } from "../db/index.js";
+import { ActionNotFoundError, CampaignNotFoundError } from "../db/index.js";
 import { InstanceService } from "./instance.js";
 
 const MOCK_CAMPAIGN: Campaign = {
@@ -513,6 +516,119 @@ describe("CampaignService", () => {
       await expect(service.getResults(999)).rejects.toThrow(
         CampaignNotFoundError,
       );
+    });
+  });
+
+  describe("removeAction", () => {
+    it("removes action via CDP call", async () => {
+      mockGetCampaignActions.mockReturnValue(MOCK_ACTIONS);
+      mockEvaluateUI.mockResolvedValueOnce(undefined);
+
+      await service.removeAction(1, 10);
+
+      expect(mockGetCampaignActions).toHaveBeenCalledWith(1);
+      expect(mockEvaluateUI).toHaveBeenCalledOnce();
+      const cdpExpr = mockEvaluateUI.mock.calls[0]?.[0] as string;
+      expect(cdpExpr).toContain("removeActionFromCampaignChain");
+      expect(cdpExpr).toContain("10");
+    });
+
+    it("throws CampaignNotFoundError for missing campaign", async () => {
+      mockGetCampaignActions.mockImplementation(() => {
+        throw new CampaignNotFoundError(999);
+      });
+
+      await expect(service.removeAction(999, 10)).rejects.toThrow(
+        CampaignNotFoundError,
+      );
+    });
+
+    it("throws ActionNotFoundError for action not in campaign", async () => {
+      mockGetCampaignActions.mockReturnValue(MOCK_ACTIONS);
+
+      await expect(service.removeAction(1, 9999)).rejects.toThrow(
+        ActionNotFoundError,
+      );
+    });
+
+    it("throws CampaignExecutionError when CDP call fails", async () => {
+      mockGetCampaignActions.mockReturnValue(MOCK_ACTIONS);
+      mockEvaluateUI.mockRejectedValueOnce(new Error("CDP timeout"));
+
+      await expect(service.removeAction(1, 10)).rejects.toThrow(
+        CampaignExecutionError,
+      );
+    });
+  });
+
+  describe("reorderActions", () => {
+    it("reorders actions via CDP calls", async () => {
+      mockGetCampaignActions
+        .mockReturnValueOnce(MOCK_ACTIONS) // validation call
+        .mockReturnValueOnce(MOCK_ACTIONS); // return call after reorder
+      mockEvaluateUI.mockResolvedValue(undefined);
+
+      const result = await service.reorderActions(1, [10]);
+
+      expect(result).toEqual(MOCK_ACTIONS);
+    });
+
+    it("calls moveActionInCampaignChain for each action at correct position", async () => {
+      mockGetCampaignActions
+        .mockReturnValueOnce(MOCK_ACTIONS)
+        .mockReturnValueOnce(MOCK_ACTIONS);
+      mockEvaluateUI.mockResolvedValue(undefined);
+
+      await service.reorderActions(1, [10]);
+
+      expect(mockEvaluateUI).toHaveBeenCalledOnce();
+      const cdpExpr = mockEvaluateUI.mock.calls[0]?.[0] as string;
+      expect(cdpExpr).toContain("moveActionInCampaignChain");
+      expect(cdpExpr).toContain('"action":10');
+      expect(cdpExpr).toContain('"at":0');
+    });
+
+    it("throws CampaignNotFoundError for missing campaign", async () => {
+      mockGetCampaignActions.mockImplementation(() => {
+        throw new CampaignNotFoundError(999);
+      });
+
+      await expect(service.reorderActions(999, [10])).rejects.toThrow(
+        CampaignNotFoundError,
+      );
+    });
+
+    it("throws ActionNotFoundError for invalid action IDs", async () => {
+      mockGetCampaignActions.mockReturnValue(MOCK_ACTIONS);
+
+      await expect(service.reorderActions(1, [9999])).rejects.toThrow(
+        ActionNotFoundError,
+      );
+    });
+
+    it("throws CampaignExecutionError when CDP call fails", async () => {
+      mockGetCampaignActions.mockReturnValue(MOCK_ACTIONS);
+      mockEvaluateUI.mockRejectedValueOnce(new Error("CDP error"));
+
+      await expect(service.reorderActions(1, [10])).rejects.toThrow(
+        CampaignExecutionError,
+      );
+    });
+
+    it("returns updated action list from repository", async () => {
+      const reorderedActions: CampaignAction[] = [
+        MOCK_ACTIONS[0] as CampaignAction,
+      ];
+      mockGetCampaignActions
+        .mockReturnValueOnce(MOCK_ACTIONS) // validation call
+        .mockReturnValueOnce(reorderedActions); // return call
+      mockEvaluateUI.mockResolvedValue(undefined);
+
+      const result = await service.reorderActions(1, [10]);
+
+      // getCampaignActions called twice: once for validation, once for return
+      expect(mockGetCampaignActions).toHaveBeenCalledTimes(2);
+      expect(result).toEqual(reorderedActions);
     });
   });
 });

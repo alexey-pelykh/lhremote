@@ -1,6 +1,7 @@
 import type {
   ActionConfig,
   ActionSettings,
+  CampaignActionConfig,
   CampaignActionResult,
   Campaign,
   CampaignAction,
@@ -94,6 +95,9 @@ export class CampaignRepository {
   // Write statements (prepared lazily to avoid issues with read-only mode)
   private writeStatements: {
     fixIsValid: PreparedStatement;
+    insertActionConfig: PreparedStatement;
+    insertAction: PreparedStatement;
+    insertActionVersion: PreparedStatement;
     insertCollection: PreparedStatement;
     insertCollectionPeopleVersion: PreparedStatement;
     setActionVersionExcludeList: PreparedStatement;
@@ -334,6 +338,18 @@ export class CampaignRepository {
       fixIsValid: db.prepare(
         `UPDATE campaigns SET is_valid = 1 WHERE id = ?`,
       ),
+      insertActionConfig: db.prepare(
+        `INSERT INTO action_configs (actionType, actionSettings, coolDown, maxActionResultsPerIteration, isDraft)
+         VALUES (?, ?, ?, ?, 0)`,
+      ),
+      insertAction: db.prepare(
+        `INSERT INTO actions (campaign_id, name, description, startAt)
+         VALUES (?, ?, ?, datetime('now'))`,
+      ),
+      insertActionVersion: db.prepare(
+        `INSERT INTO action_versions (action_id, config_id)
+         VALUES (?, ?)`,
+      ),
       insertCollection: db.prepare(
         `INSERT INTO collections (li_account_id, name, created_at, updated_at)
          VALUES (?, NULL, datetime('now'), datetime('now'))`,
@@ -462,6 +478,92 @@ export class CampaignRepository {
       this.client.db.exec("COMMIT");
     } catch (e) {
       this.client.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
+  /**
+   * Add a new action to an existing campaign's action chain.
+   *
+   * Creates the full action record set via direct DB operations:
+   * action_configs -> actions -> action_versions (x2) -> exclude list chain.
+   *
+   * @throws {CampaignNotFoundError} if no campaign exists with the given ID.
+   */
+  addAction(
+    campaignId: number,
+    actionConfig: CampaignActionConfig,
+    liAccountId: number,
+  ): CampaignAction {
+    // Verify campaign exists
+    this.getCampaign(campaignId);
+
+    const stmts = this.getWriteStatements();
+    const { db } = this.client;
+
+    const getLastId = db.prepare(
+      "SELECT last_insert_rowid() AS id",
+    );
+
+    db.exec("BEGIN");
+    try {
+      // 1. Insert action_configs
+      const actionSettings = JSON.stringify(actionConfig.actionSettings ?? {});
+      const coolDown = actionConfig.coolDown ?? 60_000;
+      const maxResults = actionConfig.maxActionResultsPerIteration ?? 10;
+
+      stmts.insertActionConfig.run(
+        actionConfig.actionType,
+        actionSettings,
+        coolDown,
+        maxResults,
+      );
+      const configId = (getLastId.get() as { id: number }).id;
+
+      // 2. Insert actions
+      stmts.insertAction.run(
+        campaignId,
+        actionConfig.name,
+        actionConfig.description ?? "",
+      );
+      const actionId = (getLastId.get() as { id: number }).id;
+
+      // 3. Insert two action_versions (matching createCampaign pattern)
+      stmts.insertActionVersion.run(actionId, configId);
+      const versionId1 = (getLastId.get() as { id: number }).id;
+      stmts.insertActionVersion.run(actionId, configId);
+
+      // 4. Create exclude list chain for the new action
+      stmts.insertCollection.run(liAccountId);
+      const collectionId = (getLastId.get() as { id: number }).id;
+
+      stmts.insertCollectionPeopleVersion.run(collectionId);
+      const cpvId = (getLastId.get() as { id: number }).id;
+
+      stmts.setActionVersionExcludeList.run(cpvId, actionId);
+
+      db.exec("COMMIT");
+
+      // Build and return the CampaignAction
+      const config: ActionConfig = {
+        id: configId,
+        actionType: actionConfig.actionType,
+        actionSettings: actionConfig.actionSettings ?? {},
+        coolDown,
+        maxActionResultsPerIteration: maxResults,
+        isDraft: false,
+      };
+
+      return {
+        id: actionId,
+        campaignId,
+        name: actionConfig.name,
+        description: actionConfig.description ?? null,
+        config,
+        versionId: versionId1,
+      };
+    } catch (e) {
+      db.exec("ROLLBACK");
       throw e;
     }
   }

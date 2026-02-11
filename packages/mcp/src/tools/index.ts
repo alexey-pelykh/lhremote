@@ -1,11 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import { registerCampaignAddAction } from "./campaign-add-action.js";
 import { registerCampaignCreate } from "./campaign-create.js";
 import { registerCampaignDelete } from "./campaign-delete.js";
 import { registerCampaignExport } from "./campaign-export.js";
 import { registerCampaignGet } from "./campaign-get.js";
 import { registerCampaignList } from "./campaign-list.js";
 import { registerCampaignMoveNext } from "./campaign-move-next.js";
+import { registerCampaignRemoveAction } from "./campaign-remove-action.js";
+import { registerCampaignReorderActions } from "./campaign-reorder-actions.js";
 import { registerCampaignRetry } from "./campaign-retry.js";
 import { registerImportPeopleFromUrls } from "./import-people-from-urls.js";
 import { registerCampaignStart } from "./campaign-start.js";
@@ -26,12 +29,15 @@ import { registerQueryProfile } from "./query-profile.js";
 import { registerQueryProfiles } from "./query-profiles.js";
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
 export function registerAllTools(server: McpServer): void {
+  registerCampaignAddAction(server);
   registerCampaignCreate(server);
   registerCampaignDelete(server);
   registerCampaignExport(server);
   registerCampaignGet(server);
   registerCampaignList(server);
   registerCampaignMoveNext(server);
+  registerCampaignRemoveAction(server);
+  registerCampaignReorderActions(server);
   registerCampaignRetry(server);
   registerCampaignStart(server);
   registerCampaignStatus(server);

@@ -1,6 +1,7 @@
 import type {
   ActionPeopleCounts,
   Campaign,
+  CampaignAction,
   CampaignConfig,
   CampaignRunResult,
   CampaignStatus,
@@ -10,7 +11,7 @@ import type {
   RunnerState,
 } from "../types/index.js";
 import type { DatabaseClient } from "../db/index.js";
-import { CampaignRepository } from "../db/index.js";
+import { ActionNotFoundError, CampaignRepository } from "../db/index.js";
 import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
 import type { InstanceService } from "./instance.js";
@@ -174,6 +175,93 @@ export class CampaignService {
         { cause: error },
       );
     }
+  }
+
+  /**
+   * Remove an action from a campaign's action chain via CDP.
+   *
+   * @throws {CampaignNotFoundError} if the campaign does not exist.
+   * @throws {ActionNotFoundError} if the action does not belong to the campaign.
+   * @throws {CampaignExecutionError} if the CDP call fails.
+   */
+  async removeAction(campaignId: number, actionId: number): Promise<void> {
+    // Verify campaign and action exist
+    const actions = this.campaignRepo.getCampaignActions(campaignId);
+    const actionExists = actions.some((a) => a.id === actionId);
+    if (!actionExists) {
+      throw new ActionNotFoundError(actionId, campaignId);
+    }
+
+    try {
+      await this.instance.evaluateUI(
+        `(async function() {
+          const pc = window.mainWindowService.mainWindow.source.people.campaigns;
+          await pc.removeActionFromCampaignChain(${String(actionId)});
+        })()`,
+      );
+    } catch (error) {
+      if (error instanceof CampaignExecutionError) throw error;
+      const message = errorMessage(error);
+      throw new CampaignExecutionError(
+        `Failed to remove action ${String(actionId)} from campaign ${String(campaignId)}: ${message}`,
+        campaignId,
+        { cause: error },
+      );
+    }
+  }
+
+  /**
+   * Reorder actions in a campaign's action chain via CDP.
+   *
+   * Moves each action to its target position using
+   * `source.people.campaigns.moveActionInCampaignChain()`.
+   *
+   * @param campaignId - Campaign ID.
+   * @param actionIds - Action IDs in the desired order.
+   * @throws {CampaignNotFoundError} if the campaign does not exist.
+   * @throws {ActionNotFoundError} if any action ID does not belong to the campaign.
+   * @throws {CampaignExecutionError} if the CDP call fails.
+   */
+  async reorderActions(
+    campaignId: number,
+    actionIds: number[],
+  ): Promise<CampaignAction[]> {
+    // Verify campaign exists and all action IDs are valid
+    const actions = this.campaignRepo.getCampaignActions(campaignId);
+    const existingIds = new Set(actions.map((a) => a.id));
+
+    for (const actionId of actionIds) {
+      if (!existingIds.has(actionId)) {
+        throw new ActionNotFoundError(actionId, campaignId);
+      }
+    }
+
+    // Move each action to its target position
+    try {
+      for (let i = 0; i < actionIds.length; i++) {
+        const actionId = actionIds[i] as number;
+        await this.instance.evaluateUI(
+          `(async function() {
+            const pc = window.mainWindowService.mainWindow.source.people.campaigns;
+            await pc.moveActionInCampaignChain(${JSON.stringify({
+              action: actionId,
+              at: i,
+            })});
+          })()`,
+        );
+      }
+    } catch (error) {
+      if (error instanceof CampaignExecutionError) throw error;
+      const message = errorMessage(error);
+      throw new CampaignExecutionError(
+        `Failed to reorder actions in campaign ${String(campaignId)}: ${message}`,
+        campaignId,
+        { cause: error },
+      );
+    }
+
+    // Return the updated action list
+    return this.campaignRepo.getCampaignActions(campaignId);
   }
 
   /**
