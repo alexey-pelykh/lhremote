@@ -1,16 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  type Account,
   ActionNotFoundError,
   CampaignNotFoundError,
   CampaignRepository,
-  DatabaseClient,
-  discoverDatabase,
-  errorMessage,
-  LauncherService,
-  LinkedHelperNotRunningError,
+  resolveAccount,
+  withDatabase,
 } from "@lhremote/core";
 import { z } from "zod";
+import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 export function registerCampaignStatistics(server: McpServer): void {
   server.tool(
@@ -44,131 +41,30 @@ export function registerCampaignStatistics(server: McpServer): void {
         .describe("CDP port (default: 9222)"),
     },
     async ({ campaignId, actionId, maxErrors, cdpPort }) => {
-      // Connect to launcher to find account
-      const launcher = new LauncherService(cdpPort);
-
-      try {
-        await launcher.connect();
-      } catch (error) {
-        if (error instanceof LinkedHelperNotRunningError) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: "LinkedHelper is not running. Use launch-app first.",
-              },
-            ],
-          };
-        }
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to connect to LinkedHelper: ${message}`,
-            },
-          ],
-        };
-      }
-
       let accountId: number;
       try {
-        const accounts = await launcher.listAccounts();
-        if (accounts.length === 0) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: "No accounts found.",
-              },
-            ],
-          };
-        }
-        if (accounts.length > 1) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: "Multiple accounts found. Cannot determine which instance to use.",
-              },
-            ],
-          };
-        }
-        accountId = (accounts[0] as Account).id;
+        accountId = await resolveAccount(cdpPort);
       } catch (error) {
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to list accounts: ${message}`,
-            },
-          ],
-        };
-      } finally {
-        launcher.disconnect();
+        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }
 
-      // Discover and open database (read-only)
-      let db: DatabaseClient | null = null;
-
       try {
-        const dbPath = discoverDatabase(accountId);
-        db = new DatabaseClient(dbPath);
+        return await withDatabase(accountId, ({ db }) => {
+          const campaignRepo = new CampaignRepository(db);
+          const statsOptions: { actionId?: number; maxErrors?: number } = { maxErrors };
+          if (actionId !== undefined) statsOptions.actionId = actionId;
+          const statistics = campaignRepo.getStatistics(campaignId, statsOptions);
 
-        const campaignRepo = new CampaignRepository(db);
-        const statsOptions: { actionId?: number; maxErrors?: number } = { maxErrors };
-        if (actionId !== undefined) statsOptions.actionId = actionId;
-        const statistics = campaignRepo.getStatistics(campaignId, statsOptions);
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(statistics, null, 2),
-            },
-          ],
-        };
+          return mcpSuccess(JSON.stringify(statistics, null, 2));
+        });
       } catch (error) {
         if (error instanceof CampaignNotFoundError) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: `Campaign ${String(campaignId)} not found.`,
-              },
-            ],
-          };
+          return mcpError(`Campaign ${String(campaignId)} not found.`);
         }
         if (error instanceof ActionNotFoundError) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: `Action ${String(actionId)} not found in campaign ${String(campaignId)}.`,
-              },
-            ],
-          };
+          return mcpError(`Action ${String(actionId)} not found in campaign ${String(campaignId)}.`);
         }
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to get campaign statistics: ${message}`,
-            },
-          ],
-        };
-      } finally {
-        db?.close();
+        return mcpCatchAll(error, "Failed to get campaign statistics");
       }
     },
   );

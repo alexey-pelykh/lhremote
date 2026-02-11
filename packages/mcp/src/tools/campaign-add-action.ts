@@ -1,15 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  type Account,
   CampaignNotFoundError,
   CampaignRepository,
-  DatabaseClient,
-  discoverDatabase,
-  errorMessage,
-  LauncherService,
-  LinkedHelperNotRunningError,
+  resolveAccount,
+  withDatabase,
 } from "@lhremote/core";
 import { z } from "zod";
+import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 export function registerCampaignAddAction(server: McpServer): void {
   server.tool(
@@ -69,152 +66,51 @@ export function registerCampaignAddAction(server: McpServer): void {
         try {
           parsedSettings = JSON.parse(actionSettings) as Record<string, unknown>;
         } catch {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: "Invalid JSON in actionSettings.",
-              },
-            ],
-          };
+          return mcpError("Invalid JSON in actionSettings.");
         }
-      }
-
-      // Connect to launcher to find account
-      const launcher = new LauncherService(cdpPort);
-
-      try {
-        await launcher.connect();
-      } catch (error) {
-        if (error instanceof LinkedHelperNotRunningError) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: "LinkedHelper is not running. Use launch-app first.",
-              },
-            ],
-          };
-        }
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to connect to LinkedHelper: ${message}`,
-            },
-          ],
-        };
       }
 
       let accountId: number;
       try {
-        const accounts = await launcher.listAccounts();
-        if (accounts.length === 0) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: "No accounts found.",
-              },
-            ],
-          };
-        }
-        if (accounts.length > 1) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: "Multiple accounts found. Cannot determine which instance to use.",
-              },
-            ],
-          };
-        }
-        accountId = (accounts[0] as Account).id;
+        accountId = await resolveAccount(cdpPort);
       } catch (error) {
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to list accounts: ${message}`,
-            },
-          ],
-        };
-      } finally {
-        launcher.disconnect();
+        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }
 
-      // Discover and open database (writable for add)
-      let db: DatabaseClient | null = null;
-
       try {
-        const dbPath = discoverDatabase(accountId);
-        db = new DatabaseClient(dbPath, { readOnly: false });
+        return await withDatabase(accountId, ({ db }) => {
+          const campaignRepo = new CampaignRepository(db);
+          const campaign = campaignRepo.getCampaign(campaignId);
 
-        const campaignRepo = new CampaignRepository(db);
-        const campaign = campaignRepo.getCampaign(campaignId);
+          const actionConfig: import("@lhremote/core").CampaignActionConfig = {
+            name,
+            actionType,
+            actionSettings: parsedSettings,
+          };
+          if (description !== undefined) {
+            actionConfig.description = description;
+          }
+          if (coolDown !== undefined) {
+            actionConfig.coolDown = coolDown;
+          }
+          if (maxActionResultsPerIteration !== undefined) {
+            actionConfig.maxActionResultsPerIteration =
+              maxActionResultsPerIteration;
+          }
 
-        const actionConfig: import("@lhremote/core").CampaignActionConfig = {
-          name,
-          actionType,
-          actionSettings: parsedSettings,
-        };
-        if (description !== undefined) {
-          actionConfig.description = description;
-        }
-        if (coolDown !== undefined) {
-          actionConfig.coolDown = coolDown;
-        }
-        if (maxActionResultsPerIteration !== undefined) {
-          actionConfig.maxActionResultsPerIteration =
-            maxActionResultsPerIteration;
-        }
+          const action = campaignRepo.addAction(
+            campaignId,
+            actionConfig,
+            campaign.liAccountId,
+          );
 
-        const action = campaignRepo.addAction(
-          campaignId,
-          actionConfig,
-          campaign.liAccountId,
-        );
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(action, null, 2),
-            },
-          ],
-        };
+          return mcpSuccess(JSON.stringify(action, null, 2));
+        }, { readOnly: false });
       } catch (error) {
         if (error instanceof CampaignNotFoundError) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: `Campaign ${String(campaignId)} not found.`,
-              },
-            ],
-          };
+          return mcpError(`Campaign ${String(campaignId)} not found.`);
         }
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to add action to campaign: ${message}`,
-            },
-          ],
-        };
-      } finally {
-        db?.close();
+        return mcpCatchAll(error, "Failed to add action to campaign");
       }
     },
   );

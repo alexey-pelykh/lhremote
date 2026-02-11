@@ -13,20 +13,28 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    discoverAllDatabases: vi.fn(),
+    resolveAccount: vi.fn(),
+    withDatabase: vi.fn(),
   };
 });
 
-import { discoverAllDatabases } from "@lhremote/core";
+import { DatabaseClient, resolveAccount, withDatabase } from "@lhremote/core";
+import type { DatabaseContext } from "@lhremote/core";
 
 import { registerQueryMessages } from "./query-messages.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 describe("registerQueryMessages (integration)", () => {
   beforeEach(() => {
-    vi.mocked(discoverAllDatabases).mockReturnValue(
-      new Map([[1, FIXTURE_PATH]]),
-    );
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) => {
+      const client = new DatabaseClient(FIXTURE_PATH);
+      try {
+        return callback({ accountId: 1, db: client } as DatabaseContext);
+      } finally {
+        client.close();
+      }
+    });
   });
 
   afterEach(() => {
@@ -38,7 +46,7 @@ describe("registerQueryMessages (integration)", () => {
     registerQueryMessages(server);
 
     const handler = getHandler("query-messages");
-    const result = (await handler({})) as {
+    const result = (await handler({ cdpPort: 9222 })) as {
       content: [{ type: string; text: string }];
       isError?: boolean;
     };
@@ -56,7 +64,7 @@ describe("registerQueryMessages (integration)", () => {
 
     const handler = getHandler("query-messages");
     // Person 1 (Ada) participates in chat 1 and chat 2
-    const result = (await handler({ personId: 1 })) as {
+    const result = (await handler({ personId: 1, cdpPort: 9222 })) as {
       content: [{ type: string; text: string }];
     };
 
@@ -74,7 +82,7 @@ describe("registerQueryMessages (integration)", () => {
     registerQueryMessages(server);
 
     const handler = getHandler("query-messages");
-    const result = (await handler({ chatId: 1 })) as {
+    const result = (await handler({ chatId: 1, cdpPort: 9222 })) as {
       content: [{ type: string; text: string }];
     };
 
@@ -97,7 +105,7 @@ describe("registerQueryMessages (integration)", () => {
     registerQueryMessages(server);
 
     const handler = getHandler("query-messages");
-    const result = (await handler({ search: "compiler" })) as {
+    const result = (await handler({ search: "compiler", cdpPort: 9222 })) as {
       content: [{ type: string; text: string }];
     };
 
@@ -115,7 +123,7 @@ describe("registerQueryMessages (integration)", () => {
     registerQueryMessages(server);
 
     const handler = getHandler("query-messages");
-    const result = (await handler({ chatId: 999 })) as {
+    const result = (await handler({ chatId: 999, cdpPort: 9222 })) as {
       content: [{ type: string; text: string }];
       isError?: boolean;
     };
@@ -129,7 +137,7 @@ describe("registerQueryMessages (integration)", () => {
     registerQueryMessages(server);
 
     const handler = getHandler("query-messages");
-    const result = (await handler({ limit: 1 })) as {
+    const result = (await handler({ limit: 1, cdpPort: 9222 })) as {
       content: [{ type: string; text: string }];
     };
 

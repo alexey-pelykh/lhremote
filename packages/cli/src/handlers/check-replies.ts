@@ -1,13 +1,10 @@
 import {
-  type Account,
   type ConversationMessages,
-  DatabaseClient,
-  discoverDatabase,
-  discoverInstancePort,
   errorMessage,
-  InstanceService,
-  LauncherService,
+  InstanceNotRunningError,
   MessageRepository,
+  resolveAccount,
+  withInstanceDatabase,
 } from "@lhremote/core";
 
 export async function handleCheckReplies(options: {
@@ -20,91 +17,57 @@ export async function handleCheckReplies(options: {
     options.since ??
     new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  // Connect to launcher to find the running account
-  const launcher = new LauncherService(cdpPort);
-
   let accountId: number;
   try {
-    await launcher.connect();
-    const accounts = await launcher.listAccounts();
-    if (accounts.length === 0) {
-      process.stderr.write("No accounts found.\n");
-      process.exitCode = 1;
-      return;
-    }
-    if (accounts.length > 1) {
-      process.stderr.write(
-        "Multiple accounts found. Cannot determine which instance to use.\n",
-      );
-      process.exitCode = 1;
-      return;
-    }
-    accountId = (accounts[0] as Account).id;
+    accountId = await resolveAccount(cdpPort);
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
-  } finally {
-    launcher.disconnect();
   }
-
-  // Discover instance CDP port
-  const instancePort = await discoverInstancePort(cdpPort);
-  if (instancePort === null) {
-    process.stderr.write(
-      "No LinkedHelper instance is running. Use start-instance first.\n",
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  // Connect to instance, execute action, then query new messages
-  const instance = new InstanceService(instancePort, { timeout: 120_000 });
-  let db: DatabaseClient | null = null;
 
   try {
-    await instance.connect();
+    await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
+      process.stderr.write("Checking for new replies...\n");
 
-    process.stderr.write("Checking for new replies...\n");
+      await instance.executeAction("CheckForReplies");
 
-    await instance.executeAction("CheckForReplies");
+      process.stderr.write("Done.\n");
 
-    process.stderr.write("Done.\n");
+      // Query messages from the database
+      const repo = new MessageRepository(db);
+      const conversations = repo.getMessagesSince(cutoff);
 
-    // Query messages from the database
-    const dbPath = discoverDatabase(accountId);
-    db = new DatabaseClient(dbPath);
-    const repo = new MessageRepository(db);
-    const conversations = repo.getMessagesSince(cutoff);
-
-    const totalNew = conversations.reduce(
-      (sum, c) => sum + c.messages.length,
-      0,
-    );
-
-    if (options.json) {
-      process.stdout.write(
-        JSON.stringify(
-          {
-            newMessages: conversations,
-            totalNew,
-            checkedAt: new Date().toISOString(),
-          },
-          null,
-          2,
-        ) + "\n",
+      const totalNew = conversations.reduce(
+        (sum, c) => sum + c.messages.length,
+        0,
       );
-    } else {
-      printReplies(conversations, totalNew);
-    }
+
+      if (options.json) {
+        process.stdout.write(
+          JSON.stringify(
+            {
+              newMessages: conversations,
+              totalNew,
+              checkedAt: new Date().toISOString(),
+            },
+            null,
+            2,
+          ) + "\n",
+        );
+      } else {
+        printReplies(conversations, totalNew);
+      }
+    }, { instanceTimeout: 120_000 });
   } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
+    if (error instanceof InstanceNotRunningError) {
+      process.stderr.write(`${error.message}\n`);
+    } else {
+      const message = errorMessage(error);
+      process.stderr.write(`${message}\n`);
+    }
     process.exitCode = 1;
-  } finally {
-    instance.disconnect();
-    db?.close();
   }
 }
 

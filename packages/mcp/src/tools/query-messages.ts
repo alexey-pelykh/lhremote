@@ -1,12 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ChatNotFoundError,
-  DatabaseClient,
-  discoverAllDatabases,
-  errorMessage,
   MessageRepository,
+  resolveAccount,
+  withDatabase,
 } from "@lhremote/core";
 import { z } from "zod";
+import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 export function registerQueryMessages(server: McpServer): void {
   server.tool(
@@ -41,55 +41,43 @@ export function registerQueryMessages(server: McpServer): void {
         .nonnegative()
         .optional()
         .describe("Pagination offset (default: 0)"),
+      cdpPort: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .default(9222)
+        .describe("CDP port (default: 9222)"),
     },
-    async ({ personId, chatId, search, limit, offset }) => {
-      const databases = discoverAllDatabases();
-      if (databases.size === 0) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: "No LinkedHelper databases found.",
-            },
-          ],
-        };
+    async ({ personId, chatId, search, limit, offset, cdpPort }) => {
+      let accountId: number;
+      try {
+        accountId = await resolveAccount(cdpPort);
+      } catch (error) {
+        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }
 
       const effectiveLimit = limit ?? 20;
       const effectiveOffset = offset ?? 0;
 
-      for (const [, dbPath] of databases) {
-        const db = new DatabaseClient(dbPath);
-        try {
+      try {
+        return await withDatabase(accountId, ({ db }) => {
           const repo = new MessageRepository(db);
 
           if (chatId != null) {
             const thread = repo.getThread(chatId, {
               limit: effectiveLimit,
             });
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify(thread, null, 2),
-                },
-              ],
-            };
+            return mcpSuccess(JSON.stringify(thread, null, 2));
           }
 
           if (search != null) {
             const messages = repo.searchMessages(search, {
               limit: effectiveLimit,
             });
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({ messages, total: messages.length }, null, 2),
-                },
-              ],
-            };
+            return mcpSuccess(
+              JSON.stringify({ messages, total: messages.length }, null, 2),
+            );
           }
 
           const conversations = repo.listChats({
@@ -97,46 +85,20 @@ export function registerQueryMessages(server: McpServer): void {
             limit: effectiveLimit,
             offset: effectiveOffset,
           });
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(
-                  { conversations, total: conversations.length },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          };
-        } catch (error) {
-          if (error instanceof ChatNotFoundError) {
-            continue;
-          }
-          const message = errorMessage(error);
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: `Failed to query messages: ${message}`,
-              },
-            ],
-          };
-        } finally {
-          db.close();
+          return mcpSuccess(
+            JSON.stringify(
+              { conversations, total: conversations.length },
+              null,
+              2,
+            ),
+          );
+        });
+      } catch (error) {
+        if (error instanceof ChatNotFoundError) {
+          return mcpError("Chat not found.");
         }
+        return mcpCatchAll(error, "Failed to query messages");
       }
-
-      return {
-        isError: true,
-        content: [
-          {
-            type: "text" as const,
-            text: "Chat not found.",
-          },
-        ],
-      };
     },
   );
 }

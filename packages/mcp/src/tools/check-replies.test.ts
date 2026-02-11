@@ -4,26 +4,21 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    LauncherService: vi.fn(),
-    InstanceService: vi.fn(),
-    DatabaseClient: vi.fn(),
+    resolveAccount: vi.fn(),
+    withInstanceDatabase: vi.fn(),
     MessageRepository: vi.fn(),
-    discoverInstancePort: vi.fn(),
-    discoverDatabase: vi.fn(),
   };
 });
 
 import {
-  type Account,
   type ConversationMessages,
-  DatabaseClient,
-  discoverDatabase,
-  discoverInstancePort,
-  InstanceNotRunningError,
-  InstanceService,
-  LauncherService,
+  type InstanceDatabaseContext,
   LinkedHelperNotRunningError,
   MessageRepository,
+  AccountResolutionError,
+  InstanceNotRunningError,
+  resolveAccount,
+  withInstanceDatabase,
 } from "@lhremote/core";
 
 import { registerCheckReplies } from "./check-replies.js";
@@ -79,42 +74,6 @@ const MOCK_CONVERSATIONS: ConversationMessages[] = [
   },
 ];
 
-function mockLauncher(overrides: Record<string, unknown> = {}) {
-  const disconnect = vi.fn();
-  vi.mocked(LauncherService).mockImplementation(function () {
-    return {
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect,
-      listAccounts: vi
-        .fn()
-        .mockResolvedValue([{ id: 1, liId: 1, name: "Alice" } as Account]),
-      ...overrides,
-    } as unknown as LauncherService;
-  });
-  return { disconnect };
-}
-
-function mockInstance(overrides: Record<string, unknown> = {}) {
-  const disconnect = vi.fn();
-  vi.mocked(InstanceService).mockImplementation(function () {
-    return {
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect,
-      executeAction: vi.fn().mockResolvedValue(undefined),
-      ...overrides,
-    } as unknown as InstanceService;
-  });
-  return { disconnect };
-}
-
-function mockDb() {
-  const close = vi.fn();
-  vi.mocked(DatabaseClient).mockImplementation(function () {
-    return { close, db: {} } as unknown as DatabaseClient;
-  });
-  return { close };
-}
-
 function mockRepo(conversations: ConversationMessages[] = MOCK_CONVERSATIONS) {
   vi.mocked(MessageRepository).mockImplementation(function () {
     return {
@@ -124,12 +83,18 @@ function mockRepo(conversations: ConversationMessages[] = MOCK_CONVERSATIONS) {
 }
 
 function setupSuccessPath() {
-  mockLauncher();
-  mockInstance();
-  mockDb();
+  vi.mocked(resolveAccount).mockResolvedValue(1);
+
+  const mockInstance = { executeAction: vi.fn().mockResolvedValue(undefined) };
+  vi.mocked(withInstanceDatabase).mockImplementation(
+    async (_cdpPort, _accountId, callback) =>
+      callback({
+        accountId: 1,
+        instance: mockInstance,
+        db: {},
+      } as unknown as InstanceDatabaseContext),
+  );
   mockRepo();
-  vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-  vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
 }
 
 describe("registerCheckReplies", () => {
@@ -177,13 +142,17 @@ describe("registerCheckReplies", () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    mockLauncher();
+    vi.mocked(resolveAccount).mockResolvedValue(1);
     const executeAction = vi.fn().mockResolvedValue(undefined);
-    mockInstance({ executeAction });
-    mockDb();
+    vi.mocked(withInstanceDatabase).mockImplementation(
+      async (_cdpPort, _accountId, callback) =>
+        callback({
+          accountId: 1,
+          instance: { executeAction },
+          db: {},
+        } as unknown as InstanceDatabaseContext),
+    );
     mockRepo();
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
 
     const handler = getHandler("check-replies");
     await handler({ cdpPort: 9222 });
@@ -195,15 +164,19 @@ describe("registerCheckReplies", () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    mockLauncher();
-    mockInstance();
-    mockDb();
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withInstanceDatabase).mockImplementation(
+      async (_cdpPort, _accountId, callback) =>
+        callback({
+          accountId: 1,
+          instance: { executeAction: vi.fn().mockResolvedValue(undefined) },
+          db: {},
+        } as unknown as InstanceDatabaseContext),
+    );
     const getMessagesSince = vi.fn().mockReturnValue([]);
     vi.mocked(MessageRepository).mockImplementation(function () {
       return { getMessagesSince } as unknown as MessageRepository;
     });
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
 
     const handler = getHandler("check-replies");
     await handler({ since: "2025-01-14T00:00:00Z", cdpPort: 9222 });
@@ -215,15 +188,19 @@ describe("registerCheckReplies", () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    mockLauncher();
-    mockInstance();
-    mockDb();
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withInstanceDatabase).mockImplementation(
+      async (_cdpPort, _accountId, callback) =>
+        callback({
+          accountId: 1,
+          instance: { executeAction: vi.fn().mockResolvedValue(undefined) },
+          db: {},
+        } as unknown as InstanceDatabaseContext),
+    );
     const getMessagesSince = vi.fn().mockReturnValue([]);
     vi.mocked(MessageRepository).mockImplementation(function () {
       return { getMessagesSince } as unknown as MessageRepository;
     });
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
 
     const handler = getHandler("check-replies");
     await handler({ cdpPort: 9222 });
@@ -235,14 +212,9 @@ describe("registerCheckReplies", () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    vi.mocked(LauncherService).mockImplementation(function () {
-      return {
-        connect: vi
-          .fn()
-          .mockRejectedValue(new LinkedHelperNotRunningError(9222)),
-        disconnect: vi.fn(),
-      } as unknown as LauncherService;
-    });
+    vi.mocked(resolveAccount).mockRejectedValue(
+      new LinkedHelperNotRunningError(9222),
+    );
 
     const handler = getHandler("check-replies");
     const result = await handler({ cdpPort: 9222 });
@@ -262,9 +234,9 @@ describe("registerCheckReplies", () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    mockLauncher({
-      listAccounts: vi.fn().mockResolvedValue([]),
-    });
+    vi.mocked(resolveAccount).mockRejectedValue(
+      new AccountResolutionError("no-accounts"),
+    );
 
     const handler = getHandler("check-replies");
     const result = await handler({ cdpPort: 9222 });
@@ -279,12 +251,9 @@ describe("registerCheckReplies", () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    mockLauncher({
-      listAccounts: vi.fn().mockResolvedValue([
-        { id: 1, liId: 1, name: "Alice" },
-        { id: 2, liId: 2, name: "Bob" },
-      ]),
-    });
+    vi.mocked(resolveAccount).mockRejectedValue(
+      new AccountResolutionError("multiple-accounts"),
+    );
 
     const handler = getHandler("check-replies");
     const result = await handler({ cdpPort: 9222 });
@@ -304,8 +273,10 @@ describe("registerCheckReplies", () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    mockLauncher();
-    vi.mocked(discoverInstancePort).mockResolvedValue(null);
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withInstanceDatabase).mockRejectedValue(
+      new InstanceNotRunningError("Instance not running"),
+    );
 
     const handler = getHandler("check-replies");
     const result = await handler({ cdpPort: 9222 });
@@ -315,38 +286,7 @@ describe("registerCheckReplies", () => {
       content: [
         {
           type: "text",
-          text: "No LinkedHelper instance is running. Use start-instance first.",
-        },
-      ],
-    });
-  });
-
-  it("returns error when instance connect fails", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCheckReplies(server);
-
-    mockLauncher();
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-    vi.mocked(InstanceService).mockImplementation(function () {
-      return {
-        connect: vi
-          .fn()
-          .mockRejectedValue(
-            new InstanceNotRunningError("LinkedIn webview target not found"),
-          ),
-        disconnect: vi.fn(),
-      } as unknown as InstanceService;
-    });
-
-    const handler = getHandler("check-replies");
-    const result = await handler({ cdpPort: 9222 });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "No LinkedHelper instance is running. Use start-instance first.",
+          text: "Failed to check replies: Instance not running",
         },
       ],
     });
@@ -356,11 +296,17 @@ describe("registerCheckReplies", () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    mockLauncher();
-    mockInstance({
-      executeAction: vi.fn().mockRejectedValue(new Error("action timed out")),
-    });
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withInstanceDatabase).mockImplementation(
+      async (_cdpPort, _accountId, callback) =>
+        callback({
+          accountId: 1,
+          instance: {
+            executeAction: vi.fn().mockRejectedValue(new Error("action timed out")),
+          },
+          db: {},
+        } as unknown as InstanceDatabaseContext),
+    );
 
     const handler = getHandler("check-replies");
     const result = await handler({ cdpPort: 9222 });
@@ -376,92 +322,20 @@ describe("registerCheckReplies", () => {
     });
   });
 
-  it("disconnects launcher after account lookup", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCheckReplies(server);
-
-    const { disconnect: launcherDisconnect } = mockLauncher();
-    mockInstance();
-    mockDb();
-    mockRepo();
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
-
-    const handler = getHandler("check-replies");
-    await handler({ cdpPort: 9222 });
-
-    expect(launcherDisconnect).toHaveBeenCalledOnce();
-  });
-
-  it("disconnects instance and closes db after success", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCheckReplies(server);
-
-    mockLauncher();
-    const { disconnect: instanceDisconnect } = mockInstance();
-    const { close: dbClose } = mockDb();
-    mockRepo();
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
-
-    const handler = getHandler("check-replies");
-    await handler({ cdpPort: 9222 });
-
-    expect(instanceDisconnect).toHaveBeenCalledOnce();
-    expect(dbClose).toHaveBeenCalledOnce();
-  });
-
-  it("disconnects instance after error", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCheckReplies(server);
-
-    mockLauncher();
-    const { disconnect: instanceDisconnect } = mockInstance({
-      executeAction: vi.fn().mockRejectedValue(new Error("test error")),
-    });
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-
-    const handler = getHandler("check-replies");
-    await handler({ cdpPort: 9222 });
-
-    expect(instanceDisconnect).toHaveBeenCalledOnce();
-  });
-
-  it("passes cdpPort to LauncherService and discoverInstancePort", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCheckReplies(server);
-
-    setupSuccessPath();
-
-    const handler = getHandler("check-replies");
-    await handler({ cdpPort: 4567 });
-
-    expect(LauncherService).toHaveBeenCalledWith(4567);
-    expect(discoverInstancePort).toHaveBeenCalledWith(4567);
-  });
-
-  it("passes discovered port and timeout to InstanceService", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCheckReplies(server);
-
-    setupSuccessPath();
-
-    const handler = getHandler("check-replies");
-    await handler({ cdpPort: 9222 });
-
-    expect(InstanceService).toHaveBeenCalledWith(55123, { timeout: 120_000 });
-  });
-
   it("returns empty results when no new messages", async () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    mockLauncher();
-    mockInstance();
-    mockDb();
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withInstanceDatabase).mockImplementation(
+      async (_cdpPort, _accountId, callback) =>
+        callback({
+          accountId: 1,
+          instance: { executeAction: vi.fn().mockResolvedValue(undefined) },
+          db: {},
+        } as unknown as InstanceDatabaseContext),
+    );
     mockRepo([]);
-    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
-    vi.mocked(discoverDatabase).mockReturnValue("/path/to/db");
 
     const handler = getHandler("check-replies");
     const result = await handler({ cdpPort: 9222 });

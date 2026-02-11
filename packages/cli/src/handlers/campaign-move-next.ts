@@ -1,15 +1,13 @@
 import { readFileSync } from "node:fs";
 
 import {
-  type Account,
   ActionNotFoundError,
   CampaignNotFoundError,
   CampaignRepository,
-  DatabaseClient,
-  discoverDatabase,
   errorMessage,
-  LauncherService,
   NoNextActionError,
+  resolveAccount,
+  withDatabase,
 } from "@lhremote/core";
 
 function parsePersonIds(raw: string): number[] {
@@ -96,63 +94,40 @@ export async function handleCampaignMoveNext(
     return;
   }
 
-  // Connect to launcher to find account
-  const launcher = new LauncherService(cdpPort);
   let accountId: number;
-
   try {
-    await launcher.connect();
-    const accounts = await launcher.listAccounts();
-    if (accounts.length === 0) {
-      process.stderr.write("No accounts found.\n");
-      process.exitCode = 1;
-      return;
-    }
-    if (accounts.length > 1) {
-      process.stderr.write(
-        "Multiple accounts found. Cannot determine which instance to use.\n",
-      );
-      process.exitCode = 1;
-      return;
-    }
-    accountId = (accounts[0] as Account).id;
+    accountId = await resolveAccount(cdpPort);
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
     return;
-  } finally {
-    launcher.disconnect();
   }
 
-  // Open database (writable) and move persons to next action
-  let db: DatabaseClient | null = null;
-
   try {
-    const dbPath = discoverDatabase(accountId);
-    db = new DatabaseClient(dbPath, { readOnly: false });
-
-    const repo = new CampaignRepository(db);
-    const { nextActionId } = repo.moveToNextAction(
-      campaignId,
-      actionId,
-      personIds,
-    );
-
-    if (options.json) {
-      const response = {
-        success: true,
+    await withDatabase(accountId, ({ db }) => {
+      const repo = new CampaignRepository(db);
+      const { nextActionId } = repo.moveToNextAction(
         campaignId,
-        fromActionId: actionId,
-        toActionId: nextActionId,
-        personsMoved: personIds.length,
-      };
-      process.stdout.write(JSON.stringify(response, null, 2) + "\n");
-    } else {
-      process.stdout.write(
-        `Campaign ${String(campaignId)}: ${String(personIds.length)} persons moved from action ${String(actionId)} to action ${String(nextActionId)}.\n`,
+        actionId,
+        personIds,
       );
-    }
+
+      if (options.json) {
+        const response = {
+          success: true,
+          campaignId,
+          fromActionId: actionId,
+          toActionId: nextActionId,
+          personsMoved: personIds.length,
+        };
+        process.stdout.write(JSON.stringify(response, null, 2) + "\n");
+      } else {
+        process.stdout.write(
+          `Campaign ${String(campaignId)}: ${String(personIds.length)} persons moved from action ${String(actionId)} to action ${String(nextActionId)}.\n`,
+        );
+      }
+    }, { readOnly: false });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
       process.stderr.write(`Campaign ${String(campaignId)} not found.\n`);
@@ -169,7 +144,5 @@ export async function handleCampaignMoveNext(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
-  } finally {
-    db?.close();
   }
 }
