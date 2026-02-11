@@ -242,6 +242,116 @@ describe("CampaignRepository", () => {
     });
   });
 
+  describe("createActionExcludeLists", () => {
+    it("creates exclude list chain for each action", () => {
+      // Campaign 1 has one action (id=1) with action_version (id=1)
+      // Verify no exclude_list_id initially
+      const before = db
+        .prepare(
+          "SELECT exclude_list_id FROM action_versions WHERE action_id = 1",
+        )
+        .all() as Array<{ exclude_list_id: number | null }>;
+      expect(before[0]?.exclude_list_id).toBeNull();
+
+      repo.createActionExcludeLists(1, 1);
+
+      // Verify exclude_list_id is now set
+      const after = db
+        .prepare(
+          "SELECT exclude_list_id FROM action_versions WHERE action_id = 1",
+        )
+        .all() as Array<{ exclude_list_id: number | null }>;
+      expect(after[0]?.exclude_list_id).not.toBeNull();
+
+      // Verify the chain: action_versions.exclude_list_id -> CPV -> collection
+      const cpvId = after.at(0)?.exclude_list_id;
+      expect(cpvId).toBeDefined();
+
+      const cpv = db
+        .prepare(
+          "SELECT id, collection_id, version_operation_status FROM collection_people_versions WHERE id = ?",
+        )
+        .get(cpvId as number) as {
+        id: number;
+        collection_id: number;
+        version_operation_status: string;
+      };
+      expect(cpv).toBeDefined();
+      expect(cpv.version_operation_status).toBe("addToTarget");
+
+      const collection = db
+        .prepare(
+          "SELECT id, li_account_id FROM collections WHERE id = ?",
+        )
+        .get(cpv.collection_id) as { id: number; li_account_id: number };
+      expect(collection).toBeDefined();
+      expect(collection.li_account_id).toBe(1);
+    });
+
+    it("creates separate exclude lists per action", () => {
+      // Add a second action to campaign 1
+      db.exec(`
+        INSERT INTO action_configs (id, actionType, coolDown, maxActionResultsPerIteration, isDraft)
+        VALUES (99, 'VisitAndExtract', 60000, 10, 0);
+        INSERT INTO actions (id, campaign_id, name)
+        VALUES (99, 1, 'Second Action');
+        INSERT INTO action_versions (id, action_id, config_id)
+        VALUES (99, 99, 99);
+      `);
+
+      repo.createActionExcludeLists(1, 1);
+
+      // Both actions should have distinct exclude_list_ids
+      const av1 = db
+        .prepare(
+          "SELECT exclude_list_id FROM action_versions WHERE action_id = 1",
+        )
+        .get() as { exclude_list_id: number };
+      const av99 = db
+        .prepare(
+          "SELECT exclude_list_id FROM action_versions WHERE action_id = 99",
+        )
+        .get() as { exclude_list_id: number };
+
+      expect(av1.exclude_list_id).not.toBeNull();
+      expect(av99.exclude_list_id).not.toBeNull();
+      expect(av1.exclude_list_id).not.toBe(av99.exclude_list_id);
+    });
+
+    it("handles campaign with no actions", () => {
+      // Campaign 3 has no actions
+      expect(() => repo.createActionExcludeLists(3, 1)).not.toThrow();
+    });
+
+    it("throws CampaignNotFoundError for missing campaign", () => {
+      expect(() => repo.createActionExcludeLists(999, 1)).toThrow(
+        CampaignNotFoundError,
+      );
+    });
+
+    it("uses the provided liAccountId for collections", () => {
+      repo.createActionExcludeLists(1, 5);
+
+      const av = db
+        .prepare(
+          "SELECT exclude_list_id FROM action_versions WHERE action_id = 1",
+        )
+        .get() as { exclude_list_id: number };
+
+      const cpv = db
+        .prepare(
+          "SELECT collection_id FROM collection_people_versions WHERE id = ?",
+        )
+        .get(av.exclude_list_id) as { collection_id: number };
+
+      const collection = db
+        .prepare("SELECT li_account_id FROM collections WHERE id = ?")
+        .get(cpv.collection_id) as { li_account_id: number };
+
+      expect(collection.li_account_id).toBe(5);
+    });
+  });
+
   describe("resetForRerun", () => {
     it("resets person state for re-run", () => {
       // Initial state: person 1 has state=2 (processed), person 3 has state=1 (queued)

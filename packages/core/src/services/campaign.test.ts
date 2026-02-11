@@ -27,6 +27,7 @@ const mockGetCampaign = vi.fn();
 const mockGetCampaignActions = vi.fn();
 const mockGetResults = vi.fn();
 const mockFixIsValid = vi.fn();
+const mockCreateActionExcludeLists = vi.fn();
 const mockResetForRerun = vi.fn();
 
 vi.mock("../db/index.js", async (importOriginal) => {
@@ -38,6 +39,7 @@ vi.mock("../db/index.js", async (importOriginal) => {
       this.getCampaignActions = mockGetCampaignActions;
       this.getResults = mockGetResults;
       this.fixIsValid = mockFixIsValid;
+      this.createActionExcludeLists = mockCreateActionExcludeLists;
       this.resetForRerun = mockResetForRerun;
     }),
     CampaignNotFoundError: original.CampaignNotFoundError,
@@ -196,6 +198,34 @@ describe("CampaignService", () => {
 
       expect(mockFixIsValid).toHaveBeenCalledWith(5);
       expect(mockFixIsValid).toHaveBeenCalledBefore(mockGetCampaign);
+    });
+
+    it("creates action-level exclude lists after CDP creation", async () => {
+      mockEvaluateUI.mockResolvedValueOnce({ id: 5 });
+      mockGetCampaign.mockReturnValue({ ...MOCK_CAMPAIGN, id: 5 });
+
+      await service.create({
+        name: "New Campaign",
+        actions: [{ name: "Visit", actionType: "VisitAndExtract" }],
+      });
+
+      expect(mockCreateActionExcludeLists).toHaveBeenCalledWith(5, 1);
+      expect(mockCreateActionExcludeLists).toHaveBeenCalledBefore(
+        mockGetCampaign,
+      );
+    });
+
+    it("uses custom liAccountId for action exclude lists", async () => {
+      mockEvaluateUI.mockResolvedValueOnce({ id: 5 });
+      mockGetCampaign.mockReturnValue({ ...MOCK_CAMPAIGN, id: 5 });
+
+      await service.create({
+        name: "Test",
+        liAccountId: 3,
+        actions: [{ name: "Visit", actionType: "VisitAndExtract" }],
+      });
+
+      expect(mockCreateActionExcludeLists).toHaveBeenCalledWith(5, 3);
     });
 
     it("throws CampaignExecutionError when CDP call fails", async () => {
