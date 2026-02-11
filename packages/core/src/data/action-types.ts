@@ -262,14 +262,20 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
     description: "Follow or unfollow a LinkedIn profile.",
     category: "engagement",
     configSchema: {
-      unfollow: {
-        type: "boolean",
+      mode: {
+        type: "string",
         required: false,
-        description: "If true, unfollow instead of follow.",
-        default: false,
+        description:
+          'Follow or unfollow the person. Must be "follow" or "unfollow" (default: follow).',
+        default: "follow",
+      },
+      skipIfUnfollowable: {
+        type: "boolean",
+        required: true,
+        description: "Skip if person can't be unfollowed.",
       },
     },
-    example: { unfollow: false },
+    example: { mode: "follow", skipIfUnfollowable: true },
   },
   {
     name: "EndorseSkills",

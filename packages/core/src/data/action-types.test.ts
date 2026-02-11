@@ -389,6 +389,30 @@ describe("getActionTypeInfo", () => {
     });
   });
 
+  it("returns correct fields for Follow", () => {
+    const info = getActionTypeInfo("Follow");
+    expect(info).toBeDefined();
+    if (info === undefined) throw new Error("Expected info");
+    expect(info.category).toBe("engagement");
+    expect(info.configSchema).toHaveProperty("mode");
+    expect(info.configSchema).toHaveProperty("skipIfUnfollowable");
+    const modeField = info.configSchema["mode"];
+    expect(modeField).toBeDefined();
+    if (modeField === undefined) throw new Error("Expected field");
+    expect(modeField.type).toBe("string");
+    expect(modeField.required).toBe(false);
+    expect(modeField.default).toBe("follow");
+    const skipField = info.configSchema["skipIfUnfollowable"];
+    expect(skipField).toBeDefined();
+    if (skipField === undefined) throw new Error("Expected field");
+    expect(skipField.type).toBe("boolean");
+    expect(skipField.required).toBe(true);
+    expect(info.example).toEqual({
+      mode: "follow",
+      skipIfUnfollowable: true,
+    });
+  });
+
   it("returns correct fields for EndorseSkills", () => {
     const info = getActionTypeInfo("EndorseSkills");
     expect(info).toBeDefined();
