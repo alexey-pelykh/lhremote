@@ -143,6 +143,23 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
         description: "Skip person if they already replied.",
         default: false,
       },
+      rejectIfRepliedWithinCampaign: {
+        type: "boolean",
+        required: false,
+        description: "Skip if person replied within this campaign.",
+      },
+      proceedOnOutOfCredits: {
+        type: "boolean",
+        required: false,
+        description:
+          "Continue processing even when InMail credits are exhausted.",
+      },
+      textInputMethod: {
+        type: "string",
+        required: false,
+        description:
+          'How to input text — "insert", "type", or "random".',
+      },
     },
     example: {
       messageTemplate: {
@@ -150,10 +167,24 @@ const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
         variants: [
           {
             type: "variant",
-            child: { type: "text", value: "I would like to connect." },
+            child: {
+              type: "group",
+              children: [
+                { type: "text", value: "Hi " },
+                { type: "var", name: "firstName" },
+                { type: "text", value: ", message body here" },
+              ],
+            },
           },
         ],
       },
+      subjectTemplate: {
+        type: "group",
+        children: [
+          { type: "text", value: "Subject line here" },
+        ],
+      },
+      rejectIfRepliedWithinCampaign: false,
     },
   },
   {

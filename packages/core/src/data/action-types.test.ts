@@ -309,6 +309,58 @@ describe("getActionTypeInfo", () => {
     });
   });
 
+  it("returns correct fields for InMail", () => {
+    const info = getActionTypeInfo("InMail");
+    expect(info).toBeDefined();
+    if (info === undefined) throw new Error("Expected info");
+    expect(info.category).toBe("messaging");
+    expect(info.configSchema).toHaveProperty("messageTemplate");
+    expect(info.configSchema).toHaveProperty("subjectTemplate");
+    expect(info.configSchema).toHaveProperty("rejectIfReplied");
+    expect(info.configSchema).toHaveProperty("rejectIfRepliedWithinCampaign");
+    expect(info.configSchema).toHaveProperty("proceedOnOutOfCredits");
+    expect(info.configSchema).toHaveProperty("textInputMethod");
+    const messageField = info.configSchema["messageTemplate"];
+    expect(messageField).toBeDefined();
+    if (messageField === undefined) throw new Error("Expected field");
+    expect(messageField.type).toBe("object");
+    expect(messageField.required).toBe(true);
+    const subjectField = info.configSchema["subjectTemplate"];
+    expect(subjectField).toBeDefined();
+    if (subjectField === undefined) throw new Error("Expected field");
+    expect(subjectField.type).toBe("object");
+    expect(subjectField.required).toBe(false);
+    const rejectField = info.configSchema["rejectIfReplied"];
+    expect(rejectField).toBeDefined();
+    if (rejectField === undefined) throw new Error("Expected field");
+    expect(rejectField.type).toBe("boolean");
+    expect(rejectField.required).toBe(false);
+    expect(rejectField.default).toBe(false);
+    expect(info.example).toEqual({
+      messageTemplate: {
+        type: "variants",
+        variants: [
+          {
+            type: "variant",
+            child: {
+              type: "group",
+              children: [
+                { type: "text", value: "Hi " },
+                { type: "var", name: "firstName" },
+                { type: "text", value: ", message body here" },
+              ],
+            },
+          },
+        ],
+      },
+      subjectTemplate: {
+        type: "group",
+        children: [{ type: "text", value: "Subject line here" }],
+      },
+      rejectIfRepliedWithinCampaign: false,
+    });
+  });
+
   it("returns correct fields for FilterContactsOutOfMyNetwork", () => {
     const info = getActionTypeInfo("FilterContactsOutOfMyNetwork");
     expect(info).toBeDefined();
