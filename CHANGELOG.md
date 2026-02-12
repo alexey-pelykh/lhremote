@@ -16,8 +16,8 @@ All notable changes to this project will be documented in this file.
 - `campaign-move-next` tool for advancing campaign queue position
 - `campaign-statistics` tool for campaign execution metrics
 - `import-people-from-urls` tool for bulk-importing LinkedIn profiles into campaigns
-- Campaign action chain management tools for reordering and modifying action sequences
-- Exclude list management tools for campaign-level contact exclusions
+- Campaign action chain management capabilities in `campaign-create` and `campaign-update` tools for reordering and modifying action sequences
+- Exclude list management capabilities in `campaign-create` and `campaign-update` tools for campaign-level contact exclusions
 - `query-messages` tool for searching LinkedIn messaging history
 - `scrape-messaging-history` tool for extracting full conversation threads
 - `check-replies` tool for detecting new message replies
@@ -30,7 +30,7 @@ All notable changes to this project will be documented in this file.
 - CampaignService for campaign lifecycle and execution management
 - Action execution service for running LinkedHelper actions programmatically
 - Action types catalog with advanced configuration schemas for all LinkedHelper action types
-- Messaging database repositories for conversation and message access
+- `MessageRepository` for conversation and message database access
 - URL validation for `navigateToProfile` to reject malformed LinkedIn URLs
 - GitHub Pages documentation site built via pandoc on every CI run
 - Test coverage reporting with Codecov integration
@@ -39,7 +39,7 @@ All notable changes to this project will be documented in this file.
 
 - Replaced `better-sqlite3` with Node.js built-in `node:sqlite` module
 - Pinned GitHub Actions to commit SHAs for supply-chain security
-- Added timeout-minutes to all CI workflow jobs
+- Added `timeout-minutes` to all CI workflow jobs
 
 ### Removed
 
