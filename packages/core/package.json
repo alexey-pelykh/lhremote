@@ -36,7 +36,7 @@
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "playwright-core": "catalog:",
-    "typedoc": "^0.28.16",
+    "typedoc": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
