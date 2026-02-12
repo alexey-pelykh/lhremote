@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import { CDPClient, discoverTargets } from "../cdp/index.js";
 import type { CdpTarget } from "../types/cdp.js";
 import { delay } from "../utils/delay.js";

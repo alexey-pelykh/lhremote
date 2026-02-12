@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import { discoverInstancePort } from "../cdp/index.js";
 import { DatabaseClient, discoverAllDatabases } from "../db/index.js";
 import { LauncherService } from "./launcher.js";

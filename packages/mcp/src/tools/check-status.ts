@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { checkStatus, errorMessage } from "@lhremote/core";
 import { z } from "zod";

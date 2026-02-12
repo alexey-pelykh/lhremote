@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import { type ChildProcess, spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";

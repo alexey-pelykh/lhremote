@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import { discoverInstancePort } from "../cdp/index.js";
 import { delay } from "../utils/delay.js";
 import type { LauncherService } from "./launcher.js";

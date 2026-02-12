@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import type { Account } from "../types/index.js";
 import { LauncherService } from "./launcher.js";
 import { ServiceError } from "./errors.js";

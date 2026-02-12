@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import { createRequire } from "node:module";
 
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";

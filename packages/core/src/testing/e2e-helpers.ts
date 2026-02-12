@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import { describe } from "vitest";
 import { AppService, type AppServiceOptions } from "../services/app.js";
 import { AppNotFoundError } from "../services/errors.js";
