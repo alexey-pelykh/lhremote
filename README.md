@@ -15,12 +15,13 @@ This project is brought to you by [Alexey Pelykh](https://github.com/alexey-pely
 
 lhremote lets AI assistants (Claude, etc.) control LinkedHelper through the [Model Context Protocol](https://modelcontextprotocol.io). It can:
 
-- Detect running LinkedHelper instances and their CDP connection details
-- Launch and quit the LinkedHelper application
-- List configured LinkedIn accounts
-- Start and stop LinkedHelper instances
-- Visit LinkedIn profiles and extract structured data (name, positions, education, skills, emails)
-- Check connection status, running instances, and database health
+- **App management** — detect, launch, and quit LinkedHelper instances
+- **Account & instance control** — list accounts, start/stop instances, check status
+- **Campaign automation** — create, configure, start, stop, and monitor campaigns with full action-chain management
+- **People import** — import LinkedIn profile URLs into campaign target lists
+- **Profile queries** — look up and search cached LinkedIn profiles from the local database
+- **Messaging** — query messaging history, check for new replies, scrape conversations from LinkedIn
+- **Action discovery** — list available LinkedHelper action types with configuration schemas
 
 ## Prerequisites
 
@@ -54,41 +55,100 @@ Add to your Claude Desktop configuration (`claude_desktop_config.json`):
 }
 ```
 
-Once configured, Claude can use the tools directly. A typical workflow:
+Once configured, Claude can use all 32 tools directly. A typical workflow:
 
-1. **`find-app`** - Detect a running LinkedHelper instance (or **`launch-app`** to start one)
-2. **`list-accounts`** - See available LinkedIn accounts
-3. **`start-instance`** - Start an instance for an account
-4. **`visit-and-extract`** - Visit a profile and get structured data
-5. **`stop-instance`** - Stop the instance when done
-6. **`quit-app`** - Quit LinkedHelper
+1. **`find-app`** — Detect a running LinkedHelper instance (or **`launch-app`** to start one)
+2. **`list-accounts`** — See available LinkedIn accounts
+3. **`start-instance`** — Start an instance for an account
+4. **`describe-actions`** — Explore available action types
+5. **`campaign-create`** — Create a campaign from YAML/JSON configuration
+6. **`import-people-from-urls`** — Import target LinkedIn profiles into the campaign
+7. **`campaign-start`** — Run the campaign
+8. **`campaign-status`** / **`campaign-statistics`** — Monitor progress
+9. **`query-messages`** / **`check-replies`** — Review messaging results
 
 ## CLI Usage
 
-The `lhremote` command provides the same functionality as the MCP server:
+The `lhremote` command provides the same functionality as the MCP server. Every MCP tool has a corresponding CLI command.
+
+### App Management
 
 ```sh
 lhremote find-app [--json]
 lhremote launch-app [--cdp-port <port>]
 lhremote quit-app [--cdp-port <port>]
+```
+
+### Account & Instance
+
+```sh
 lhremote list-accounts [--cdp-port <port>] [--json]
 lhremote start-instance <accountId> [--cdp-port <port>]
 lhremote stop-instance <accountId> [--cdp-port <port>]
-lhremote visit-and-extract <profileUrl> [--cdp-port <port>] [--json]
 lhremote check-status [--cdp-port <port>] [--json]
+```
+
+### Campaigns
+
+```sh
+lhremote campaign-list [--include-archived] [--json]
+lhremote campaign-create --file <path> | --yaml <config> | --json-input <config> [--cdp-port <port>] [--json]
+lhremote campaign-get <campaignId> [--cdp-port <port>] [--json]
+lhremote campaign-export <campaignId> [--format yaml|json] [--output <path>] [--cdp-port <port>]
+lhremote campaign-update <campaignId> [--name <name>] [--description <text>] [--clear-description] [--cdp-port <port>] [--json]
+lhremote campaign-delete <campaignId> [--cdp-port <port>] [--json]
+lhremote campaign-start <campaignId> [--person-ids <ids>] [--person-ids-file <path>] [--cdp-port <port>] [--json]
+lhremote campaign-stop <campaignId> [--cdp-port <port>] [--json]
+lhremote campaign-status <campaignId> [--include-results] [--limit <n>] [--cdp-port <port>] [--json]
+lhremote campaign-statistics <campaignId> [--action-id <id>] [--max-errors <n>] [--cdp-port <port>] [--json]
+lhremote campaign-retry <campaignId> [--person-ids <ids>] [--person-ids-file <path>] [--cdp-port <port>] [--json]
+```
+
+### Campaign Actions
+
+```sh
+lhremote campaign-add-action <campaignId> --name <name> --action-type <type> [--description <text>] [--cool-down <ms>] [--max-results <n>] [--action-settings <json>] [--cdp-port <port>] [--json]
+lhremote campaign-remove-action <campaignId> <actionId> [--cdp-port <port>] [--json]
+lhremote campaign-reorder-actions <campaignId> --action-ids <ids> [--cdp-port <port>] [--json]
+lhremote campaign-move-next <campaignId> <actionId> [--person-ids <ids>] [--person-ids-file <path>] [--cdp-port <port>] [--json]
+```
+
+### Campaign Targeting
+
+```sh
+lhremote campaign-exclude-list <campaignId> [--action-id <id>] [--cdp-port <port>] [--json]
+lhremote campaign-exclude-add <campaignId> --person-ids <ids> | --person-ids-file <path> [--action-id <id>] [--cdp-port <port>] [--json]
+lhremote campaign-exclude-remove <campaignId> --person-ids <ids> | --person-ids-file <path> [--action-id <id>] [--cdp-port <port>] [--json]
+lhremote import-people-from-urls <campaignId> --urls <urls> | --urls-file <path> [--cdp-port <port>] [--json]
+```
+
+### Profiles & Messaging
+
+```sh
+lhremote query-profile --person-id <id> | --public-id <slug> [--json]
+lhremote query-profiles [--query <text>] [--company <name>] [--limit <n>] [--offset <n>] [--json]
+lhremote query-messages [--person-id <id>] [--chat-id <id>] [--search <text>] [--limit <n>] [--offset <n>] [--json]
+lhremote check-replies [--since <timestamp>] [--cdp-port <port>] [--json]
+lhremote scrape-messaging-history [--cdp-port <port>] [--json]
+```
+
+### Utilities
+
+```sh
+lhremote describe-actions [--category <category>] [--type <type>] [--json]
 ```
 
 ## MCP Tools
 
-### `find-app`
+### App Management
 
-Detect running LinkedHelper application instances and their CDP connection details. Useful when the app is already running and you need to discover which port to connect on.
+#### `find-app`
+
+Detect running LinkedHelper application instances and their CDP connection details.
 
 *No parameters.*
 
-Returns an array of discovered instances, each with `pid`, `cdpPort`, and `connectable` status.
-
-### `launch-app`
+#### `launch-app`
 
 Launch the LinkedHelper application with remote debugging enabled.
 
@@ -96,7 +156,7 @@ Launch the LinkedHelper application with remote debugging enabled.
 |-----------|------|----------|---------|-------------|
 | `cdpPort` | number | No | auto-select | CDP port to use |
 
-### `quit-app`
+#### `quit-app`
 
 Quit the LinkedHelper application.
 
@@ -104,7 +164,9 @@ Quit the LinkedHelper application.
 |-----------|------|----------|---------|-------------|
 | `cdpPort` | number | No | 9222 | CDP port |
 
-### `list-accounts`
+### Account & Instance
+
+#### `list-accounts`
 
 List available LinkedHelper accounts. Returns account ID, LinkedIn ID, name, and email for each account.
 
@@ -112,16 +174,16 @@ List available LinkedHelper accounts. Returns account ID, LinkedIn ID, name, and
 |-----------|------|----------|---------|-------------|
 | `cdpPort` | number | No | 9222 | CDP port |
 
-### `start-instance`
+#### `start-instance`
 
-Start a LinkedHelper instance for a LinkedIn account. Required before `visit-and-extract`.
+Start a LinkedHelper instance for a LinkedIn account.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `accountId` | number | No | auto-select if single account | Account ID |
 | `cdpPort` | number | No | 9222 | CDP port |
 
-### `stop-instance`
+#### `stop-instance`
 
 Stop a running LinkedHelper instance.
 
@@ -130,16 +192,7 @@ Stop a running LinkedHelper instance.
 | `accountId` | number | No | auto-select if single account | Account ID |
 | `cdpPort` | number | No | 9222 | CDP port |
 
-### `visit-and-extract`
-
-Visit a LinkedIn profile via LinkedHelper and extract all available data (name, positions, education, skills, emails). Requires a running instance.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `profileUrl` | string | Yes | - | LinkedIn profile URL (e.g., `https://www.linkedin.com/in/username`) |
-| `cdpPort` | number | No | 9222 | CDP port |
-
-### `check-status`
+#### `check-status`
 
 Check LinkedHelper connection status, running instances, and database health.
 
@@ -147,11 +200,277 @@ Check LinkedHelper connection status, running instances, and database health.
 |-----------|------|----------|---------|-------------|
 | `cdpPort` | number | No | 9222 | CDP port |
 
+### Campaigns
+
+#### `campaign-list`
+
+List existing campaigns with summary statistics.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `includeArchived` | boolean | No | false | Include archived campaigns |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-create`
+
+Create a new campaign from YAML or JSON configuration. Provide exactly one of `yamlConfig` or `jsonConfig`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `yamlConfig` | string | No | — | YAML campaign configuration |
+| `jsonConfig` | string | No | — | JSON campaign configuration |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-get`
+
+Get detailed campaign information including action chain.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-export`
+
+Export campaign configuration as YAML or JSON.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `format` | string | No | yaml | Export format (`yaml` or `json`) |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-update`
+
+Update a campaign's name and/or description.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `name` | string | No | — | New campaign name |
+| `description` | string | No | — | New description (empty string to clear) |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-delete`
+
+Delete (archive) a campaign.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-start`
+
+Start a campaign with specified target persons.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `personIds` | number[] | No | — | Person IDs to target |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-stop`
+
+Stop a running campaign.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-status`
+
+Check campaign execution status and results.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `includeResults` | boolean | No | false | Include execution results |
+| `limit` | number | No | 20 | Max results to return |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-statistics`
+
+Get per-action statistics for a campaign.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `actionId` | number | No | — | Filter to a specific action |
+| `maxErrors` | number | No | 5 | Max top errors per action |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-retry`
+
+Reset specified people for re-run in a campaign.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `personIds` | number[] | No | — | Person IDs to retry |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+### Campaign Actions
+
+#### `campaign-add-action`
+
+Add a new action to a campaign's action chain. Use `describe-actions` to explore available action types.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `name` | string | Yes | — | Display name for the action |
+| `actionType` | string | Yes | — | Action type (e.g., `VisitAndExtract`, `MessageToPerson`) |
+| `description` | string | No | — | Action description |
+| `coolDown` | number | No | — | Milliseconds between executions |
+| `maxResults` | number | No | — | Max results per iteration (-1 for unlimited) |
+| `actionSettings` | object | No | — | Action-specific settings |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-remove-action`
+
+Remove an action from a campaign's action chain.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `actionId` | number | Yes | — | Action ID to remove |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-reorder-actions`
+
+Reorder actions in a campaign's action chain.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `actionIds` | number[] | Yes | — | Action IDs in desired order |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-move-next`
+
+Move people from one action to the next in a campaign.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `actionId` | number | Yes | — | Action ID to move people from |
+| `personIds` | number[] | No | — | Person IDs to move |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+### Campaign Targeting
+
+#### `campaign-exclude-list`
+
+View the exclude list for a campaign or action.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `actionId` | number | No | — | Action ID (for action-level list) |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-exclude-add`
+
+Add people to a campaign or action exclude list.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `personIds` | number[] | Yes | — | Person IDs to exclude |
+| `actionId` | number | No | — | Action ID (for action-level list) |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-exclude-remove`
+
+Remove people from a campaign or action exclude list.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `personIds` | number[] | Yes | — | Person IDs to remove from exclude list |
+| `actionId` | number | No | — | Action ID (for action-level list) |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `import-people-from-urls`
+
+Import LinkedIn profile URLs into a campaign action target list. Idempotent — previously imported URLs are skipped.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `urls` | string[] | Yes | — | LinkedIn profile URLs |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+### Profiles & Messaging
+
+#### `query-profile`
+
+Look up a cached LinkedIn profile from the local database by person ID or public ID.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personId` | number | No | — | Internal person ID |
+| `publicId` | string | No | — | LinkedIn public ID (URL slug) |
+
+#### `query-profiles`
+
+Search for profiles in the local database with name, headline, or company filters.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `query` | string | No | — | Search name or headline |
+| `company` | string | No | — | Filter by company |
+| `limit` | number | No | 20 | Max results |
+| `offset` | number | No | 0 | Pagination offset |
+
+#### `query-messages`
+
+Query messaging history from the local database.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personId` | number | No | — | Filter by person ID |
+| `chatId` | number | No | — | Show specific conversation thread |
+| `search` | string | No | — | Search message text |
+| `limit` | number | No | 20 | Max results |
+| `offset` | number | No | 0 | Pagination offset |
+
+#### `check-replies`
+
+Check for new message replies from LinkedIn.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `since` | string | No | — | Only show replies after this ISO timestamp |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `scrape-messaging-history`
+
+Scrape all messaging history from LinkedIn into the local database. This is a long-running operation that navigates LinkedIn's messaging interface.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `cdpPort` | number | No | 9222 | CDP port |
+
+### Utilities
+
+#### `describe-actions`
+
+List available LinkedHelper action types with descriptions and configuration schemas.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `category` | string | No | — | Filter by category (`people`, `messaging`, `engagement`, `crm`, `workflow`) |
+| `actionType` | string | No | — | Get details for a specific action type |
+
 ## Known Limitations
 
-- **Single account for visit-and-extract**: When multiple accounts are configured, `visit-and-extract` cannot select which account to use. Use `start-instance` with an explicit `accountId` first.
 - **Platform support**: LinkedHelper runs on macOS, Windows, and Linux. Binary paths are detected automatically but can be overridden with the `LINKEDHELPER_PATH` environment variable.
 - **Instance startup time**: Starting an instance loads LinkedIn, which may take up to 45 seconds.
+- **Profile data is cached**: `query-profile` and `query-profiles` search the local LinkedHelper database. Profiles must have been visited or imported by LinkedHelper to appear in results.
+- **Messaging scrape is slow**: `scrape-messaging-history` navigates LinkedIn's messaging UI and can take several minutes depending on conversation volume.
 
 ## Troubleshooting
 
@@ -183,19 +502,13 @@ Check LinkedHelper connection status, running instances, and database health.
 
 **Error**: `No LinkedHelper instance is running. Use start-instance first.`
 
-**Solution**: Run `start-instance` before using `visit-and-extract`. An instance must be running to interact with LinkedIn.
+**Solution**: Run `start-instance` before using campaign or messaging tools. An instance must be running to interact with LinkedIn.
 
 ### Instance initialization timeout
 
 **Error**: `Instance started but failed to initialize within timeout.`
 
 **Solution**: The instance was started but took too long to finish loading. This can happen on slow connections. Try again; the instance may still be starting in the background. Use `check-status` to verify.
-
-### Profile extraction timeout
-
-**Error**: `Profile extraction timed out. The profile may not have loaded correctly.`
-
-**Solution**: The LinkedIn profile page did not load within the expected time. Check that the profile URL is valid and that LinkedIn is accessible from the LinkedHelper instance. Try again.
 
 ### Database not found
 
