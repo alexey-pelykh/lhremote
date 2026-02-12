@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeE2E, launchApp, quitApp, retryAsync } from "../testing/e2e-helpers.js";
 import { findApp, type DiscoveredApp } from "../cdp/app-discovery.js";

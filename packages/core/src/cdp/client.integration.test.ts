@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CDPClient } from "./client.js";
 import { CDPEvaluationError } from "./errors.js";

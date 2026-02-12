@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import { type ChildProcess, spawn } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { join } from "node:path";

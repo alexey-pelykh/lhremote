@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { errorMessage } from "../utils/error-message.js";

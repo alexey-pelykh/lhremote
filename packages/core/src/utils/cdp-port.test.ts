@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2025 Alexey Pelykh
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isCdpPort } from "./cdp-port.js";
 
