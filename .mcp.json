@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "lhremote": {
+      "command": "npx",
+      "args": ["lhremote", "mcp"]
+    }
+  }
+}
