@@ -14,7 +14,7 @@
  *   1 — one or more licenses are not on the allow-list
  */
 
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 
 const ALLOWED_LICENSES = new Set([
   "MIT",
@@ -30,7 +30,7 @@ const ALLOWED_LICENSES = new Set([
   "CC-BY-4.0",
 ]);
 
-const output = execFileSync("pnpm", ["licenses", "list", "--prod", "--json"], {
+const output = execSync("pnpm licenses list --prod --json", {
   encoding: "utf-8",
 });
 const licenseMap = JSON.parse(output);
