@@ -37,6 +37,7 @@ function readPersonIdsFile(filePath: string): number[] {
     });
 }
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-retry} CLI command. */
 export async function handleCampaignRetry(
   campaignId: number,
   options: {

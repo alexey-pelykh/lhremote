@@ -12,6 +12,7 @@ import {
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-create | campaign-create} MCP tool. */
 export function registerCampaignCreate(server: McpServer): void {
   server.tool(
     "campaign-create",

@@ -40,6 +40,7 @@ function readPersonIdsFile(filePath: string): number[] {
     });
 }
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-start} CLI command. */
 export async function handleCampaignStart(
   campaignId: number,
   options: {

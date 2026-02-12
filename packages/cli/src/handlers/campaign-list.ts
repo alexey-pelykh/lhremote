@@ -6,6 +6,7 @@ import {
   errorMessage,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-list} CLI command. */
 export async function handleCampaignList(options: {
   includeArchived?: boolean;
   json?: boolean;

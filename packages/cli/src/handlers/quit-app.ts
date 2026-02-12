@@ -1,5 +1,6 @@
 import { AppService, errorMessage } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#app-management | quit-app} CLI command. */
 export async function handleQuitApp(options: {
   cdpPort?: number;
 }): Promise<void> {

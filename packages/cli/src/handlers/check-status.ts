@@ -1,5 +1,6 @@
 import { checkStatus, errorMessage } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | check-status} CLI command. */
 export async function handleCheckStatus(options: {
   cdpPort?: number;
   json?: boolean;

@@ -6,6 +6,7 @@ import {
   withDatabase,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-actions | campaign-add-action} CLI command. */
 export async function handleCampaignAddAction(
   campaignId: number,
   options: {

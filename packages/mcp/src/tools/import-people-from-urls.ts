@@ -9,6 +9,7 @@ import {
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#import-people-from-urls | import-people-from-urls} MCP tool. */
 export function registerImportPeopleFromUrls(server: McpServer): void {
   server.tool(
     "import-people-from-urls",

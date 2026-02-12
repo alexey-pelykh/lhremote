@@ -7,6 +7,7 @@ import {
   ProfileRepository,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | query-profile} CLI command. */
 export async function handleQueryProfile(options: {
   personId?: number;
   publicId?: string;

@@ -9,6 +9,7 @@ import {
   withInstanceDatabase,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-actions | campaign-reorder-actions} CLI command. */
 export async function handleCampaignReorderActions(
   campaignId: number,
   options: {

@@ -10,6 +10,7 @@ import {
   withDatabase,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-export} CLI command. */
 export async function handleCampaignExport(
   campaignId: number,
   options: {

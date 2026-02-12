@@ -4,6 +4,7 @@ import {
   getActionTypeInfo,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#utilities | describe-actions} CLI command. */
 export function handleDescribeActions(options: {
   category?: string;
   type?: string;

@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { errorMessage, findApp } from "@lhremote/core";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#find-app | find-app} MCP tool. */
 export function registerFindApp(server: McpServer): void {
   server.tool(
     "find-app",

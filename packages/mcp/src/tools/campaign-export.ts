@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-export | campaign-export} MCP tool. */
 export function registerCampaignExport(server: McpServer): void {
   server.tool(
     "campaign-export",

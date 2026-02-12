@@ -8,6 +8,7 @@ import {
   withDatabase,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-targeting | campaign-exclude-list} CLI command. */
 export async function handleCampaignExcludeList(
   campaignId: number,
   options: {

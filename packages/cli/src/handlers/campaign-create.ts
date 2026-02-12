@@ -13,6 +13,7 @@ import {
   withInstanceDatabase,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-create} CLI command. */
 export async function handleCampaignCreate(options: {
   file?: string;
   yaml?: string;

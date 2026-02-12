@@ -8,6 +8,7 @@ import {
   withInstanceDatabase,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-status} CLI command. */
 export async function handleCampaignStatus(
   campaignId: number,
   options: {

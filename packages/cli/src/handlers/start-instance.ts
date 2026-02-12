@@ -4,6 +4,7 @@ import {
   startInstanceWithRecovery,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | start-instance} CLI command. */
 export async function handleStartInstance(
   accountIdArg: string,
   options: { cdpPort?: number },

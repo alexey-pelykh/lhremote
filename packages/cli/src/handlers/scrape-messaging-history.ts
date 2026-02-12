@@ -7,6 +7,7 @@ import {
   withInstanceDatabase,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | scrape-messaging-history} CLI command. */
 export async function handleScrapeMessagingHistory(options: {
   cdpPort?: number;
   json?: boolean;

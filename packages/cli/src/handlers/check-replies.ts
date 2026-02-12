@@ -7,6 +7,7 @@ import {
   withInstanceDatabase,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | check-replies} CLI command. */
 export async function handleCheckReplies(options: {
   since?: string;
   cdpPort?: number;

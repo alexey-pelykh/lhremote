@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AppService, errorMessage } from "@lhremote/core";
 import { z } from "zod";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#quit-app | quit-app} MCP tool. */
 export function registerQuitApp(server: McpServer): void {
   server.tool(
     "quit-app",

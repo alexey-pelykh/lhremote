@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-move-next | campaign-move-next} MCP tool. */
 export function registerCampaignMoveNext(server: McpServer): void {
   server.tool(
     "campaign-move-next",

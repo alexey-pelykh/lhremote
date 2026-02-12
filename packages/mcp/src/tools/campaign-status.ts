@@ -9,6 +9,7 @@ import {
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-status | campaign-status} MCP tool. */
 export function registerCampaignStatus(server: McpServer): void {
   server.tool(
     "campaign-status",

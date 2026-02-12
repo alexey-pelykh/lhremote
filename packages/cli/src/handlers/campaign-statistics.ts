@@ -7,6 +7,7 @@ import {
   withDatabase,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-statistics} CLI command. */
 export async function handleCampaignStatistics(
   campaignId: number,
   options: {

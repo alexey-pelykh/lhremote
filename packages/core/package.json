@@ -29,12 +29,14 @@
     "test": "vitest run",
     "test:e2e": "vitest run --config ../../vitest.e2e.config.ts",
     "lint": "eslint src/",
+    "docs": "typedoc",
     "dev": "tsc --watch"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "playwright-core": "catalog:",
+    "typedoc": "^0.28.16",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

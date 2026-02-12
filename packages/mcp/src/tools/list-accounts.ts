@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { errorMessage, LauncherService, LinkedHelperNotRunningError } from "@lhremote/core";
 import { z } from "zod";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#list-accounts | list-accounts} MCP tool. */
 export function registerListAccounts(server: McpServer): void {
   server.tool(
     "list-accounts",

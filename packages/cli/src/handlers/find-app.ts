@@ -1,5 +1,6 @@
 import { errorMessage, findApp } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#app-management | find-app} CLI command. */
 export async function handleFindApp(options: {
   json?: boolean;
 }): Promise<void> {

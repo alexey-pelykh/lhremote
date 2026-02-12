@@ -8,6 +8,7 @@ import {
 } from "@lhremote/core";
 import { z } from "zod";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#query-profiles | query-profiles} MCP tool. */
 export function registerQueryProfiles(server: McpServer): void {
   server.tool(
     "query-profiles",

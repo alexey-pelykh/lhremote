@@ -6,6 +6,7 @@ import {
   type ProfileSearchResult,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | query-profiles} CLI command. */
 export async function handleQueryProfiles(options: {
   query?: string;
   company?: string;

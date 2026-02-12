@@ -9,6 +9,7 @@ import {
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-stop | campaign-stop} MCP tool. */
 export function registerCampaignStop(server: McpServer): void {
   server.tool(
     "campaign-stop",

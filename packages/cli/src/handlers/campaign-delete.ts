@@ -8,6 +8,7 @@ import {
   withInstanceDatabase,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-delete} CLI command. */
 export async function handleCampaignDelete(
   campaignId: number,
   options: {

@@ -51,6 +51,11 @@ jobs:
       - name: Set up GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
 
+      - uses: ./.github/actions/setup
+
+      - name: Build packages
+        run: pnpm build
+
       - name: Build docs
         run: |
           command -v pandoc || (sudo apt-get update && sudo apt-get install -y pandoc)
@@ -59,6 +64,8 @@ jobs:
           pandoc \
             -f gfm -t html5 -s --shift-heading-level-by=-1 --lua-filter=gh-pages/filter.lua -H gh-pages/header.html \
             -o build/gh-pages/index.html gh-pages/metadata.md README.md
+
+          pnpm --filter @lhremote/core docs
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0

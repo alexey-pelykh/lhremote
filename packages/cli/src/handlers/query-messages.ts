@@ -9,6 +9,7 @@ import {
   MessageRepository,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | query-messages} CLI command. */
 export async function handleQueryMessages(options: {
   personId?: number;
   chatId?: number;

@@ -8,6 +8,7 @@ import {
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#query-messages | query-messages} MCP tool. */
 export function registerQueryMessages(server: McpServer): void {
   server.tool(
     "query-messages",

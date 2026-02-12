@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AppLaunchError, AppNotFoundError, AppService, errorMessage } from "@lhremote/core";
 import { z } from "zod";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#launch-app | launch-app} MCP tool. */
 export function registerLaunchApp(server: McpServer): void {
   server.tool(
     "launch-app",

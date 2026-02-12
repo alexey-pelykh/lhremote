@@ -1,5 +1,6 @@
 import { errorMessage, LauncherService } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | stop-instance} CLI command. */
 export async function handleStopInstance(
   accountIdArg: string,
   options: { cdpPort?: number },

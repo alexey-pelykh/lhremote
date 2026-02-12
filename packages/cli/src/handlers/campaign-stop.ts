@@ -8,6 +8,7 @@ import {
   withInstanceDatabase,
 } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-stop} CLI command. */
 export async function handleCampaignStop(
   campaignId: number,
   options: {

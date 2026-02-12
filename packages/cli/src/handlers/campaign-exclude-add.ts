@@ -39,6 +39,7 @@ function readPersonIdsFile(filePath: string): number[] {
     });
 }
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-targeting | campaign-exclude-add} CLI command. */
 export async function handleCampaignExcludeAdd(
   campaignId: number,
   options: {

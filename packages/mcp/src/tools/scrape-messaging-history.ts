@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 import { mcpCatchAll, mcpSuccess } from "../helpers.js";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#scrape-messaging-history | scrape-messaging-history} MCP tool. */
 export function registerScrapeMessagingHistory(server: McpServer): void {
   server.tool(
     "scrape-messaging-history",

@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 import { mcpCatchAll, mcpSuccess } from "../helpers.js";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#check-replies | check-replies} MCP tool. */
 export function registerCheckReplies(server: McpServer): void {
   server.tool(
     "check-replies",

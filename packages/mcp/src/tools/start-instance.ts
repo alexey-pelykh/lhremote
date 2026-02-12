@@ -8,6 +8,7 @@ import {
 } from "@lhremote/core";
 import { z } from "zod";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#start-instance | start-instance} MCP tool. */
 export function registerStartInstance(server: McpServer): void {
   server.tool(
     "start-instance",

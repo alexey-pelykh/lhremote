@@ -1,5 +1,6 @@
 import { errorMessage, LauncherService } from "@lhremote/core";
 
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | list-accounts} CLI command. */
 export async function handleListAccounts(options: {
   cdpPort?: number;
   json?: boolean;

@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
+/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-exclude-add | campaign-exclude-add} MCP tool. */
 export function registerCampaignExcludeAdd(server: McpServer): void {
   server.tool(
     "campaign-exclude-add",
