@@ -13,6 +13,7 @@
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e --concurrency=1",
     "lint": "turbo run lint",
+    "license-check": "node scripts/check-licenses.js",
     "dev": "turbo run dev"
   },
   "devDependencies": {
