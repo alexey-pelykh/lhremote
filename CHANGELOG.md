@@ -32,6 +32,18 @@ All notable changes to this project will be documented in this file.
 - Action types catalog with advanced configuration schemas for all LinkedHelper action types
 - `MessageRepository` for conversation and message database access
 - URL validation for `navigateToProfile` to reject malformed LinkedIn URLs
+- URL scheme validation in `CDPClient.navigate()` to reject non-HTTP(S) schemes
+- Claude Code plugin with `lhremote-mcp` skill for IDE integration
+- SPDX license headers on all source files
+- ESLint rule to enforce SPDX license headers on new files
+- Dependency license compatibility check in CI
+- Issue templates for bug reports and feature requests
+- Dependabot configuration for automated dependency updates
+- CONTRIBUTING guide with development setup instructions
+- Getting started guide
+- Architecture Decision Records (ADRs)
+- Security documentation for localhost trust model and loopback validation
+- npm provenance attestation for release publishing
 - GitHub Pages documentation site built via pandoc on every CI run
 - Test coverage reporting with Codecov integration
 
@@ -40,6 +52,18 @@ All notable changes to this project will be documented in this file.
 - Replaced `better-sqlite3` with Node.js built-in `node:sqlite` module
 - Pinned GitHub Actions to commit SHAs for supply-chain security
 - Added `timeout-minutes` to all CI workflow jobs
+- Moved E2E tests out of core to dedicated package
+- Exported `DEFAULT_CDP_PORT` constant for consistent usage across packages
+- Converted root devDependencies to pnpm workspace catalog refs
+- Added `fail-fast: false` to CI matrix strategy
+- Pinned npm version in release workflow
+
+### Fixed
+
+- Windows compatibility for pnpm execution in CI scripts
+- Explicit timer advancement for polling tests
+- LIKE wildcard escaping for search queries
+- Pagination for merged multi-database results in `query-profiles`
 
 ### Removed
 
