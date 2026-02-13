@@ -19,6 +19,6 @@ catalog:
   "@modelcontextprotocol/sdk": "^1.26.0"
   zod: "^4.3.6"
   commander: "^14.0.3"
-  typedoc: "^0.28.16"
-  turbo: "^2.3.4"
+  typedoc: "^0.28.17"
+  turbo: "^2.8.7"
   yaml: "^2.7.1"
