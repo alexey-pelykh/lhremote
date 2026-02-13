@@ -8,10 +8,10 @@
 
 | Element | Convention | Example |
 |---------|------------|---------|
-| Files | kebab-case | `cdp-client.ts` |
-| Classes | PascalCase | `ProfileService` |
-| Functions | camelCase | `visitProfile()` |
-| Constants | UPPER_SNAKE | `DEFAULT_CDP_PORT` |
+| Files | kebab-case | `campaign-format.ts` |
+| Classes | PascalCase | `CampaignService` |
+| Functions | camelCase | `checkStatus()` |
+| Constants | UPPER_SNAKE | `DEFAULT_LAUNCHER_PORT` |
 
 ### Commits
 
@@ -19,7 +19,7 @@ Format: `(type) scope: description`
 
 Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`
 
-Example: `(feat) mcp: add visit-profile tool`
+Example: `(feat) mcp: add campaign-create tool`
 
 Do **not** add issue numbers (e.g. `(#12)`) to commit messages. GitHub links PRs to issues via `Closes #N` in the PR body, not in commits.
 
