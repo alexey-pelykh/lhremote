@@ -144,6 +144,6 @@ describe("handleQueryMessages (integration)", () => {
     const body = JSON.parse(output) as {
       conversations: { id: number }[];
     };
-    expect(body.conversations).toHaveLength(2);
+    expect(body.conversations).toHaveLength(3);
   });
 });

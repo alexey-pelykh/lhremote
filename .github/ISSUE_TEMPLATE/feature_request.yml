@@ -1,0 +1,39 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Description / Use Case
+      description: What problem does this feature solve? Why is it needed?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions or workarounds you've considered
+    validations:
+      required: false
+
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Interface Preference
+      description: Which interface should this feature target?
+      options:
+        - CLI
+        - MCP
+        - Both
+    validations:
+      required: true

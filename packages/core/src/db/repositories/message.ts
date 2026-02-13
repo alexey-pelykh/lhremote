@@ -12,6 +12,7 @@ import type {
 } from "../../types/index.js";
 import type { DatabaseClient } from "../client.js";
 import { ChatNotFoundError } from "../errors.js";
+import { escapeLike } from "../escape-like.js";
 
 interface ChatRow {
   id: number;
@@ -234,7 +235,7 @@ export class MessageRepository {
        JOIN participant_messages pm ON m.id = pm.message_id
        JOIN chat_participants cp ON pm.chat_participant_id = cp.id
        JOIN person_mini_profile mp ON cp.person_id = mp.person_id
-       WHERE m.message_text LIKE ?
+       WHERE m.message_text LIKE ? ESCAPE '\\'
        ORDER BY m.send_at DESC
        LIMIT ?`,
     );
@@ -342,7 +343,7 @@ export class MessageRepository {
     options?: { limit?: number },
   ): Message[] {
     const limit = options?.limit ?? 50;
-    const pattern = `%${query}%`;
+    const pattern = `%${escapeLike(query)}%`;
 
     const rows = this.stmtSearchMessages.all(
       pattern,
