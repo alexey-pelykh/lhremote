@@ -45,7 +45,7 @@ describe("resolveAccount", () => {
     const id = await resolveAccount(9222);
 
     expect(id).toBe(42);
-    expect(mockedLauncherService).toHaveBeenCalledWith(9222);
+    expect(mockedLauncherService).toHaveBeenCalledWith(9222, undefined);
   });
 
   it("throws AccountResolutionError with reason 'no-accounts' when no accounts exist", async () => {
