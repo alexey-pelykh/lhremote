@@ -4,11 +4,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   DEFAULT_CDP_PORT,
-  errorMessage,
   LauncherService,
-  LinkedHelperNotRunningError,
 } from "@lhremote/core";
 import { z } from "zod";
+import { mcpCatchAll, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#list-accounts | list-accounts} MCP tool. */
 export function registerListAccounts(server: McpServer): void {
@@ -38,44 +37,14 @@ export function registerListAccounts(server: McpServer): void {
       try {
         await launcher.connect();
       } catch (error) {
-        if (error instanceof LinkedHelperNotRunningError) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text",
-                text: "LinkedHelper is not running. Use launch-app first.",
-              },
-            ],
-          };
-        }
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: `Failed to connect to LinkedHelper: ${message}`,
-            },
-          ],
-        };
+        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }
 
       try {
         const accounts = await launcher.listAccounts();
-        return {
-          content: [
-            { type: "text", text: JSON.stringify(accounts, null, 2) },
-          ],
-        };
+        return mcpSuccess(JSON.stringify(accounts, null, 2));
       } catch (error) {
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            { type: "text", text: `Failed to list accounts: ${message}` },
-          ],
-        };
+        return mcpCatchAll(error, "Failed to list accounts");
       } finally {
         launcher.disconnect();
       }

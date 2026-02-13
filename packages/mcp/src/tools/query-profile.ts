@@ -5,11 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   DatabaseClient,
   discoverAllDatabases,
-  errorMessage,
   ProfileNotFoundError,
   ProfileRepository,
 } from "@lhremote/core";
 import { z } from "zod";
+import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#query-profile | query-profile} MCP tool. */
 export function registerQueryProfile(server: McpServer): void {
@@ -32,28 +32,14 @@ export function registerQueryProfile(server: McpServer): void {
     },
     async ({ personId, publicId }) => {
       if ((personId == null) === (publicId == null)) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: "Exactly one of personId or publicId must be provided.",
-            },
-          ],
-        };
+        return mcpError(
+          "Exactly one of personId or publicId must be provided.",
+        );
       }
 
       const databases = discoverAllDatabases();
       if (databases.size === 0) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: "No LinkedHelper databases found.",
-            },
-          ],
-        };
+        return mcpError("No LinkedHelper databases found.");
       }
 
       for (const [, dbPath] of databases) {
@@ -65,42 +51,18 @@ export function registerQueryProfile(server: McpServer): void {
               ? repo.findById(personId)
               : repo.findByPublicId(publicId as string);
 
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(profile, null, 2),
-              },
-            ],
-          };
+          return mcpSuccess(JSON.stringify(profile, null, 2));
         } catch (error) {
           if (error instanceof ProfileNotFoundError) {
             continue;
           }
-          const message = errorMessage(error);
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: `Failed to query profile: ${message}`,
-              },
-            ],
-          };
+          return mcpCatchAll(error, "Failed to query profile");
         } finally {
           db.close();
         }
       }
 
-      return {
-        isError: true,
-        content: [
-          {
-            type: "text" as const,
-            text: "Profile not found.",
-          },
-        ],
-      };
+      return mcpError("Profile not found.");
     },
   );
 }

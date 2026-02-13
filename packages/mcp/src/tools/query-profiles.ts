@@ -5,11 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   DatabaseClient,
   discoverAllDatabases,
-  errorMessage,
   ProfileRepository,
   type ProfileSearchResult,
 } from "@lhremote/core";
 import { z } from "zod";
+import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#query-profiles | query-profiles} MCP tool. */
 export function registerQueryProfiles(server: McpServer): void {
@@ -41,15 +41,7 @@ export function registerQueryProfiles(server: McpServer): void {
     async ({ query, company, limit, offset }) => {
       const databases = discoverAllDatabases();
       if (databases.size === 0) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: "No LinkedHelper databases found.",
-            },
-          ],
-        };
+        return mcpError("No LinkedHelper databases found.");
       }
 
       // Aggregate results from all databases
@@ -67,16 +59,7 @@ export function registerQueryProfiles(server: McpServer): void {
           allProfiles.push(...result.profiles);
           totalCount += result.total;
         } catch (error) {
-          const message = errorMessage(error);
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: `Failed to query profiles: ${message}`,
-              },
-            ],
-          };
+          return mcpCatchAll(error, "Failed to query profiles");
         } finally {
           db.close();
         }
@@ -96,14 +79,7 @@ export function registerQueryProfiles(server: McpServer): void {
         offset: effectiveOffset,
       };
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(response, null, 2),
-          },
-        ],
-      };
+      return mcpSuccess(JSON.stringify(response, null, 2));
     },
   );
 }

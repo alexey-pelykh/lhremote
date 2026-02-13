@@ -2,8 +2,9 @@
 // Copyright (C) 2025 Alexey Pelykh
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { AppLaunchError, AppNotFoundError, AppService, errorMessage } from "@lhremote/core";
+import { AppLaunchError, AppNotFoundError, AppService } from "@lhremote/core";
 import { z } from "zod";
+import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#launch-app | launch-app} MCP tool. */
 export function registerLaunchApp(server: McpServer): void {
@@ -28,28 +29,14 @@ export function registerLaunchApp(server: McpServer): void {
           error instanceof AppNotFoundError ||
           error instanceof AppLaunchError
         ) {
-          return {
-            isError: true,
-            content: [{ type: "text", text: error.message }],
-          };
+          return mcpError(error.message);
         }
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            { type: "text", text: `Failed to launch LinkedHelper: ${message}` },
-          ],
-        };
+        return mcpCatchAll(error, "Failed to launch LinkedHelper");
       }
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: `LinkedHelper launched on CDP port ${String(app.cdpPort)}`,
-          },
-        ],
-      };
+      return mcpSuccess(
+        `LinkedHelper launched on CDP port ${String(app.cdpPort)}`,
+      );
     },
   );
 }

@@ -2,8 +2,9 @@
 // Copyright (C) 2025 Alexey Pelykh
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { AppService, DEFAULT_CDP_PORT, errorMessage } from "@lhremote/core";
+import { AppService, DEFAULT_CDP_PORT } from "@lhremote/core";
 import { z } from "zod";
+import { mcpCatchAll, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#quit-app | quit-app} MCP tool. */
 export function registerQuitApp(server: McpServer): void {
@@ -25,18 +26,10 @@ export function registerQuitApp(server: McpServer): void {
       try {
         await app.quit();
       } catch (error) {
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            { type: "text", text: `Failed to quit LinkedHelper: ${message}` },
-          ],
-        };
+        return mcpCatchAll(error, "Failed to quit LinkedHelper");
       }
 
-      return {
-        content: [{ type: "text", text: "LinkedHelper quit successfully" }],
-      };
+      return mcpSuccess("LinkedHelper quit successfully");
     },
   );
 }

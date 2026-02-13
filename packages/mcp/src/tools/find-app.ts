@@ -2,7 +2,8 @@
 // Copyright (C) 2025 Alexey Pelykh
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { errorMessage, findApp } from "@lhremote/core";
+import { findApp } from "@lhremote/core";
+import { mcpCatchAll, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#find-app | find-app} MCP tool. */
 export function registerFindApp(server: McpServer): void {
@@ -15,32 +16,12 @@ export function registerFindApp(server: McpServer): void {
         const apps = await findApp();
 
         if (apps.length === 0) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: "No running LinkedHelper instances found",
-              },
-            ],
-          };
+          return mcpSuccess("No running LinkedHelper instances found");
         }
 
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(apps, null, 2) },
-          ],
-        };
+        return mcpSuccess(JSON.stringify(apps, null, 2));
       } catch (error) {
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to find LinkedHelper: ${message}`,
-            },
-          ],
-        };
+        return mcpCatchAll(error, "Failed to find LinkedHelper");
       }
     },
   );

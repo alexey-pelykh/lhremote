@@ -4,6 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getActionTypeCatalog, getActionTypeInfo } from "@lhremote/core";
 import { z } from "zod";
+import { mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#describe-actions | describe-actions} MCP tool. */
 export function registerDescribeActions(server: McpServer): void {
@@ -25,32 +26,16 @@ export function registerDescribeActions(server: McpServer): void {
       if (actionType !== undefined) {
         const info = getActionTypeInfo(actionType);
         if (info === undefined) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: `Unknown action type: ${actionType}`,
-              },
-            ],
-          };
+          return mcpError(`Unknown action type: ${actionType}`);
         }
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(info, null, 2) },
-          ],
-        };
+        return mcpSuccess(JSON.stringify(info, null, 2));
       }
 
       const catalog = getActionTypeCatalog(
         category === "all" ? undefined : category,
       );
 
-      return {
-        content: [
-          { type: "text" as const, text: JSON.stringify(catalog, null, 2) },
-        ],
-      };
+      return mcpSuccess(JSON.stringify(catalog, null, 2));
     },
   );
 }

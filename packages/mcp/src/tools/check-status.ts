@@ -2,8 +2,9 @@
 // Copyright (C) 2025 Alexey Pelykh
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { checkStatus, DEFAULT_CDP_PORT, errorMessage } from "@lhremote/core";
+import { checkStatus, DEFAULT_CDP_PORT } from "@lhremote/core";
 import { z } from "zod";
+import { mcpCatchAll, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#check-status | check-status} MCP tool. */
 export function registerCheckStatus(server: McpServer): void {
@@ -31,22 +32,9 @@ export function registerCheckStatus(server: McpServer): void {
       try {
         const report = await checkStatus(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
 
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(report, null, 2) },
-          ],
-        };
+        return mcpSuccess(JSON.stringify(report, null, 2));
       } catch (error) {
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to check status: ${message}`,
-            },
-          ],
-        };
+        return mcpCatchAll(error, "Failed to check status");
       }
     },
   );

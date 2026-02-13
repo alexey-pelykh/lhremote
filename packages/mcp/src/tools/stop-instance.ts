@@ -5,11 +5,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   type Account,
   DEFAULT_CDP_PORT,
-  errorMessage,
   LauncherService,
-  LinkedHelperNotRunningError,
 } from "@lhremote/core";
 import { z } from "zod";
+import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#stop-instance | stop-instance} MCP tool. */
 export function registerStopInstance(server: McpServer): void {
@@ -47,27 +46,7 @@ export function registerStopInstance(server: McpServer): void {
       try {
         await launcher.connect();
       } catch (error) {
-        if (error instanceof LinkedHelperNotRunningError) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: "LinkedHelper is not running. Use launch-app first.",
-              },
-            ],
-          };
-        }
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to connect to LinkedHelper: ${message}`,
-            },
-          ],
-        };
+        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }
 
       try {
@@ -76,51 +55,23 @@ export function registerStopInstance(server: McpServer): void {
         if (resolvedId === undefined) {
           const accounts = await launcher.listAccounts();
           if (accounts.length === 0) {
-            return {
-              isError: true,
-              content: [
-                {
-                  type: "text" as const,
-                  text: "No accounts found.",
-                },
-              ],
-            };
+            return mcpError("No accounts found.");
           }
           if (accounts.length > 1) {
-            return {
-              isError: true,
-              content: [
-                {
-                  type: "text" as const,
-                  text: "Multiple accounts found. Specify accountId. Use list-accounts to see available accounts.",
-                },
-              ],
-            };
+            return mcpError(
+              "Multiple accounts found. Specify accountId. Use list-accounts to see available accounts.",
+            );
           }
           resolvedId = (accounts[0] as Account).id;
         }
 
         await launcher.stopInstance(resolvedId);
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Instance stopped for account ${String(resolvedId)}`,
-            },
-          ],
-        };
+        return mcpSuccess(
+          `Instance stopped for account ${String(resolvedId)}`,
+        );
       } catch (error) {
-        const message = errorMessage(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to stop instance: ${message}`,
-            },
-          ],
-        };
+        return mcpCatchAll(error, "Failed to stop instance");
       } finally {
         launcher.disconnect();
       }
