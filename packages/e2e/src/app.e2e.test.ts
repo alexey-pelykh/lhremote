@@ -2,37 +2,52 @@
 // Copyright (C) 2025 Alexey Pelykh
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, launchApp, quitApp, retryAsync } from "../testing/e2e-helpers.js";
-import { findApp, type DiscoveredApp } from "../cdp/app-discovery.js";
-import { discoverTargets } from "../cdp/discovery.js";
-import type { Account, CampaignSummary, Profile } from "../types/index.js";
-import type { StatusReport } from "./status.js";
-import { AppService } from "./app.js";
-import { checkStatus } from "./status.js";
-import { startInstanceWithRecovery, waitForInstanceShutdown } from "./instance-lifecycle.js";
-import { LauncherService } from "./launcher.js";
-import { CampaignRepository, DatabaseClient, discoverDatabase } from "../db/index.js";
-import { killInstanceProcesses } from "../cdp/index.js";
+import { describeE2E, launchApp, quitApp, retryAsync } from "@lhremote/core/testing";
+import {
+  AppService,
+  CampaignRepository,
+  DatabaseClient,
+  checkStatus,
+  discoverDatabase,
+  discoverTargets,
+  findApp,
+  killInstanceProcesses,
+  LauncherService,
+  startInstanceWithRecovery,
+  waitForInstanceShutdown,
+} from "@lhremote/core";
+import type {
+  Account,
+  CampaignSummary,
+  DiscoveredApp,
+  Profile,
+  StatusReport,
+} from "@lhremote/core";
 
 // CLI handlers — tested against the same running app
-import { handleCheckStatus } from "../../../cli/src/handlers/check-status.js";
-import { handleFindApp } from "../../../cli/src/handlers/find-app.js";
-import { handleListAccounts } from "../../../cli/src/handlers/list-accounts.js";
-import { handleQuitApp } from "../../../cli/src/handlers/quit-app.js";
-import { handleStartInstance } from "../../../cli/src/handlers/start-instance.js";
-import { handleStopInstance } from "../../../cli/src/handlers/stop-instance.js";
-import { handleQueryProfile } from "../../../cli/src/handlers/query-profile.js";
-import { handleCheckReplies } from "../../../cli/src/handlers/check-replies.js";
-import { handleScrapeMessagingHistory } from "../../../cli/src/handlers/scrape-messaging-history.js";
+import {
+  handleCheckReplies,
+  handleCheckStatus,
+  handleFindApp,
+  handleListAccounts,
+  handleQueryProfile,
+  handleQuitApp,
+  handleScrapeMessagingHistory,
+  handleStartInstance,
+  handleStopInstance,
+} from "@lhremote/cli/handlers";
+
 // MCP tool registration — tested against the same running app
-import { registerCheckStatus } from "../../../mcp/src/tools/check-status.js";
-import { registerFindApp } from "../../../mcp/src/tools/find-app.js";
-import { registerStartInstance } from "../../../mcp/src/tools/start-instance.js";
-import { registerStopInstance } from "../../../mcp/src/tools/stop-instance.js";
-import { registerQueryProfile } from "../../../mcp/src/tools/query-profile.js";
-import { registerCheckReplies } from "../../../mcp/src/tools/check-replies.js";
-import { registerScrapeMessagingHistory } from "../../../mcp/src/tools/scrape-messaging-history.js";
-import { createMockServer } from "../../../mcp/src/tools/testing/mock-server.js";
+import {
+  registerCheckReplies,
+  registerCheckStatus,
+  registerFindApp,
+  registerQueryProfile,
+  registerScrapeMessagingHistory,
+  registerStartInstance,
+  registerStopInstance,
+} from "@lhremote/mcp/tools";
+import { createMockServer } from "@lhremote/mcp/testing";
 
 /** Type-narrowing assertion — fails the test with `message` when `value` is nullish. */
 function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {

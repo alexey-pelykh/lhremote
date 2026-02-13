@@ -149,6 +149,31 @@ importers:
         specifier: 'catalog:'
         version: 4.0.18(@types/node@22.19.11)(yaml@2.8.2)
 
+  packages/e2e:
+    dependencies:
+      '@lhremote/cli':
+        specifier: workspace:^
+        version: link:../cli
+      '@lhremote/core':
+        specifier: workspace:^
+        version: link:../core
+      '@lhremote/mcp':
+        specifier: workspace:^
+        version: link:../mcp
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.11
+      eslint:
+        specifier: 'catalog:'
+        version: 9.39.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.18(@types/node@22.19.11)(yaml@2.8.2)
+
   packages/lhremote:
     dependencies:
       '@lhremote/cli':
