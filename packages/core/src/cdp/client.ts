@@ -146,8 +146,18 @@ export class CDPClient {
 
   /**
    * Navigate the target to the given URL via `Page.navigate`.
+   *
+   * Only `http:` and `https:` schemes are allowed.  Other schemes such as
+   * `file:`, `javascript:`, or `data:` are rejected to prevent misuse.
+   *
+   * @throws {TypeError} If the URL uses an unsupported scheme.
    */
   async navigate(url: string): Promise<Protocol.Page.NavigateResponse> {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      throw new TypeError(`Unsafe URL scheme: ${parsed.protocol}`);
+    }
+
     return (await this.send("Page.navigate", {
       url,
     })) as Protocol.Page.NavigateResponse;
