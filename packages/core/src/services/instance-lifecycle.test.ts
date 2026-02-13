@@ -156,7 +156,9 @@ describe("waitForInstancePort", () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValue(55123);
 
-    const result = await waitForInstancePort(9222);
+    const resultPromise = waitForInstancePort(9222);
+    await vi.advanceTimersByTimeAsync(3_000);
+    const result = await resultPromise;
 
     expect(result).toBe(55123);
     expect(discoverInstancePort).toHaveBeenCalledTimes(3);
@@ -198,7 +200,9 @@ describe("waitForInstanceShutdown", () => {
       .mockResolvedValueOnce(55123)
       .mockResolvedValue(null);
 
-    await waitForInstanceShutdown(9222);
+    const promise = waitForInstanceShutdown(9222);
+    await vi.advanceTimersByTimeAsync(3_000);
+    await promise;
 
     expect(discoverInstancePort).toHaveBeenCalledTimes(3);
   });
