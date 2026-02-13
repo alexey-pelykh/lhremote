@@ -28,7 +28,51 @@ You can add this automatically with `git commit -s`.
 
 ## Development
 
-See [README.md](README.md) for setup. Follow conventions in [CLAUDE.md](CLAUDE.md).
+### Prerequisites
+
+- **Node.js** >= 24
+- **pnpm** 9.15.4
+
+### Setup
+
+```sh
+git clone https://github.com/alexey-pelykh/lhremote.git
+cd lhremote
+pnpm install
+pnpm build
+```
+
+To run integration tests, install Chromium for Playwright:
+
+```sh
+npx playwright-core install chromium --with-deps
+```
+
+### Running Tests
+
+```sh
+pnpm test          # unit + integration tests
+pnpm lint          # lint checks
+```
+
+### Project Structure
+
+The repository is a pnpm monorepo with four packages:
+
+| Package | Description |
+|---------|-------------|
+| `packages/core` | CDP client, LinkedHelper service layer, database access |
+| `packages/mcp` | MCP server exposing LinkedHelper tools |
+| `packages/cli` | CLI interface wrapping the same tools |
+| `packages/lhremote` | Umbrella package published to npm |
+
+### E2E Tests
+
+E2E tests (`pnpm test:e2e`) require the LinkedHelper desktop application with an active license. They are not part of CI and are intended for local use only.
+
+### Conventions
+
+Follow the project conventions documented in [CLAUDE.md](CLAUDE.md).
 
 ### Submitting Changes
 
