@@ -63,8 +63,6 @@ export function registerQueryProfiles(server: McpServer): void {
           const result = repo.search({
             ...(query !== undefined && { query }),
             ...(company !== undefined && { company }),
-            ...(limit !== undefined && { limit }),
-            ...(offset !== undefined && { offset }),
           });
           allProfiles.push(...result.profiles);
           totalCount += result.total;
@@ -84,11 +82,18 @@ export function registerQueryProfiles(server: McpServer): void {
         }
       }
 
+      const effectiveOffset = offset ?? 0;
+      const effectiveLimit = limit ?? 20;
+      const paginatedProfiles = allProfiles.slice(
+        effectiveOffset,
+        effectiveOffset + effectiveLimit,
+      );
+
       const response = {
-        profiles: allProfiles,
+        profiles: paginatedProfiles,
         total: totalCount,
-        limit: limit ?? 20,
-        offset: offset ?? 0,
+        limit: effectiveLimit,
+        offset: effectiveOffset,
       };
 
       return {
