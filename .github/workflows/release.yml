@@ -44,7 +44,7 @@ jobs:
 
       # Trusted publishing requires npm 11.5.1+ for OIDC token exchange
       - name: Upgrade npm
-        run: npm install -g npm@latest
+        run: npm install -g "npm@^11.5.1"
 
       - name: Stamp version
         env:
