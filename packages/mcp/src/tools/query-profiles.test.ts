@@ -108,7 +108,7 @@ describe("registerQueryProfiles", () => {
     expect(response.offset).toBe(0);
   });
 
-  it("passes search parameters to repository", async () => {
+  it("passes only filter parameters to repository (no limit/offset)", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryProfiles(server);
     vi.mocked(discoverAllDatabases).mockReturnValue(
@@ -127,8 +127,6 @@ describe("registerQueryProfiles", () => {
     expect(searchFn).toHaveBeenCalledWith({
       query: "Jane",
       company: "Acme",
-      limit: 10,
-      offset: 5,
     });
   });
 
@@ -238,6 +236,60 @@ describe("registerQueryProfiles", () => {
     expect(response.profiles).toHaveLength(2);
     expect(response.total).toBe(30);
     expect(close).toHaveBeenCalledTimes(2);
+  });
+
+  it("applies limit/offset to merged results across databases", async () => {
+    const { server, getHandler } = createMockServer();
+    registerQueryProfiles(server);
+    vi.mocked(discoverAllDatabases).mockReturnValue(
+      new Map([
+        [1, "/path/to/db1"],
+        [2, "/path/to/db2"],
+      ]),
+    );
+
+    const close = vi.fn();
+    vi.mocked(DatabaseClient).mockImplementation(function () {
+      return { close, db: {} } as unknown as DatabaseClient;
+    });
+
+    let callCount = 0;
+    vi.mocked(ProfileRepository).mockImplementation(function () {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          search: vi.fn().mockReturnValue({
+            profiles: [
+              { id: 1, firstName: "Alice" },
+              { id: 2, firstName: "Bob" },
+            ],
+            total: 2,
+          }),
+        } as unknown as ProfileRepository;
+      }
+      return {
+        search: vi.fn().mockReturnValue({
+          profiles: [
+            { id: 3, firstName: "Carol" },
+            { id: 4, firstName: "Dave" },
+          ],
+          total: 2,
+        }),
+      } as unknown as ProfileRepository;
+    });
+
+    const handler = getHandler("query-profiles");
+    const result = await handler({ limit: 2, offset: 1 });
+
+    const response = JSON.parse(
+      (result as { content: [{ text: string }] }).content[0].text,
+    );
+    expect(response.profiles).toHaveLength(2);
+    expect(response.profiles[0].firstName).toBe("Bob");
+    expect(response.profiles[1].firstName).toBe("Carol");
+    expect(response.total).toBe(4);
+    expect(response.limit).toBe(2);
+    expect(response.offset).toBe(1);
   });
 
   it("returns custom limit and offset in response", async () => {
