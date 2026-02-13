@@ -5,6 +5,7 @@ import {
   ActionNotFoundError,
   CampaignNotFoundError,
   CampaignRepository,
+  DEFAULT_CDP_PORT,
   errorMessage,
   resolveAccount,
   withDatabase,
@@ -20,7 +21,7 @@ export async function handleCampaignStatistics(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? 9222;
+  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
 
   let accountId: number;
   try {

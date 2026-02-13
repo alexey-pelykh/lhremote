@@ -3,12 +3,8 @@
 
 import { pidToPorts, portToPid } from "pid-port";
 import psList from "ps-list";
+import { DEFAULT_CDP_PORT } from "../constants.js";
 import { isCdpPort } from "../utils/cdp-port.js";
-
-/**
- * Default CDP port used by the LinkedHelper launcher process.
- */
-const DEFAULT_LAUNCHER_PORT = 9222;
 
 /**
  * Discover the dynamic CDP port of a running LinkedHelper instance process.
@@ -32,7 +28,7 @@ const DEFAULT_LAUNCHER_PORT = 9222;
  * @returns The dynamic instance CDP port, or `null` if no running instance was found.
  */
 export async function discoverInstancePort(
-  launcherPort: number = DEFAULT_LAUNCHER_PORT,
+  launcherPort: number = DEFAULT_CDP_PORT,
 ): Promise<number | null> {
   const launcherPid = await findPidListeningOn(launcherPort);
   if (launcherPid === null) {
