@@ -142,6 +142,14 @@ export {
   killInstanceProcesses,
 } from "./cdp/index.js";
 
+// Operations (shared business logic for CLI + MCP)
+export {
+  campaignStatus,
+  type CampaignStatusInput,
+  type CampaignStatusOutput,
+  type ConnectionOptions,
+} from "./operations/index.js";
+
 // Constants
 export { DEFAULT_CDP_PORT } from "./constants.js";
 

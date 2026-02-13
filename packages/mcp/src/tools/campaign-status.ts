@@ -5,10 +5,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
   DEFAULT_CDP_PORT,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignStatus,
 } from "@lhremote/core";
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
@@ -53,27 +51,17 @@ export function registerCampaignStatus(server: McpServer): void {
         .describe("Allow non-loopback CDP connections"),
     },
     async ({ campaignId, includeResults, limit, cdpPort, cdpHost, allowRemote }) => {
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-          const campaignService = new CampaignService(instance, db);
-          const status = await campaignService.getStatus(campaignId);
-
-          const response: Record<string, unknown> = { campaignId, ...status };
-
-          if (includeResults) {
-            const runResult = await campaignService.getResults(campaignId);
-            response.results = runResult.results.slice(0, limit);
-          }
-
-          return mcpSuccess(JSON.stringify(response, null, 2));
+        const result = await campaignStatus({
+          campaignId,
+          includeResults,
+          limit,
+          cdpPort,
+          cdpHost,
+          allowRemote,
         });
+
+        return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CampaignNotFoundError) {
           return mcpError(`Campaign ${String(campaignId)} not found.`);
