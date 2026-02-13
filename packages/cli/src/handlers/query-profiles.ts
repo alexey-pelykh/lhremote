@@ -37,8 +37,6 @@ export async function handleQueryProfiles(options: {
       const result = repo.search({
         ...(query !== undefined && { query }),
         ...(company !== undefined && { company }),
-        limit,
-        offset,
       });
       allProfiles.push(...result.profiles);
       totalCount += result.total;
@@ -52,16 +50,18 @@ export async function handleQueryProfiles(options: {
     }
   }
 
+  const paginatedProfiles = allProfiles.slice(offset, offset + limit);
+
   if (options.json) {
     const response = {
-      profiles: allProfiles,
+      profiles: paginatedProfiles,
       total: totalCount,
       limit,
       offset,
     };
     process.stdout.write(JSON.stringify(response, null, 2) + "\n");
   } else {
-    if (allProfiles.length === 0) {
+    if (paginatedProfiles.length === 0) {
       const criteria: string[] = [];
       if (query) criteria.push(`"${query}"`);
       if (company) criteria.push(`company "${company}"`);
@@ -75,10 +75,10 @@ export async function handleQueryProfiles(options: {
     if (company) criteria.push(`company "${company}"`);
     const desc = criteria.length > 0 ? criteria.join(", ") : "all";
     process.stdout.write(
-      `Profiles matching ${desc} (showing ${allProfiles.length} of ${totalCount}):\n\n`,
+      `Profiles matching ${desc} (showing ${paginatedProfiles.length} of ${totalCount}):\n\n`,
     );
 
-    for (const profile of allProfiles) {
+    for (const profile of paginatedProfiles) {
       const name = [profile.firstName, profile.lastName]
         .filter(Boolean)
         .join(" ");

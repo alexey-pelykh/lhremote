@@ -157,8 +157,8 @@ describe("ProfileRepository", () => {
     it("returns all profiles when no filters specified", () => {
       const result = repo.search({});
 
-      expect(result.total).toBe(3);
-      expect(result.profiles).toHaveLength(3);
+      expect(result.total).toBe(4);
+      expect(result.profiles).toHaveLength(4);
     });
 
     it("searches by name query", () => {
@@ -205,14 +205,14 @@ describe("ProfileRepository", () => {
     it("respects limit parameter", () => {
       const result = repo.search({ limit: 2 });
 
-      expect(result.total).toBe(3);
+      expect(result.total).toBe(4);
       expect(result.profiles).toHaveLength(2);
     });
 
     it("respects offset parameter", () => {
       const result = repo.search({ limit: 2, offset: 1 });
 
-      expect(result.total).toBe(3);
+      expect(result.total).toBe(4);
       expect(result.profiles).toHaveLength(2);
     });
 
@@ -235,6 +235,22 @@ describe("ProfileRepository", () => {
       expect(result.profiles).toHaveLength(1);
       expect(result.profiles[0]?.company).toBeNull();
       expect(result.profiles[0]?.title).toBeNull();
+    });
+
+    it("escapes percent wildcard in search query", () => {
+      const result = repo.search({ query: "100%" });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.firstName).toBe("Alan");
+    });
+
+    it("escapes underscore wildcard in search query", () => {
+      const result = repo.search({ query: "Enigma_v2" });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.firstName).toBe("Alan");
     });
   });
 });
