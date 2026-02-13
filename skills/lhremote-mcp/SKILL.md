@@ -1,79 +1,14 @@
 # lhremote MCP — Tool Surface & Workflow Guide
 
-This skill teaches the lhremote MCP tool surface: 32 tools for automating LinkedHelper via Chrome DevTools Protocol (CDP).
+This skill teaches lhremote MCP workflow patterns, conventions, and error handling for automating LinkedHelper via Chrome DevTools Protocol (CDP).
 
 ## Prerequisites
 
 LinkedHelper must be installed locally with an active license. The MCP server connects to it via CDP on a configurable port (default: 9222).
 
-## Tool Inventory
+## Tool Discovery
 
-### App Management
-
-| Tool | Description |
-|------|-------------|
-| `find-app` | Detect running LinkedHelper instances and their CDP ports |
-| `launch-app` | Launch LinkedHelper with remote debugging enabled |
-| `quit-app` | Quit the LinkedHelper application |
-
-### Accounts & Instances
-
-| Tool | Description |
-|------|-------------|
-| `list-accounts` | List available LinkedHelper accounts (ID, LinkedIn ID, name, email) |
-| `start-instance` | Start a LinkedHelper instance for a LinkedIn account |
-| `stop-instance` | Stop a running LinkedHelper instance |
-| `check-status` | Check connection status, running instances, and database health |
-| `check-replies` | Trigger reply check on LinkedIn, return new messages (default: last 24h) |
-
-### Campaign CRUD
-
-| Tool | Description |
-|------|-------------|
-| `campaign-list` | List campaigns with summary statistics |
-| `campaign-create` | Create a campaign from YAML or JSON configuration |
-| `campaign-get` | Get campaign details including actions and configuration |
-| `campaign-update` | Update campaign name or description |
-| `campaign-delete` | Delete (archive) a campaign |
-| `campaign-export` | Export campaign configuration to YAML or JSON |
-
-### Campaign Execution
-
-| Tool | Description |
-|------|-------------|
-| `campaign-start` | Start a campaign with specified target person IDs (async) |
-| `campaign-stop` | Stop a running campaign |
-| `campaign-status` | Check execution status and optionally include results |
-| `campaign-statistics` | Get detailed execution statistics with error breakdown |
-| `campaign-retry` | Retry failed persons in a campaign |
-| `campaign-move-next` | Advance persons to the next action in the chain |
-
-### Campaign Actions
-
-| Tool | Description |
-|------|-------------|
-| `campaign-add-action` | Add an action to a campaign |
-| `campaign-remove-action` | Remove an action from a campaign |
-| `campaign-reorder-actions` | Reorder actions within a campaign |
-| `describe-actions` | List available action types with schemas (use to discover what actions exist) |
-
-### Campaign Targeting
-
-| Tool | Description |
-|------|-------------|
-| `import-people-from-urls` | Import LinkedIn profile URLs into a campaign's target list (idempotent) |
-| `campaign-exclude-add` | Add persons to campaign or action exclude list |
-| `campaign-exclude-remove` | Remove persons from exclude list |
-| `campaign-exclude-list` | View the exclude list for a campaign or action |
-
-### Profile & Message Queries
-
-| Tool | Description |
-|------|-------------|
-| `query-profile` | Look up a cached LinkedIn profile by person ID or public ID |
-| `query-profiles` | Search profiles by name, headline, or company (paginated) |
-| `query-messages` | Query messaging history: list conversations, read threads, or search |
-| `scrape-messaging-history` | Scrape all messaging history from LinkedIn (requires active instance) |
+Tools are autodiscovered via the MCP protocol handshake (`tools/list`). Use the MCP tool listing to see available tools and their parameters.
 
 ## Workflow Patterns
 

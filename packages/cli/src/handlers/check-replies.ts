@@ -3,6 +3,7 @@
 
 import {
   type ConversationMessages,
+  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   MessageRepository,
@@ -16,7 +17,7 @@ export async function handleCheckReplies(options: {
   cdpPort?: number;
   json?: boolean;
 }): Promise<void> {
-  const cdpPort = options.cdpPort ?? 9222;
+  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
   const cutoff =
     options.since ??
     new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

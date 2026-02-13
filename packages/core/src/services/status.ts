@@ -2,6 +2,7 @@
 // Copyright (C) 2025 Alexey Pelykh
 
 import { discoverInstancePort } from "../cdp/index.js";
+import { DEFAULT_CDP_PORT } from "../constants.js";
 import { DatabaseClient, discoverAllDatabases } from "../db/index.js";
 import { LauncherService } from "./launcher.js";
 
@@ -40,7 +41,7 @@ export interface StatusReport {
  *
  * @param cdpPort - The CDP port of the LinkedHelper launcher (default 9222).
  */
-export async function checkStatus(cdpPort = 9222): Promise<StatusReport> {
+export async function checkStatus(cdpPort = DEFAULT_CDP_PORT): Promise<StatusReport> {
   const launcher: LauncherStatus = { reachable: false, port: cdpPort };
   const instances: AccountInstanceStatus[] = [];
   const databases: DatabaseStatus[] = [];

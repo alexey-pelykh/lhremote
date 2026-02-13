@@ -5,6 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CampaignNotFoundError,
   CampaignRepository,
+  DEFAULT_CDP_PORT,
   resolveAccount,
   withDatabase,
 } from "@lhremote/core";
@@ -51,8 +52,8 @@ export function registerCampaignAddAction(server: McpServer): void {
         .int()
         .positive()
         .optional()
-        .default(9222)
-        .describe("CDP port (default: 9222)"),
+        .default(DEFAULT_CDP_PORT)
+        .describe("CDP port"),
     },
     async ({
       campaignId,

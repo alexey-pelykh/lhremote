@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2025 Alexey Pelykh
 
+import { DEFAULT_CDP_PORT } from "../constants.js";
+
 /**
  * Base class for all service-layer errors.
  */
@@ -76,7 +78,7 @@ export class WrongPortError extends ServiceError {
   constructor(port: number) {
     super(
       `CDP port ${String(port)} appears to be a LinkedHelper instance, not the launcher. ` +
-        `Use the launcher port instead (default: 9222).`,
+        `Use the launcher port instead (default: ${String(DEFAULT_CDP_PORT)}).`,
     );
     this.name = "WrongPortError";
   }

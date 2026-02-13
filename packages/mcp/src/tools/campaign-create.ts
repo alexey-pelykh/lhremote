@@ -6,6 +6,7 @@ import {
   CampaignExecutionError,
   CampaignFormatError,
   CampaignService,
+  DEFAULT_CDP_PORT,
   errorMessage,
   parseCampaignJson,
   parseCampaignYaml,
@@ -32,8 +33,8 @@ export function registerCampaignCreate(server: McpServer): void {
         .int()
         .positive()
         .optional()
-        .default(9222)
-        .describe("CDP port (default: 9222)"),
+        .default(DEFAULT_CDP_PORT)
+        .describe("CDP port"),
     },
     async ({ config, format, cdpPort }) => {
       // Parse campaign config

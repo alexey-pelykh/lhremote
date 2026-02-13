@@ -2,6 +2,7 @@
 // Copyright (C) 2025 Alexey Pelykh
 
 import {
+  DEFAULT_CDP_PORT,
   errorMessage,
   LauncherService,
   startInstanceWithRecovery,
@@ -13,7 +14,7 @@ export async function handleStartInstance(
   options: { cdpPort?: number },
 ): Promise<void> {
   const accountId = Number(accountIdArg);
-  const cdpPort = options.cdpPort ?? 9222;
+  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
   const launcher = new LauncherService(cdpPort);
 
   try {
