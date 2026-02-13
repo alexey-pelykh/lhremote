@@ -64,4 +64,4 @@ jobs:
         run: pnpm -r publish --dry-run --access public --no-git-checks
 
       - name: Publish packages
-        run: pnpm -r publish --access public --no-git-checks --report-summary
+        run: pnpm -r publish --access public --no-git-checks --report-summary --provenance
