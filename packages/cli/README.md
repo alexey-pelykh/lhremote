@@ -8,14 +8,18 @@ Built on [`@lhremote/core`](../core).
 
 ## Installation
 
+End users should install the [`lhremote`](https://www.npmjs.com/package/lhremote) meta-package, which includes both the CLI and MCP server:
+
 ```bash
-npm install -g @lhremote/cli
+npm install -g lhremote
 ```
 
-Or run directly with npx:
+This provides the `lhremote` binary. See the [root README](https://github.com/alexey-pelykh/lhremote#installation) for full details.
+
+Installing `@lhremote/cli` directly is possible but provides the `lhremote-cli` binary instead:
 
 ```bash
-npx @lhremote/cli --help
+npm install -g @lhremote/cli    # binary: lhremote-cli
 ```
 
 ## Usage
