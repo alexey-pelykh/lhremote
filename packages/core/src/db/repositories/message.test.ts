@@ -28,9 +28,9 @@ describe("MessageRepository", () => {
     it("returns all chats ordered by latest message", () => {
       const chats = repo.listChats();
 
-      expect(chats).toHaveLength(3);
-      // Chat 3 has latest message (2025-01-13), then Chat 2 (2025-01-12), then Chat 1 (2025-01-11)
-      expect(chats.map((c) => c.id)).toEqual([3, 2, 1]);
+      expect(chats).toHaveLength(4);
+      // Chat 4 has latest message (2025-01-14), then Chat 3 (2025-01-13), then Chat 2 (2025-01-12), then Chat 1 (2025-01-11)
+      expect(chats.map((c) => c.id)).toEqual([4, 3, 2, 1]);
     });
 
     it("includes participants for each chat", () => {
@@ -68,13 +68,14 @@ describe("MessageRepository", () => {
     });
 
     it("filters by personId", () => {
-      // Person 2 (Charlie) is in chat 2 and chat 3
+      // Person 2 (Charlie) is in chat 2, chat 3, and chat 4
       const chats = repo.listChats({ personId: 2 });
 
-      expect(chats).toHaveLength(2);
+      expect(chats).toHaveLength(3);
       const chatIds = chats.map((c) => c.id);
       expect(chatIds).toContain(2);
       expect(chatIds).toContain(3);
+      expect(chatIds).toContain(4);
     });
 
     it("respects limit parameter", () => {
@@ -87,7 +88,7 @@ describe("MessageRepository", () => {
       const chats = repo.listChats({ limit: 1, offset: 1 });
 
       expect(chats).toHaveLength(1);
-      expect(chats.map((c) => c.id)).toEqual([2]);
+      expect(chats.map((c) => c.id)).toEqual([3]);
     });
   });
 
@@ -199,16 +200,34 @@ describe("MessageRepository", () => {
 
       expect(results.length).toBeGreaterThanOrEqual(1);
     });
+
+    it("escapes percent wildcard in search query", () => {
+      const results = repo.searchMessages("100%");
+
+      expect(results).toHaveLength(1);
+      expect(results[0]?.text).toBe(
+        "We achieved 100% coverage on the test suite!",
+      );
+    });
+
+    it("escapes underscore wildcard in search query", () => {
+      const results = repo.searchMessages("field_name");
+
+      expect(results).toHaveLength(1);
+      expect(results[0]?.text).toBe(
+        "The field_name parameter needs updating.",
+      );
+    });
   });
 
   describe("getMessageStats", () => {
     it("returns aggregate statistics", () => {
       const stats = repo.getMessageStats();
 
-      expect(stats.totalMessages).toBe(6);
-      expect(stats.totalChats).toBe(3);
+      expect(stats.totalMessages).toBe(8);
+      expect(stats.totalChats).toBe(4);
       expect(stats.earliestMessage).toBe("2025-01-10T09:00:00.000Z");
-      expect(stats.latestMessage).toBe("2025-01-13T08:30:00.000Z");
+      expect(stats.latestMessage).toBe("2025-01-14T09:30:00.000Z");
     });
   });
 });

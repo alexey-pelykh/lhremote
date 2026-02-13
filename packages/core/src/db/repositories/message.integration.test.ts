@@ -37,13 +37,14 @@ describe("MessageRepository (integration)", () => {
     });
 
     it("filters chats by person", () => {
-      // Person 1 (Ada) participates in chat 1 and chat 2
+      // Person 1 (Ada) participates in chat 1, chat 2, and chat 4
       const chats = repo.listChats({ personId: 1 });
 
-      expect(chats).toHaveLength(2);
+      expect(chats).toHaveLength(3);
       const chatIds = chats.map((c) => c.id);
       expect(chatIds).toContain(1);
       expect(chatIds).toContain(2);
+      expect(chatIds).toContain(4);
     });
   });
 
@@ -104,15 +105,16 @@ describe("MessageRepository (integration)", () => {
 
   describe("getMessagesSince", () => {
     it("returns messages after a given timestamp grouped by conversation", () => {
-      // Fixture has messages at 2025-01-10, 2025-01-11, 2025-01-12, 2025-01-13
+      // Fixture has messages at 2025-01-10, 2025-01-11, 2025-01-12, 2025-01-13, 2025-01-14
       const conversations = repo.getMessagesSince("2025-01-12T00:00:00.000Z");
 
-      // Should include: msg 4 (2025-01-12), msg 5 (2025-01-13), msg 6 (2025-01-13)
+      // Should include: msg 4 (2025-01-12), msg 5 (2025-01-13), msg 6 (2025-01-13),
+      //                 msg 7 (2025-01-14), msg 8 (2025-01-14)
       const totalMessages = conversations.reduce(
         (sum, c) => sum + c.messages.length,
         0,
       );
-      expect(totalMessages).toBe(3);
+      expect(totalMessages).toBe(5);
 
       // Each conversation should have chatId, personId, personName
       for (const conv of conversations) {
@@ -135,8 +137,8 @@ describe("MessageRepository (integration)", () => {
         (sum, c) => sum + c.messages.length,
         0,
       );
-      // Fixture has 6 messages total
-      expect(totalMessages).toBe(6);
+      // Fixture has 8 messages total
+      expect(totalMessages).toBe(8);
     });
 
     it("groups messages by chat and sender", () => {

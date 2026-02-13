@@ -272,6 +272,83 @@ describe("CDPClient", () => {
     });
   });
 
+  describe("navigate", () => {
+    it("should accept https: URLs", async () => {
+      await client.connect();
+      const ws = lastMockWs();
+
+      ws.send = (data: string) => {
+        const msg = JSON.parse(data) as { id: number };
+        queueMicrotask(() => {
+          ws.receiveMessage({
+            id: msg.id,
+            result: { frameId: "F1" },
+          });
+        });
+      };
+
+      const result = await client.navigate("https://example.com");
+      expect(result).toEqual({ frameId: "F1" });
+    });
+
+    it("should accept http: URLs", async () => {
+      await client.connect();
+      const ws = lastMockWs();
+
+      ws.send = (data: string) => {
+        const msg = JSON.parse(data) as { id: number };
+        queueMicrotask(() => {
+          ws.receiveMessage({
+            id: msg.id,
+            result: { frameId: "F1" },
+          });
+        });
+      };
+
+      const result = await client.navigate("http://example.com");
+      expect(result).toEqual({ frameId: "F1" });
+    });
+
+    it("should reject file: URLs", async () => {
+      await client.connect();
+
+      await expect(client.navigate("file:///etc/passwd")).rejects.toThrow(
+        TypeError,
+      );
+      await expect(client.navigate("file:///etc/passwd")).rejects.toThrow(
+        /Unsafe URL scheme: file:/,
+      );
+    });
+
+    it("should reject javascript: URLs", async () => {
+      await client.connect();
+
+      await expect(
+        client.navigate("javascript:alert(1)"),
+      ).rejects.toThrow(TypeError);
+      await expect(
+        client.navigate("javascript:alert(1)"),
+      ).rejects.toThrow(/Unsafe URL scheme: javascript:/);
+    });
+
+    it("should reject data: URLs", async () => {
+      await client.connect();
+
+      await expect(
+        client.navigate("data:text/html,<h1>Test</h1>"),
+      ).rejects.toThrow(TypeError);
+      await expect(
+        client.navigate("data:text/html,<h1>Test</h1>"),
+      ).rejects.toThrow(/Unsafe URL scheme: data:/);
+    });
+
+    it("should throw on invalid URL strings", async () => {
+      await client.connect();
+
+      await expect(client.navigate("not-a-url")).rejects.toThrow();
+    });
+  });
+
   describe("events", () => {
     it("should dispatch CDP events to listeners", async () => {
       await client.connect();
