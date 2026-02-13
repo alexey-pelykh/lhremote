@@ -3,6 +3,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  DEFAULT_CDP_PORT,
   MessageRepository,
   resolveAccount,
   withInstanceDatabase,
@@ -27,8 +28,8 @@ export function registerCheckReplies(server: McpServer): void {
         .int()
         .positive()
         .optional()
-        .default(9222)
-        .describe("CDP port (default: 9222)"),
+        .default(DEFAULT_CDP_PORT)
+        .describe("CDP port"),
     },
     async ({ since, cdpPort }) => {
       const cutoff =

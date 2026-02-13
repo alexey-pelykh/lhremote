@@ -160,13 +160,14 @@ describe("ProfileRepository (integration)", () => {
     it("returns all profiles when no filters provided", () => {
       const result = repo.search({});
 
-      expect(result.total).toBe(3);
-      expect(result.profiles).toHaveLength(3);
+      expect(result.total).toBe(4);
+      expect(result.profiles).toHaveLength(4);
       // Verify all known test profiles are present
       const names = result.profiles.map((p) => p.firstName);
       expect(names).toContain("Ada");
       expect(names).toContain("Charlie");
       expect(names).toContain("Grace");
+      expect(names).toContain("Alan");
     });
 
     it("filters by first name", () => {
@@ -238,7 +239,7 @@ describe("ProfileRepository (integration)", () => {
       const result = repo.search({ limit: 2 });
 
       // Total should still reflect all matching records
-      expect(result.total).toBe(3);
+      expect(result.total).toBe(4);
       // But only limit records returned
       expect(result.profiles).toHaveLength(2);
     });
@@ -248,7 +249,7 @@ describe("ProfileRepository (integration)", () => {
       const page2 = repo.search({ limit: 2, offset: 2 });
 
       expect(page1.profiles).toHaveLength(2);
-      expect(page2.profiles).toHaveLength(1);
+      expect(page2.profiles).toHaveLength(2);
       // Ensure no overlap
       const page1Ids = page1.profiles.map((p) => p.id);
       const page2Ids = page2.profiles.map((p) => p.id);

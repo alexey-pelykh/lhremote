@@ -6,6 +6,7 @@ import {
   CampaignExecutionError,
   CampaignNotFoundError,
   CampaignService,
+  DEFAULT_CDP_PORT,
   resolveAccount,
   withInstanceDatabase,
 } from "@lhremote/core";
@@ -28,8 +29,8 @@ export function registerCampaignStop(server: McpServer): void {
         .int()
         .positive()
         .optional()
-        .default(9222)
-        .describe("CDP port (default: 9222)"),
+        .default(DEFAULT_CDP_PORT)
+        .describe("CDP port"),
     },
     async ({ campaignId, cdpPort }) => {
       let accountId: number;

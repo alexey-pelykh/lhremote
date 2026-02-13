@@ -15,7 +15,9 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 
 import {
   type ProfileSearchResult,
+  DatabaseClient,
   ProfileRepository,
+  discoverAllDatabases,
 } from "@lhremote/core";
 
 import { handleQueryProfiles } from "./query-profiles.js";
@@ -246,7 +248,7 @@ describe("handleQueryProfiles", () => {
     expect(stderrSpy).toHaveBeenCalledWith("database locked\n");
   });
 
-  it("passes parameters to repository", async () => {
+  it("passes only filter parameters to repository (no limit/offset)", async () => {
     vi.spyOn(process.stdout, "write").mockReturnValue(true);
 
     mockDiscovery();
@@ -267,9 +269,91 @@ describe("handleQueryProfiles", () => {
     expect(searchFn).toHaveBeenCalledWith({
       query: "Jane",
       company: "Acme",
-      limit: 10,
-      offset: 5,
     });
+  });
+
+  it("applies limit/offset to merged results across databases", async () => {
+    const stdoutSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockReturnValue(true);
+
+    vi.mocked(discoverAllDatabases).mockReturnValue(
+      new Map([
+        [1, "/path/to/db1"],
+        [2, "/path/to/db2"],
+      ]),
+    );
+
+    const close = vi.fn();
+    vi.mocked(DatabaseClient).mockImplementation(function () {
+      return { close, db: {} } as unknown as DatabaseClient;
+    });
+
+    let callCount = 0;
+    vi.mocked(ProfileRepository).mockImplementation(function () {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          search: vi.fn().mockReturnValue({
+            profiles: [
+              {
+                id: 1,
+                firstName: "Alice",
+                lastName: null,
+                headline: null,
+                company: "A Corp",
+                title: "Engineer",
+              },
+              {
+                id: 2,
+                firstName: "Bob",
+                lastName: null,
+                headline: null,
+                company: "A Corp",
+                title: "Manager",
+              },
+            ],
+            total: 2,
+          }),
+        } as unknown as ProfileRepository;
+      }
+      return {
+        search: vi.fn().mockReturnValue({
+          profiles: [
+            {
+              id: 3,
+              firstName: "Carol",
+              lastName: null,
+              headline: null,
+              company: "B Corp",
+              title: "Designer",
+            },
+            {
+              id: 4,
+              firstName: "Dave",
+              lastName: null,
+              headline: null,
+              company: "B Corp",
+              title: "Analyst",
+            },
+          ],
+          total: 2,
+        }),
+      } as unknown as ProfileRepository;
+    });
+
+    await handleQueryProfiles({ limit: 2, offset: 1, json: true });
+
+    const output = stdoutSpy.mock.calls
+      .map((call) => String(call[0]))
+      .join("");
+    const parsed = JSON.parse(output);
+    expect(parsed.profiles).toHaveLength(2);
+    expect(parsed.profiles[0].firstName).toBe("Bob");
+    expect(parsed.profiles[1].firstName).toBe("Carol");
+    expect(parsed.total).toBe(4);
+    expect(parsed.limit).toBe(2);
+    expect(parsed.offset).toBe(1);
   });
 
   it("uses custom limit and offset in JSON output", async () => {

@@ -66,7 +66,7 @@ describe("registerQueryMessages (integration)", () => {
     registerQueryMessages(server);
 
     const handler = getHandler("query-messages");
-    // Person 1 (Ada) participates in chat 1 and chat 2
+    // Person 1 (Ada) participates in chat 1, chat 2, and chat 4
     const result = (await handler({ personId: 1, cdpPort: 9222 })) as {
       content: [{ type: string; text: string }];
     };
@@ -74,10 +74,11 @@ describe("registerQueryMessages (integration)", () => {
     const body = JSON.parse(result.content[0].text) as {
       conversations: { id: number }[];
     };
-    expect(body.conversations).toHaveLength(2);
+    expect(body.conversations).toHaveLength(3);
     const chatIds = body.conversations.map((c) => c.id);
     expect(chatIds).toContain(1);
     expect(chatIds).toContain(2);
+    expect(chatIds).toContain(4);
   });
 
   it("retrieves a conversation thread by chatId", async () => {

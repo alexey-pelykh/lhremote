@@ -2,7 +2,7 @@
 // Copyright (C) 2025 Alexey Pelykh
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { AppService, errorMessage } from "@lhremote/core";
+import { AppService, DEFAULT_CDP_PORT, errorMessage } from "@lhremote/core";
 import { z } from "zod";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#quit-app | quit-app} MCP tool. */
@@ -16,8 +16,8 @@ export function registerQuitApp(server: McpServer): void {
         .int()
         .positive()
         .optional()
-        .default(9222)
-        .describe("CDP port (default: 9222)"),
+        .default(DEFAULT_CDP_PORT)
+        .describe("CDP port"),
     },
     async ({ cdpPort }) => {
       const app = new AppService(cdpPort);
