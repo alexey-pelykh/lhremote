@@ -139,5 +139,8 @@ export {
   type DiscoveredApp,
 } from "./cdp/index.js";
 
+// Constants
+export { DEFAULT_CDP_PORT } from "./constants.js";
+
 // Utilities
 export { delay, errorMessage, isCdpPort } from "./utils/index.js";

@@ -5,6 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CampaignNotFoundError,
   CampaignRepository,
+  DEFAULT_CDP_PORT,
   resolveAccount,
   serializeCampaignJson,
   serializeCampaignYaml,
@@ -34,8 +35,8 @@ export function registerCampaignExport(server: McpServer): void {
         .int()
         .positive()
         .optional()
-        .default(9222)
-        .describe("CDP port (default: 9222)"),
+        .default(DEFAULT_CDP_PORT)
+        .describe("CDP port"),
     },
     async ({ campaignId, format, cdpPort }) => {
       let accountId: number;

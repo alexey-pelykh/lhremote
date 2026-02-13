@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import {
   CampaignNotFoundError,
   CampaignRepository,
+  DEFAULT_CDP_PORT,
   errorMessage,
   resolveAccount,
   withDatabase,
@@ -50,7 +51,7 @@ export async function handleCampaignRetry(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? 9222;
+  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
 
   // Reject conflicting options
   if (options.personIds && options.personIdsFile) {

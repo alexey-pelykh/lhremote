@@ -4,6 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   type Account,
+  DEFAULT_CDP_PORT,
   errorMessage,
   LauncherService,
   LinkedHelperNotRunningError,
@@ -30,8 +31,8 @@ export function registerStartInstance(server: McpServer): void {
         .int()
         .positive()
         .optional()
-        .default(9222)
-        .describe("CDP port (default: 9222)"),
+        .default(DEFAULT_CDP_PORT)
+        .describe("CDP port"),
     },
     async ({ accountId, cdpPort }) => {
       const launcher = new LauncherService(cdpPort);

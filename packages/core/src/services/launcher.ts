@@ -2,6 +2,7 @@
 // Copyright (C) 2025 Alexey Pelykh
 
 import { CDPClient, CDPConnectionError, CDPEvaluationError } from "../cdp/index.js";
+import { DEFAULT_CDP_PORT } from "../constants.js";
 import type {
   Account,
   InstanceStatus,
@@ -13,9 +14,6 @@ import {
   StartInstanceError,
   WrongPortError,
 } from "./errors.js";
-
-/** Default CDP port for the LinkedHelper launcher process. */
-const DEFAULT_LAUNCHER_PORT = 9222;
 
 /**
  * Controls the LinkedHelper launcher process via CDP.
@@ -30,7 +28,7 @@ export class LauncherService {
   private client: CDPClient | null = null;
 
   constructor(
-    port: number = DEFAULT_LAUNCHER_PORT,
+    port: number = DEFAULT_CDP_PORT,
     options?: { host?: string },
   ) {
     this.port = port;

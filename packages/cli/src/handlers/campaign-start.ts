@@ -8,6 +8,7 @@ import {
   CampaignNotFoundError,
   CampaignService,
   CampaignTimeoutError,
+  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   resolveAccount,
@@ -53,7 +54,7 @@ export async function handleCampaignStart(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? 9222;
+  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
 
   // Reject conflicting options
   if (options.personIds && options.personIdsFile) {
