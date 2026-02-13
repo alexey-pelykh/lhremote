@@ -62,10 +62,13 @@ jobs:
         run: |
           command -v pandoc || (sudo apt-get update && sudo apt-get install -y pandoc)
 
-          mkdir -p build/gh-pages
+          mkdir -p build/gh-pages build/gh-pages/docs
           pandoc \
             -f gfm -t html5 -s --shift-heading-level-by=-1 --lua-filter=gh-pages/filter.lua -H gh-pages/header.html \
             -o build/gh-pages/index.html gh-pages/metadata.md README.md
+          pandoc \
+            -f gfm -t html5 -s --shift-heading-level-by=-1 --lua-filter=gh-pages/filter.lua -H gh-pages/header.html \
+            -o build/gh-pages/docs/getting-started.html gh-pages/metadata.md docs/getting-started.md
 
           pnpm --filter @lhremote/core docs
 

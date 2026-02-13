@@ -23,6 +23,8 @@ lhremote lets AI assistants (Claude, etc.) control LinkedHelper through the [Mod
 - **Messaging** — query messaging history, check for new replies, scrape conversations from LinkedIn
 - **Action discovery** — list available LinkedHelper action types with configuration schemas
 
+**New to lhremote?** Check out the [Getting Started guide](docs/getting-started.md) for a step-by-step walkthrough.
+
 ## Prerequisites
 
 - **Node.js** >= 24
