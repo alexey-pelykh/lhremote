@@ -82,6 +82,7 @@ export {
   type LauncherStatus,
   type StatusReport,
   waitForInstancePort,
+  waitForInstanceShutdown,
   withDatabase,
   withInstanceDatabase,
 } from "./services/index.js";
@@ -135,8 +136,10 @@ export {
   CDPEvaluationError,
   CDPTimeoutError,
   discoverInstancePort,
+  discoverTargets,
   findApp,
   type DiscoveredApp,
+  killInstanceProcesses,
 } from "./cdp/index.js";
 
 // Constants

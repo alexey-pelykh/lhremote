@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "exclude": ["**/*.e2e.test.ts"],
+  "references": [
+    { "path": "../core" },
+    { "path": "../cli" },
+    { "path": "../mcp" }
+  ]
+}

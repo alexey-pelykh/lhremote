@@ -35,6 +35,42 @@ import { registerQueryMessages } from "./query-messages.js";
 import { registerQueryProfile } from "./query-profile.js";
 import { registerQueryProfiles } from "./query-profiles.js";
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
+
+export {
+  registerCampaignAddAction,
+  registerCampaignCreate,
+  registerCampaignDelete,
+  registerCampaignExcludeAdd,
+  registerCampaignExcludeList,
+  registerCampaignExcludeRemove,
+  registerCampaignExport,
+  registerCampaignGet,
+  registerCampaignList,
+  registerCampaignMoveNext,
+  registerCampaignRemoveAction,
+  registerCampaignReorderActions,
+  registerCampaignRetry,
+  registerCampaignStart,
+  registerCampaignStatistics,
+  registerCampaignStatus,
+  registerCampaignStop,
+  registerCampaignUpdate,
+  registerCheckReplies,
+  registerCheckStatus,
+  registerDescribeActions,
+  registerFindApp,
+  registerImportPeopleFromUrls,
+  registerLaunchApp,
+  registerListAccounts,
+  registerQueryMessages,
+  registerQueryProfile,
+  registerQueryProfiles,
+  registerQuitApp,
+  registerScrapeMessagingHistory,
+  registerStartInstance,
+  registerStopInstance,
+};
+
 export function registerAllTools(server: McpServer): void {
   registerCampaignAddAction(server);
   registerCampaignCreate(server);

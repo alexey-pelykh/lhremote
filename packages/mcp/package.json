@@ -27,6 +27,14 @@
     "./stdio": {
       "types": "./dist/stdio.d.ts",
       "import": "./dist/stdio.js"
+    },
+    "./tools": {
+      "types": "./dist/tools/index.d.ts",
+      "import": "./dist/tools/index.js"
+    },
+    "./testing": {
+      "types": "./dist/tools/testing/mock-server.d.ts",
+      "import": "./dist/tools/testing/mock-server.js"
     }
   },
   "bin": {

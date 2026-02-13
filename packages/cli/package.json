@@ -19,6 +19,10 @@
     ".": {
       "types": "./dist/program.d.ts",
       "import": "./dist/program.js"
+    },
+    "./handlers": {
+      "types": "./dist/handlers/index.d.ts",
+      "import": "./dist/handlers/index.js"
     }
   },
   "bin": {

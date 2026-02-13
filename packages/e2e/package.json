@@ -1,0 +1,29 @@
+{
+  "name": "@lhremote/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end tests for LinkedHelper automation",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "license": "AGPL-3.0-only",
+  "author": "Alexey Pelykh (https://github.com/alexey-pelykh)",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo 'No unit tests'",
+    "test:e2e": "vitest run --config ../../vitest.e2e.config.ts",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@lhremote/cli": "workspace:^",
+    "@lhremote/core": "workspace:^",
+    "@lhremote/mcp": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
