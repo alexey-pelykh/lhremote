@@ -78,15 +78,22 @@ describe("CDPClient (integration)", () => {
   });
 
   describe("navigate", () => {
-    it("should navigate to a data URL", async () => {
+    it("should navigate to an HTTP URL", async () => {
       client = new CDPClient(chromium.port);
       await client.connect();
 
-      const response = await client.navigate(
-        "data:text/html,<h1>Integration Test</h1>",
-      );
+      const response = await client.navigate("http://example.com");
 
       expect(response.frameId).toEqual(expect.any(String));
+    });
+
+    it("should reject non-HTTP schemes", async () => {
+      client = new CDPClient(chromium.port);
+      await client.connect();
+
+      await expect(
+        client.navigate("data:text/html,<h1>Test</h1>"),
+      ).rejects.toThrow(TypeError);
     });
   });
 
@@ -103,7 +110,7 @@ describe("CDPClient (integration)", () => {
         10_000,
       );
 
-      await client.navigate("data:text/html,<h1>Event Test</h1>");
+      await client.navigate("http://example.com");
 
       const params = (await eventPromise) as { timestamp: number };
       expect(params.timestamp).toEqual(expect.any(Number));

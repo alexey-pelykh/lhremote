@@ -5,6 +5,7 @@ import {
   CampaignExecutionError,
   CampaignNotFoundError,
   CampaignService,
+  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   resolveAccount,
@@ -19,7 +20,7 @@ export async function handleCampaignDelete(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? 9222;
+  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
 
   let accountId: number;
   try {

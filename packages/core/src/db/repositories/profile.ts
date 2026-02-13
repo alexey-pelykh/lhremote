@@ -16,6 +16,7 @@ import type {
 } from "../../types/index.js";
 import type { DatabaseClient } from "../client.js";
 import { ProfileNotFoundError } from "../errors.js";
+import { escapeLike } from "../escape-like.js";
 
 interface ProfileSearchRow {
   id: number;
@@ -159,8 +160,8 @@ export class ProfileRepository {
        FROM people p
        LEFT JOIN person_mini_profile mp ON p.id = mp.person_id
        LEFT JOIN person_current_position cp ON p.id = cp.person_id
-       WHERE (? IS NULL OR mp.first_name LIKE ? OR mp.last_name LIKE ? OR mp.headline LIKE ?)
-         AND (? IS NULL OR cp.company LIKE ?)
+       WHERE (? IS NULL OR mp.first_name LIKE ? ESCAPE '\\' OR mp.last_name LIKE ? ESCAPE '\\' OR mp.headline LIKE ? ESCAPE '\\')
+         AND (? IS NULL OR cp.company LIKE ? ESCAPE '\\')
        ORDER BY mp.first_name, mp.last_name
        LIMIT ? OFFSET ?`,
     );
@@ -196,8 +197,8 @@ export class ProfileRepository {
   search(options: ProfileSearchOptions = {}): ProfileSearchResult {
     const { query, company, limit = 20, offset = 0 } = options;
 
-    const queryPattern = query ? `%${query}%` : null;
-    const companyPattern = company ? `%${company}%` : null;
+    const queryPattern = query ? `%${escapeLike(query)}%` : null;
+    const companyPattern = company ? `%${escapeLike(company)}%` : null;
 
     const rows = this.stmtSearch.all(
       queryPattern,

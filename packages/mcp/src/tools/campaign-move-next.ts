@@ -6,6 +6,7 @@ import {
   ActionNotFoundError,
   CampaignNotFoundError,
   CampaignRepository,
+  DEFAULT_CDP_PORT,
   NoNextActionError,
   resolveAccount,
   withDatabase,
@@ -38,8 +39,8 @@ export function registerCampaignMoveNext(server: McpServer): void {
         .int()
         .positive()
         .optional()
-        .default(9222)
-        .describe("CDP port (default: 9222)"),
+        .default(DEFAULT_CDP_PORT)
+        .describe("CDP port"),
     },
     async ({ campaignId, actionId, personIds, cdpPort }) => {
       let accountId: number;

@@ -333,6 +333,24 @@ db.exec(`
   VALUES (3, 'grace.personal@example.test', 'personal', '${NOW}');
 `);
 
+// Person 4: profile with LIKE wildcard characters in headline
+db.exec(`
+  INSERT INTO people (id, original_id, created_at, updated_at)
+  VALUES (4, 4, '${NOW}', '${NOW}');
+
+  INSERT INTO person_mini_profile
+    (person_id, first_name, first_name_uppercase, last_name, last_name_uppercase,
+     headline, headline_uppercase)
+  VALUES
+    (4, 'Alan', 'ALAN', 'Turing', 'TURING',
+     'Achieved 100% on Enigma_v2 decryption',
+     'ACHIEVED 100% ON ENIGMA_V2 DECRYPTION');
+
+  INSERT INTO person_external_ids
+    (person_id, external_id, external_id_uppercase, type_group)
+  VALUES (4, 'alan-turing-test', 'ALAN-TURING-TEST', 'public');
+`);
+
 // ── Messaging Data (chats between Ada, Charlie, Grace) ──────────────
 
 // Chat 1: Ada ↔ Grace (3 messages)
@@ -390,6 +408,25 @@ db.exec(`
 
   INSERT INTO participant_messages (id, chat_participant_id, message_id)
   VALUES (5, 5, 5), (6, 6, 6);
+`);
+
+// Chat 4: Ada ↔ Charlie (messages with LIKE wildcard characters)
+db.exec(`
+  INSERT INTO chats (id, original_id, type, platform, created_at, updated_at)
+  VALUES (4, 1004, 'MEMBER_TO_MEMBER', 'LINKEDIN', '${NOW}', '${NOW}');
+
+  INSERT INTO chat_participants (id, chat_id, person_id)
+  VALUES (7, 4, 1), (8, 4, 2);
+
+  INSERT INTO messages (id, type, message_text, attachments_count, send_at, created_at, updated_at)
+  VALUES
+    (7, 'MEMBER_TO_MEMBER', 'We achieved 100% coverage on the test suite!', 0,
+     '2025-01-14T09:00:00.000Z', '${NOW}', '${NOW}'),
+    (8, 'MEMBER_TO_MEMBER', 'The field_name parameter needs updating.', 0,
+     '2025-01-14T09:30:00.000Z', '${NOW}', '${NOW}');
+
+  INSERT INTO participant_messages (id, chat_participant_id, message_id)
+  VALUES (7, 7, 7), (8, 8, 8);
 `);
 
 // ── Campaign Schema ──────────────────────────────────────────────────

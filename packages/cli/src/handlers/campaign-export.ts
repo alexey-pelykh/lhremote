@@ -6,6 +6,7 @@ import { writeFileSync } from "node:fs";
 import {
   CampaignNotFoundError,
   CampaignRepository,
+  DEFAULT_CDP_PORT,
   errorMessage,
   resolveAccount,
   serializeCampaignJson,
@@ -22,7 +23,7 @@ export async function handleCampaignExport(
     cdpPort?: number;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? 9222;
+  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
   const format = options.format ?? "yaml";
 
   if (format !== "yaml" && format !== "json") {
