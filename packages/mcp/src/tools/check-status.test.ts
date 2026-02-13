@@ -98,7 +98,7 @@ describe("registerCheckStatus", () => {
     const handler = getHandler("check-status");
     await handler({ cdpPort: 4567 });
 
-    expect(mockedCheckStatus).toHaveBeenCalledWith(4567);
+    expect(mockedCheckStatus).toHaveBeenCalledWith(4567, {});
   });
 
   it("returns error when checkStatus throws", async () => {

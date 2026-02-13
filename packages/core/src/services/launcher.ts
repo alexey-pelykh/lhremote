@@ -25,14 +25,16 @@ import {
 export class LauncherService {
   private readonly port: number;
   private readonly host: string;
+  private readonly allowRemote: boolean;
   private client: CDPClient | null = null;
 
   constructor(
     port: number = DEFAULT_CDP_PORT,
-    options?: { host?: string },
+    options?: { host?: string; allowRemote?: boolean },
   ) {
     this.port = port;
     this.host = options?.host ?? "127.0.0.1";
+    this.allowRemote = options?.allowRemote ?? false;
   }
 
   /**
@@ -41,7 +43,7 @@ export class LauncherService {
    * @throws {LinkedHelperNotRunningError} if the launcher is not reachable.
    */
   async connect(): Promise<void> {
-    const client = new CDPClient(this.port, { host: this.host });
+    const client = new CDPClient(this.port, { host: this.host, allowRemote: this.allowRemote });
     try {
       await client.connect();
     } catch (error) {

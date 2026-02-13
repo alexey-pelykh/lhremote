@@ -21,6 +21,8 @@ export async function handleCampaignAddAction(
     maxResults?: number;
     actionSettings?: string;
     cdpPort?: number;
+    cdpHost?: string;
+    allowRemote?: boolean;
     json?: boolean;
   },
 ): Promise<void> {
@@ -43,7 +45,10 @@ export async function handleCampaignAddAction(
 
   let accountId: number;
   try {
-    accountId = await resolveAccount(cdpPort);
+    accountId = await resolveAccount(cdpPort, {
+      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
+      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+    });
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);

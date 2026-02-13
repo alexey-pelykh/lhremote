@@ -123,6 +123,35 @@ describe("CDPClient", () => {
     client = new CDPClient(9222, { timeout: 500 });
   });
 
+  describe("loopback validation", () => {
+    it("should allow default host (127.0.0.1)", () => {
+      expect(() => new CDPClient(9222)).not.toThrow();
+    });
+
+    it("should allow explicit loopback host", () => {
+      expect(() => new CDPClient(9222, { host: "localhost" })).not.toThrow();
+      expect(() => new CDPClient(9222, { host: "::1" })).not.toThrow();
+    });
+
+    it("should reject non-loopback host without allowRemote", () => {
+      expect(() => new CDPClient(9222, { host: "192.168.1.1" })).toThrow(
+        CDPConnectionError,
+      );
+      expect(() => new CDPClient(9222, { host: "example.com" })).toThrow(
+        /Remote CDP connections/,
+      );
+    });
+
+    it("should allow non-loopback host with allowRemote", () => {
+      expect(
+        () => new CDPClient(9222, { host: "192.168.1.1", allowRemote: true }),
+      ).not.toThrow();
+      expect(
+        () => new CDPClient(9222, { host: "example.com", allowRemote: true }),
+      ).not.toThrow();
+    });
+  });
+
   afterEach(() => {
     client.disconnect();
     vi.restoreAllMocks();

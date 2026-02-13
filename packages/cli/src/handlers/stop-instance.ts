@@ -6,11 +6,14 @@ import { DEFAULT_CDP_PORT, errorMessage, LauncherService } from "@lhremote/core"
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | stop-instance} CLI command. */
 export async function handleStopInstance(
   accountIdArg: string,
-  options: { cdpPort?: number },
+  options: { cdpPort?: number; cdpHost?: string; allowRemote?: boolean },
 ): Promise<void> {
   const accountId = Number(accountIdArg);
   const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
-  const launcher = new LauncherService(cdpPort);
+  const launcher = new LauncherService(cdpPort, {
+    ...(options.cdpHost !== undefined && { host: options.cdpHost }),
+    ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+  });
 
   try {
     await launcher.connect();

@@ -41,13 +41,16 @@ export interface StatusReport {
  *
  * @param cdpPort - The CDP port of the LinkedHelper launcher (default 9222).
  */
-export async function checkStatus(cdpPort = DEFAULT_CDP_PORT): Promise<StatusReport> {
+export async function checkStatus(
+  cdpPort = DEFAULT_CDP_PORT,
+  options?: { host?: string; allowRemote?: boolean },
+): Promise<StatusReport> {
   const launcher: LauncherStatus = { reachable: false, port: cdpPort };
   const instances: AccountInstanceStatus[] = [];
   const databases: DatabaseStatus[] = [];
 
   // 1. Probe launcher
-  const launcherService = new LauncherService(cdpPort);
+  const launcherService = new LauncherService(cdpPort, options);
   try {
     await launcherService.connect();
     launcher.reachable = true;

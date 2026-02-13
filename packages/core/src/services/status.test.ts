@@ -112,7 +112,7 @@ describe("checkStatus", () => {
     const report = await checkStatus(4567);
 
     expect(report.launcher.port).toBe(4567);
-    expect(mockedLauncherService).toHaveBeenCalledWith(4567);
+    expect(mockedLauncherService).toHaveBeenCalledWith(4567, undefined);
   });
 
   it("defaults cdpPort to 9222", async () => {

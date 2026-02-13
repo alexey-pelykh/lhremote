@@ -146,4 +146,4 @@ export {
 export { DEFAULT_CDP_PORT } from "./constants.js";
 
 // Utilities
-export { delay, errorMessage, isCdpPort } from "./utils/index.js";
+export { delay, errorMessage, isCdpPort, isLoopbackAddress } from "./utils/index.js";

@@ -3,6 +3,7 @@
 
 import type { Protocol } from "devtools-protocol";
 import type { CdpTarget } from "../types/cdp.js";
+import { isLoopbackAddress } from "../utils/loopback.js";
 import {
   CDPConnectionError,
   CDPEvaluationError,
@@ -52,11 +53,18 @@ export class CDPClient {
 
   constructor(
     port: number,
-    options?: { host?: string; timeout?: number },
+    options?: { host?: string; timeout?: number; allowRemote?: boolean },
   ) {
     this.port = port;
     this.host = options?.host ?? "127.0.0.1";
     this.timeout = options?.timeout ?? DEFAULT_TIMEOUT;
+
+    if (!isLoopbackAddress(this.host) && !options?.allowRemote) {
+      throw new CDPConnectionError(
+        `Remote CDP connections to "${this.host}" are not allowed. ` +
+          "Use the allowRemote option to connect to non-loopback addresses.",
+      );
+    }
   }
 
   /**

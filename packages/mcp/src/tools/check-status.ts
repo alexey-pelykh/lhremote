@@ -18,10 +18,18 @@ export function registerCheckStatus(server: McpServer): void {
         .optional()
         .default(DEFAULT_CDP_PORT)
         .describe("CDP port"),
+      cdpHost: z
+        .string()
+        .optional()
+        .describe("CDP host (default: 127.0.0.1)"),
+      allowRemote: z
+        .boolean()
+        .optional()
+        .describe("Allow non-loopback CDP connections"),
     },
-    async ({ cdpPort }) => {
+    async ({ cdpPort, cdpHost, allowRemote }) => {
       try {
-        const report = await checkStatus(cdpPort);
+        const report = await checkStatus(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
 
         return {
           content: [

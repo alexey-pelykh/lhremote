@@ -15,6 +15,8 @@ import {
 export async function handleCheckReplies(options: {
   since?: string;
   cdpPort?: number;
+  cdpHost?: string;
+  allowRemote?: boolean;
   json?: boolean;
 }): Promise<void> {
   const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
@@ -24,7 +26,10 @@ export async function handleCheckReplies(options: {
 
   let accountId: number;
   try {
-    accountId = await resolveAccount(cdpPort);
+    accountId = await resolveAccount(cdpPort, {
+      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
+      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+    });
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);

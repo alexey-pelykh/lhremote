@@ -6,10 +6,15 @@ import { checkStatus, errorMessage } from "@lhremote/core";
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | check-status} CLI command. */
 export async function handleCheckStatus(options: {
   cdpPort?: number;
+  cdpHost?: string;
+  allowRemote?: boolean;
   json?: boolean;
 }): Promise<void> {
   try {
-    const report = await checkStatus(options.cdpPort);
+    const report = await checkStatus(options.cdpPort, {
+      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
+      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+    });
 
     if (options.json) {
       process.stdout.write(JSON.stringify(report, null, 2) + "\n");

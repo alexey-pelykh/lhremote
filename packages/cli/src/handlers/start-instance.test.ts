@@ -120,7 +120,7 @@ describe("handleStartInstance", () => {
 
     await handleStartInstance("42", { cdpPort: 4567 });
 
-    expect(LauncherService).toHaveBeenCalledWith(4567);
+    expect(LauncherService).toHaveBeenCalledWith(4567, {});
   });
 
   it("sets exitCode 1 when instance fails to initialize within timeout", async () => {

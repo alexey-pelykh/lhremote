@@ -14,13 +14,18 @@ import {
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | scrape-messaging-history} CLI command. */
 export async function handleScrapeMessagingHistory(options: {
   cdpPort?: number;
+  cdpHost?: string;
+  allowRemote?: boolean;
   json?: boolean;
 }): Promise<void> {
   const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
 
   let accountId: number;
   try {
-    accountId = await resolveAccount(cdpPort);
+    accountId = await resolveAccount(cdpPort, {
+      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
+      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+    });
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);

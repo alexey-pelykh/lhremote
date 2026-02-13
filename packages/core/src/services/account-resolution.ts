@@ -31,8 +31,11 @@ export class AccountResolutionError extends ServiceError {
  * {@link AccountResolutionError} if zero or multiple accounts exist,
  * or the underlying CDP/launcher error on other failures.
  */
-export async function resolveAccount(cdpPort: number): Promise<number> {
-  const launcher = new LauncherService(cdpPort);
+export async function resolveAccount(
+  cdpPort: number,
+  options?: { host?: string; allowRemote?: boolean },
+): Promise<number> {
+  const launcher = new LauncherService(cdpPort, options);
 
   try {
     await launcher.connect();

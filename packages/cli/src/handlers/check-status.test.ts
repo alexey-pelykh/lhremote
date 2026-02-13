@@ -149,6 +149,6 @@ describe("handleCheckStatus", () => {
 
     await handleCheckStatus({ cdpPort: 4567 });
 
-    expect(mockedCheckStatus).toHaveBeenCalledWith(4567);
+    expect(mockedCheckStatus).toHaveBeenCalledWith(4567, {});
   });
 });

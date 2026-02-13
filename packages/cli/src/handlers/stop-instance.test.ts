@@ -90,6 +90,6 @@ describe("handleStopInstance", () => {
 
     await handleStopInstance("42", { cdpPort: 4567 });
 
-    expect(LauncherService).toHaveBeenCalledWith(4567);
+    expect(LauncherService).toHaveBeenCalledWith(4567, {});
   });
 });

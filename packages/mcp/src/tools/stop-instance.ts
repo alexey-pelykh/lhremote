@@ -32,9 +32,17 @@ export function registerStopInstance(server: McpServer): void {
         .optional()
         .default(DEFAULT_CDP_PORT)
         .describe("CDP port"),
+      cdpHost: z
+        .string()
+        .optional()
+        .describe("CDP host (default: 127.0.0.1)"),
+      allowRemote: z
+        .boolean()
+        .optional()
+        .describe("Allow non-loopback CDP connections"),
     },
-    async ({ accountId, cdpPort }) => {
-      const launcher = new LauncherService(cdpPort);
+    async ({ accountId, cdpPort, cdpHost, allowRemote }) => {
+      const launcher = new LauncherService(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
 
       try {
         await launcher.connect();

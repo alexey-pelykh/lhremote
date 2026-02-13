@@ -39,13 +39,15 @@ export class InstanceService {
   private readonly port: number;
   private readonly host: string;
   private readonly timeout: number | undefined;
+  private readonly allowRemote: boolean;
   private linkedInClient: CDPClient | null = null;
   private uiClient: CDPClient | null = null;
 
-  constructor(port: number, options?: { host?: string; timeout?: number }) {
+  constructor(port: number, options?: { host?: string; timeout?: number; allowRemote?: boolean }) {
     this.port = port;
     this.host = options?.host ?? "127.0.0.1";
     this.timeout = options?.timeout;
+    this.allowRemote = options?.allowRemote ?? false;
   }
 
   /**
@@ -87,9 +89,11 @@ export class InstanceService {
       );
     }
 
-    const clientOptions = this.timeout !== undefined
-      ? { host: this.host, timeout: this.timeout }
-      : { host: this.host };
+    const clientOptions = {
+      host: this.host,
+      ...(this.timeout !== undefined && { timeout: this.timeout }),
+      allowRemote: this.allowRemote,
+    };
 
     const liClient = new CDPClient(this.port, clientOptions);
     await liClient.connect(linkedInTarget.id);

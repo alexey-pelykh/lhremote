@@ -39,8 +39,16 @@ export function registerCampaignUpdate(server: McpServer): void {
         .optional()
         .default(DEFAULT_CDP_PORT)
         .describe("CDP port"),
+      cdpHost: z
+        .string()
+        .optional()
+        .describe("CDP host (default: 127.0.0.1)"),
+      allowRemote: z
+        .boolean()
+        .optional()
+        .describe("Allow non-loopback CDP connections"),
     },
-    async ({ campaignId, name, description, cdpPort }) => {
+    async ({ campaignId, name, description, cdpPort, cdpHost, allowRemote }) => {
       // Validate that at least one field is provided
       if (name === undefined && description === undefined) {
         return mcpError("At least one of name or description must be provided.");
@@ -48,7 +56,7 @@ export function registerCampaignUpdate(server: McpServer): void {
 
       let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort);
+        accountId = await resolveAccount(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
       } catch (error) {
         return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }

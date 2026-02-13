@@ -6,9 +6,14 @@ import { errorMessage, LauncherService } from "@lhremote/core";
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | list-accounts} CLI command. */
 export async function handleListAccounts(options: {
   cdpPort?: number;
+  cdpHost?: string;
+  allowRemote?: boolean;
   json?: boolean;
 }): Promise<void> {
-  const launcher = new LauncherService(options.cdpPort);
+  const launcher = new LauncherService(options.cdpPort, {
+    ...(options.cdpHost !== undefined && { host: options.cdpHost }),
+    ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+  });
 
   try {
     await launcher.connect();

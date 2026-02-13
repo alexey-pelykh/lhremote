@@ -203,7 +203,7 @@ describe("registerStopInstance", () => {
     const handler = getHandler("stop-instance");
     await handler({ accountId: 42, cdpPort: 4567 });
 
-    expect(LauncherService).toHaveBeenCalledWith(4567);
+    expect(LauncherService).toHaveBeenCalledWith(4567, {});
   });
 
   it("disconnects after successful call", async () => {

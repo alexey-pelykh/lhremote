@@ -138,6 +138,6 @@ describe("registerListAccounts", () => {
     const handler = getHandler("list-accounts");
     await handler({ cdpPort: 4567 });
 
-    expect(LauncherService).toHaveBeenCalledWith(4567);
+    expect(LauncherService).toHaveBeenCalledWith(4567, {});
   });
 });

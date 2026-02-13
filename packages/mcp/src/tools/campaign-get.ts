@@ -30,11 +30,19 @@ export function registerCampaignGet(server: McpServer): void {
         .optional()
         .default(DEFAULT_CDP_PORT)
         .describe("CDP port"),
+      cdpHost: z
+        .string()
+        .optional()
+        .describe("CDP host (default: 127.0.0.1)"),
+      allowRemote: z
+        .boolean()
+        .optional()
+        .describe("Allow non-loopback CDP connections"),
     },
-    async ({ campaignId, cdpPort }) => {
+    async ({ campaignId, cdpPort, cdpHost, allowRemote }) => {
       let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort);
+        accountId = await resolveAccount(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
       } catch (error) {
         return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }
