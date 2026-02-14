@@ -5,6 +5,7 @@ import { discoverInstancePort } from "../cdp/index.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import { DatabaseClient, discoverAllDatabases } from "../db/index.js";
 import { ProfileRepository } from "../db/repositories/profile.js";
+import { errorMessage } from "../utils/error-message.js";
 import { LauncherService } from "./launcher.js";
 
 /** Status of the LinkedHelper launcher process. */
@@ -32,6 +33,7 @@ export interface StatusReport {
   launcher: LauncherStatus;
   instances: AccountInstanceStatus[];
   databases: DatabaseStatus[];
+  warnings?: string[];
 }
 
 /**
@@ -49,14 +51,15 @@ export async function checkStatus(
   const launcher: LauncherStatus = { reachable: false, port: cdpPort };
   const instances: AccountInstanceStatus[] = [];
   const databases: DatabaseStatus[] = [];
+  const warnings: string[] = [];
 
   // 1. Probe launcher
   const launcherService = new LauncherService(cdpPort, options);
   try {
     await launcherService.connect();
     launcher.reachable = true;
-  } catch {
-    // Launcher not reachable — skip instance discovery but still check databases
+  } catch (error: unknown) {
+    warnings.push(`Launcher not reachable on port ${cdpPort.toString()}: ${errorMessage(error)}`);
   }
 
   // 2. List accounts and discover instance CDP ports (only if launcher is reachable)
@@ -75,8 +78,8 @@ export async function checkStatus(
           cdpPort: accounts.length === 1 ? instancePort : null,
         });
       }
-    } catch {
-      // Failed to query accounts — report empty
+    } catch (error: unknown) {
+      warnings.push(`Failed to query accounts: ${errorMessage(error)}`);
     } finally {
       launcherService.disconnect();
     }
@@ -95,14 +98,19 @@ export async function checkStatus(
         } finally {
           client.close();
         }
-      } catch {
-        // Database unreadable — report count as 0
+      } catch (error: unknown) {
+        warnings.push(`Database unreadable at ${dbPath}: ${errorMessage(error)}`);
       }
       databases.push({ accountId, path: dbPath, profileCount });
     }
-  } catch {
-    // Failed to discover databases — report empty
+  } catch (error: unknown) {
+    warnings.push(`Failed to discover databases: ${errorMessage(error)}`);
   }
 
-  return { launcher, instances, databases };
+  return {
+    launcher,
+    instances,
+    databases,
+    ...(warnings.length > 0 ? { warnings } : {}),
+  };
 }

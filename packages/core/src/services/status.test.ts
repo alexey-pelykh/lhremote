@@ -62,6 +62,9 @@ describe("checkStatus", () => {
     expect(report.launcher).toEqual({ reachable: false, port: 9222 });
     expect(report.instances).toEqual([]);
     expect(report.databases).toEqual([]);
+    expect(report.warnings).toEqual([
+      "Launcher not reachable on port 9222: connection refused",
+    ]);
   });
 
   it("still discovers databases when launcher is not reachable", async () => {
@@ -90,6 +93,9 @@ describe("checkStatus", () => {
     expect(report.instances).toEqual([]);
     expect(report.databases).toEqual([
       { accountId: 1, path: "/path/to/db.db", profileCount: 10 },
+    ]);
+    expect(report.warnings).toEqual([
+      "Launcher not reachable on port 9222: connection refused",
     ]);
     expect(mockedDiscoverAllDatabases).toHaveBeenCalledOnce();
   });
@@ -183,6 +189,9 @@ describe("checkStatus", () => {
 
     expect(report.instances).toEqual([]);
     expect(report.launcher.reachable).toBe(true);
+    expect(report.warnings).toEqual([
+      "Failed to query accounts: eval error",
+    ]);
   });
 
   it("reports databases with profile counts", async () => {
@@ -228,6 +237,9 @@ describe("checkStatus", () => {
     expect(report.databases).toEqual([
       { accountId: 1, path: "/path/to/db.db", profileCount: 0 },
     ]);
+    expect(report.warnings).toEqual([
+      "Database unreadable at /path/to/db.db: SQLITE_CANTOPEN",
+    ]);
   });
 
   it("reports empty databases when discovery fails", async () => {
@@ -240,6 +252,41 @@ describe("checkStatus", () => {
     const report = await checkStatus(9222);
 
     expect(report.databases).toEqual([]);
+    expect(report.warnings).toEqual([
+      "Failed to discover databases: no such directory",
+    ]);
+  });
+
+  it("omits warnings when no errors occur", async () => {
+    mockLauncher();
+    mockedDiscoverInstancePort.mockResolvedValue(null);
+    mockedDiscoverAllDatabases.mockReturnValue(new Map());
+
+    const report = await checkStatus(9222);
+
+    expect(report.warnings).toBeUndefined();
+  });
+
+  it("accumulates multiple warnings from different stages", async () => {
+    mockedLauncherService.mockImplementation(function () {
+      return {
+        connect: vi.fn().mockRejectedValue(new Error("refused")),
+        disconnect: vi.fn(),
+      } as unknown as LauncherService;
+    });
+    mockedDiscoverAllDatabases.mockImplementation(() => {
+      throw new Error("no dir");
+    });
+
+    const report = await checkStatus(9222);
+
+    expect(report.warnings).toHaveLength(2);
+    expect(report.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/Launcher not reachable/),
+        expect.stringMatching(/Failed to discover databases/),
+      ]),
+    );
   });
 
   it("disconnects launcher after querying accounts", async () => {
