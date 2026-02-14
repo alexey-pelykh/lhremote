@@ -6,13 +6,13 @@ Accepted
 
 ## Context
 
-lhremote operates across three distinct layers — CDP protocol communication, database access, and service orchestration — each with its own failure modes. Errors from these layers surface through the MCP server and CLI, which need to provide meaningful feedback to users and AI agents.
+lhremote operates across four distinct layers — CDP protocol communication, database access, format/validation, and service orchestration — each with its own failure modes. Errors from these layers surface through the MCP server and CLI, which need to provide meaningful feedback to users and AI agents.
 
-Without custom errors, all failures would be generic `Error` instances, making it impossible to distinguish "LinkedHelper is not running" from "profile not found in database" from "CDP WebSocket timed out" without parsing error message strings.
+Without custom errors, all failures would be generic `Error` instances, making it impossible to distinguish "LinkedHelper is not running" from "profile not found in database" from "invalid campaign YAML" from "CDP WebSocket timed out" without parsing error message strings.
 
 ## Decision
 
-Define a three-tier error hierarchy with domain-specific base classes, each extending `Error`:
+Define a four-tier error hierarchy with domain-specific base classes, each extending `Error`:
 
 ```
 Error (built-in)
@@ -29,6 +29,9 @@ Error (built-in)
 │   ├── ActionNotFoundError         Campaign action not found
 │   ├── NoNextActionError           Action is terminal in chain
 │   └── ExcludeListNotFoundError    Exclude list not found
+│
+├── FormatError                     (packages/core/src/formats/errors.ts)
+│   └── CampaignFormatError         Campaign document structural validation failed
 │
 └── ServiceError                    (packages/core/src/services/errors.ts)
     ├── AppNotFoundError            LinkedHelper binary not found
@@ -47,7 +50,7 @@ Error (built-in)
 
 **Key design choices:**
 
-1. **Three independent base classes** (`CDPError`, `DatabaseError`, `ServiceError`) rather than a single project-wide base — each base class maps to an architectural layer, enabling layer-specific catch blocks.
+1. **Four independent base classes** (`CDPError`, `DatabaseError`, `FormatError`, `ServiceError`) rather than a single project-wide base — each base class maps to an architectural layer, enabling layer-specific catch blocks.
 
 2. **Errors carry domain context** — `ActionExecutionError` includes `actionType`, `CampaignExecutionError` and `CampaignTimeoutError` include `campaignId`, `ProfileNotFoundError` handles both numeric ID and public slug identifiers. This context enables meaningful user-facing messages.
 
@@ -88,9 +91,9 @@ Throw standard `Error` with descriptive messages. Simpler but forces all error h
 **Negative:**
 
 - Each new failure mode requires defining a new error class — adds boilerplate
-- Three independent hierarchies mean you cannot catch "any lhremote error" with a single `instanceof` check
+- Four independent hierarchies mean you cannot catch "any lhremote error" with a single `instanceof` check
 - Error classes must be exported and imported across package boundaries, adding to the public API surface
 
 **Neutral:**
 
-- The error hierarchy mirrors the package architecture (CDP, DB, Services) — changes to the layer structure would require corresponding error reorganization
+- The error hierarchy mirrors the package architecture (CDP, DB, Formats, Services) — changes to the layer structure would require corresponding error reorganization

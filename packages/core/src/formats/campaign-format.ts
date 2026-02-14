@@ -10,6 +10,7 @@ import type {
   CampaignActionConfig,
   CampaignConfig,
 } from "../types/index.js";
+import { FormatError } from "./errors.js";
 
 /** Current version of the campaign document format. */
 const CURRENT_VERSION = "1";
@@ -44,7 +45,7 @@ interface CampaignDocumentAction {
 /**
  * Thrown when a campaign document fails structural validation.
  */
-export class CampaignFormatError extends Error {
+export class CampaignFormatError extends FormatError {
   constructor(message: string) {
     super(message);
     this.name = "CampaignFormatError";
