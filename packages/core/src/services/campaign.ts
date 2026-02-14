@@ -508,28 +508,34 @@ export class CampaignService {
 
   /**
    * Get people counts for each action via CDP.
+   *
+   * Each action requires a single CDP round-trip that retrieves all
+   * four people-state counts at once.
    */
   private async getActionPeopleCounts(
     actionIds: number[],
   ): Promise<ActionPeopleCounts[]> {
     return Promise.all(
       actionIds.map(async (actionId) => {
-        const [queued, processed, successful, failed] = await Promise.all([
-          this.instance.evaluateUI<number>(
-            `(async () => window.mainWindowService.mainWindow.source.people.actions.getActionPeopleCount(${String(actionId)}, ${String(PEOPLE_STATE.QUEUED)}))()`,
-          ),
-          this.instance.evaluateUI<number>(
-            `(async () => window.mainWindowService.mainWindow.source.people.actions.getActionPeopleCount(${String(actionId)}, ${String(PEOPLE_STATE.PROCESSED)}))()`,
-          ),
-          this.instance.evaluateUI<number>(
-            `(async () => window.mainWindowService.mainWindow.source.people.actions.getActionPeopleCount(${String(actionId)}, ${String(PEOPLE_STATE.SUCCESSFUL)}))()`,
-          ),
-          this.instance.evaluateUI<number>(
-            `(async () => window.mainWindowService.mainWindow.source.people.actions.getActionPeopleCount(${String(actionId)}, ${String(PEOPLE_STATE.FAILED)}))()`,
-          ),
-        ]);
+        const counts = await this.instance.evaluateUI<{
+          queued: number;
+          processed: number;
+          successful: number;
+          failed: number;
+        }>(
+          `(async () => {
+            const actions = window.mainWindowService.mainWindow.source.people.actions;
+            const [queued, processed, successful, failed] = await Promise.all([
+              actions.getActionPeopleCount(${String(actionId)}, ${String(PEOPLE_STATE.QUEUED)}),
+              actions.getActionPeopleCount(${String(actionId)}, ${String(PEOPLE_STATE.PROCESSED)}),
+              actions.getActionPeopleCount(${String(actionId)}, ${String(PEOPLE_STATE.SUCCESSFUL)}),
+              actions.getActionPeopleCount(${String(actionId)}, ${String(PEOPLE_STATE.FAILED)}),
+            ]);
+            return { queued, processed, successful, failed };
+          })()`,
+        );
 
-        return { actionId, queued, processed, successful, failed };
+        return { actionId, ...counts };
       }),
     );
   }

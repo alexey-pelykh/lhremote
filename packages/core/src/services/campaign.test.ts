@@ -453,14 +453,11 @@ describe("CampaignService", () => {
       mockGetCampaign.mockReturnValue(MOCK_CAMPAIGN);
       mockGetCampaignActions.mockReturnValue(MOCK_ACTIONS);
 
-      // CDP calls: runnerState, isPaused, then 4 action counts
+      // CDP calls: runnerState, isPaused, then 1 batched action counts call
       mockEvaluateUI
         .mockResolvedValueOnce("idle")   // runnerState
         .mockResolvedValueOnce(true)     // isPaused
-        .mockResolvedValueOnce(5)        // queued
-        .mockResolvedValueOnce(3)        // processed
-        .mockResolvedValueOnce(2)        // successful
-        .mockResolvedValueOnce(1);       // failed
+        .mockResolvedValueOnce({ queued: 5, processed: 3, successful: 2, failed: 1 });
 
       const status = await service.getStatus(1);
 
@@ -493,12 +490,9 @@ describe("CampaignService", () => {
       mockGetResults.mockReturnValue(MOCK_RESULTS);
       mockGetCampaignActions.mockReturnValue(MOCK_ACTIONS);
 
-      // 4 action count CDP calls
+      // 1 batched action counts CDP call
       mockEvaluateUI
-        .mockResolvedValueOnce(0)  // queued
-        .mockResolvedValueOnce(0)  // processed
-        .mockResolvedValueOnce(1)  // successful
-        .mockResolvedValueOnce(0); // failed
+        .mockResolvedValueOnce({ queued: 0, processed: 0, successful: 1, failed: 0 });
 
       const result = await service.getResults(1);
 
