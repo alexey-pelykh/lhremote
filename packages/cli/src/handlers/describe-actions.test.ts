@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { handleDescribeActions } from "./describe-actions.js";
+import { getStderr, getStdout } from "./testing/mock-helpers.js";
 
 describe("handleDescribeActions", () => {
   const originalExitCode = process.exitCode;
@@ -21,23 +22,11 @@ describe("handleDescribeActions", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
-  function getStderr(): string {
-    return stderrSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("lists all action types in human-readable format", () => {
     handleDescribeActions({});
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("All action types");
     expect(output).toContain("VisitAndExtract");
     expect(output).toContain("MessageToPerson");
@@ -49,7 +38,7 @@ describe("handleDescribeActions", () => {
     handleDescribeActions({ json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     const parsed = JSON.parse(output) as { actionTypes: unknown[] };
     expect(parsed.actionTypes).toBeDefined();
     expect(parsed.actionTypes.length).toBeGreaterThan(0);
@@ -59,7 +48,7 @@ describe("handleDescribeActions", () => {
     handleDescribeActions({ category: "messaging" });
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain('"messaging"');
     expect(output).toContain("MessageToPerson");
     expect(output).not.toContain("VisitAndExtract");
@@ -69,7 +58,7 @@ describe("handleDescribeActions", () => {
     handleDescribeActions({ category: "people", json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     const parsed = JSON.parse(output) as {
       actionTypes: Array<{ category: string }>;
     };
@@ -82,7 +71,7 @@ describe("handleDescribeActions", () => {
     handleDescribeActions({ type: "VisitAndExtract" });
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("VisitAndExtract");
     expect(output).toContain("[people]");
     expect(output).toContain("Configuration:");
@@ -93,7 +82,7 @@ describe("handleDescribeActions", () => {
     handleDescribeActions({ type: "Waiter", json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     const parsed = JSON.parse(output) as { name: string; category: string };
     expect(parsed.name).toBe("Waiter");
     expect(parsed.category).toBe("workflow");
@@ -112,7 +101,7 @@ describe("handleDescribeActions", () => {
     handleDescribeActions({ category: "bogus" });
 
     expect(process.exitCode).toBe(1);
-    const output = getStderr();
+    const output = getStderr(stderrSpy);
     expect(output).toContain("Invalid category: bogus");
     expect(output).toContain("Valid categories:");
   });
@@ -120,7 +109,7 @@ describe("handleDescribeActions", () => {
   it("shows example when available", () => {
     handleDescribeActions({ type: "VisitAndExtract" });
 
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("Example:");
     expect(output).toContain("extractCurrentOrganizations");
   });
@@ -128,7 +117,7 @@ describe("handleDescribeActions", () => {
   it("does not show example when not available", () => {
     handleDescribeActions({ type: "RemoveFromFirstConnection" });
 
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).not.toContain("Example:");
   });
 });

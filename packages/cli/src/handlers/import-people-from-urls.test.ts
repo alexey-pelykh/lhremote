@@ -33,6 +33,7 @@ import { readFileSync } from "node:fs";
 
 import { handleImportPeopleFromUrls } from "./import-people-from-urls.js";
 import {
+  getStdout,
   mockResolveAccount,
   mockWithInstanceDatabase,
 } from "./testing/mock-helpers.js";
@@ -76,12 +77,6 @@ describe("handleImportPeopleFromUrls", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("imports people from --urls and prints result", async () => {
     setupSuccessPath();
 
@@ -90,7 +85,7 @@ describe("handleImportPeopleFromUrls", () => {
     });
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("Imported 3 people into campaign 1 action 10.");
     expect(output).toContain("1 already in queue.");
   });
@@ -104,7 +99,7 @@ describe("handleImportPeopleFromUrls", () => {
     await handleImportPeopleFromUrls(1, { urlsFile: "urls.txt" });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("Imported 3 people");
+    expect(getStdout(stdoutSpy)).toContain("Imported 3 people");
   });
 
   it("prints JSON with --json", async () => {
@@ -116,7 +111,7 @@ describe("handleImportPeopleFromUrls", () => {
     });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.success).toBe(true);
     expect(parsed.campaignId).toBe(1);
     expect(parsed.actionId).toBe(10);
@@ -139,7 +134,7 @@ describe("handleImportPeopleFromUrls", () => {
       urls: "https://linkedin.com/in/alice",
     });
 
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("2 already processed.");
     expect(output).toContain("1 failed.");
   });
@@ -159,7 +154,7 @@ describe("handleImportPeopleFromUrls", () => {
       urls: "https://linkedin.com/in/alice",
     });
 
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).not.toContain("already in queue");
     expect(output).not.toContain("already processed");
     expect(output).not.toContain("failed");

@@ -37,6 +37,7 @@ import { readFileSync } from "node:fs";
 
 import { handleCampaignCreate } from "./campaign-create.js";
 import {
+  getStdout,
   mockResolveAccount,
   mockWithInstanceDatabase,
 } from "./testing/mock-helpers.js";
@@ -77,19 +78,13 @@ describe("handleCampaignCreate", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("creates campaign from --json-input and prints result", async () => {
     setupSuccessPath();
 
     await handleCampaignCreate({ jsonInput: '{"name":"Test"}' });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain('Campaign created: #1 "Test Campaign"');
+    expect(getStdout(stdoutSpy)).toContain('Campaign created: #1 "Test Campaign"');
     expect(parseCampaignJson).toHaveBeenCalledWith('{"name":"Test"}');
   });
 
@@ -129,7 +124,7 @@ describe("handleCampaignCreate", () => {
     await handleCampaignCreate({ jsonInput: '{"name":"Test"}', json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.id).toBe(1);
     expect(parsed.name).toBe("Test Campaign");
   });

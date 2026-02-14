@@ -21,7 +21,7 @@ import {
 } from "@lhremote/core";
 
 import { handleCampaignStatistics } from "./campaign-statistics.js";
-import { mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
 
 const MOCK_ACTION = {
   actionId: 1,
@@ -88,19 +88,13 @@ describe("handleCampaignStatistics", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("prints human-readable statistics", async () => {
     setupSuccessPath();
 
     await handleCampaignStatistics(1, {});
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("Campaign #1 Statistics");
     expect(output).toContain("80 successful");
     expect(output).toContain("10 replied");
@@ -117,7 +111,7 @@ describe("handleCampaignStatistics", () => {
     await handleCampaignStatistics(1, { json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.totals.successful).toBe(80);
     expect(parsed.actions).toHaveLength(1);
   });
@@ -150,7 +144,7 @@ describe("handleCampaignStatistics", () => {
 
     await handleCampaignStatistics(1, {});
 
-    expect(getStdout()).not.toContain("Timeline:");
+    expect(getStdout(stdoutSpy)).not.toContain("Timeline:");
   });
 
   it("shows exception label for exception errors", async () => {
@@ -170,7 +164,7 @@ describe("handleCampaignStatistics", () => {
 
     await handleCampaignStatistics(1, {});
 
-    expect(getStdout()).toContain("(exception)");
+    expect(getStdout(stdoutSpy)).toContain("(exception)");
   });
 
   it("sets exitCode 1 when campaign not found", async () => {

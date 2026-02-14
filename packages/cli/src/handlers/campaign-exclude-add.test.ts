@@ -31,7 +31,7 @@ import {
 import { readFileSync } from "node:fs";
 
 import { handleCampaignExcludeAdd } from "./campaign-exclude-add.js";
-import { mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
 
 function mockRepo(added = 2) {
   const addToExcludeList = vi.fn().mockReturnValue(added);
@@ -64,19 +64,13 @@ describe("handleCampaignExcludeAdd", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("adds persons to campaign-level exclude list", async () => {
     setupSuccessPath();
 
     await handleCampaignExcludeAdd(1, { personIds: "100,200" });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain(
+    expect(getStdout(stdoutSpy)).toContain(
       "Added 2 person(s) to exclude list for campaign 1.",
     );
   });
@@ -87,7 +81,7 @@ describe("handleCampaignExcludeAdd", () => {
     await handleCampaignExcludeAdd(1, { personIds: "100,200", actionId: 10 });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain(
+    expect(getStdout(stdoutSpy)).toContain(
       "Added 2 person(s) to exclude list for action 10 in campaign 1.",
     );
   });
@@ -99,7 +93,7 @@ describe("handleCampaignExcludeAdd", () => {
 
     await handleCampaignExcludeAdd(1, { personIds: "100,200" });
 
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("Added 1 person(s)");
     expect(output).toContain("1 person(s) already in exclude list.");
   });
@@ -119,7 +113,7 @@ describe("handleCampaignExcludeAdd", () => {
     await handleCampaignExcludeAdd(1, { personIds: "100,200", json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.success).toBe(true);
     expect(parsed.campaignId).toBe(1);
     expect(parsed.level).toBe("campaign");
@@ -136,7 +130,7 @@ describe("handleCampaignExcludeAdd", () => {
       json: true,
     });
 
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.actionId).toBe(10);
     expect(parsed.level).toBe("action");
   });

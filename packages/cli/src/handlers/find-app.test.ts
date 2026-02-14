@@ -14,6 +14,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import { type DiscoveredApp, findApp } from "@lhremote/core";
 
 import { handleFindApp } from "./find-app.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
 describe("handleFindApp", () => {
   const originalExitCode = process.exitCode;
@@ -32,12 +33,6 @@ describe("handleFindApp", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("prints JSON with --json", async () => {
     const apps: DiscoveredApp[] = [
       { pid: 1234, cdpPort: 9222, connectable: true },
@@ -47,7 +42,7 @@ describe("handleFindApp", () => {
     await handleFindApp({ json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed).toEqual(apps);
   });
 
@@ -59,9 +54,9 @@ describe("handleFindApp", () => {
     await handleFindApp({});
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("PID 1234");
-    expect(getStdout()).toContain("CDP port 9222");
-    expect(getStdout()).toContain("connectable");
+    expect(getStdout(stdoutSpy)).toContain("PID 1234");
+    expect(getStdout(stdoutSpy)).toContain("CDP port 9222");
+    expect(getStdout(stdoutSpy)).toContain("connectable");
   });
 
   it("prints 'not connectable' for non-connectable instance", async () => {
@@ -71,7 +66,7 @@ describe("handleFindApp", () => {
 
     await handleFindApp({});
 
-    expect(getStdout()).toContain("not connectable");
+    expect(getStdout(stdoutSpy)).toContain("not connectable");
   });
 
   it("prints 'no CDP port' when cdpPort is null", async () => {
@@ -81,7 +76,7 @@ describe("handleFindApp", () => {
 
     await handleFindApp({});
 
-    expect(getStdout()).toContain("no CDP port");
+    expect(getStdout(stdoutSpy)).toContain("no CDP port");
   });
 
   it("prints message when no instances found", async () => {
@@ -90,7 +85,7 @@ describe("handleFindApp", () => {
     await handleFindApp({});
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("No running LinkedHelper instances found");
+    expect(getStdout(stdoutSpy)).toContain("No running LinkedHelper instances found");
   });
 
   it("sets exitCode 1 on error", async () => {

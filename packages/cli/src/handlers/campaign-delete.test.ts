@@ -24,6 +24,7 @@ import {
 
 import { handleCampaignDelete } from "./campaign-delete.js";
 import {
+  getStdout,
   mockResolveAccount,
   mockWithInstanceDatabase,
 } from "./testing/mock-helpers.js";
@@ -59,19 +60,13 @@ describe("handleCampaignDelete", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("archives campaign and prints confirmation", async () => {
     setupSuccessPath();
 
     await handleCampaignDelete(5, {});
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("Campaign 5 archived.");
+    expect(getStdout(stdoutSpy)).toContain("Campaign 5 archived.");
   });
 
   it("prints JSON with --json", async () => {
@@ -80,7 +75,7 @@ describe("handleCampaignDelete", () => {
     await handleCampaignDelete(5, { json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.success).toBe(true);
     expect(parsed.campaignId).toBe(5);
     expect(parsed.action).toBe("archived");

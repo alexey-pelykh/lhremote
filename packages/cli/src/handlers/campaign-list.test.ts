@@ -16,7 +16,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import { type CampaignSummary, CampaignRepository } from "@lhremote/core";
 
 import { handleCampaignList } from "./campaign-list.js";
-import { mockDb, mockDiscovery } from "./testing/mock-helpers.js";
+import { getStdout, mockDb, mockDiscovery } from "./testing/mock-helpers.js";
 
 const MOCK_CAMPAIGNS: CampaignSummary[] = [
   {
@@ -70,19 +70,13 @@ describe("handleCampaignList", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("prints JSON with --json", async () => {
     setupSuccessPath();
 
     await handleCampaignList({ json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.campaigns).toHaveLength(2);
     expect(parsed.total).toBe(2);
   });
@@ -93,7 +87,7 @@ describe("handleCampaignList", () => {
     await handleCampaignList({});
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("Campaigns (2 total):");
     expect(output).toContain("#1  Outreach Q1");
     expect(output).toContain("[active]");
@@ -111,7 +105,7 @@ describe("handleCampaignList", () => {
     await handleCampaignList({});
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("No campaigns found.");
+    expect(getStdout(stdoutSpy)).toContain("No campaigns found.");
   });
 
   it("sets exitCode 1 when no databases found", async () => {

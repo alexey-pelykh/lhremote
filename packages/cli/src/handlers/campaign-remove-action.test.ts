@@ -25,6 +25,7 @@ import {
 
 import { handleCampaignRemoveAction } from "./campaign-remove-action.js";
 import {
+  getStdout,
   mockResolveAccount,
   mockWithInstanceDatabase,
 } from "./testing/mock-helpers.js";
@@ -60,19 +61,13 @@ describe("handleCampaignRemoveAction", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("removes action and prints confirmation", async () => {
     setupSuccessPath();
 
     await handleCampaignRemoveAction(1, 10, {});
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("Action 10 removed from campaign 1.");
+    expect(getStdout(stdoutSpy)).toContain("Action 10 removed from campaign 1.");
   });
 
   it("prints JSON with --json", async () => {
@@ -81,7 +76,7 @@ describe("handleCampaignRemoveAction", () => {
     await handleCampaignRemoveAction(1, 10, { json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.success).toBe(true);
     expect(parsed.campaignId).toBe(1);
     expect(parsed.removedActionId).toBe(10);

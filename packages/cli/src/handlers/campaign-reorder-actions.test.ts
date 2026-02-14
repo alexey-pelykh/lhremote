@@ -25,6 +25,7 @@ import {
 
 import { handleCampaignReorderActions } from "./campaign-reorder-actions.js";
 import {
+  getStdout,
   mockResolveAccount,
   mockWithInstanceDatabase,
 } from "./testing/mock-helpers.js";
@@ -65,19 +66,13 @@ describe("handleCampaignReorderActions", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("reorders actions and prints confirmation", async () => {
     setupSuccessPath();
 
     await handleCampaignReorderActions(1, { actionIds: "2,1" });
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("Actions reordered in campaign 1.");
     expect(output).toContain('#2 "Send Message" (MessageToPerson)');
     expect(output).toContain('#1 "Visit Profile" (VisitAndExtract)');
@@ -89,7 +84,7 @@ describe("handleCampaignReorderActions", () => {
     await handleCampaignReorderActions(1, { actionIds: "2,1", json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.success).toBe(true);
     expect(parsed.campaignId).toBe(1);
     expect(parsed.actions).toHaveLength(2);

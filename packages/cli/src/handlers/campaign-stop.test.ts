@@ -24,6 +24,7 @@ import {
 
 import { handleCampaignStop } from "./campaign-stop.js";
 import {
+  getStdout,
   mockResolveAccount,
   mockWithInstanceDatabase,
 } from "./testing/mock-helpers.js";
@@ -59,19 +60,13 @@ describe("handleCampaignStop", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("pauses campaign and prints confirmation", async () => {
     setupSuccessPath();
 
     await handleCampaignStop(5, {});
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("Campaign 5 paused.");
+    expect(getStdout(stdoutSpy)).toContain("Campaign 5 paused.");
   });
 
   it("prints JSON with --json", async () => {
@@ -80,7 +75,7 @@ describe("handleCampaignStop", () => {
     await handleCampaignStop(5, { json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.success).toBe(true);
     expect(parsed.campaignId).toBe(5);
     expect(parsed.message).toBe("Campaign paused");

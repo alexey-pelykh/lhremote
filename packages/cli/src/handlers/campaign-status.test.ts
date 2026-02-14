@@ -20,6 +20,7 @@ import {
 } from "@lhremote/core";
 
 import { handleCampaignStatus } from "./campaign-status.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
 const MOCK_STATUS_RESULT: CampaignStatusOutput = {
   campaignId: 1,
@@ -53,19 +54,13 @@ describe("handleCampaignStatus", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("prints human-readable status", async () => {
     vi.mocked(campaignStatus).mockResolvedValue(MOCK_STATUS_RESULT);
 
     await handleCampaignStatus(1, {});
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("Campaign #1 Status");
     expect(output).toContain("State: active");
     expect(output).toContain("Paused: no");
@@ -79,7 +74,7 @@ describe("handleCampaignStatus", () => {
     await handleCampaignStatus(1, { json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.campaignId).toBe(1);
     expect(parsed.campaignState).toBe("active");
     expect(parsed.actionCounts).toHaveLength(1);
@@ -94,7 +89,7 @@ describe("handleCampaignStatus", () => {
     await handleCampaignStatus(1, { includeResults: true });
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("Results (2):");
     expect(output).toContain("Person 100: result=3");
     expect(output).toContain("Person 101: result=0");
@@ -108,7 +103,7 @@ describe("handleCampaignStatus", () => {
 
     await handleCampaignStatus(1, { includeResults: true, json: true });
 
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.results).toHaveLength(2);
   });
 
@@ -120,7 +115,7 @@ describe("handleCampaignStatus", () => {
 
     await handleCampaignStatus(1, { includeResults: true });
 
-    expect(getStdout()).toContain("No results yet.");
+    expect(getStdout(stdoutSpy)).toContain("No results yet.");
   });
 
   it("omits action counts section when empty", async () => {
@@ -131,7 +126,7 @@ describe("handleCampaignStatus", () => {
 
     await handleCampaignStatus(1, {});
 
-    expect(getStdout()).not.toContain("Action Counts:");
+    expect(getStdout(stdoutSpy)).not.toContain("Action Counts:");
   });
 
   it("sets exitCode 1 when campaign not found", async () => {

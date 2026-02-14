@@ -33,7 +33,7 @@ import {
 import { writeFileSync } from "node:fs";
 
 import { handleCampaignExport } from "./campaign-export.js";
-import { mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
 
 const MOCK_CAMPAIGN = { id: 1, name: "Test Campaign" };
 const MOCK_ACTIONS = [{ id: 10, name: "Visit" }];
@@ -72,12 +72,6 @@ describe("handleCampaignExport", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("exports campaign as YAML to stdout by default", async () => {
     setupSuccessPath();
 
@@ -85,7 +79,7 @@ describe("handleCampaignExport", () => {
 
     expect(process.exitCode).toBeUndefined();
     expect(serializeCampaignYaml).toHaveBeenCalled();
-    expect(getStdout()).toContain("name: Test Campaign");
+    expect(getStdout(stdoutSpy)).toContain("name: Test Campaign");
   });
 
   it("exports campaign as JSON when --format json", async () => {
@@ -108,7 +102,7 @@ describe("handleCampaignExport", () => {
       "name: Test Campaign\n",
       "utf-8",
     );
-    expect(getStdout()).toContain("Campaign 1 exported to campaign.yaml");
+    expect(getStdout(stdoutSpy)).toContain("Campaign 1 exported to campaign.yaml");
   });
 
   it("sets exitCode 1 on unsupported format", async () => {
