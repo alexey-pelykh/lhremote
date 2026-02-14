@@ -5,6 +5,10 @@ inputs:
   registry-url:
     description: Registry URL for publishing
     required: false
+  skip-playwright:
+    description: Skip Playwright Chromium installation
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -20,8 +24,39 @@ runs:
     - run: pnpm install --frozen-lockfile
       shell: bash
 
+    - name: Get Playwright version
+      if: inputs.skip-playwright != 'true'
+      id: pw-version
+      run: echo "version=$(npx playwright-core --version)" >> "$GITHUB_OUTPUT"
+      shell: bash
+
+    - name: Resolve Playwright cache path
+      if: inputs.skip-playwright != 'true'
+      id: pw-cache-path
+      shell: bash
+      run: |
+        case "${{ runner.os }}" in
+          Linux)   echo "path=${XDG_CACHE_HOME:-$HOME/.cache}/ms-playwright" >> "$GITHUB_OUTPUT" ;;
+          macOS)   echo "path=$HOME/Library/Caches/ms-playwright" >> "$GITHUB_OUTPUT" ;;
+          Windows) echo "path=$LOCALAPPDATA/ms-playwright" >> "$GITHUB_OUTPUT" ;;
+        esac
+
+    - name: Cache Playwright browsers
+      if: inputs.skip-playwright != 'true'
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      id: pw-cache
+      with:
+        path: ${{ steps.pw-cache-path.outputs.path }}
+        key: pw-${{ runner.os }}-${{ steps.pw-version.outputs.version }}
+
     - name: Install Playwright Chromium
+      if: inputs.skip-playwright != 'true' && steps.pw-cache.outputs.cache-hit != 'true'
       run: npx playwright-core install chromium --with-deps
+      shell: bash
+
+    - name: Install Playwright OS deps (cache hit)
+      if: inputs.skip-playwright != 'true' && steps.pw-cache.outputs.cache-hit == 'true'
+      run: npx playwright-core install-deps chromium
       shell: bash
 
     - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
