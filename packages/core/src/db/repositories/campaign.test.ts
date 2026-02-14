@@ -166,8 +166,8 @@ describe("CampaignRepository", () => {
     it("returns action results for a campaign", () => {
       const results = repo.getResults(1);
 
-      expect(results).toHaveLength(1);
-      const result = results.at(0);
+      expect(results).toHaveLength(4);
+      const result = results.find((r) => r.id === 1);
       expect(result).toBeDefined();
       expect(result).toMatchObject({
         id: 1,
@@ -840,6 +840,217 @@ describe("CampaignRepository", () => {
       expect(() => repo.removeFromExcludeList(2, [1])).toThrow(
         ExcludeListNotFoundError,
       );
+    });
+  });
+
+  describe("getStatistics", () => {
+    // Campaign 1 fixture data:
+    //   Action 1 ("Send Welcome Message", MessageToPerson) with 4 results:
+    //     person 1: result=1 (successful)
+    //     person 3: result=2 (replied)
+    //     person 2: result=-1 (failed)
+    //     person 4: result=-2 (skipped)
+    //   Error flags (code != NULL):
+    //     code=100, is_exception=0, who_to_blame='LinkedIn' (x2)
+    //     code=200, is_exception=1, who_to_blame='LH' (x1)
+
+    it("returns per-action breakdown for a campaign", () => {
+      const stats = repo.getStatistics(1);
+
+      expect(stats.campaignId).toBe(1);
+      expect(stats.actions).toHaveLength(1);
+
+      const action = stats.actions.at(0);
+      expect(action).toBeDefined();
+      expect(action).toMatchObject({
+        actionId: 1,
+        actionName: "Send Welcome Message",
+        actionType: "MessageToPerson",
+      });
+    });
+
+    it("counts successful/replied/failed/skipped correctly", () => {
+      const stats = repo.getStatistics(1);
+
+      const action = stats.actions.at(0);
+      expect(action).toBeDefined();
+      expect(action?.successful).toBe(1);
+      expect(action?.replied).toBe(1);
+      expect(action?.failed).toBe(1);
+      expect(action?.skipped).toBe(1);
+      expect(action?.total).toBe(4);
+    });
+
+    it("calculates success rate correctly", () => {
+      const stats = repo.getStatistics(1);
+
+      const action = stats.actions.at(0);
+      expect(action).toBeDefined();
+      // successRate = round(((successful + replied) / total) * 1000) / 10
+      // = round(((1 + 1) / 4) * 1000) / 10 = round(500) / 10 = 50
+      expect(action?.successRate).toBe(50);
+    });
+
+    it("returns top errors with blame attribution", () => {
+      const stats = repo.getStatistics(1);
+
+      const action = stats.actions.at(0);
+      expect(action).toBeDefined();
+      const errors = action?.topErrors ?? [];
+
+      expect(errors).toHaveLength(2);
+      expect(errors.at(0)).toMatchObject({
+        code: 100,
+        count: 2,
+        isException: false,
+        whoToBlame: "LinkedIn",
+      });
+      expect(errors.at(1)).toMatchObject({
+        code: 200,
+        count: 1,
+        isException: true,
+        whoToBlame: "LH",
+      });
+    });
+
+    it("orders top errors by count descending", () => {
+      const stats = repo.getStatistics(1);
+
+      const action = stats.actions.at(0);
+      expect(action).toBeDefined();
+      const errors = action?.topErrors ?? [];
+
+      for (let i = 1; i < errors.length; i++) {
+        expect(errors[i - 1]?.count).toBeGreaterThanOrEqual(
+          errors[i]?.count ?? 0,
+        );
+      }
+    });
+
+    it("respects maxErrors option", () => {
+      const stats = repo.getStatistics(1, { maxErrors: 1 });
+
+      const action = stats.actions.at(0);
+      expect(action).toBeDefined();
+      const errors = action?.topErrors ?? [];
+
+      expect(errors).toHaveLength(1);
+      expect(errors.at(0)?.code).toBe(100);
+    });
+
+    it("filters by actionId when provided", () => {
+      const stats = repo.getStatistics(1, { actionId: 1 });
+
+      expect(stats.actions).toHaveLength(1);
+      expect(stats.actions.at(0)?.actionId).toBe(1);
+    });
+
+    it("throws CampaignNotFoundError for missing campaign", () => {
+      expect(() => repo.getStatistics(999)).toThrow(CampaignNotFoundError);
+    });
+
+    it("throws ActionNotFoundError for invalid actionId", () => {
+      expect(() => repo.getStatistics(1, { actionId: 999 })).toThrow(
+        ActionNotFoundError,
+      );
+    });
+
+    it("handles campaign with no results", () => {
+      // Campaign 3 has no actions (archived)
+      const stats = repo.getStatistics(3);
+
+      expect(stats.campaignId).toBe(3);
+      expect(stats.actions).toHaveLength(0);
+      expect(stats.totals).toMatchObject({
+        successful: 0,
+        replied: 0,
+        failed: 0,
+        skipped: 0,
+        total: 0,
+        successRate: 0,
+      });
+    });
+
+    it("aggregates totals across all actions", () => {
+      const stats = repo.getStatistics(1);
+
+      expect(stats.totals).toMatchObject({
+        successful: 1,
+        replied: 1,
+        failed: 1,
+        skipped: 1,
+        total: 4,
+        successRate: 50,
+      });
+    });
+
+    it("includes first and last result timestamps", () => {
+      const stats = repo.getStatistics(1);
+
+      const action = stats.actions.at(0);
+      expect(action).toBeDefined();
+      expect(action?.firstResultAt).toBe("2025-01-15T12:30:00.000Z");
+      expect(action?.lastResultAt).toBe("2025-01-15T14:00:00.000Z");
+    });
+  });
+
+  describe("resetForRerun — rollback", () => {
+    it("rolls back transaction on error and preserves database state", () => {
+      // Snapshot initial state
+      const initialTargets = db
+        .prepare(
+          "SELECT person_id, state FROM action_target_people WHERE action_id = 1 ORDER BY person_id",
+        )
+        .all() as Array<{ person_id: number; state: number }>;
+
+      const initialHistory = db
+        .prepare(
+          "SELECT person_id, result_status FROM person_in_campaigns_history WHERE campaign_id = 1 ORDER BY person_id",
+        )
+        .all() as Array<{ person_id: number; result_status: number }>;
+
+      const initialResults = db
+        .prepare(
+          "SELECT id FROM action_results WHERE action_version_id = 1 ORDER BY id",
+        )
+        .all() as Array<{ id: number }>;
+
+      // Sabotage a write statement to force an error mid-transaction
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- private method access for rollback test
+      const stmts = (repo as any).getWriteStatements();
+      const originalRun = stmts.resetHistory.run.bind(stmts.resetHistory);
+      stmts.resetHistory.run = () => {
+        throw new Error("Simulated DB error");
+      };
+
+      // Attempt reset — should throw the simulated error
+      expect(() => repo.resetForRerun(1, [1])).toThrow("Simulated DB error");
+
+      // Restore original to avoid side effects
+      stmts.resetHistory.run = originalRun;
+
+      // Verify database state is unchanged (ROLLBACK worked)
+      const afterTargets = db
+        .prepare(
+          "SELECT person_id, state FROM action_target_people WHERE action_id = 1 ORDER BY person_id",
+        )
+        .all() as Array<{ person_id: number; state: number }>;
+
+      const afterHistory = db
+        .prepare(
+          "SELECT person_id, result_status FROM person_in_campaigns_history WHERE campaign_id = 1 ORDER BY person_id",
+        )
+        .all() as Array<{ person_id: number; result_status: number }>;
+
+      const afterResults = db
+        .prepare(
+          "SELECT id FROM action_results WHERE action_version_id = 1 ORDER BY id",
+        )
+        .all() as Array<{ id: number }>;
+
+      expect(afterTargets).toEqual(initialTargets);
+      expect(afterHistory).toEqual(initialHistory);
+      expect(afterResults).toEqual(initialResults);
     });
   });
 });

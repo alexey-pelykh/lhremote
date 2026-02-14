@@ -548,6 +548,9 @@ db.exec(`
     action_result_id INTEGER NOT NULL,
     flag_name TEXT NOT NULL,
     flag_value INTEGER,
+    code INTEGER,
+    is_exception INTEGER DEFAULT 0,
+    who_to_blame TEXT DEFAULT '',
     created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
     updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
     FOREIGN KEY(action_result_id) REFERENCES action_results(id)
@@ -623,18 +626,30 @@ db.exec(`
   INSERT INTO action_target_people (id, action_id, action_version_id, person_id, state, li_account_id, created_at, updated_at)
   VALUES
     (1, 1, 1, 1, 2, 1, '${NOW}', '${NOW}'),
-    (2, 1, 1, 3, 1, 1, '${NOW}', '${NOW}');
+    (2, 1, 1, 3, 2, 1, '${NOW}', '${NOW}'),
+    (10, 1, 1, 2, 2, 1, '${NOW}', '${NOW}'),
+    (11, 1, 1, 4, 2, 1, '${NOW}', '${NOW}');
 
   INSERT INTO person_in_campaigns_history (id, campaign_id, person_id, action_target_people_id, result_status, result_id, result_action_version_id, add_to_target_date, add_to_target_or_result_saved_date, created_at, updated_at)
   VALUES
     (1, 1, 1, 1, 1, 1, 1, '${NOW}', '${NOW}', '${NOW}', '${NOW}'),
-    (2, 1, 3, 2, -999, NULL, NULL, '${NOW}', '${NOW}', '${NOW}', '${NOW}');
+    (2, 1, 3, 2, 2, 2, 1, '${NOW}', '${NOW}', '${NOW}', '${NOW}'),
+    (10, 1, 2, 10, -1, 3, 1, '${NOW}', '${NOW}', '${NOW}', '${NOW}'),
+    (11, 1, 4, 11, -2, 4, 1, '${NOW}', '${NOW}', '${NOW}', '${NOW}');
 
   INSERT INTO action_results (id, action_version_id, person_id, result, platform, created_at, updated_at)
-  VALUES (1, 1, 1, 1, 'LINKEDIN', '2025-01-15T12:30:00.000Z', '${NOW}');
+  VALUES
+    (1, 1, 1, 1, 'LINKEDIN', '2025-01-15T12:30:00.000Z', '${NOW}'),
+    (2, 1, 3, 2, 'LINKEDIN', '2025-01-15T13:00:00.000Z', '${NOW}'),
+    (3, 1, 2, -1, 'LINKEDIN', '2025-01-15T13:30:00.000Z', '${NOW}'),
+    (4, 1, 4, -2, 'LINKEDIN', '2025-01-15T14:00:00.000Z', '${NOW}');
 
-  INSERT INTO action_result_flags (id, action_result_id, flag_name, flag_value)
-  VALUES (1, 1, 'message_sent', 1);
+  INSERT INTO action_result_flags (id, action_result_id, flag_name, flag_value, code, is_exception, who_to_blame)
+  VALUES
+    (1, 1, 'message_sent', 1, NULL, 0, ''),
+    (2, 3, 'error', 1, 100, 0, 'LinkedIn'),
+    (3, 3, 'error', 1, 200, 1, 'LH'),
+    (4, 4, 'skipped', 1, 100, 0, 'LinkedIn');
 
   INSERT INTO action_result_messages (id, action_result_id, type, message_id)
   VALUES (1, 1, 'Sent', 1);
