@@ -25,6 +25,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: pnpm lint
+      - run: pnpm license-check
       - run: pnpm test
 
   publish-npm:
