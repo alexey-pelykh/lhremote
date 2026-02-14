@@ -3,14 +3,18 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  CampaignNotFoundError,
   CampaignRepository,
-  DEFAULT_CDP_PORT,
   resolveAccount,
   withDatabase,
 } from "@lhremote/core";
 import { z } from "zod";
-import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
+import {
+  buildCdpOptions,
+  cdpConnectionSchema,
+  mcpCatchAll,
+  mcpError,
+  mcpSuccess,
+} from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-update | campaign-update} MCP tool. */
 export function registerCampaignUpdate(server: McpServer): void {
@@ -32,21 +36,7 @@ export function registerCampaignUpdate(server: McpServer): void {
         .nullable()
         .optional()
         .describe("New campaign description (null to clear)"),
-      cdpPort: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .default(DEFAULT_CDP_PORT)
-        .describe("CDP port"),
-      cdpHost: z
-        .string()
-        .optional()
-        .describe("CDP host (default: 127.0.0.1)"),
-      allowRemote: z
-        .boolean()
-        .optional()
-        .describe("SECURITY: Allow non-loopback CDP connections. Enables remote code execution on target host. Only use if network path is secured."),
+      ...cdpConnectionSchema,
     },
     async ({ campaignId, name, description, cdpPort, cdpHost, allowRemote }) => {
       // Validate that at least one field is provided
@@ -56,7 +46,7 @@ export function registerCampaignUpdate(server: McpServer): void {
 
       let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
+        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
       } catch (error) {
         return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }
@@ -73,9 +63,6 @@ export function registerCampaignUpdate(server: McpServer): void {
           return mcpSuccess(JSON.stringify(campaign, null, 2));
         }, { readOnly: false });
       } catch (error) {
-        if (error instanceof CampaignNotFoundError) {
-          return mcpError(`Campaign ${String(campaignId)} not found.`);
-        }
         return mcpCatchAll(error, "Failed to update campaign");
       }
     },
