@@ -39,7 +39,7 @@ export function registerStartInstance(server: McpServer): void {
       allowRemote: z
         .boolean()
         .optional()
-        .describe("Allow non-loopback CDP connections"),
+        .describe("SECURITY: Allow non-loopback CDP connections. Enables remote code execution on target host. Only use if network path is secured."),
     },
     async ({ accountId, cdpPort, cdpHost, allowRemote }) => {
       const launcher = new LauncherService(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
