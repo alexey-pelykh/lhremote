@@ -16,6 +16,12 @@
     "url": "https://github.com/alexey-pelykh/lhremote.git",
     "directory": "packages/lhremote"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    }
+  },
   "bin": {
     "lhremote": "./dist/cli.js"
   },
