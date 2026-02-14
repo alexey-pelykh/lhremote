@@ -4,10 +4,8 @@
 import { AppService, errorMessage } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#app-management | launch-app} CLI command. */
-export async function handleLaunchApp(options: {
-  cdpPort?: number;
-}): Promise<void> {
-  const app = new AppService(options.cdpPort);
+export async function handleLaunchApp(): Promise<void> {
+  const app = new AppService();
 
   try {
     await app.launch();

@@ -52,6 +52,17 @@ function parsePositiveInt(value: string): number {
   return n;
 }
 
+/** Parse a string as a max-results value: positive integer or -1 for unlimited. */
+function parseMaxResults(value: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < -1 || n === 0) {
+    throw new InvalidArgumentError(
+      `Expected a positive integer or -1 for unlimited, got "${value}".`,
+    );
+  }
+  return n;
+}
+
 /** Parse a string as a non-negative integer, throwing on invalid input. */
 function parseNonNegativeInt(value: string): number {
   const n = Number(value);
@@ -81,17 +92,11 @@ export function createProgram(): Command {
   program
     .command("launch-app")
     .description("Launch the LinkedHelper application")
-    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
-    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
-    .option("--allow-remote", "Allow non-loopback CDP connections")
     .action(handleLaunchApp);
 
   program
     .command("quit-app")
     .description("Quit the LinkedHelper application")
-    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
-    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
-    .option("--allow-remote", "Allow non-loopback CDP connections")
     .action(handleQuitApp);
 
   program
@@ -326,7 +331,7 @@ export function createProgram(): Command {
     .option(
       "--max-results <n>",
       "Maximum results per iteration (-1 for unlimited)",
-      parseInt,
+      parseMaxResults,
     )
     .option("--action-settings <json>", "Action-specific settings as JSON")
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)

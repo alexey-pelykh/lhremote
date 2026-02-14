@@ -4,10 +4,8 @@
 import { AppService, DEFAULT_CDP_PORT, errorMessage } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#app-management | quit-app} CLI command. */
-export async function handleQuitApp(options: {
-  cdpPort?: number;
-}): Promise<void> {
-  const app = new AppService(options.cdpPort ?? DEFAULT_CDP_PORT);
+export async function handleQuitApp(): Promise<void> {
+  const app = new AppService(DEFAULT_CDP_PORT);
 
   try {
     await app.quit();

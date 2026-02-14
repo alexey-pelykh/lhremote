@@ -72,12 +72,22 @@ describe("createProgram", () => {
   });
 
   describe("launch-app", () => {
-    it("accepts --cdp-port option", () => {
+    it("does not have --cdp-port option", () => {
       const program = createProgram();
       const cmd = program.commands.find((c) => c.name() === "launch-app");
       const portOption = cmd?.options.find((o) => o.long === "--cdp-port");
 
-      expect(portOption).toBeDefined();
+      expect(portOption).toBeUndefined();
+    });
+  });
+
+  describe("quit-app", () => {
+    it("does not have --cdp-port option", () => {
+      const program = createProgram();
+      const cmd = program.commands.find((c) => c.name() === "quit-app");
+      const portOption = cmd?.options.find((o) => o.long === "--cdp-port");
+
+      expect(portOption).toBeUndefined();
     });
   });
 
@@ -109,6 +119,60 @@ describe("createProgram", () => {
 
       await expect(
         program.parseAsync(["node", "lhremote", "start-instance", "abc"]),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe("campaign-add-action --max-results", () => {
+    it("rejects non-numeric value", async () => {
+      const program = createProgram();
+      program.exitOverride().configureOutput({ writeErr: () => {} });
+
+      await expect(
+        program.parseAsync([
+          "node", "lhremote", "campaign-add-action", "1",
+          "--name", "test", "--action-type", "VisitAndExtract",
+          "--max-results", "abc",
+        ]),
+      ).rejects.toThrow();
+    });
+
+    it("rejects fractional value", async () => {
+      const program = createProgram();
+      program.exitOverride().configureOutput({ writeErr: () => {} });
+
+      await expect(
+        program.parseAsync([
+          "node", "lhremote", "campaign-add-action", "1",
+          "--name", "test", "--action-type", "VisitAndExtract",
+          "--max-results", "3.7",
+        ]),
+      ).rejects.toThrow();
+    });
+
+    it("rejects zero", async () => {
+      const program = createProgram();
+      program.exitOverride().configureOutput({ writeErr: () => {} });
+
+      await expect(
+        program.parseAsync([
+          "node", "lhremote", "campaign-add-action", "1",
+          "--name", "test", "--action-type", "VisitAndExtract",
+          "--max-results", "0",
+        ]),
+      ).rejects.toThrow();
+    });
+
+    it("rejects values less than -1", async () => {
+      const program = createProgram();
+      program.exitOverride().configureOutput({ writeErr: () => {} });
+
+      await expect(
+        program.parseAsync([
+          "node", "lhremote", "campaign-add-action", "1",
+          "--name", "test", "--action-type", "VisitAndExtract",
+          "--max-results", "-2",
+        ]),
       ).rejects.toThrow();
     });
   });

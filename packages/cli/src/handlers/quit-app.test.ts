@@ -39,13 +39,13 @@ describe("handleQuitApp", () => {
       } as unknown as AppService;
     });
 
-    await handleQuitApp({});
+    await handleQuitApp();
 
     expect(stdoutSpy).toHaveBeenCalledWith("LinkedHelper quit\n");
     expect(process.exitCode).toBeUndefined();
   });
 
-  it("passes cdpPort to AppService", async () => {
+  it("creates AppService with DEFAULT_CDP_PORT", async () => {
     vi.spyOn(process.stdout, "write").mockReturnValue(true);
 
     vi.mocked(AppService).mockImplementation(function () {
@@ -54,21 +54,7 @@ describe("handleQuitApp", () => {
       } as unknown as AppService;
     });
 
-    await handleQuitApp({ cdpPort: 4567 });
-
-    expect(AppService).toHaveBeenCalledWith(4567);
-  });
-
-  it("defaults cdpPort to 9222", async () => {
-    vi.spyOn(process.stdout, "write").mockReturnValue(true);
-
-    vi.mocked(AppService).mockImplementation(function () {
-      return {
-        quit: vi.fn().mockResolvedValue(undefined),
-      } as unknown as AppService;
-    });
-
-    await handleQuitApp({});
+    await handleQuitApp();
 
     expect(AppService).toHaveBeenCalledWith(9222);
   });
@@ -84,7 +70,7 @@ describe("handleQuitApp", () => {
       } as unknown as AppService;
     });
 
-    await handleQuitApp({});
+    await handleQuitApp();
 
     expect(process.exitCode).toBe(1);
     expect(stderrSpy).toHaveBeenCalledWith("SIGTERM failed\n");
