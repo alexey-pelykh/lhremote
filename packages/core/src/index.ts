@@ -102,6 +102,7 @@ export {
 // Formats
 export {
   CampaignFormatError,
+  FormatError,
   parseCampaignJson,
   parseCampaignYaml,
   serializeCampaignJson,
