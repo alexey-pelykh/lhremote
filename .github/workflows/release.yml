@@ -42,6 +42,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           registry-url: https://registry.npmjs.org
+          skip-playwright: 'true'
 
       # Trusted publishing requires npm 11.5.1+ for OIDC token exchange
       - name: Upgrade npm

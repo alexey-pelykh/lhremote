@@ -54,6 +54,8 @@ jobs:
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
 
       - uses: ./.github/actions/setup
+        with:
+          skip-playwright: 'true'
 
       - name: Build packages
         run: pnpm build
