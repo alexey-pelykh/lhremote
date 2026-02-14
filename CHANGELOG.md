@@ -16,8 +16,8 @@ All notable changes to this project will be documented in this file.
 - `campaign-move-next` tool for advancing campaign queue position
 - `campaign-statistics` tool for campaign execution metrics
 - `import-people-from-urls` tool for bulk-importing LinkedIn profiles into campaigns
-- Campaign action chain management capabilities in `campaign-create` and `campaign-update` tools for reordering and modifying action sequences
-- Exclude list management capabilities in `campaign-create` and `campaign-update` tools for campaign-level contact exclusions
+- `campaign-add-action`, `campaign-remove-action`, `campaign-reorder-actions` tools for managing campaign action chains
+- `campaign-exclude-list`, `campaign-exclude-add`, `campaign-exclude-remove` tools for campaign-action-level exclusion management
 - `query-messages` tool for searching LinkedIn messaging history
 - `scrape-messaging-history` tool for extracting full conversation threads
 - `check-replies` tool for detecting new message replies
