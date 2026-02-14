@@ -3,14 +3,17 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  CampaignNotFoundError,
   CampaignRepository,
-  DEFAULT_CDP_PORT,
   resolveAccount,
   withDatabase,
 } from "@lhremote/core";
 import { z } from "zod";
-import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
+import {
+  buildCdpOptions,
+  cdpConnectionSchema,
+  mcpCatchAll,
+  mcpSuccess,
+} from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-retry | campaign-retry} MCP tool. */
 export function registerCampaignRetry(server: McpServer): void {
@@ -27,26 +30,12 @@ export function registerCampaignRetry(server: McpServer): void {
         .array(z.number().int().positive())
         .nonempty()
         .describe("Person IDs to reset for retry"),
-      cdpPort: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .default(DEFAULT_CDP_PORT)
-        .describe("CDP port"),
-      cdpHost: z
-        .string()
-        .optional()
-        .describe("CDP host (default: 127.0.0.1)"),
-      allowRemote: z
-        .boolean()
-        .optional()
-        .describe("SECURITY: Allow non-loopback CDP connections. Enables remote code execution on target host. Only use if network path is secured."),
+      ...cdpConnectionSchema,
     },
     async ({ campaignId, personIds, cdpPort, cdpHost, allowRemote }) => {
       let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
+        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
       } catch (error) {
         return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }
@@ -71,9 +60,6 @@ export function registerCampaignRetry(server: McpServer): void {
           );
         }, { readOnly: false });
       } catch (error) {
-        if (error instanceof CampaignNotFoundError) {
-          return mcpError(`Campaign ${String(campaignId)} not found.`);
-        }
         return mcpCatchAll(error, "Failed to reset persons for retry");
       }
     },

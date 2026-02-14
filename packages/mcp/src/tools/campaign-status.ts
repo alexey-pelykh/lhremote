@@ -4,12 +4,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CampaignExecutionError,
-  CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   campaignStatus,
 } from "@lhremote/core";
 import { z } from "zod";
-import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-status | campaign-status} MCP tool. */
 export function registerCampaignStatus(server: McpServer): void {
@@ -34,21 +32,7 @@ export function registerCampaignStatus(server: McpServer): void {
         .optional()
         .default(20)
         .describe("Max results to return"),
-      cdpPort: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .default(DEFAULT_CDP_PORT)
-        .describe("CDP port"),
-      cdpHost: z
-        .string()
-        .optional()
-        .describe("CDP host (default: 127.0.0.1)"),
-      allowRemote: z
-        .boolean()
-        .optional()
-        .describe("SECURITY: Allow non-loopback CDP connections. Enables remote code execution on target host. Only use if network path is secured."),
+      ...cdpConnectionSchema,
     },
     async ({ campaignId, includeResults, limit, cdpPort, cdpHost, allowRemote }) => {
       try {
@@ -63,9 +47,6 @@ export function registerCampaignStatus(server: McpServer): void {
 
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
-        if (error instanceof CampaignNotFoundError) {
-          return mcpError(`Campaign ${String(campaignId)} not found.`);
-        }
         if (error instanceof CampaignExecutionError) {
           return mcpError(`Failed to get campaign status: ${error.message}`);
         }

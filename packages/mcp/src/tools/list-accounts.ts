@@ -2,12 +2,8 @@
 // Copyright (C) 2025 Alexey Pelykh
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  DEFAULT_CDP_PORT,
-  LauncherService,
-} from "@lhremote/core";
-import { z } from "zod";
-import { mcpCatchAll, mcpSuccess } from "../helpers.js";
+import { LauncherService } from "@lhremote/core";
+import { buildCdpOptions, cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#list-accounts | list-accounts} MCP tool. */
 export function registerListAccounts(server: McpServer): void {
@@ -15,24 +11,10 @@ export function registerListAccounts(server: McpServer): void {
     "list-accounts",
     "List available LinkedHelper accounts",
     {
-      cdpPort: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .default(DEFAULT_CDP_PORT)
-        .describe("CDP port"),
-      cdpHost: z
-        .string()
-        .optional()
-        .describe("CDP host (default: 127.0.0.1)"),
-      allowRemote: z
-        .boolean()
-        .optional()
-        .describe("SECURITY: Allow non-loopback CDP connections. Enables remote code execution on target host. Only use if network path is secured."),
+      ...cdpConnectionSchema,
     },
     async ({ cdpPort, cdpHost, allowRemote }) => {
-      const launcher = new LauncherService(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
+      const launcher = new LauncherService(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
 
       try {
         await launcher.connect();

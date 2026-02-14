@@ -3,13 +3,12 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  DEFAULT_CDP_PORT,
   MessageRepository,
   resolveAccount,
   withInstanceDatabase,
 } from "@lhremote/core";
 import { z } from "zod";
-import { mcpCatchAll, mcpSuccess } from "../helpers.js";
+import { buildCdpOptions, cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#check-replies | check-replies} MCP tool. */
 export function registerCheckReplies(server: McpServer): void {
@@ -23,21 +22,7 @@ export function registerCheckReplies(server: McpServer): void {
         .describe(
           "ISO timestamp; only return messages after this time. If omitted, returns messages from the last 24 hours",
         ),
-      cdpPort: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .default(DEFAULT_CDP_PORT)
-        .describe("CDP port"),
-      cdpHost: z
-        .string()
-        .optional()
-        .describe("CDP host (default: 127.0.0.1)"),
-      allowRemote: z
-        .boolean()
-        .optional()
-        .describe("SECURITY: Allow non-loopback CDP connections. Enables remote code execution on target host. Only use if network path is secured."),
+      ...cdpConnectionSchema,
     },
     async ({ since, cdpPort, cdpHost, allowRemote }) => {
       const cutoff =
@@ -45,7 +30,7 @@ export function registerCheckReplies(server: McpServer): void {
 
       let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
+        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
       } catch (error) {
         return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }

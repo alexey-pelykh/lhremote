@@ -5,14 +5,18 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ActionNotFoundError,
   CampaignExecutionError,
-  CampaignNotFoundError,
   CampaignService,
-  DEFAULT_CDP_PORT,
   resolveAccount,
   withInstanceDatabase,
 } from "@lhremote/core";
 import { z } from "zod";
-import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
+import {
+  buildCdpOptions,
+  cdpConnectionSchema,
+  mcpCatchAll,
+  mcpError,
+  mcpSuccess,
+} from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-reorder-actions | campaign-reorder-actions} MCP tool. */
 export function registerCampaignReorderActions(server: McpServer): void {
@@ -29,26 +33,12 @@ export function registerCampaignReorderActions(server: McpServer): void {
         .array(z.number().int().positive())
         .nonempty()
         .describe("Action IDs in the desired order"),
-      cdpPort: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .default(DEFAULT_CDP_PORT)
-        .describe("CDP port"),
-      cdpHost: z
-        .string()
-        .optional()
-        .describe("CDP host (default: 127.0.0.1)"),
-      allowRemote: z
-        .boolean()
-        .optional()
-        .describe("SECURITY: Allow non-loopback CDP connections. Enables remote code execution on target host. Only use if network path is secured."),
+      ...cdpConnectionSchema,
     },
     async ({ campaignId, actionIds, cdpPort, cdpHost, allowRemote }) => {
       let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, { ...(cdpHost !== undefined && { host: cdpHost }), ...(allowRemote !== undefined && { allowRemote }) });
+        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
       } catch (error) {
         return mcpCatchAll(error, "Failed to connect to LinkedHelper");
       }
@@ -74,9 +64,6 @@ export function registerCampaignReorderActions(server: McpServer): void {
           );
         });
       } catch (error) {
-        if (error instanceof CampaignNotFoundError) {
-          return mcpError(`Campaign ${String(campaignId)} not found.`);
-        }
         if (error instanceof ActionNotFoundError) {
           return mcpError(`One or more action IDs not found in campaign ${String(campaignId)}.`);
         }
