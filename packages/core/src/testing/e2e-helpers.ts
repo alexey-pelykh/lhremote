@@ -6,6 +6,7 @@ import { AppService, type AppServiceOptions } from "../services/app.js";
 import { AppNotFoundError } from "../services/errors.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { LauncherService } from "../services/launcher.js";
+import { delay } from "../utils/delay.js";
 
 const linkedHelperAvailable = (() => {
   try {
@@ -66,7 +67,7 @@ export async function launchApp(options?: {
     } catch {
       // Not ready yet
     }
-    await new Promise<void>((r) => setTimeout(r, 250));
+    await delay(250);
   }
 
   // Phase 2: Wait for full launcher readiness (WebSocket + renderer loaded)
@@ -80,7 +81,7 @@ export async function launchApp(options?: {
     } catch {
       launcher.disconnect();
     }
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await delay(500);
   }
 
   // Clean up on timeout
@@ -117,7 +118,7 @@ export async function retryAsync<T>(
   options?: { retries?: number; delay?: number },
 ): Promise<T> {
   const retries = options?.retries ?? 3;
-  const delay = options?.delay ?? 500;
+  const interval = options?.delay ?? 500;
   let lastError: unknown;
 
   for (let i = 0; i <= retries; i++) {
@@ -126,7 +127,7 @@ export async function retryAsync<T>(
     } catch (error) {
       lastError = error;
       if (i < retries) {
-        await new Promise<void>((r) => setTimeout(r, delay));
+        await delay(interval);
       }
     }
   }
