@@ -3,7 +3,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  CampaignRepository,
+  CampaignStatisticsRepository,
   resolveAccount,
   withDatabase,
 } from "@lhremote/core";
@@ -42,8 +42,8 @@ export function registerCampaignRetry(server: McpServer): void {
 
       try {
         return await withDatabase(accountId, ({ db }) => {
-          const campaignRepo = new CampaignRepository(db);
-          campaignRepo.resetForRerun(campaignId, personIds);
+          const statisticsRepo = new CampaignStatisticsRepository(db);
+          statisticsRepo.resetForRerun(campaignId, personIds);
 
           return mcpSuccess(
             JSON.stringify(

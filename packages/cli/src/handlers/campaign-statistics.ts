@@ -4,7 +4,7 @@
 import {
   ActionNotFoundError,
   CampaignNotFoundError,
-  CampaignRepository,
+  CampaignStatisticsRepository,
   DEFAULT_CDP_PORT,
   errorMessage,
   resolveAccount,
@@ -40,11 +40,11 @@ export async function handleCampaignStatistics(
 
   try {
     await withDatabase(accountId, ({ db }) => {
-      const repo = new CampaignRepository(db);
+      const statisticsRepo = new CampaignStatisticsRepository(db);
       const statsOptions: { actionId?: number; maxErrors?: number } = {};
       if (options.actionId !== undefined) statsOptions.actionId = options.actionId;
       if (options.maxErrors !== undefined) statsOptions.maxErrors = options.maxErrors;
-      const statistics = repo.getStatistics(campaignId, statsOptions);
+      const statistics = statisticsRepo.getStatistics(campaignId, statsOptions);
 
       if (options.json) {
         process.stdout.write(JSON.stringify(statistics, null, 2) + "\n");

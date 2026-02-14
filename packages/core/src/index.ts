@@ -90,7 +90,9 @@ export {
 
 // Data access
 export {
+  CampaignExcludeListRepository,
   CampaignRepository,
+  CampaignStatisticsRepository,
   DatabaseClient,
   type DatabaseClientOptions,
   discoverAllDatabases,

@@ -14,7 +14,7 @@ import type {
   RunnerState,
 } from "../types/index.js";
 import type { DatabaseClient } from "../db/index.js";
-import { ActionNotFoundError, CampaignRepository } from "../db/index.js";
+import { ActionNotFoundError, CampaignRepository, CampaignStatisticsRepository } from "../db/index.js";
 import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
 import type { InstanceService } from "./instance.js";
@@ -46,10 +46,12 @@ const PEOPLE_STATE = {
 export class CampaignService {
   private readonly instance: InstanceService;
   private readonly campaignRepo: CampaignRepository;
+  private readonly statisticsRepo: CampaignStatisticsRepository;
 
   constructor(instance: InstanceService, db: DatabaseClient) {
     this.instance = instance;
     this.campaignRepo = new CampaignRepository(db);
+    this.statisticsRepo = new CampaignStatisticsRepository(db);
   }
 
   /**
@@ -330,7 +332,7 @@ export class CampaignService {
 
     // Step 1: Reset persons for re-run
     if (personIds.length > 0) {
-      this.campaignRepo.resetForRerun(campaignId, personIds);
+      this.statisticsRepo.resetForRerun(campaignId, personIds);
     }
 
     // Step 2: Wait for idle

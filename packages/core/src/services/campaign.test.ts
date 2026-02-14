@@ -31,8 +31,10 @@ const mockGetCampaignActions = vi.fn();
 const mockGetResults = vi.fn();
 const mockFixIsValid = vi.fn();
 const mockCreateActionExcludeLists = vi.fn();
-const mockResetForRerun = vi.fn();
 const mockAddAction = vi.fn();
+
+// Mock CampaignStatisticsRepository (via db/index.js)
+const mockResetForRerun = vi.fn();
 
 vi.mock("../db/index.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../db/index.js")>();
@@ -44,8 +46,10 @@ vi.mock("../db/index.js", async (importOriginal) => {
       this.getResults = mockGetResults;
       this.fixIsValid = mockFixIsValid;
       this.createActionExcludeLists = mockCreateActionExcludeLists;
-      this.resetForRerun = mockResetForRerun;
       this.addAction = mockAddAction;
+    }),
+    CampaignStatisticsRepository: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+      this.resetForRerun = mockResetForRerun;
     }),
     CampaignNotFoundError: original.CampaignNotFoundError,
     ActionNotFoundError: original.ActionNotFoundError,

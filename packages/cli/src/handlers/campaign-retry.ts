@@ -3,7 +3,7 @@
 
 import {
   CampaignNotFoundError,
-  CampaignRepository,
+  CampaignStatisticsRepository,
   DEFAULT_CDP_PORT,
   errorMessage,
   resolveAccount,
@@ -51,8 +51,8 @@ export async function handleCampaignRetry(
 
   try {
     await withDatabase(accountId, ({ db }) => {
-      const repo = new CampaignRepository(db);
-      repo.resetForRerun(campaignId, personIds);
+      const statisticsRepo = new CampaignStatisticsRepository(db);
+      statisticsRepo.resetForRerun(campaignId, personIds);
 
       if (options.json) {
         const response = {

@@ -14,7 +14,9 @@ export {
   ProfileNotFoundError,
 } from "./errors.js";
 export {
+  CampaignExcludeListRepository,
   CampaignRepository,
+  CampaignStatisticsRepository,
   MessageRepository,
   ProfileRepository,
 } from "./repositories/index.js";

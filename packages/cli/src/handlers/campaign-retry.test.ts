@@ -9,7 +9,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
     ...actual,
     resolveAccount: vi.fn(),
     withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    CampaignStatisticsRepository: vi.fn(),
   };
 });
 
@@ -23,7 +23,7 @@ vi.mock("node:fs", async (importOriginal) => {
 
 import {
   CampaignNotFoundError,
-  CampaignRepository,
+  CampaignStatisticsRepository,
   resolveAccount,
 } from "@lhremote/core";
 import { readFileSync } from "node:fs";
@@ -33,8 +33,8 @@ import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-
 
 function mockRepo() {
   const resetForRerun = vi.fn();
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return { resetForRerun } as unknown as CampaignRepository;
+  vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
+    return { resetForRerun } as unknown as CampaignStatisticsRepository;
   });
   return { resetForRerun };
 }
@@ -143,12 +143,12 @@ describe("handleCampaignRetry", () => {
   it("sets exitCode 1 when campaign not found", async () => {
     mockResolveAccount();
     mockWithDatabase();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
+    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
       return {
         resetForRerun: vi.fn().mockImplementation(() => {
           throw new CampaignNotFoundError(999);
         }),
-      } as unknown as CampaignRepository;
+      } as unknown as CampaignStatisticsRepository;
     });
 
     await handleCampaignRetry(999, { personIds: "100" });
