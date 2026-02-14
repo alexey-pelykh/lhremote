@@ -142,6 +142,18 @@ lhremote describe-actions [--category <category>] [--type <type>] [--json]
 
 ## MCP Tools
 
+### Common Parameters
+
+Most tools and CLI commands connect to LinkedHelper via the Chrome DevTools Protocol (CDP). In addition to the tool-specific parameters listed below, all CDP-connected tools accept:
+
+| Parameter | CLI Flag | Type | Default | Description |
+|-----------|----------|------|---------|-------------|
+| `cdpPort` | `--cdp-port` | number | 9222 | CDP debugging port |
+| `cdpHost` | `--cdp-host` | string | `127.0.0.1` | CDP host address |
+| `allowRemote` | `--allow-remote` | boolean | false | Allow connections to non-loopback addresses |
+
+> **Security warning:** Enabling `allowRemote` permits CDP connections to remote hosts. CDP is an unsandboxed protocol that grants full control over the target browser — equivalent to remote code execution. Only enable this when the network path between your machine and the target host is fully secured (e.g., SSH tunnel, VPN, or trusted LAN).
+
 ### App Management
 
 #### `find-app`
