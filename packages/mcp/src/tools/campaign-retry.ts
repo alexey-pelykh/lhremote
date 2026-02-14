@@ -41,7 +41,7 @@ export function registerCampaignRetry(server: McpServer): void {
       allowRemote: z
         .boolean()
         .optional()
-        .describe("Allow non-loopback CDP connections"),
+        .describe("SECURITY: Allow non-loopback CDP connections. Enables remote code execution on target host. Only use if network path is secured."),
     },
     async ({ campaignId, personIds, cdpPort, cdpHost, allowRemote }) => {
       let accountId: number;

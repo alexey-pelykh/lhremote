@@ -138,7 +138,7 @@ describe("CDPClient", () => {
         CDPConnectionError,
       );
       expect(() => new CDPClient(9222, { host: "example.com" })).toThrow(
-        /Remote CDP connections/,
+        /arbitrary code execution/,
       );
     });
 
@@ -149,6 +149,22 @@ describe("CDPClient", () => {
       expect(
         () => new CDPClient(9222, { host: "example.com", allowRemote: true }),
       ).not.toThrow();
+    });
+
+    it("should warn when allowRemote is used with non-loopback host", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      new CDPClient(9222, { host: "192.168.1.1", allowRemote: true });
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[SECURITY WARNING]"),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("should not warn for loopback host with allowRemote", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      new CDPClient(9222, { host: "127.0.0.1", allowRemote: true });
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
   });
 

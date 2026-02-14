@@ -63,7 +63,15 @@ export class CDPClient {
     if (!isLoopbackAddress(this.host) && !options?.allowRemote) {
       throw new CDPConnectionError(
         `Remote CDP connections to "${this.host}" are not allowed. ` +
-          "Use the allowRemote option to connect to non-loopback addresses.",
+          "Remote connections expose the target to arbitrary code execution. " +
+          "Set allowRemote only if the network path is secured.",
+      );
+    }
+
+    if (!isLoopbackAddress(this.host) && options?.allowRemote) {
+      console.warn(
+        `[SECURITY WARNING] Remote CDP connection to ${this.host} enabled. ` +
+          "Any client on the network path can execute arbitrary JavaScript on the target.",
       );
     }
   }
