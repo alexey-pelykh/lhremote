@@ -24,6 +24,19 @@ describe("ProfileRepository", () => {
     db.close();
   });
 
+  describe("getProfileCount", () => {
+    it("returns the total number of profiles", () => {
+      expect(repo.getProfileCount()).toBe(4);
+    });
+
+    it("returns 0 for an empty database", () => {
+      db.exec("PRAGMA foreign_keys = OFF");
+      db.exec("DELETE FROM people");
+      db.exec("PRAGMA foreign_keys = ON");
+      expect(repo.getProfileCount()).toBe(0);
+    });
+  });
+
   describe("findById", () => {
     it("returns a fully assembled profile", () => {
       const profile = repo.findById(1);
