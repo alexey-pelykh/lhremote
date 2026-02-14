@@ -4,7 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ActionNotFoundError,
-  CampaignRepository,
+  CampaignExcludeListRepository,
   ExcludeListNotFoundError,
   resolveAccount,
   withDatabase,
@@ -53,8 +53,8 @@ export function registerCampaignExcludeAdd(server: McpServer): void {
 
       try {
         return await withDatabase(accountId, ({ db }) => {
-          const campaignRepo = new CampaignRepository(db);
-          const added = campaignRepo.addToExcludeList(
+          const excludeListRepo = new CampaignExcludeListRepository(db);
+          const added = excludeListRepo.addToExcludeList(
             campaignId,
             personIds,
             actionId,

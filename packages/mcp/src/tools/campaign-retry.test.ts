@@ -9,13 +9,13 @@ vi.mock("@lhremote/core", async (importOriginal) => {
     ...actual,
     resolveAccount: vi.fn(),
     withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    CampaignStatisticsRepository: vi.fn(),
   };
 });
 
 import {
   CampaignNotFoundError,
-  CampaignRepository,
+  CampaignStatisticsRepository,
   type DatabaseContext,
   resolveAccount,
   withDatabase,
@@ -27,10 +27,10 @@ import { createMockServer } from "./testing/mock-server.js";
 
 function mockCampaignRepo() {
   const resetForRerun = vi.fn();
-  vi.mocked(CampaignRepository).mockImplementation(function () {
+  vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
     return {
       resetForRerun,
-    } as unknown as CampaignRepository;
+    } as unknown as CampaignStatisticsRepository;
   });
   return { resetForRerun };
 }
@@ -125,12 +125,12 @@ describe("registerCampaignRetry", () => {
     vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
       callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
     );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
+    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
       return {
         resetForRerun: vi.fn().mockImplementation(() => {
           throw new CampaignNotFoundError(999);
         }),
-      } as unknown as CampaignRepository;
+      } as unknown as CampaignStatisticsRepository;
     });
 
     const handler = getHandler("campaign-retry");

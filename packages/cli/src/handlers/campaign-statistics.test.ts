@@ -9,14 +9,14 @@ vi.mock("@lhremote/core", async (importOriginal) => {
     ...actual,
     resolveAccount: vi.fn(),
     withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    CampaignStatisticsRepository: vi.fn(),
   };
 });
 
 import {
   ActionNotFoundError,
   CampaignNotFoundError,
-  CampaignRepository,
+  CampaignStatisticsRepository,
   resolveAccount,
 } from "@lhremote/core";
 
@@ -59,8 +59,8 @@ const MOCK_STATISTICS = {
 
 function mockRepo(statistics = MOCK_STATISTICS) {
   const getStatistics = vi.fn().mockReturnValue(statistics);
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return { getStatistics } as unknown as CampaignRepository;
+  vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
+    return { getStatistics } as unknown as CampaignStatisticsRepository;
   });
   return { getStatistics };
 }
@@ -170,12 +170,12 @@ describe("handleCampaignStatistics", () => {
   it("sets exitCode 1 when campaign not found", async () => {
     mockResolveAccount();
     mockWithDatabase();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
+    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
       return {
         getStatistics: vi.fn().mockImplementation(() => {
           throw new CampaignNotFoundError(999);
         }),
-      } as unknown as CampaignRepository;
+      } as unknown as CampaignStatisticsRepository;
     });
 
     await handleCampaignStatistics(999, {});
@@ -187,12 +187,12 @@ describe("handleCampaignStatistics", () => {
   it("sets exitCode 1 when action not found", async () => {
     mockResolveAccount();
     mockWithDatabase();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
+    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
       return {
         getStatistics: vi.fn().mockImplementation(() => {
           throw new ActionNotFoundError(99, 1);
         }),
-      } as unknown as CampaignRepository;
+      } as unknown as CampaignStatisticsRepository;
     });
 
     await handleCampaignStatistics(1, { actionId: 99 });

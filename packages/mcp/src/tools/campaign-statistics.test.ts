@@ -9,7 +9,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
     ...actual,
     resolveAccount: vi.fn(),
     withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    CampaignStatisticsRepository: vi.fn(),
   };
 });
 
@@ -17,7 +17,7 @@ import {
   AccountResolutionError,
   ActionNotFoundError,
   CampaignNotFoundError,
-  CampaignRepository,
+  CampaignStatisticsRepository,
   type CampaignStatistics,
   type DatabaseContext,
   resolveAccount,
@@ -63,11 +63,11 @@ function mockCampaignRepo(
   overrides: Record<string, unknown> = {},
 ) {
   const getStatistics = vi.fn().mockReturnValue(SAMPLE_STATISTICS);
-  vi.mocked(CampaignRepository).mockImplementation(function () {
+  vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
     return {
       getStatistics,
       ...overrides,
-    } as unknown as CampaignRepository;
+    } as unknown as CampaignStatisticsRepository;
   });
   return { getStatistics };
 }
@@ -156,12 +156,12 @@ describe("registerCampaignStatistics", () => {
     vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
       callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
     );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
+    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
       return {
         getStatistics: vi.fn().mockImplementation(() => {
           throw new CampaignNotFoundError(999);
         }),
-      } as unknown as CampaignRepository;
+      } as unknown as CampaignStatisticsRepository;
     });
 
     const handler = getHandler("campaign-statistics");
@@ -190,12 +190,12 @@ describe("registerCampaignStatistics", () => {
     vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
       callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
     );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
+    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
       return {
         getStatistics: vi.fn().mockImplementation(() => {
           throw new ActionNotFoundError(999, 10);
         }),
-      } as unknown as CampaignRepository;
+      } as unknown as CampaignStatisticsRepository;
     });
 
     const handler = getHandler("campaign-statistics");

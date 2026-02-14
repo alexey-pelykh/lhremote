@@ -9,14 +9,14 @@ vi.mock("@lhremote/core", async (importOriginal) => {
     ...actual,
     resolveAccount: vi.fn(),
     withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    CampaignExcludeListRepository: vi.fn(),
   };
 });
 
 import {
   ActionNotFoundError,
   CampaignNotFoundError,
-  CampaignRepository,
+  CampaignExcludeListRepository,
   type DatabaseContext,
   ExcludeListNotFoundError,
   resolveAccount,
@@ -29,10 +29,10 @@ import { createMockServer } from "./testing/mock-server.js";
 
 function mockCampaignRepo() {
   const addToExcludeList = vi.fn().mockReturnValue(2);
-  vi.mocked(CampaignRepository).mockImplementation(function () {
+  vi.mocked(CampaignExcludeListRepository).mockImplementation(function () {
     return {
       addToExcludeList,
-    } as unknown as CampaignRepository;
+    } as unknown as CampaignExcludeListRepository;
   });
   return { addToExcludeList };
 }
@@ -150,12 +150,12 @@ describe("registerCampaignExcludeAdd", () => {
     vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
       callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
     );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
+    vi.mocked(CampaignExcludeListRepository).mockImplementation(function () {
       return {
         addToExcludeList: vi.fn().mockImplementation(() => {
           throw new CampaignNotFoundError(999);
         }),
-      } as unknown as CampaignRepository;
+      } as unknown as CampaignExcludeListRepository;
     });
 
     const handler = getHandler("campaign-exclude-add");
@@ -184,12 +184,12 @@ describe("registerCampaignExcludeAdd", () => {
     vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
       callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
     );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
+    vi.mocked(CampaignExcludeListRepository).mockImplementation(function () {
       return {
         addToExcludeList: vi.fn().mockImplementation(() => {
           throw new ActionNotFoundError(5, 10);
         }),
-      } as unknown as CampaignRepository;
+      } as unknown as CampaignExcludeListRepository;
     });
 
     const handler = getHandler("campaign-exclude-add");
@@ -219,12 +219,12 @@ describe("registerCampaignExcludeAdd", () => {
     vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
       callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
     );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
+    vi.mocked(CampaignExcludeListRepository).mockImplementation(function () {
       return {
         addToExcludeList: vi.fn().mockImplementation(() => {
           throw new ExcludeListNotFoundError("campaign", 10);
         }),
-      } as unknown as CampaignRepository;
+      } as unknown as CampaignExcludeListRepository;
     });
 
     const handler = getHandler("campaign-exclude-add");

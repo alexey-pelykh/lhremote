@@ -3,8 +3,8 @@
 
 import {
   ActionNotFoundError,
+  CampaignExcludeListRepository,
   CampaignNotFoundError,
-  CampaignRepository,
   DEFAULT_CDP_PORT,
   errorMessage,
   ExcludeListNotFoundError,
@@ -40,8 +40,8 @@ export async function handleCampaignExcludeList(
 
   try {
     await withDatabase(accountId, ({ db }) => {
-      const repo = new CampaignRepository(db);
-      const entries = repo.getExcludeList(campaignId, options.actionId);
+      const excludeListRepo = new CampaignExcludeListRepository(db);
+      const entries = excludeListRepo.getExcludeList(campaignId, options.actionId);
 
       const level = options.actionId !== undefined ? "action" : "campaign";
       const targetLabel =

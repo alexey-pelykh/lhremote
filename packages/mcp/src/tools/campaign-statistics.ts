@@ -4,7 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ActionNotFoundError,
-  CampaignRepository,
+  CampaignStatisticsRepository,
   resolveAccount,
   withDatabase,
 } from "@lhremote/core";
@@ -53,10 +53,10 @@ export function registerCampaignStatistics(server: McpServer): void {
 
       try {
         return await withDatabase(accountId, ({ db }) => {
-          const campaignRepo = new CampaignRepository(db);
+          const statisticsRepo = new CampaignStatisticsRepository(db);
           const statsOptions: { actionId?: number; maxErrors?: number } = { maxErrors };
           if (actionId !== undefined) statsOptions.actionId = actionId;
-          const statistics = campaignRepo.getStatistics(campaignId, statsOptions);
+          const statistics = statisticsRepo.getStatistics(campaignId, statsOptions);
 
           return mcpSuccess(JSON.stringify(statistics, null, 2));
         });

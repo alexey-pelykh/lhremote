@@ -3,20 +3,15 @@
 
 import type {
   ActionConfig,
-  ActionErrorSummary,
   ActionSettings,
-  ActionStatistics,
   CampaignActionConfig,
   CampaignActionResult,
   Campaign,
   CampaignAction,
   CampaignState,
-  CampaignStatistics,
   CampaignSummary,
   CampaignUpdateConfig,
-  ExcludeListEntry,
   GetResultsOptions,
-  GetStatisticsOptions,
   ListCampaignsOptions,
 } from "../../types/index.js";
 import type { DatabaseSync } from "node:sqlite";
@@ -24,7 +19,6 @@ import type { DatabaseClient } from "../client.js";
 import {
   ActionNotFoundError,
   CampaignNotFoundError,
-  ExcludeListNotFoundError,
   NoNextActionError,
 } from "../errors.js";
 
@@ -68,11 +62,6 @@ interface ActionResultRow {
   created_at: string;
 }
 
-interface ActionVersionRow {
-  id: number;
-  action_id: number;
-}
-
 function deriveCampaignState(
   isPaused: number | null,
   isArchived: number | null,
@@ -85,10 +74,11 @@ function deriveCampaignState(
 }
 
 /**
- * Repository for campaign database operations.
+ * Repository for campaign CRUD, creation support, and action chain operations.
  *
  * Provides read operations (list, get, getActions, getResults, getState)
- * and write operations (resetForRerun) for LinkedHelper campaigns.
+ * and write operations (fixIsValid, createActionExcludeLists, addAction,
+ * moveToNextAction, updateCampaign) for LinkedHelper campaigns.
  *
  * Write operations require the DatabaseClient to be opened with
  * `{ readOnly: false }`.
@@ -99,7 +89,6 @@ export class CampaignRepository {
   private readonly stmtGetCampaign;
   private readonly stmtGetCampaignActions;
   private readonly stmtGetResults;
-  private readonly stmtGetActionVersions;
 
   // Write statements (prepared lazily to avoid issues with read-only mode)
   private writeStatements: {
@@ -110,17 +99,10 @@ export class CampaignRepository {
     insertCollection: PreparedStatement;
     insertCollectionPeopleVersion: PreparedStatement;
     setActionVersionExcludeList: PreparedStatement;
-    resetTargetPeople: PreparedStatement;
-    resetHistory: PreparedStatement;
-    deleteResultFlags: PreparedStatement;
-    deleteResultMessages: PreparedStatement;
-    deleteResults: PreparedStatement;
     markTargetSuccessful: PreparedStatement;
     queueTarget: PreparedStatement;
     insertTarget: PreparedStatement;
     countTarget: PreparedStatement;
-    insertCollectionPerson: PreparedStatement;
-    deleteCollectionPerson: PreparedStatement;
   } | null = null;
 
   constructor(private readonly client: DatabaseClient) {
@@ -171,13 +153,6 @@ export class CampaignRepository {
        WHERE a.campaign_id = ?
        ORDER BY ar.created_at DESC
        LIMIT ?`,
-    );
-
-    this.stmtGetActionVersions = db.prepare(
-      `SELECT av.id, av.action_id
-       FROM action_versions av
-       JOIN actions a ON av.action_id = a.id
-       WHERE a.campaign_id = ?`,
     );
   }
 
@@ -373,48 +348,6 @@ export class CampaignRepository {
       setActionVersionExcludeList: db.prepare(
         `UPDATE action_versions SET exclude_list_id = ? WHERE action_id = ?`,
       ),
-      resetTargetPeople: db.prepare(
-        `UPDATE action_target_people SET state = 1
-         WHERE action_id = ? AND person_id = ?`,
-      ),
-      resetHistory: db.prepare(
-        `UPDATE person_in_campaigns_history
-         SET result_status = -999,
-             result_id = NULL,
-             result_action_version_id = NULL,
-             result_action_iteration_id = NULL,
-             result_created_at = NULL,
-             result_data = NULL,
-             result_data_message = NULL,
-             result_code = NULL,
-             result_is_exception = NULL,
-             result_who_to_blame = NULL,
-             result_is_retryable = NULL,
-             result_flag_recipient_replied = NULL,
-             result_flag_sender_messaged = NULL,
-             result_invited_platform = NULL,
-             result_messaged_platform = NULL,
-             add_to_target_or_result_saved_date = add_to_target_date
-         WHERE campaign_id = ? AND person_id = ?`,
-      ),
-      deleteResultFlags: db.prepare(
-        `DELETE FROM action_result_flags
-         WHERE action_result_id IN (
-           SELECT id FROM action_results
-           WHERE action_version_id = ? AND person_id = ?
-         )`,
-      ),
-      deleteResultMessages: db.prepare(
-        `DELETE FROM action_result_messages
-         WHERE action_result_id IN (
-           SELECT id FROM action_results
-           WHERE action_version_id = ? AND person_id = ?
-         )`,
-      ),
-      deleteResults: db.prepare(
-        `DELETE FROM action_results
-         WHERE action_version_id = ? AND person_id = ?`,
-      ),
       markTargetSuccessful: db.prepare(
         `UPDATE action_target_people SET state = 3
          WHERE action_id = ? AND person_id = ?`,
@@ -431,14 +364,6 @@ export class CampaignRepository {
       countTarget: db.prepare(
         `SELECT COUNT(*) AS cnt FROM action_target_people
          WHERE action_id = ? AND person_id = ?`,
-      ),
-      insertCollectionPerson: db.prepare(
-        `INSERT OR IGNORE INTO collection_people (collection_id, person_id)
-         VALUES (?, ?)`,
-      ),
-      deleteCollectionPerson: db.prepare(
-        `DELETE FROM collection_people
-         WHERE collection_id = ? AND person_id = ?`,
       ),
     };
 
@@ -653,407 +578,5 @@ export class CampaignRepository {
     }
 
     return { nextActionId: nextAction.id };
-  }
-
-  /**
-   * Resolve the collection_id for an exclude list.
-   *
-   * Follows the chain: exclude_list_id → collection_people_versions → collection_id.
-   *
-   * @param level - "campaign" or "action"
-   * @param id - Campaign ID (if level is "campaign") or action ID (if level is "action")
-   * @throws {CampaignNotFoundError} if level is "campaign" and campaign does not exist.
-   * @throws {ExcludeListNotFoundError} if the exclude list chain is not found.
-   */
-  private resolveExcludeListCollectionId(
-    level: "campaign" | "action",
-    id: number,
-  ): number {
-    const { db } = this.client;
-
-    let excludeListId: number | null = null;
-
-    if (level === "campaign") {
-      const row = db
-        .prepare(
-          `SELECT exclude_list_id FROM campaign_versions
-           WHERE campaign_id = ? ORDER BY id DESC LIMIT 1`,
-        )
-        .get(id) as { exclude_list_id: number | null } | undefined;
-      excludeListId = row?.exclude_list_id ?? null;
-    } else {
-      const row = db
-        .prepare(
-          `SELECT exclude_list_id FROM action_versions
-           WHERE action_id = ? ORDER BY id DESC LIMIT 1`,
-        )
-        .get(id) as { exclude_list_id: number | null } | undefined;
-      excludeListId = row?.exclude_list_id ?? null;
-    }
-
-    if (excludeListId === null) {
-      throw new ExcludeListNotFoundError(level, id);
-    }
-
-    // Resolve CPV → collection_id
-    const cpv = db
-      .prepare(
-        `SELECT collection_id FROM collection_people_versions WHERE id = ?`,
-      )
-      .get(excludeListId) as { collection_id: number } | undefined;
-
-    if (!cpv) {
-      throw new ExcludeListNotFoundError(level, id);
-    }
-
-    return cpv.collection_id;
-  }
-
-  /**
-   * Validate campaign/action and resolve the exclude-list collection ID.
-   *
-   * Shared preamble for {@link getExcludeList}, {@link addToExcludeList},
-   * and {@link removeFromExcludeList}.
-   *
-   * @param campaignId - Campaign ID (verified to exist).
-   * @param actionId - If provided, scope to the action-level exclude list.
-   * @throws {CampaignNotFoundError} if the campaign does not exist.
-   * @throws {ActionNotFoundError} if actionId is provided and not in the campaign.
-   * @throws {ExcludeListNotFoundError} if the exclude list chain is not found.
-   */
-  private resolveExcludeListContext(
-    campaignId: number,
-    actionId?: number,
-  ): { collectionId: number; level: "campaign" | "action"; targetId: number } {
-    this.getCampaign(campaignId);
-
-    if (actionId !== undefined) {
-      const actions = this.getCampaignActions(campaignId);
-      if (!actions.some((a) => a.id === actionId)) {
-        throw new ActionNotFoundError(actionId, campaignId);
-      }
-    }
-
-    const level = actionId !== undefined ? "action" : "campaign";
-    const targetId = actionId ?? campaignId;
-    const collectionId = this.resolveExcludeListCollectionId(level, targetId);
-
-    return { collectionId, level, targetId };
-  }
-
-  /**
-   * Get the exclude list for a campaign or action.
-   *
-   * @param campaignId - Campaign ID (verified to exist).
-   * @param actionId - If provided, get the action-level exclude list.
-   *   Otherwise, get the campaign-level exclude list.
-   * @throws {CampaignNotFoundError} if the campaign does not exist.
-   * @throws {ActionNotFoundError} if actionId is provided and not in the campaign.
-   * @throws {ExcludeListNotFoundError} if the exclude list chain is not found.
-   */
-  getExcludeList(
-    campaignId: number,
-    actionId?: number,
-  ): ExcludeListEntry[] {
-    const { collectionId } = this.resolveExcludeListContext(
-      campaignId,
-      actionId,
-    );
-
-    const rows = this.client.db
-      .prepare(
-        `SELECT person_id FROM collection_people
-         WHERE collection_id = ?
-         ORDER BY person_id`,
-      )
-      .all(collectionId) as unknown as { person_id: number }[];
-
-    return rows.map((r) => ({ personId: r.person_id }));
-  }
-
-  /**
-   * Add people to a campaign or action exclude list.
-   *
-   * @param campaignId - Campaign ID (verified to exist).
-   * @param personIds - Person IDs to add.
-   * @param actionId - If provided, add to the action-level exclude list.
-   * @returns Number of people actually added (excludes already-present).
-   * @throws {CampaignNotFoundError} if the campaign does not exist.
-   * @throws {ActionNotFoundError} if actionId is provided and not in the campaign.
-   * @throws {ExcludeListNotFoundError} if the exclude list chain is not found.
-   */
-  addToExcludeList(
-    campaignId: number,
-    personIds: number[],
-    actionId?: number,
-  ): number {
-    if (personIds.length === 0) return 0;
-
-    const { collectionId } = this.resolveExcludeListContext(
-      campaignId,
-      actionId,
-    );
-
-    const stmts = this.getWriteStatements();
-    let added = 0;
-
-    this.client.db.exec("BEGIN");
-    try {
-      for (const personId of personIds) {
-        const result = stmts.insertCollectionPerson.run(
-          collectionId,
-          personId,
-        );
-        if (result.changes > 0) added++;
-      }
-      this.client.db.exec("COMMIT");
-    } catch (e) {
-      this.client.db.exec("ROLLBACK");
-      throw e;
-    }
-
-    return added;
-  }
-
-  /**
-   * Remove people from a campaign or action exclude list.
-   *
-   * @param campaignId - Campaign ID (verified to exist).
-   * @param personIds - Person IDs to remove.
-   * @param actionId - If provided, remove from the action-level exclude list.
-   * @returns Number of people actually removed.
-   * @throws {CampaignNotFoundError} if the campaign does not exist.
-   * @throws {ActionNotFoundError} if actionId is provided and not in the campaign.
-   * @throws {ExcludeListNotFoundError} if the exclude list chain is not found.
-   */
-  removeFromExcludeList(
-    campaignId: number,
-    personIds: number[],
-    actionId?: number,
-  ): number {
-    if (personIds.length === 0) return 0;
-
-    const { collectionId } = this.resolveExcludeListContext(
-      campaignId,
-      actionId,
-    );
-
-    const stmts = this.getWriteStatements();
-    let removed = 0;
-
-    this.client.db.exec("BEGIN");
-    try {
-      for (const personId of personIds) {
-        const result = stmts.deleteCollectionPerson.run(
-          collectionId,
-          personId,
-        );
-        if (result.changes > 0) removed++;
-      }
-      this.client.db.exec("COMMIT");
-    } catch (e) {
-      this.client.db.exec("ROLLBACK");
-      throw e;
-    }
-
-    return removed;
-  }
-
-  /**
-   * Get aggregated statistics for a campaign.
-   *
-   * Returns per-action result breakdowns (success/failure/skip/reply rates),
-   * top error codes with blame attribution, and processing timeline.
-   *
-   * @throws {CampaignNotFoundError} if no campaign exists with the given ID.
-   * @throws {ActionNotFoundError} if actionId is provided and not in the campaign.
-   */
-  getStatistics(
-    campaignId: number,
-    options: GetStatisticsOptions = {},
-  ): CampaignStatistics {
-    const { actionId, maxErrors = 5 } = options;
-
-    // Get actions (also validates campaign exists)
-    const actions = this.getCampaignActions(campaignId);
-
-    if (actionId !== undefined) {
-      if (!actions.some((a) => a.id === actionId)) {
-        throw new ActionNotFoundError(actionId, campaignId);
-      }
-    }
-
-    const filteredActions = actionId !== undefined
-      ? actions.filter((a) => a.id === actionId)
-      : actions;
-
-    const { db } = this.client;
-
-    const stmtActionStats = db.prepare(
-      `SELECT
-         SUM(CASE WHEN ar.result = 1 THEN 1 ELSE 0 END) AS successful,
-         SUM(CASE WHEN ar.result = 2 THEN 1 ELSE 0 END) AS replied,
-         SUM(CASE WHEN ar.result = -1 THEN 1 ELSE 0 END) AS failed,
-         SUM(CASE WHEN ar.result = -2 THEN 1 ELSE 0 END) AS skipped,
-         COUNT(*) AS total,
-         MIN(ar.created_at) AS first_result_at,
-         MAX(ar.created_at) AS last_result_at
-       FROM action_results ar
-       JOIN action_versions av ON ar.action_version_id = av.id
-       WHERE av.action_id = ?`,
-    );
-
-    const stmtTopErrors = db.prepare(
-      `SELECT
-         arf.code,
-         COUNT(*) AS cnt,
-         arf.is_exception,
-         arf.who_to_blame
-       FROM action_result_flags arf
-       JOIN action_results ar ON arf.action_result_id = ar.id
-       JOIN action_versions av ON ar.action_version_id = av.id
-       WHERE av.action_id = ? AND arf.code IS NOT NULL
-       GROUP BY arf.code, arf.is_exception, arf.who_to_blame
-       ORDER BY cnt DESC
-       LIMIT ?`,
-    );
-
-    interface ActionStatsRow {
-      successful: number;
-      replied: number;
-      failed: number;
-      skipped: number;
-      total: number;
-      first_result_at: string | null;
-      last_result_at: string | null;
-    }
-
-    interface ErrorRow {
-      code: number;
-      cnt: number;
-      is_exception: number;
-      who_to_blame: string;
-    }
-
-    const actionStats: ActionStatistics[] = [];
-    let totalSuccessful = 0;
-    let totalReplied = 0;
-    let totalFailed = 0;
-    let totalSkipped = 0;
-    let grandTotal = 0;
-
-    for (const action of filteredActions) {
-      const stats = stmtActionStats.get(
-        action.id,
-      ) as unknown as ActionStatsRow;
-
-      const successful = stats.successful ?? 0;
-      const replied = stats.replied ?? 0;
-      const failed = stats.failed ?? 0;
-      const skipped = stats.skipped ?? 0;
-      const total = stats.total ?? 0;
-      const successRate = total > 0
-        ? Math.round(((successful + replied) / total) * 1000) / 10
-        : 0;
-
-      const errorRows = stmtTopErrors.all(
-        action.id,
-        maxErrors,
-      ) as unknown as ErrorRow[];
-
-      const topErrors: ActionErrorSummary[] = errorRows.map((e) => ({
-        code: e.code,
-        count: e.cnt,
-        isException: e.is_exception === 1,
-        whoToBlame: e.who_to_blame,
-      }));
-
-      actionStats.push({
-        actionId: action.id,
-        actionName: action.name,
-        actionType: action.config.actionType,
-        successful,
-        replied,
-        failed,
-        skipped,
-        total,
-        successRate,
-        firstResultAt: stats.first_result_at,
-        lastResultAt: stats.last_result_at,
-        topErrors,
-      });
-
-      totalSuccessful += successful;
-      totalReplied += replied;
-      totalFailed += failed;
-      totalSkipped += skipped;
-      grandTotal += total;
-    }
-
-    const totalSuccessRate = grandTotal > 0
-      ? Math.round(((totalSuccessful + totalReplied) / grandTotal) * 1000) / 10
-      : 0;
-
-    return {
-      campaignId,
-      actions: actionStats,
-      totals: {
-        successful: totalSuccessful,
-        replied: totalReplied,
-        failed: totalFailed,
-        skipped: totalSkipped,
-        total: grandTotal,
-        successRate: totalSuccessRate,
-      },
-    };
-  }
-
-  /**
-   * Reset persons for re-run in a campaign.
-   *
-   * This performs the three-table reset pattern required by LinkedHelper:
-   * 1. Requeue person in action_target_people (state = 1)
-   * 2. Reset person_in_campaigns_history (result_status = -999)
-   * 3. Delete old action_results (and FK children)
-   *
-   * @throws {CampaignNotFoundError} if no campaign exists with the given ID.
-   */
-  resetForRerun(campaignId: number, personIds: number[]): void {
-    if (personIds.length === 0) return;
-
-    // Verify campaign exists and get actions
-    const actions = this.getCampaignActions(campaignId);
-    if (actions.length === 0) return;
-
-    // Get all action versions for this campaign
-    const actionVersionRows = this.stmtGetActionVersions.all(
-      campaignId,
-    ) as unknown as ActionVersionRow[];
-
-    const stmts = this.getWriteStatements();
-
-    this.client.db.exec("BEGIN");
-    try {
-      for (const personId of personIds) {
-        // 1. Requeue person in action_target_people for each action
-        for (const action of actions) {
-          stmts.resetTargetPeople.run(action.id, personId);
-        }
-
-        // 2. Reset campaign history
-        stmts.resetHistory.run(campaignId, personId);
-
-        // 3. Delete old results for each action version
-        for (const version of actionVersionRows) {
-          stmts.deleteResultFlags.run(version.id, personId);
-          stmts.deleteResultMessages.run(version.id, personId);
-          stmts.deleteResults.run(version.id, personId);
-        }
-      }
-      this.client.db.exec("COMMIT");
-    } catch (e) {
-      this.client.db.exec("ROLLBACK");
-      throw e;
-    }
   }
 }
