@@ -710,6 +710,38 @@ export class CampaignRepository {
   }
 
   /**
+   * Validate campaign/action and resolve the exclude-list collection ID.
+   *
+   * Shared preamble for {@link getExcludeList}, {@link addToExcludeList},
+   * and {@link removeFromExcludeList}.
+   *
+   * @param campaignId - Campaign ID (verified to exist).
+   * @param actionId - If provided, scope to the action-level exclude list.
+   * @throws {CampaignNotFoundError} if the campaign does not exist.
+   * @throws {ActionNotFoundError} if actionId is provided and not in the campaign.
+   * @throws {ExcludeListNotFoundError} if the exclude list chain is not found.
+   */
+  private resolveExcludeListContext(
+    campaignId: number,
+    actionId?: number,
+  ): { collectionId: number; level: "campaign" | "action"; targetId: number } {
+    this.getCampaign(campaignId);
+
+    if (actionId !== undefined) {
+      const actions = this.getCampaignActions(campaignId);
+      if (!actions.some((a) => a.id === actionId)) {
+        throw new ActionNotFoundError(actionId, campaignId);
+      }
+    }
+
+    const level = actionId !== undefined ? "action" : "campaign";
+    const targetId = actionId ?? campaignId;
+    const collectionId = this.resolveExcludeListCollectionId(level, targetId);
+
+    return { collectionId, level, targetId };
+  }
+
+  /**
    * Get the exclude list for a campaign or action.
    *
    * @param campaignId - Campaign ID (verified to exist).
@@ -723,20 +755,10 @@ export class CampaignRepository {
     campaignId: number,
     actionId?: number,
   ): ExcludeListEntry[] {
-    // Verify campaign exists
-    this.getCampaign(campaignId);
-
-    if (actionId !== undefined) {
-      // Verify action belongs to campaign
-      const actions = this.getCampaignActions(campaignId);
-      if (!actions.some((a) => a.id === actionId)) {
-        throw new ActionNotFoundError(actionId, campaignId);
-      }
-    }
-
-    const level = actionId !== undefined ? "action" : "campaign";
-    const targetId = actionId ?? campaignId;
-    const collectionId = this.resolveExcludeListCollectionId(level, targetId);
+    const { collectionId } = this.resolveExcludeListContext(
+      campaignId,
+      actionId,
+    );
 
     const rows = this.client.db
       .prepare(
@@ -767,19 +789,10 @@ export class CampaignRepository {
   ): number {
     if (personIds.length === 0) return 0;
 
-    // Verify campaign exists
-    this.getCampaign(campaignId);
-
-    if (actionId !== undefined) {
-      const actions = this.getCampaignActions(campaignId);
-      if (!actions.some((a) => a.id === actionId)) {
-        throw new ActionNotFoundError(actionId, campaignId);
-      }
-    }
-
-    const level = actionId !== undefined ? "action" : "campaign";
-    const targetId = actionId ?? campaignId;
-    const collectionId = this.resolveExcludeListCollectionId(level, targetId);
+    const { collectionId } = this.resolveExcludeListContext(
+      campaignId,
+      actionId,
+    );
 
     const stmts = this.getWriteStatements();
     let added = 0;
@@ -820,19 +833,10 @@ export class CampaignRepository {
   ): number {
     if (personIds.length === 0) return 0;
 
-    // Verify campaign exists
-    this.getCampaign(campaignId);
-
-    if (actionId !== undefined) {
-      const actions = this.getCampaignActions(campaignId);
-      if (!actions.some((a) => a.id === actionId)) {
-        throw new ActionNotFoundError(actionId, campaignId);
-      }
-    }
-
-    const level = actionId !== undefined ? "action" : "campaign";
-    const targetId = actionId ?? campaignId;
-    const collectionId = this.resolveExcludeListCollectionId(level, targetId);
+    const { collectionId } = this.resolveExcludeListContext(
+      campaignId,
+      actionId,
+    );
 
     const stmts = this.getWriteStatements();
     let removed = 0;
