@@ -473,6 +473,7 @@ List available LinkedHelper action types with descriptions and configuration sch
 - **Instance startup time**: Starting an instance loads LinkedIn, which may take up to 45 seconds.
 - **Profile data is cached**: `query-profile` and `query-profiles` search the local LinkedHelper database. Profiles must have been visited or imported by LinkedHelper to appear in results.
 - **Messaging scrape is slow**: `scrape-messaging-history` navigates LinkedIn's messaging UI and can take several minutes depending on conversation volume.
+- **Same-machine requirement**: lhremote must run on the same machine as LinkedHelper. CDP connections are localhost-only by default (for security), and database access requires direct file system access to the LinkedHelper SQLite database.
 
 ## Troubleshooting
 
