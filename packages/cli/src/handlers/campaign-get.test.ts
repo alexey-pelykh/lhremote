@@ -20,7 +20,7 @@ import {
 } from "@lhremote/core";
 
 import { handleCampaignGet } from "./campaign-get.js";
-import { mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
 
 const MOCK_CAMPAIGN = {
   id: 1,
@@ -81,19 +81,13 @@ describe("handleCampaignGet", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("prints JSON with --json", async () => {
     setupSuccessPath();
 
     await handleCampaignGet(1, { json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.id).toBe(1);
     expect(parsed.name).toBe("Outreach Q1");
     expect(parsed.actions).toHaveLength(2);
@@ -105,7 +99,7 @@ describe("handleCampaignGet", () => {
     await handleCampaignGet(1, {});
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("Campaign #1: Outreach Q1");
     expect(output).toContain("State: running");
     expect(output).toContain("Paused: no");
@@ -123,7 +117,7 @@ describe("handleCampaignGet", () => {
 
     await handleCampaignGet(1, {});
 
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).not.toContain("Description:");
   });
 
@@ -134,7 +128,7 @@ describe("handleCampaignGet", () => {
 
     await handleCampaignGet(1, {});
 
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).not.toContain("Actions");
   });
 

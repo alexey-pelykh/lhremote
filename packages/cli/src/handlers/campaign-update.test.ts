@@ -20,7 +20,7 @@ import {
 } from "@lhremote/core";
 
 import { handleCampaignUpdate } from "./campaign-update.js";
-import { mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
 
 const MOCK_UPDATED = { id: 1, name: "Updated Name" };
 
@@ -55,19 +55,13 @@ describe("handleCampaignUpdate", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("updates campaign name and prints confirmation", async () => {
     setupSuccessPath();
 
     await handleCampaignUpdate(1, { name: "Updated Name" });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain('Campaign updated: #1 "Updated Name"');
+    expect(getStdout(stdoutSpy)).toContain('Campaign updated: #1 "Updated Name"');
   });
 
   it("prints JSON with --json", async () => {
@@ -76,7 +70,7 @@ describe("handleCampaignUpdate", () => {
     await handleCampaignUpdate(1, { name: "Updated Name", json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.id).toBe(1);
     expect(parsed.name).toBe("Updated Name");
   });

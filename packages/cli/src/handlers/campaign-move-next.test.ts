@@ -31,7 +31,7 @@ import {
 import { readFileSync } from "node:fs";
 
 import { handleCampaignMoveNext } from "./campaign-move-next.js";
-import { mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
 
 function mockRepo(nextActionId = 11) {
   const moveToNextAction = vi.fn().mockReturnValue({ nextActionId });
@@ -64,19 +64,13 @@ describe("handleCampaignMoveNext", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("moves persons to next action with --person-ids", async () => {
     setupSuccessPath();
 
     await handleCampaignMoveNext(1, 10, { personIds: "100,200" });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain(
+    expect(getStdout(stdoutSpy)).toContain(
       "Campaign 1: 2 persons moved from action 10 to action 11.",
     );
   });
@@ -88,7 +82,7 @@ describe("handleCampaignMoveNext", () => {
     await handleCampaignMoveNext(1, 10, { personIdsFile: "ids.txt" });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("3 persons moved");
+    expect(getStdout(stdoutSpy)).toContain("3 persons moved");
   });
 
   it("prints JSON with --json", async () => {
@@ -97,7 +91,7 @@ describe("handleCampaignMoveNext", () => {
     await handleCampaignMoveNext(1, 10, { personIds: "100", json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.success).toBe(true);
     expect(parsed.campaignId).toBe(1);
     expect(parsed.fromActionId).toBe(10);

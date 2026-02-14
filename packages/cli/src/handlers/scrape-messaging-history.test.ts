@@ -22,6 +22,8 @@ import {
 
 import { handleScrapeMessagingHistory } from "./scrape-messaging-history.js";
 import {
+  getStderr,
+  getStdout,
   mockResolveAccount,
   mockWithInstanceDatabase,
 } from "./testing/mock-helpers.js";
@@ -64,25 +66,13 @@ describe("handleScrapeMessagingHistory", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
-  function getStderr(): string {
-    return stderrSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("prints JSON with --json", async () => {
     setupSuccessPath();
 
     await handleScrapeMessagingHistory({ json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const output = JSON.parse(getStdout());
+    const output = JSON.parse(getStdout(stdoutSpy));
     expect(output.success).toBe(true);
     expect(output.actionType).toBe("ScrapeMessagingHistory");
     expect(output.stats).toEqual(MOCK_STATS);
@@ -94,7 +84,7 @@ describe("handleScrapeMessagingHistory", () => {
     await handleScrapeMessagingHistory({});
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("42 conversations");
     expect(output).toContain("256 messages");
     expect(output).toContain("2024-06-01");
@@ -106,7 +96,7 @@ describe("handleScrapeMessagingHistory", () => {
 
     await handleScrapeMessagingHistory({});
 
-    const stderr = getStderr();
+    const stderr = getStderr(stderrSpy);
     expect(stderr).toContain("Scraping messaging history");
     expect(stderr).toContain("Done.");
   });
@@ -124,7 +114,7 @@ describe("handleScrapeMessagingHistory", () => {
     await handleScrapeMessagingHistory({});
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("0 conversations");
     expect(output).not.toContain("Date range");
   });
@@ -137,7 +127,7 @@ describe("handleScrapeMessagingHistory", () => {
     await handleScrapeMessagingHistory({});
 
     expect(process.exitCode).toBe(1);
-    expect(getStderr()).toContain("No accounts found.");
+    expect(getStderr(stderrSpy)).toContain("No accounts found.");
   });
 
   it("sets exitCode 1 when instance not running", async () => {
@@ -151,7 +141,7 @@ describe("handleScrapeMessagingHistory", () => {
     await handleScrapeMessagingHistory({});
 
     expect(process.exitCode).toBe(1);
-    expect(getStderr()).toContain("No LinkedHelper instance is running.");
+    expect(getStderr(stderrSpy)).toContain("No LinkedHelper instance is running.");
   });
 
   it("sets exitCode 1 on unexpected error", async () => {
@@ -163,6 +153,6 @@ describe("handleScrapeMessagingHistory", () => {
     await handleScrapeMessagingHistory({});
 
     expect(process.exitCode).toBe(1);
-    expect(getStderr()).toContain("connection reset");
+    expect(getStderr(stderrSpy)).toContain("connection reset");
   });
 });

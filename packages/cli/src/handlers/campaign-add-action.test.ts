@@ -20,7 +20,11 @@ import {
 } from "@lhremote/core";
 
 import { handleCampaignAddAction } from "./campaign-add-action.js";
-import { mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import {
+  getStdout,
+  mockResolveAccount,
+  mockWithDatabase,
+} from "./testing/mock-helpers.js";
 
 const MOCK_CAMPAIGN = { id: 1, name: "Test", liAccountId: 42 };
 const MOCK_ACTION = {
@@ -61,12 +65,6 @@ describe("handleCampaignAddAction", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("adds action and prints confirmation", async () => {
     setupSuccessPath();
 
@@ -76,7 +74,7 @@ describe("handleCampaignAddAction", () => {
     });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain(
+    expect(getStdout(stdoutSpy)).toContain(
       'Action added: #10 "Visit" (VisitAndExtract) to campaign #1',
     );
   });
@@ -91,7 +89,7 @@ describe("handleCampaignAddAction", () => {
     });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.id).toBe(10);
     expect(parsed.name).toBe("Visit");
   });

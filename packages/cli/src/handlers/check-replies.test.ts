@@ -23,6 +23,8 @@ import {
 
 import { handleCheckReplies } from "./check-replies.js";
 import {
+  getStderr,
+  getStdout,
   mockResolveAccount,
   mockWithInstanceDatabase,
 } from "./testing/mock-helpers.js";
@@ -92,25 +94,13 @@ describe("handleCheckReplies", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
-  function getStderr(): string {
-    return stderrSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("prints JSON with --json", async () => {
     setupSuccessPath();
 
     await handleCheckReplies({ json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const output = JSON.parse(getStdout());
+    const output = JSON.parse(getStdout(stdoutSpy));
     expect(output.newMessages).toEqual(MOCK_CONVERSATIONS);
     expect(output.totalNew).toBe(1);
     expect(output.checkedAt).toBeDefined();
@@ -122,7 +112,7 @@ describe("handleCheckReplies", () => {
     await handleCheckReplies({});
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("1 new message found:");
     expect(output).toContain("Jane Doe (person #456, chat #123):");
     expect(output).toContain("Thanks for reaching out!");
@@ -133,7 +123,7 @@ describe("handleCheckReplies", () => {
 
     await handleCheckReplies({});
 
-    const stderr = getStderr();
+    const stderr = getStderr(stderrSpy);
     expect(stderr).toContain("Checking for new replies...");
     expect(stderr).toContain("Done.");
   });
@@ -144,7 +134,7 @@ describe("handleCheckReplies", () => {
 
     await handleCheckReplies({});
 
-    expect(getStdout()).toContain("No new messages found.");
+    expect(getStdout(stdoutSpy)).toContain("No new messages found.");
   });
 
   it("uses since parameter when provided", async () => {
@@ -179,7 +169,7 @@ describe("handleCheckReplies", () => {
     await handleCheckReplies({});
 
     expect(process.exitCode).toBe(1);
-    expect(getStderr()).toContain("No accounts found.");
+    expect(getStderr(stderrSpy)).toContain("No accounts found.");
   });
 
   it("sets exitCode when no instance running", async () => {
@@ -193,7 +183,7 @@ describe("handleCheckReplies", () => {
     await handleCheckReplies({});
 
     expect(process.exitCode).toBe(1);
-    expect(getStderr()).toContain(
+    expect(getStderr(stderrSpy)).toContain(
       "No LinkedHelper instance is running. Use start-instance first.",
     );
   });
@@ -222,6 +212,6 @@ describe("handleCheckReplies", () => {
 
     await handleCheckReplies({});
 
-    expect(getStdout()).toContain("2 new messages found:");
+    expect(getStdout(stdoutSpy)).toContain("2 new messages found:");
   });
 });

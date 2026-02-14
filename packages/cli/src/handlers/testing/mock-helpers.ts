@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2025 Alexey Pelykh
 
+import type { Mock } from "vitest";
 import { vi } from "vitest";
 
 import type {
@@ -17,6 +18,20 @@ import {
   withDatabase,
   withInstanceDatabase,
 } from "@lhremote/core";
+
+/**
+ * Collect all captured stdout output from a `process.stdout.write` spy.
+ */
+export function getStdout(spy: Mock): string {
+  return spy.mock.calls.map((call: unknown[]) => String(call[0])).join("");
+}
+
+/**
+ * Collect all captured stderr output from a `process.stderr.write` spy.
+ */
+export function getStderr(spy: Mock): string {
+  return spy.mock.calls.map((call: unknown[]) => String(call[0])).join("");
+}
 
 /**
  * Mock {@link LauncherService} with optional method overrides.

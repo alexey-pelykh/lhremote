@@ -22,7 +22,7 @@ import {
 } from "@lhremote/core";
 
 import { handleCampaignExcludeList } from "./campaign-exclude-list.js";
-import { mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
 
 const MOCK_ENTRIES = [{ personId: 100 }, { personId: 200 }];
 
@@ -57,19 +57,13 @@ describe("handleCampaignExcludeList", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("prints campaign-level exclude list", async () => {
     setupSuccessPath();
 
     await handleCampaignExcludeList(1, {});
 
     expect(process.exitCode).toBeUndefined();
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("Exclude list for campaign 1: 2 person(s)");
     expect(output).toContain("Person IDs: 100, 200");
   });
@@ -80,7 +74,7 @@ describe("handleCampaignExcludeList", () => {
     await handleCampaignExcludeList(1, { actionId: 10 });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain(
+    expect(getStdout(stdoutSpy)).toContain(
       "Exclude list for action 10 in campaign 1: 2 person(s)",
     );
   });
@@ -92,7 +86,7 @@ describe("handleCampaignExcludeList", () => {
 
     await handleCampaignExcludeList(1, {});
 
-    const output = getStdout();
+    const output = getStdout(stdoutSpy);
     expect(output).toContain("0 person(s)");
     expect(output).not.toContain("Person IDs:");
   });
@@ -103,7 +97,7 @@ describe("handleCampaignExcludeList", () => {
     await handleCampaignExcludeList(1, { json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.campaignId).toBe(1);
     expect(parsed.level).toBe("campaign");
     expect(parsed.count).toBe(2);
@@ -115,7 +109,7 @@ describe("handleCampaignExcludeList", () => {
 
     await handleCampaignExcludeList(1, { actionId: 10, json: true });
 
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.actionId).toBe(10);
     expect(parsed.level).toBe("action");
   });

@@ -29,7 +29,7 @@ import {
 import { readFileSync } from "node:fs";
 
 import { handleCampaignRetry } from "./campaign-retry.js";
-import { mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
 
 function mockRepo() {
   const resetForRerun = vi.fn();
@@ -62,19 +62,13 @@ describe("handleCampaignRetry", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("resets persons for retry with --person-ids", async () => {
     setupSuccessPath();
 
     await handleCampaignRetry(1, { personIds: "100,200" });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("Campaign 1: 2 persons reset for retry.");
+    expect(getStdout(stdoutSpy)).toContain("Campaign 1: 2 persons reset for retry.");
   });
 
   it("resets persons for retry with --person-ids-file", async () => {
@@ -84,7 +78,7 @@ describe("handleCampaignRetry", () => {
     await handleCampaignRetry(1, { personIdsFile: "ids.txt" });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("3 persons reset for retry.");
+    expect(getStdout(stdoutSpy)).toContain("3 persons reset for retry.");
   });
 
   it("prints JSON with --json", async () => {
@@ -93,7 +87,7 @@ describe("handleCampaignRetry", () => {
     await handleCampaignRetry(1, { personIds: "100", json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.success).toBe(true);
     expect(parsed.campaignId).toBe(1);
     expect(parsed.personsReset).toBe(1);

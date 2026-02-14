@@ -34,6 +34,7 @@ import { readFileSync } from "node:fs";
 
 import { handleCampaignStart } from "./campaign-start.js";
 import {
+  getStdout,
   mockResolveAccount,
   mockWithInstanceDatabase,
 } from "./testing/mock-helpers.js";
@@ -69,19 +70,13 @@ describe("handleCampaignStart", () => {
     vi.restoreAllMocks();
   });
 
-  function getStdout(): string {
-    return stdoutSpy.mock.calls
-      .map((call: unknown[]) => String(call[0]))
-      .join("");
-  }
-
   it("starts campaign with --person-ids", async () => {
     setupSuccessPath();
 
     await handleCampaignStart(1, { personIds: "100,200,300" });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("Campaign 1 started with 3 persons queued.");
+    expect(getStdout(stdoutSpy)).toContain("Campaign 1 started with 3 persons queued.");
   });
 
   it("starts campaign with --person-ids-file", async () => {
@@ -91,7 +86,7 @@ describe("handleCampaignStart", () => {
     await handleCampaignStart(1, { personIdsFile: "ids.txt" });
 
     expect(process.exitCode).toBeUndefined();
-    expect(getStdout()).toContain("3 persons queued.");
+    expect(getStdout(stdoutSpy)).toContain("3 persons queued.");
   });
 
   it("prints JSON with --json", async () => {
@@ -100,7 +95,7 @@ describe("handleCampaignStart", () => {
     await handleCampaignStart(1, { personIds: "100", json: true });
 
     expect(process.exitCode).toBeUndefined();
-    const parsed = JSON.parse(getStdout());
+    const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.success).toBe(true);
     expect(parsed.campaignId).toBe(1);
     expect(parsed.personsQueued).toBe(1);
