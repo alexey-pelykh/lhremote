@@ -96,6 +96,7 @@ export class ProfileRepository {
   private readonly stmtSkills;
   private readonly stmtEmails;
   private readonly stmtSearch;
+  private readonly stmtProfileCount;
 
   constructor(client: DatabaseClient) {
     const { db } = client;
@@ -148,6 +149,10 @@ export class ProfileRepository {
       `SELECT email FROM person_email WHERE person_id = ?`,
     );
 
+    this.stmtProfileCount = db.prepare(
+      "SELECT COUNT(*) AS cnt FROM people",
+    );
+
     this.stmtSearch = db.prepare(
       `SELECT
          p.id,
@@ -165,6 +170,14 @@ export class ProfileRepository {
        ORDER BY mp.first_name, mp.last_name
        LIMIT ? OFFSET ?`,
     );
+  }
+
+  /**
+   * Returns the total number of profiles in the database.
+   */
+  getProfileCount(): number {
+    const row = this.stmtProfileCount.get() as { cnt: number } | undefined;
+    return row?.cnt ?? 0;
   }
 
   /**

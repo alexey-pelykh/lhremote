@@ -4,6 +4,7 @@
 import { discoverInstancePort } from "../cdp/index.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import { DatabaseClient, discoverAllDatabases } from "../db/index.js";
+import { ProfileRepository } from "../db/repositories/profile.js";
 import { LauncherService } from "./launcher.js";
 
 /** Status of the LinkedHelper launcher process. */
@@ -89,10 +90,8 @@ export async function checkStatus(
       try {
         const client = new DatabaseClient(dbPath);
         try {
-          const row = client.db
-            .prepare("SELECT COUNT(*) AS cnt FROM people")
-            .get() as { cnt: number } | undefined;
-          profileCount = row?.cnt ?? 0;
+          const repo = new ProfileRepository(client);
+          profileCount = repo.getProfileCount();
         } finally {
           client.close();
         }
