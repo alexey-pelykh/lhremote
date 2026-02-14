@@ -40,7 +40,7 @@ describe("handleLaunchApp", () => {
       } as unknown as AppService;
     });
 
-    await handleLaunchApp({});
+    await handleLaunchApp();
 
     expect(stdoutSpy).toHaveBeenCalledWith(
       "LinkedHelper launched on CDP port 9222\n",
@@ -48,19 +48,19 @@ describe("handleLaunchApp", () => {
     expect(process.exitCode).toBeUndefined();
   });
 
-  it("passes cdpPort option to AppService", async () => {
+  it("creates AppService without explicit port", async () => {
     vi.spyOn(process.stdout, "write").mockReturnValue(true);
 
     vi.mocked(AppService).mockImplementation(function () {
       return {
         launch: vi.fn().mockResolvedValue(undefined),
-        cdpPort: 4567,
+        cdpPort: 9222,
       } as unknown as AppService;
     });
 
-    await handleLaunchApp({ cdpPort: 4567 });
+    await handleLaunchApp();
 
-    expect(AppService).toHaveBeenCalledWith(4567);
+    expect(AppService).toHaveBeenCalledWith();
   });
 
   it("sets exitCode 1 on error", async () => {
@@ -78,7 +78,7 @@ describe("handleLaunchApp", () => {
       } as unknown as AppService;
     });
 
-    await handleLaunchApp({});
+    await handleLaunchApp();
 
     expect(process.exitCode).toBe(1);
     expect(stderrSpy).toHaveBeenCalledWith(
