@@ -12,6 +12,9 @@ updates:
         update-types:
           - minor
           - patch
+      actions-major:
+        update-types:
+          - major
 
   - package-ecosystem: npm
     directory: /
@@ -22,3 +25,6 @@ updates:
         update-types:
           - minor
           - patch
+      npm-major:
+        update-types:
+          - major
