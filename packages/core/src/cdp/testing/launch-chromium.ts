@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright-core";
 import { discoverTargets } from "../discovery.js";
+import { delay } from "../../utils/delay.js";
 
 /** Result of launching a test Chromium instance. */
 export interface ChromiumInstance {
@@ -88,7 +89,7 @@ export async function launchChromium(options?: {
     } catch {
       // Not ready yet
     }
-    await new Promise<void>((r) => setTimeout(r, 100));
+    await delay(100);
   }
 
   if (!ready) {

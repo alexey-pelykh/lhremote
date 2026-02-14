@@ -3,6 +3,7 @@
 
 import type { Protocol } from "devtools-protocol";
 import type { CdpTarget } from "../types/cdp.js";
+import { delay } from "../utils/delay.js";
 import { isLoopbackAddress } from "../utils/loopback.js";
 import {
   CDPConnectionError,
@@ -357,8 +358,8 @@ export class CDPClient {
     this.reconnecting = true;
 
     for (let attempt = 0; attempt < MAX_RECONNECT_ATTEMPTS; attempt++) {
-      const delay = RECONNECT_BASE_DELAY * 2 ** attempt;
-      await new Promise<void>((r) => setTimeout(r, delay));
+      const backoff = RECONNECT_BASE_DELAY * 2 ** attempt;
+      await delay(backoff);
 
       try {
         await this.connect(this.targetId ?? undefined);
