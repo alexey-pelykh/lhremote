@@ -17,7 +17,7 @@ runs:
         cache: pnpm
         registry-url: ${{ inputs.registry-url }}
 
-    - run: pnpm install --frozen-lockfile
+    - run: pnpm install --frozen-lockfile --ignore-scripts
       shell: bash
 
     - name: Install Playwright Chromium
