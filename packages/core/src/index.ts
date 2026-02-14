@@ -85,6 +85,7 @@ export {
   waitForInstanceShutdown,
   withDatabase,
   withInstanceDatabase,
+  WrongPortError,
 } from "./services/index.js";
 
 // Data access
