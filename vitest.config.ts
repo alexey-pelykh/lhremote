@@ -18,6 +18,12 @@ export default defineConfig({
         "**/*.d.ts",
         "**/testing/**",
       ],
+      thresholds: {
+        statements: 85,
+        branches: 69,
+        functions: 80,
+        lines: 85,
+      },
     },
   },
 });
