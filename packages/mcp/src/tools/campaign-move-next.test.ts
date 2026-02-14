@@ -18,13 +18,13 @@ import {
   CampaignNotFoundError,
   CampaignRepository,
   type DatabaseContext,
-  LinkedHelperNotRunningError,
   NoNextActionError,
   resolveAccount,
   withDatabase,
 } from "@lhremote/core";
 
 import { registerCampaignMoveNext } from "./campaign-move-next.js";
+import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 function mockCampaignRepo() {
@@ -226,30 +226,9 @@ describe("registerCampaignMoveNext", () => {
     });
   });
 
-  it("returns error when LinkedHelper is not running", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignMoveNext(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new LinkedHelperNotRunningError(9222),
-    );
-
-    const handler = getHandler("campaign-move-next");
-    const result = await handler({
-      campaignId: 10,
-      actionId: 5,
-      personIds: [100],
-      cdpPort: 9222,
-    });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "LinkedHelper is not running. Use launch-app first.",
-        },
-      ],
-    });
-  });
+  describeInfrastructureErrors(
+    registerCampaignMoveNext,
+    "campaign-move-next",
+    () => ({ campaignId: 10, actionId: 5, personIds: [100], cdpPort: 9222 }),
+  );
 });

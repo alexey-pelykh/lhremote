@@ -18,12 +18,12 @@ import {
   CampaignNotFoundError,
   CampaignService,
   type InstanceDatabaseContext,
-  LinkedHelperNotRunningError,
   resolveAccount,
   withInstanceDatabase,
 } from "@lhremote/core";
 
 import { registerImportPeopleFromUrls } from "./import-people-from-urls.js";
+import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 function mockCampaignService() {
@@ -151,31 +151,15 @@ describe("registerImportPeopleFromUrls", () => {
     });
   });
 
-  it("returns error when LinkedHelper is not running", async () => {
-    const { server, getHandler } = createMockServer();
-    registerImportPeopleFromUrls(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new LinkedHelperNotRunningError(9222),
-    );
-
-    const handler = getHandler("import-people-from-urls");
-    const result = await handler({
+  describeInfrastructureErrors(
+    registerImportPeopleFromUrls,
+    "import-people-from-urls",
+    () => ({
       campaignId: 14,
       linkedInUrls: ["https://www.linkedin.com/in/alice"],
       cdpPort: 9222,
-    });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "LinkedHelper is not running. Use launch-app first.",
-        },
-      ],
-    });
-  });
+    }),
+  );
 
   it("returns error when campaign has no actions", async () => {
     const { server, getHandler } = createMockServer();

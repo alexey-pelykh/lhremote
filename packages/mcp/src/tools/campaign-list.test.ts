@@ -17,12 +17,12 @@ import {
   type CampaignSummary,
   CampaignRepository,
   type DatabaseContext,
-  LinkedHelperNotRunningError,
   resolveAccount,
   withDatabase,
 } from "@lhremote/core";
 
 import { registerCampaignList } from "./campaign-list.js";
+import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 const MOCK_CAMPAIGNS: CampaignSummary[] = [
@@ -144,47 +144,10 @@ describe("registerCampaignList", () => {
     expect(listCampaigns).toHaveBeenCalledWith({ includeArchived: true });
   });
 
-  it("returns error when LinkedHelper is not running", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignList(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new LinkedHelperNotRunningError(9222),
-    );
-
-    const handler = getHandler("campaign-list");
-    const result = await handler({ includeArchived: false, cdpPort: 9222 });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "LinkedHelper is not running. Use launch-app first.",
-        },
-      ],
-    });
-  });
-
-  it("returns error when connection fails", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignList(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new Error("connection refused"),
-    );
-
-    const handler = getHandler("campaign-list");
-    const result = await handler({ includeArchived: false, cdpPort: 9222 });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "Failed to connect to LinkedHelper: connection refused",
-        },
-      ],
-    });
-  });
+  describeInfrastructureErrors(
+    registerCampaignList,
+    "campaign-list",
+    () => ({ includeArchived: false, cdpPort: 9222 }),
+    "Failed to connect to LinkedHelper",
+  );
 });

@@ -18,12 +18,12 @@ import {
   CampaignNotFoundError,
   CampaignService,
   type InstanceDatabaseContext,
-  LinkedHelperNotRunningError,
   resolveAccount,
   withInstanceDatabase,
 } from "@lhremote/core";
 
 import { registerCampaignDelete } from "./campaign-delete.js";
+import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 function mockCampaignService() {
@@ -130,55 +130,12 @@ describe("registerCampaignDelete", () => {
     });
   });
 
-  it("returns error when LinkedHelper is not running", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignDelete(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new LinkedHelperNotRunningError(9222),
-    );
-
-    const handler = getHandler("campaign-delete");
-    const result = await handler({
-      campaignId: 15,
-      cdpPort: 9222,
-    });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "LinkedHelper is not running. Use launch-app first.",
-        },
-      ],
-    });
-  });
-
-  it("returns error when connection fails", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignDelete(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new Error("connection refused"),
-    );
-
-    const handler = getHandler("campaign-delete");
-    const result = await handler({
-      campaignId: 15,
-      cdpPort: 9222,
-    });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "Failed to connect to LinkedHelper: connection refused",
-        },
-      ],
-    });
-  });
+  describeInfrastructureErrors(
+    registerCampaignDelete,
+    "campaign-delete",
+    () => ({ campaignId: 15, cdpPort: 9222 }),
+    "Failed to connect to LinkedHelper",
+  );
 
   it("returns error when campaign execution fails", async () => {
     const { server, getHandler } = createMockServer();

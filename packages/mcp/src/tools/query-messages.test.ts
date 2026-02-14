@@ -19,13 +19,13 @@ import {
   type DatabaseContext,
   type Message,
   ChatNotFoundError,
-  LinkedHelperNotRunningError,
   MessageRepository,
   resolveAccount,
   withDatabase,
 } from "@lhremote/core";
 
 import { registerQueryMessages } from "./query-messages.js";
+import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 const MOCK_CHAT: Chat = {
@@ -255,27 +255,11 @@ describe("registerQueryMessages", () => {
     });
   });
 
-  it("returns error when LinkedHelper is not running", async () => {
-    const { server, getHandler } = createMockServer();
-    registerQueryMessages(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new LinkedHelperNotRunningError(9222),
-    );
-
-    const handler = getHandler("query-messages");
-    const result = await handler({ cdpPort: 9222 });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "LinkedHelper is not running. Use launch-app first.",
-        },
-      ],
-    });
-  });
+  describeInfrastructureErrors(
+    registerQueryMessages,
+    "query-messages",
+    () => ({ cdpPort: 9222 }),
+  );
 
   it("chatId takes priority over search and personId", async () => {
     const { server, getHandler } = createMockServer();

@@ -21,7 +21,6 @@ import {
   CampaignNotFoundError,
   CampaignRepository,
   type DatabaseContext,
-  LinkedHelperNotRunningError,
   resolveAccount,
   serializeCampaignJson,
   serializeCampaignYaml,
@@ -29,6 +28,7 @@ import {
 } from "@lhremote/core";
 
 import { registerCampaignExport } from "./campaign-export.js";
+import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 const MOCK_CAMPAIGN: Campaign = {
@@ -186,47 +186,10 @@ describe("registerCampaignExport", () => {
     });
   });
 
-  it("returns error when connection fails", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignExport(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new Error("connection refused"),
-    );
-
-    const handler = getHandler("campaign-export");
-    const result = await handler({ campaignId: 15, format: "yaml", cdpPort: 9222 });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "Failed to connect to LinkedHelper: connection refused",
-        },
-      ],
-    });
-  });
-
-  it("returns error when LinkedHelper is not running", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignExport(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new LinkedHelperNotRunningError(9222),
-    );
-
-    const handler = getHandler("campaign-export");
-    const result = await handler({ campaignId: 15, format: "yaml", cdpPort: 9222 });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "LinkedHelper is not running. Use launch-app first.",
-        },
-      ],
-    });
-  });
+  describeInfrastructureErrors(
+    registerCampaignExport,
+    "campaign-export",
+    () => ({ campaignId: 15, format: "yaml", cdpPort: 9222 }),
+    "Failed to connect to LinkedHelper",
+  );
 });

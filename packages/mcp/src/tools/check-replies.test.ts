@@ -16,7 +16,6 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import {
   type ConversationMessages,
   type InstanceDatabaseContext,
-  LinkedHelperNotRunningError,
   MessageRepository,
   AccountResolutionError,
   InstanceNotRunningError,
@@ -25,6 +24,7 @@ import {
 } from "@lhremote/core";
 
 import { registerCheckReplies } from "./check-replies.js";
+import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 const MOCK_CONVERSATIONS: ConversationMessages[] = [
@@ -211,27 +211,11 @@ describe("registerCheckReplies", () => {
     expect(getMessagesSince).toHaveBeenCalledWith("2025-01-14T12:00:00.000Z");
   });
 
-  it("returns error when LinkedHelper not running", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCheckReplies(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new LinkedHelperNotRunningError(9222),
-    );
-
-    const handler = getHandler("check-replies");
-    const result = await handler({ cdpPort: 9222 });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "LinkedHelper is not running. Use launch-app first.",
-        },
-      ],
-    });
-  });
+  describeInfrastructureErrors(
+    registerCheckReplies,
+    "check-replies",
+    () => ({ cdpPort: 9222 }),
+  );
 
   it("returns error when no accounts found", async () => {
     const { server, getHandler } = createMockServer();
