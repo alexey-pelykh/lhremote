@@ -1,0 +1,6 @@
+# Require owner review for CI/CD and security-sensitive files
+.github/ @alexey-pelykh
+.npmrc @alexey-pelykh
+pnpm-workspace.yaml @alexey-pelykh
+scripts/ @alexey-pelykh
+SECURITY.md @alexey-pelykh
