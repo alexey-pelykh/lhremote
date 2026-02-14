@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2025 Alexey Pelykh
+// Copyright (C) 2025-2026 Alexey Pelykh
 
 export { DatabaseClient, type DatabaseClientOptions } from "./client.js";
 export { discoverAllDatabases, discoverDatabase } from "./discovery.js";
