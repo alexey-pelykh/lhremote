@@ -586,6 +586,45 @@ describe("CDPClient", () => {
       expect(client.isConnected).toBe(false);
     });
 
+    it("should emit reconnect-exhausted event after all attempts fail", async () => {
+      await client.connect();
+      const ws = lastMockWs();
+
+      const exhaustedEvents: unknown[] = [];
+      client.on("reconnect-exhausted", (params) => {
+        exhaustedEvents.push(params);
+      });
+
+      // All 5 reconnection attempts will fail
+      MockWebSocket.nextBehaviors = ["error", "error", "error", "error", "error"];
+
+      ws.emit("close", {});
+
+      // Advance past all 5 backoff delays: 500 + 1000 + 2000 + 4000 + 8000 = 15500
+      await vi.advanceTimersByTimeAsync(15_500);
+
+      expect(exhaustedEvents).toHaveLength(1);
+      expect(exhaustedEvents[0]).toEqual({ attempts: 5 });
+    });
+
+    it("should not emit reconnect-exhausted event when reconnection succeeds", async () => {
+      await client.connect();
+      const ws = lastMockWs();
+
+      const exhaustedEvents: unknown[] = [];
+      client.on("reconnect-exhausted", (params) => {
+        exhaustedEvents.push(params);
+      });
+
+      // Reconnection will succeed on first attempt (default auto-open)
+      ws.emit("close", {});
+
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(client.isConnected).toBe(true);
+      expect(exhaustedEvents).toHaveLength(0);
+    });
+
     it("should reject pending requests when reconnection fails", async () => {
       await client.connect();
       const ws = lastMockWs();

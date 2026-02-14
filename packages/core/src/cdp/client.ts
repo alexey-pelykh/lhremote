@@ -339,17 +339,16 @@ export class CDPClient {
 
     // Event
     if (msg.method) {
-      const set = this.listeners.get(msg.method);
-      if (set) {
-        for (const listener of set) {
-          listener(msg.params);
-        }
-      }
+      this.emitEvent(msg.method, msg.params);
     }
   }
 
   /**
    * Attempt to reconnect with exponential backoff.
+   *
+   * Called fire-and-forget from the WebSocket close handler.  When all
+   * {@link MAX_RECONNECT_ATTEMPTS} are exhausted a `"reconnect-exhausted"`
+   * event is emitted so callers can react to permanent connection loss.
    */
   private async attemptReconnect(): Promise<void> {
     if (this.reconnecting || !this.targetId) {
@@ -371,6 +370,19 @@ export class CDPClient {
     }
 
     this.reconnecting = false;
+    this.emitEvent("reconnect-exhausted", { attempts: MAX_RECONNECT_ATTEMPTS });
+  }
+
+  /**
+   * Emit an event to registered listeners.
+   */
+  private emitEvent(event: string, params: unknown): void {
+    const set = this.listeners.get(event);
+    if (set) {
+      for (const listener of set) {
+        listener(params);
+      }
+    }
   }
 
   /**
