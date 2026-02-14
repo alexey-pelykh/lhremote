@@ -18,13 +18,13 @@ import {
   type MessageStats,
   AccountResolutionError,
   InstanceNotRunningError,
-  LinkedHelperNotRunningError,
   MessageRepository,
   resolveAccount,
   withInstanceDatabase,
 } from "@lhremote/core";
 
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
+import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 const MOCK_STATS: MessageStats = {
@@ -127,49 +127,12 @@ describe("registerScrapeMessagingHistory", () => {
     expect(executeAction).toHaveBeenCalledWith("ScrapeMessagingHistory");
   });
 
-  it("returns error when LinkedHelper not running", async () => {
-    const { server, getHandler } = createMockServer();
-    registerScrapeMessagingHistory(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new LinkedHelperNotRunningError(9222),
-    );
-
-    const handler = getHandler("scrape-messaging-history");
-    const result = await handler({ cdpPort: 9222 });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "LinkedHelper is not running. Use launch-app first.",
-        },
-      ],
-    });
-  });
-
-  it("returns error when connection fails", async () => {
-    const { server, getHandler } = createMockServer();
-    registerScrapeMessagingHistory(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new Error("connection refused"),
-    );
-
-    const handler = getHandler("scrape-messaging-history");
-    const result = await handler({ cdpPort: 9222 });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "Failed to connect to LinkedHelper: connection refused",
-        },
-      ],
-    });
-  });
+  describeInfrastructureErrors(
+    registerScrapeMessagingHistory,
+    "scrape-messaging-history",
+    () => ({ cdpPort: 9222 }),
+    "Failed to connect to LinkedHelper",
+  );
 
   it("returns error when no accounts found", async () => {
     const { server, getHandler } = createMockServer();

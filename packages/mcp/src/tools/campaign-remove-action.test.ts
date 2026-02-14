@@ -20,12 +20,12 @@ import {
   CampaignService,
   type InstanceDatabaseContext,
   InstanceNotRunningError,
-  LinkedHelperNotRunningError,
   resolveAccount,
   withInstanceDatabase,
 } from "@lhremote/core";
 
 import { registerCampaignRemoveAction } from "./campaign-remove-action.js";
+import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 function mockCampaignService() {
@@ -175,31 +175,11 @@ describe("registerCampaignRemoveAction", () => {
     });
   });
 
-  it("returns error when LinkedHelper is not running", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignRemoveAction(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new LinkedHelperNotRunningError(9222),
-    );
-
-    const handler = getHandler("campaign-remove-action");
-    const result = await handler({
-      campaignId: 15,
-      actionId: 50,
-      cdpPort: 9222,
-    });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "LinkedHelper is not running. Use launch-app first.",
-        },
-      ],
-    });
-  });
+  describeInfrastructureErrors(
+    registerCampaignRemoveAction,
+    "campaign-remove-action",
+    () => ({ campaignId: 15, actionId: 50, cdpPort: 9222 }),
+  );
 
   it("returns error when instance is not running", async () => {
     const { server, getHandler } = createMockServer();

@@ -20,12 +20,12 @@ import {
   CampaignService,
   type InstanceDatabaseContext,
   InstanceNotRunningError,
-  LinkedHelperNotRunningError,
   resolveAccount,
   withInstanceDatabase,
 } from "@lhremote/core";
 
 import { registerCampaignReorderActions } from "./campaign-reorder-actions.js";
+import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 const MOCK_ACTIONS: CampaignAction[] = [
@@ -212,31 +212,11 @@ describe("registerCampaignReorderActions", () => {
     });
   });
 
-  it("returns error when LinkedHelper is not running", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignReorderActions(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new LinkedHelperNotRunningError(9222),
-    );
-
-    const handler = getHandler("campaign-reorder-actions");
-    const result = await handler({
-      campaignId: 15,
-      actionIds: [50, 51],
-      cdpPort: 9222,
-    });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "LinkedHelper is not running. Use launch-app first.",
-        },
-      ],
-    });
-  });
+  describeInfrastructureErrors(
+    registerCampaignReorderActions,
+    "campaign-reorder-actions",
+    () => ({ campaignId: 15, actionIds: [50, 51], cdpPort: 9222 }),
+  );
 
   it("returns error when instance is not running", async () => {
     const { server, getHandler } = createMockServer();

@@ -17,12 +17,12 @@ import {
   CampaignNotFoundError,
   CampaignRepository,
   type DatabaseContext,
-  LinkedHelperNotRunningError,
   resolveAccount,
   withDatabase,
 } from "@lhremote/core";
 
 import { registerCampaignRetry } from "./campaign-retry.js";
+import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 function mockCampaignRepo() {
@@ -151,55 +151,10 @@ describe("registerCampaignRetry", () => {
     });
   });
 
-  it("returns error when LinkedHelper is not running", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignRetry(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new LinkedHelperNotRunningError(9222),
-    );
-
-    const handler = getHandler("campaign-retry");
-    const result = await handler({
-      campaignId: 10,
-      personIds: [100],
-      cdpPort: 9222,
-    });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "LinkedHelper is not running. Use launch-app first.",
-        },
-      ],
-    });
-  });
-
-  it("returns error when connection fails", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCampaignRetry(server);
-
-    vi.mocked(resolveAccount).mockRejectedValue(
-      new Error("connection refused"),
-    );
-
-    const handler = getHandler("campaign-retry");
-    const result = await handler({
-      campaignId: 10,
-      personIds: [100],
-      cdpPort: 9222,
-    });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "Failed to connect to LinkedHelper: connection refused",
-        },
-      ],
-    });
-  });
+  describeInfrastructureErrors(
+    registerCampaignRetry,
+    "campaign-retry",
+    () => ({ campaignId: 10, personIds: [100], cdpPort: 9222 }),
+    "Failed to connect to LinkedHelper",
+  );
 });
