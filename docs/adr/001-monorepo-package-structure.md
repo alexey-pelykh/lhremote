@@ -17,13 +17,18 @@ The project needs to:
 
 ## Decision
 
-Organize as a pnpm workspace monorepo with four packages in a layered dependency graph:
+Organize as a pnpm workspace monorepo with five packages in a layered dependency graph:
 
 ```
 lhremote (distribution package)
 ├── @lhremote/cli   (CLI interface)
 └── @lhremote/mcp   (MCP server interface)
     └── @lhremote/core (shared foundation)
+
+@lhremote/e2e (private, not published)
+├── @lhremote/cli
+├── @lhremote/mcp
+└── @lhremote/core
 ```
 
 **Package responsibilities:**
@@ -34,6 +39,7 @@ lhremote (distribution package)
 | `@lhremote/mcp` | MCP server with tool definitions and Zod validation | `@lhremote/core`, `@modelcontextprotocol/sdk`, `zod` |
 | `@lhremote/cli` | Commander.js CLI with command handlers | `@lhremote/core`, `commander` |
 | `lhremote` | Published npm package, combines CLI + MCP binaries | `@lhremote/cli`, `@lhremote/mcp` |
+| `@lhremote/e2e` | E2E tests against real LinkedHelper (private, not published) | `@lhremote/core`, `@lhremote/mcp`, `@lhremote/cli` |
 
 **Key constraints:**
 
@@ -68,7 +74,7 @@ Merge CLI and MCP into a single "app" package. Reduces package count but couples
 
 **Negative:**
 
-- Four `package.json` files and `tsconfig.json` files to maintain
+- Five `package.json` files and `tsconfig.json` files to maintain
 - pnpm workspace and Turbo configuration add infrastructure complexity
 - Developers must understand the dependency graph to know where code belongs
 - Cross-package TypeScript changes require rebuilding downstream packages
