@@ -41,7 +41,8 @@ Error (built-in)
     ├── InvalidProfileUrlError      Profile URL validation failed
     ├── ExtractionTimeoutError      Profile data didn't appear in DB in time
     ├── CampaignExecutionError      Campaign operation failed (carries campaignId)
-    └── CampaignTimeoutError        Campaign state transition timeout (carries campaignId)
+    ├── CampaignTimeoutError        Campaign state transition timeout (carries campaignId)
+    └── AccountResolutionError      Account resolution ambiguous (carries reason: "no-accounts" | "multiple-accounts")
 ```
 
 **Key design choices:**
