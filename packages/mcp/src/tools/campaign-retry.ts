@@ -3,17 +3,10 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  CampaignStatisticsRepository,
-  resolveAccount,
-  withDatabase,
+  campaignRetry,
 } from "@lhremote/core";
 import { z } from "zod";
-import {
-  buildCdpOptions,
-  cdpConnectionSchema,
-  mcpCatchAll,
-  mcpSuccess,
-} from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-retry | campaign-retry} MCP tool. */
 export function registerCampaignRetry(server: McpServer): void {
@@ -33,32 +26,9 @@ export function registerCampaignRetry(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ campaignId, personIds, cdpPort, cdpHost, allowRemote }) => {
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withDatabase(accountId, ({ db }) => {
-          const statisticsRepo = new CampaignStatisticsRepository(db);
-          statisticsRepo.resetForRerun(campaignId, personIds);
-
-          return mcpSuccess(
-            JSON.stringify(
-              {
-                success: true,
-                campaignId,
-                personsReset: personIds.length,
-                message:
-                  "Persons reset for retry. Use campaign-start to run the campaign.",
-              },
-              null,
-              2,
-            ),
-          );
-        }, { readOnly: false });
+        const result = await campaignRetry({ campaignId, personIds, cdpPort, cdpHost, allowRemote });
+        return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to reset persons for retry");
       }

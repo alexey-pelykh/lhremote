@@ -7,62 +7,62 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    campaignGet: vi.fn(),
   };
 });
 
 import {
+  type CampaignGetOutput,
   CampaignNotFoundError,
-  CampaignRepository,
-  resolveAccount,
+  campaignGet,
 } from "@lhremote/core";
 
 import { handleCampaignGet } from "./campaign-get.js";
-import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
-const MOCK_CAMPAIGN = {
+const MOCK_RESULT: CampaignGetOutput = {
   id: 1,
   name: "Outreach Q1",
-  state: "running",
+  state: "active",
   isPaused: false,
   isArchived: false,
+  isValid: true,
   description: "Q1 outreach campaign",
   createdAt: "2025-01-01T00:00:00Z",
   liAccountId: 42,
+  actions: [
+    {
+      id: 10,
+      campaignId: 1,
+      name: "Visit Profile",
+      description: null,
+      config: {
+        id: 100,
+        actionType: "VisitAndExtract",
+        actionSettings: {},
+        coolDown: 60000,
+        maxActionResultsPerIteration: 10,
+        isDraft: false,
+      },
+      versionId: 1,
+    },
+    {
+      id: 11,
+      campaignId: 1,
+      name: "Send Message",
+      description: null,
+      config: {
+        id: 101,
+        actionType: "MessageToPerson",
+        actionSettings: {},
+        coolDown: 60000,
+        maxActionResultsPerIteration: 10,
+        isDraft: false,
+      },
+      versionId: 1,
+    },
+  ],
 };
-
-const MOCK_ACTIONS = [
-  {
-    id: 10,
-    name: "Visit Profile",
-    config: { actionType: "VisitAndExtract" },
-  },
-  {
-    id: 11,
-    name: "Send Message",
-    config: { actionType: "MessageToPerson" },
-  },
-];
-
-function mockRepo(
-  campaign = MOCK_CAMPAIGN,
-  actions = MOCK_ACTIONS,
-) {
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return {
-      getCampaign: vi.fn().mockReturnValue(campaign),
-      getCampaignActions: vi.fn().mockReturnValue(actions),
-    } as unknown as CampaignRepository;
-  });
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithDatabase();
-  mockRepo();
-}
 
 describe("handleCampaignGet", () => {
   const originalExitCode = process.exitCode;
@@ -82,7 +82,7 @@ describe("handleCampaignGet", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignGet).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignGet(1, { json: true });
 
@@ -94,14 +94,14 @@ describe("handleCampaignGet", () => {
   });
 
   it("prints human-readable output", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignGet).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignGet(1, {});
 
     expect(process.exitCode).toBeUndefined();
     const output = getStdout(stdoutSpy);
     expect(output).toContain("Campaign #1: Outreach Q1");
-    expect(output).toContain("State: running");
+    expect(output).toContain("State: active");
     expect(output).toContain("Paused: no");
     expect(output).toContain("Archived: no");
     expect(output).toContain("Description: Q1 outreach campaign");
@@ -111,9 +111,10 @@ describe("handleCampaignGet", () => {
   });
 
   it("omits description when absent", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    mockRepo({ ...MOCK_CAMPAIGN, description: null as unknown as string }, []);
+    vi.mocked(campaignGet).mockResolvedValue({
+      ...MOCK_RESULT,
+      description: null as unknown as string,
+    });
 
     await handleCampaignGet(1, {});
 
@@ -122,9 +123,10 @@ describe("handleCampaignGet", () => {
   });
 
   it("omits actions section when empty", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    mockRepo(MOCK_CAMPAIGN, []);
+    vi.mocked(campaignGet).mockResolvedValue({
+      ...MOCK_RESULT,
+      actions: [],
+    });
 
     await handleCampaignGet(1, {});
 
@@ -133,16 +135,7 @@ describe("handleCampaignGet", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        getCampaign: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-        getCampaignActions: vi.fn(),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignGet).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleCampaignGet(999, {});
 
@@ -151,7 +144,7 @@ describe("handleCampaignGet", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(
+    vi.mocked(campaignGet).mockRejectedValue(
       new Error("No accounts found."),
     );
 
@@ -162,16 +155,7 @@ describe("handleCampaignGet", () => {
   });
 
   it("sets exitCode 1 on unexpected error", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        getCampaign: vi.fn().mockImplementation(() => {
-          throw new Error("disk failure");
-        }),
-        getCampaignActions: vi.fn(),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignGet).mockRejectedValue(new Error("disk failure"));
 
     await handleCampaignGet(1, {});
 

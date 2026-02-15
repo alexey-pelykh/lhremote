@@ -7,79 +7,18 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
-    serializeCampaignYaml: vi.fn(),
-    serializeCampaignJson: vi.fn(),
+    campaignExport: vi.fn(),
   };
 });
 
 import {
-  type Campaign,
-  type CampaignAction,
   CampaignNotFoundError,
-  CampaignRepository,
-  type DatabaseContext,
-  resolveAccount,
-  serializeCampaignJson,
-  serializeCampaignYaml,
-  withDatabase,
+  campaignExport,
 } from "@lhremote/core";
 
 import { registerCampaignExport } from "./campaign-export.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
-
-const MOCK_CAMPAIGN: Campaign = {
-  id: 15,
-  name: "Outreach Campaign",
-  description: "Connect with engineering leaders",
-  state: "active",
-  liAccountId: 1,
-  isPaused: true,
-  isArchived: false,
-  isValid: true,
-  createdAt: "2026-02-07T10:00:00Z",
-};
-
-const MOCK_ACTIONS: CampaignAction[] = [
-  {
-    id: 86,
-    campaignId: 15,
-    name: "Visit Profile",
-    description: null,
-    config: {
-      id: 100,
-      actionType: "VisitAndExtract",
-      actionSettings: { extractCurrentOrganizations: true },
-      coolDown: 60000,
-      maxActionResultsPerIteration: 10,
-      isDraft: false,
-    },
-    versionId: 1,
-  },
-];
-
-function mockCampaignRepo(
-  campaign: Campaign = MOCK_CAMPAIGN,
-  actions: CampaignAction[] = MOCK_ACTIONS,
-) {
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return {
-      getCampaign: vi.fn().mockReturnValue(campaign),
-      getCampaignActions: vi.fn().mockReturnValue(actions),
-    } as unknown as CampaignRepository;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-  );
-  mockCampaignRepo();
-}
 
 describe("registerCampaignExport", () => {
   beforeEach(() => {
@@ -106,24 +45,19 @@ describe("registerCampaignExport", () => {
   it("exports campaign as YAML by default", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignExport(server);
-    setupSuccessPath();
 
     const yamlOutput = 'version: "1"\nname: Outreach Campaign\n';
-    vi.mocked(serializeCampaignYaml).mockReturnValue(yamlOutput);
+    const exportResult = { campaignId: 15, format: "yaml" as const, config: yamlOutput };
+    vi.mocked(campaignExport).mockResolvedValue(exportResult);
 
     const handler = getHandler("campaign-export");
     const result = await handler({ campaignId: 15, format: "yaml", cdpPort: 9222 });
 
-    expect(serializeCampaignYaml).toHaveBeenCalledWith(MOCK_CAMPAIGN, MOCK_ACTIONS);
     expect(result).toEqual({
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            { campaignId: 15, format: "yaml", config: yamlOutput },
-            null,
-            2,
-          ),
+          text: JSON.stringify(exportResult, null, 2),
         },
       ],
     });
@@ -132,24 +66,19 @@ describe("registerCampaignExport", () => {
   it("exports campaign as JSON when requested", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignExport(server);
-    setupSuccessPath();
 
     const jsonOutput = '{\n  "version": "1",\n  "name": "Outreach Campaign"\n}\n';
-    vi.mocked(serializeCampaignJson).mockReturnValue(jsonOutput);
+    const exportResult = { campaignId: 15, format: "json" as const, config: jsonOutput };
+    vi.mocked(campaignExport).mockResolvedValue(exportResult);
 
     const handler = getHandler("campaign-export");
     const result = await handler({ campaignId: 15, format: "json", cdpPort: 9222 });
 
-    expect(serializeCampaignJson).toHaveBeenCalledWith(MOCK_CAMPAIGN, MOCK_ACTIONS);
     expect(result).toEqual({
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            { campaignId: 15, format: "json", config: jsonOutput },
-            null,
-            2,
-          ),
+          text: JSON.stringify(exportResult, null, 2),
         },
       ],
     });
@@ -159,18 +88,7 @@ describe("registerCampaignExport", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignExport(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        getCampaign: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-        getCampaignActions: vi.fn(),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignExport).mockRejectedValue(new CampaignNotFoundError(999));
 
     const handler = getHandler("campaign-export");
     const result = await handler({ campaignId: 999, format: "yaml", cdpPort: 9222 });
@@ -190,6 +108,7 @@ describe("registerCampaignExport", () => {
     registerCampaignExport,
     "campaign-export",
     () => ({ campaignId: 15, format: "yaml", cdpPort: 9222 }),
-    "Failed to connect to LinkedHelper",
+    (error) => vi.mocked(campaignExport).mockRejectedValue(error),
+    "Failed to export campaign",
   );
 });

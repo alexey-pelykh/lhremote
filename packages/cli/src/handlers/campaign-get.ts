@@ -3,11 +3,10 @@
 
 import {
   CampaignNotFoundError,
-  CampaignRepository,
   DEFAULT_CDP_PORT,
   errorMessage,
-  resolveAccount,
-  withDatabase,
+  campaignGet,
+  type CampaignGetOutput,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-get} CLI command. */
@@ -20,52 +19,13 @@ export async function handleCampaignGet(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
-
-  let accountId: number;
+  let result: CampaignGetOutput;
   try {
-    accountId = await resolveAccount(cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
-    });
-  } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    await withDatabase(accountId, ({ db }) => {
-      const repo = new CampaignRepository(db);
-      const campaign = repo.getCampaign(campaignId);
-      const actions = repo.getCampaignActions(campaignId);
-
-      if (options.json) {
-        process.stdout.write(
-          JSON.stringify({ ...campaign, actions }, null, 2) + "\n",
-        );
-      } else {
-        process.stdout.write(`Campaign #${campaign.id}: ${campaign.name}\n`);
-        process.stdout.write(`State: ${campaign.state}\n`);
-        process.stdout.write(`Paused: ${campaign.isPaused ? "yes" : "no"}\n`);
-        process.stdout.write(
-          `Archived: ${campaign.isArchived ? "yes" : "no"}\n`,
-        );
-        if (campaign.description) {
-          process.stdout.write(`Description: ${campaign.description}\n`);
-        }
-        process.stdout.write(`Created: ${campaign.createdAt}\n`);
-
-        if (actions.length > 0) {
-          process.stdout.write(`\nActions (${String(actions.length)}):\n`);
-          for (const action of actions) {
-            process.stdout.write(
-              `  #${action.id}  ${action.name} [${action.config.actionType}]\n`,
-            );
-          }
-        }
-      }
+    result = await campaignGet({
+      campaignId,
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
@@ -75,5 +35,30 @@ export async function handleCampaignGet(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
+    return;
+  }
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(`Campaign #${result.id}: ${result.name}\n`);
+    process.stdout.write(`State: ${result.state}\n`);
+    process.stdout.write(`Paused: ${result.isPaused ? "yes" : "no"}\n`);
+    process.stdout.write(
+      `Archived: ${result.isArchived ? "yes" : "no"}\n`,
+    );
+    if (result.description) {
+      process.stdout.write(`Description: ${result.description}\n`);
+    }
+    process.stdout.write(`Created: ${result.createdAt}\n`);
+
+    if (result.actions.length > 0) {
+      process.stdout.write(`\nActions (${String(result.actions.length)}):\n`);
+      for (const action of result.actions) {
+        process.stdout.write(
+          `  #${action.id}  ${action.name} [${action.config.actionType}]\n`,
+        );
+      }
+    }
   }
 }

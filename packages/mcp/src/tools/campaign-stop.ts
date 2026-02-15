@@ -4,18 +4,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CampaignExecutionError,
-  CampaignService,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignStop,
 } from "@lhremote/core";
 import { z } from "zod";
-import {
-  buildCdpOptions,
-  cdpConnectionSchema,
-  mcpCatchAll,
-  mcpError,
-  mcpSuccess,
-} from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-stop | campaign-stop} MCP tool. */
 export function registerCampaignStop(server: McpServer): void {
@@ -31,30 +23,9 @@ export function registerCampaignStop(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ campaignId, cdpPort, cdpHost, allowRemote }) => {
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-          const campaignService = new CampaignService(instance, db);
-          await campaignService.stop(campaignId);
-
-          return mcpSuccess(
-            JSON.stringify(
-              {
-                success: true,
-                campaignId,
-                message: "Campaign paused",
-              },
-              null,
-              2,
-            ),
-          );
-        });
+        const result = await campaignStop({ campaignId, cdpPort, cdpHost, allowRemote });
+        return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CampaignExecutionError) {
           return mcpError(`Failed to stop campaign: ${error.message}`);

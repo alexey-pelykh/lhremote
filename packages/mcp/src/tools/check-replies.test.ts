@@ -7,20 +7,14 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    MessageRepository: vi.fn(),
+    checkReplies: vi.fn(),
   };
 });
 
 import {
   type ConversationMessages,
-  type InstanceDatabaseContext,
-  MessageRepository,
   AccountResolutionError,
-  InstanceNotRunningError,
-  resolveAccount,
-  withInstanceDatabase,
+  checkReplies,
 } from "@lhremote/core";
 
 import { registerCheckReplies } from "./check-replies.js";
@@ -77,38 +71,12 @@ const MOCK_CONVERSATIONS: ConversationMessages[] = [
   },
 ];
 
-function mockRepo(conversations: ConversationMessages[] = MOCK_CONVERSATIONS) {
-  vi.mocked(MessageRepository).mockImplementation(function () {
-    return {
-      getMessagesSince: vi.fn().mockReturnValue(conversations),
-    } as unknown as MessageRepository;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-
-  const mockInstance = { executeAction: vi.fn().mockResolvedValue(undefined) };
-  vi.mocked(withInstanceDatabase).mockImplementation(
-    async (_cdpPort, _accountId, callback) =>
-      callback({
-        accountId: 1,
-        instance: mockInstance,
-        db: {},
-      } as unknown as InstanceDatabaseContext),
-  );
-  mockRepo();
-}
-
 describe("registerCheckReplies", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-01-15T12:00:00Z"));
   });
 
   afterEach(() => {
-    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -128,100 +96,106 @@ describe("registerCheckReplies", () => {
   it("returns new messages on success", async () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
-    setupSuccessPath();
+
+    vi.mocked(checkReplies).mockResolvedValue({
+      newMessages: MOCK_CONVERSATIONS,
+      totalNew: 3,
+      checkedAt: "2025-01-15T12:00:00.000Z",
+    });
 
     const handler = getHandler("check-replies");
     const result = await handler({ cdpPort: 9222 });
 
-    const content = (result as { content: { text: string }[] }).content;
-    expect(content[0]).toBeDefined();
-    const parsed = JSON.parse(content[0]?.text ?? "");
-    expect(parsed.newMessages).toEqual(MOCK_CONVERSATIONS);
-    expect(parsed.totalNew).toBe(3);
-    expect(parsed.checkedAt).toBeDefined();
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              newMessages: MOCK_CONVERSATIONS,
+              totalNew: 3,
+              checkedAt: "2025-01-15T12:00:00.000Z",
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    });
   });
 
-  it("executes CheckForReplies action", async () => {
+  it("passes correct arguments to operation", async () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    const executeAction = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: { executeAction },
-          db: {},
-        } as unknown as InstanceDatabaseContext),
-    );
-    mockRepo();
-
-    const handler = getHandler("check-replies");
-    await handler({ cdpPort: 9222 });
-
-    expect(executeAction).toHaveBeenCalledWith("CheckForReplies");
-  });
-
-  it("uses since parameter when provided", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCheckReplies(server);
-
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: { executeAction: vi.fn().mockResolvedValue(undefined) },
-          db: {},
-        } as unknown as InstanceDatabaseContext),
-    );
-    const getMessagesSince = vi.fn().mockReturnValue([]);
-    vi.mocked(MessageRepository).mockImplementation(function () {
-      return { getMessagesSince } as unknown as MessageRepository;
+    vi.mocked(checkReplies).mockResolvedValue({
+      newMessages: [],
+      totalNew: 0,
+      checkedAt: "2025-01-15T12:00:00.000Z",
     });
 
     const handler = getHandler("check-replies");
     await handler({ since: "2025-01-14T00:00:00Z", cdpPort: 9222 });
 
-    expect(getMessagesSince).toHaveBeenCalledWith("2025-01-14T00:00:00Z");
+    expect(checkReplies).toHaveBeenCalledWith(
+      expect.objectContaining({ since: "2025-01-14T00:00:00Z", cdpPort: 9222 }),
+    );
   });
 
-  it("defaults to last 24 hours when since is omitted", async () => {
+  it("passes since as undefined when omitted", async () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: { executeAction: vi.fn().mockResolvedValue(undefined) },
-          db: {},
-        } as unknown as InstanceDatabaseContext),
-    );
-    const getMessagesSince = vi.fn().mockReturnValue([]);
-    vi.mocked(MessageRepository).mockImplementation(function () {
-      return { getMessagesSince } as unknown as MessageRepository;
+    vi.mocked(checkReplies).mockResolvedValue({
+      newMessages: [],
+      totalNew: 0,
+      checkedAt: "2025-01-15T12:00:00.000Z",
     });
 
     const handler = getHandler("check-replies");
     await handler({ cdpPort: 9222 });
 
-    expect(getMessagesSince).toHaveBeenCalledWith("2025-01-14T12:00:00.000Z");
+    expect(checkReplies).toHaveBeenCalledWith(
+      expect.objectContaining({ cdpPort: 9222 }),
+    );
   });
 
-  describeInfrastructureErrors(
-    registerCheckReplies,
-    "check-replies",
-    () => ({ cdpPort: 9222 }),
-  );
+  it("returns empty results when no new messages", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCheckReplies(server);
+
+    vi.mocked(checkReplies).mockResolvedValue({
+      newMessages: [],
+      totalNew: 0,
+      checkedAt: "2025-01-15T12:00:00.000Z",
+    });
+
+    const handler = getHandler("check-replies");
+    const result = await handler({ cdpPort: 9222 });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              newMessages: [],
+              totalNew: 0,
+              checkedAt: "2025-01-15T12:00:00.000Z",
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    });
+  });
 
   it("returns error when no accounts found", async () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    vi.mocked(resolveAccount).mockRejectedValue(
+    vi.mocked(checkReplies).mockRejectedValue(
       new AccountResolutionError("no-accounts"),
     );
 
@@ -238,7 +212,7 @@ describe("registerCheckReplies", () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    vi.mocked(resolveAccount).mockRejectedValue(
+    vi.mocked(checkReplies).mockRejectedValue(
       new AccountResolutionError("multiple-accounts"),
     );
 
@@ -256,43 +230,12 @@ describe("registerCheckReplies", () => {
     });
   });
 
-  it("returns error when no instance is running", async () => {
+  it("returns error on unexpected failure", async () => {
     const { server, getHandler } = createMockServer();
     registerCheckReplies(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockRejectedValue(
-      new InstanceNotRunningError("Instance not running"),
-    );
-
-    const handler = getHandler("check-replies");
-    const result = await handler({ cdpPort: 9222 });
-
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "Failed to check replies: Instance not running",
-        },
-      ],
-    });
-  });
-
-  it("returns error on action execution failure", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCheckReplies(server);
-
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {
-            executeAction: vi.fn().mockRejectedValue(new Error("action timed out")),
-          },
-          db: {},
-        } as unknown as InstanceDatabaseContext),
+    vi.mocked(checkReplies).mockRejectedValue(
+      new Error("action timed out"),
     );
 
     const handler = getHandler("check-replies");
@@ -309,28 +252,11 @@ describe("registerCheckReplies", () => {
     });
   });
 
-  it("returns empty results when no new messages", async () => {
-    const { server, getHandler } = createMockServer();
-    registerCheckReplies(server);
-
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: { executeAction: vi.fn().mockResolvedValue(undefined) },
-          db: {},
-        } as unknown as InstanceDatabaseContext),
-    );
-    mockRepo([]);
-
-    const handler = getHandler("check-replies");
-    const result = await handler({ cdpPort: 9222 });
-
-    const content = (result as { content: { text: string }[] }).content;
-    expect(content[0]).toBeDefined();
-    const parsed = JSON.parse(content[0]?.text ?? "");
-    expect(parsed.newMessages).toEqual([]);
-    expect(parsed.totalNew).toBe(0);
-  });
+  describeInfrastructureErrors(
+    registerCheckReplies,
+    "check-replies",
+    () => ({ cdpPort: 9222 }),
+    (error) => vi.mocked(checkReplies).mockRejectedValue(error),
+    "Failed to check replies",
+  );
 });

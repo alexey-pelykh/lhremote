@@ -7,9 +7,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    CampaignService: vi.fn(),
+    campaignCreate: vi.fn(),
     parseCampaignJson: vi.fn(),
     parseCampaignYaml: vi.fn(),
   };
@@ -24,42 +22,31 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import {
+  type CampaignCreateOutput,
   CampaignExecutionError,
   CampaignFormatError,
-  CampaignService,
   InstanceNotRunningError,
+  campaignCreate,
   parseCampaignJson,
   parseCampaignYaml,
-  resolveAccount,
-  withInstanceDatabase,
 } from "@lhremote/core";
 import { readFileSync } from "node:fs";
 
 import { handleCampaignCreate } from "./campaign-create.js";
-import {
-  getStdout,
-  mockResolveAccount,
-  mockWithInstanceDatabase,
-} from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
 const MOCK_CONFIG = { name: "Test Campaign", actions: [] };
-const MOCK_CAMPAIGN = { id: 1, name: "Test Campaign" };
-
-function mockCampaignService(campaign = MOCK_CAMPAIGN) {
-  vi.mocked(CampaignService).mockImplementation(function () {
-    return {
-      create: vi.fn().mockResolvedValue(campaign),
-    } as unknown as CampaignService;
-  });
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithInstanceDatabase();
-  mockCampaignService();
-  vi.mocked(parseCampaignJson).mockReturnValue(MOCK_CONFIG as never);
-  vi.mocked(parseCampaignYaml).mockReturnValue(MOCK_CONFIG as never);
-}
+const MOCK_RESULT: CampaignCreateOutput = {
+  id: 1,
+  name: "Test Campaign",
+  description: null,
+  state: "active",
+  liAccountId: 1,
+  isPaused: false,
+  isArchived: false,
+  isValid: true,
+  createdAt: "2025-01-01T00:00:00Z",
+};
 
 describe("handleCampaignCreate", () => {
   const originalExitCode = process.exitCode;
@@ -79,7 +66,8 @@ describe("handleCampaignCreate", () => {
   });
 
   it("creates campaign from --json-input and prints result", async () => {
-    setupSuccessPath();
+    vi.mocked(parseCampaignJson).mockReturnValue(MOCK_CONFIG as never);
+    vi.mocked(campaignCreate).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignCreate({ jsonInput: '{"name":"Test"}' });
 
@@ -89,7 +77,8 @@ describe("handleCampaignCreate", () => {
   });
 
   it("creates campaign from --yaml", async () => {
-    setupSuccessPath();
+    vi.mocked(parseCampaignYaml).mockReturnValue(MOCK_CONFIG as never);
+    vi.mocked(campaignCreate).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignCreate({ yaml: "name: Test" });
 
@@ -98,8 +87,9 @@ describe("handleCampaignCreate", () => {
   });
 
   it("creates campaign from --file with JSON extension", async () => {
-    setupSuccessPath();
     vi.mocked(readFileSync).mockReturnValue('{"name":"Test"}');
+    vi.mocked(parseCampaignJson).mockReturnValue(MOCK_CONFIG as never);
+    vi.mocked(campaignCreate).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignCreate({ file: "campaign.json" });
 
@@ -109,8 +99,9 @@ describe("handleCampaignCreate", () => {
   });
 
   it("creates campaign from --file with YAML extension", async () => {
-    setupSuccessPath();
     vi.mocked(readFileSync).mockReturnValue("name: Test");
+    vi.mocked(parseCampaignYaml).mockReturnValue(MOCK_CONFIG as never);
+    vi.mocked(campaignCreate).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignCreate({ file: "campaign.yaml" });
 
@@ -119,7 +110,8 @@ describe("handleCampaignCreate", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(parseCampaignJson).mockReturnValue(MOCK_CONFIG as never);
+    vi.mocked(campaignCreate).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignCreate({ jsonInput: '{"name":"Test"}', json: true });
 
@@ -148,7 +140,6 @@ describe("handleCampaignCreate", () => {
   });
 
   it("sets exitCode 1 on CampaignFormatError", async () => {
-    mockResolveAccount();
     vi.mocked(parseCampaignJson).mockImplementation(() => {
       throw new CampaignFormatError("missing name");
     });
@@ -162,7 +153,6 @@ describe("handleCampaignCreate", () => {
   });
 
   it("sets exitCode 1 on parse error", async () => {
-    mockResolveAccount();
     vi.mocked(parseCampaignJson).mockImplementation(() => {
       throw new SyntaxError("Unexpected token");
     });
@@ -176,10 +166,10 @@ describe("handleCampaignCreate", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(
+    vi.mocked(parseCampaignJson).mockReturnValue(MOCK_CONFIG as never);
+    vi.mocked(campaignCreate).mockRejectedValue(
       new Error("No accounts found."),
     );
-    vi.mocked(parseCampaignJson).mockReturnValue(MOCK_CONFIG as never);
 
     await handleCampaignCreate({ jsonInput: '{"name":"Test"}' });
 
@@ -188,16 +178,10 @@ describe("handleCampaignCreate", () => {
   });
 
   it("sets exitCode 1 on CampaignExecutionError", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
     vi.mocked(parseCampaignJson).mockReturnValue(MOCK_CONFIG as never);
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        create: vi.fn().mockRejectedValue(
-          new CampaignExecutionError("duplicate name"),
-        ),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignCreate).mockRejectedValue(
+      new CampaignExecutionError("duplicate name"),
+    );
 
     await handleCampaignCreate({ jsonInput: '{"name":"Test"}' });
 
@@ -208,9 +192,8 @@ describe("handleCampaignCreate", () => {
   });
 
   it("sets exitCode 1 on InstanceNotRunningError", async () => {
-    mockResolveAccount();
     vi.mocked(parseCampaignJson).mockReturnValue(MOCK_CONFIG as never);
-    vi.mocked(withInstanceDatabase).mockRejectedValue(
+    vi.mocked(campaignCreate).mockRejectedValue(
       new InstanceNotRunningError("No LinkedHelper instance is running."),
     );
 

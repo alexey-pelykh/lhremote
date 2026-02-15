@@ -3,13 +3,12 @@
 
 import {
   ActionNotFoundError,
-  CampaignExcludeListRepository,
   CampaignNotFoundError,
   DEFAULT_CDP_PORT,
   errorMessage,
   ExcludeListNotFoundError,
-  resolveAccount,
-  withDatabase,
+  campaignExcludeAdd,
+  type CampaignExcludeAddOutput,
 } from "@lhremote/core";
 
 import { resolvePersonIds } from "./person-ids.js";
@@ -27,8 +26,6 @@ export async function handleCampaignExcludeAdd(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
-
   let personIds: number[];
   try {
     personIds = resolvePersonIds(options);
@@ -39,57 +36,16 @@ export async function handleCampaignExcludeAdd(
     return;
   }
 
-  let accountId: number;
+  let result: CampaignExcludeAddOutput;
   try {
-    accountId = await resolveAccount(cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+    result = await campaignExcludeAdd({
+      campaignId,
+      personIds,
+      actionId: options.actionId,
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
     });
-  } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    await withDatabase(accountId, ({ db }) => {
-      const excludeListRepo = new CampaignExcludeListRepository(db);
-      const added = excludeListRepo.addToExcludeList(
-        campaignId,
-        personIds,
-        options.actionId,
-      );
-
-      const level = options.actionId !== undefined ? "action" : "campaign";
-      const targetLabel =
-        options.actionId !== undefined
-          ? `action ${String(options.actionId)} in campaign ${String(campaignId)}`
-          : `campaign ${String(campaignId)}`;
-
-      if (options.json) {
-        const response = {
-          success: true,
-          campaignId,
-          ...(options.actionId !== undefined
-            ? { actionId: options.actionId }
-            : {}),
-          level,
-          added,
-          alreadyExcluded: personIds.length - added,
-        };
-        process.stdout.write(JSON.stringify(response, null, 2) + "\n");
-      } else {
-        process.stdout.write(
-          `Added ${String(added)} person(s) to exclude list for ${targetLabel}.\n`,
-        );
-        if (personIds.length - added > 0) {
-          process.stdout.write(
-            `${String(personIds.length - added)} person(s) already in exclude list.\n`,
-          );
-        }
-      }
-    }, { readOnly: false });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
       process.stderr.write(`Campaign ${String(campaignId)} not found.\n`);
@@ -104,5 +60,24 @@ export async function handleCampaignExcludeAdd(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
+    return;
+  }
+
+  const targetLabel =
+    options.actionId !== undefined
+      ? `action ${String(options.actionId)} in campaign ${String(campaignId)}`
+      : `campaign ${String(campaignId)}`;
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(
+      `Added ${String(result.added)} person(s) to exclude list for ${targetLabel}.\n`,
+    );
+    if (result.alreadyExcluded > 0) {
+      process.stdout.write(
+        `${String(result.alreadyExcluded)} person(s) already in exclude list.\n`,
+      );
+    }
   }
 }

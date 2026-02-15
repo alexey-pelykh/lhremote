@@ -5,12 +5,11 @@ import {
   ActionNotFoundError,
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
   DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignReorderActions,
+  type CampaignReorderActionsOutput,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-actions | campaign-reorder-actions} CLI command. */
@@ -24,8 +23,6 @@ export async function handleCampaignReorderActions(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
-
   // Parse action IDs
   const actionIds = options.actionIds
     .split(",")
@@ -51,44 +48,14 @@ export async function handleCampaignReorderActions(
     return;
   }
 
-  let accountId: number;
+  let result: CampaignReorderActionsOutput;
   try {
-    accountId = await resolveAccount(cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
-    });
-  } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-      const campaignService = new CampaignService(instance, db);
-      const updatedActions = await campaignService.reorderActions(
-        campaignId,
-        actionIds,
-      );
-
-      if (options.json) {
-        const response = {
-          success: true,
-          campaignId,
-          actions: updatedActions,
-        };
-        process.stdout.write(JSON.stringify(response, null, 2) + "\n");
-      } else {
-        process.stdout.write(
-          `Actions reordered in campaign ${String(campaignId)}.\n`,
-        );
-        for (const action of updatedActions) {
-          process.stdout.write(
-            `  #${action.id} "${action.name}" (${action.config.actionType})\n`,
-          );
-        }
-      }
+    result = await campaignReorderActions({
+      campaignId,
+      actionIds,
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
@@ -108,5 +75,19 @@ export async function handleCampaignReorderActions(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
+    return;
+  }
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(
+      `Actions reordered in campaign ${String(campaignId)}.\n`,
+    );
+    for (const action of result.actions) {
+      process.stdout.write(
+        `  #${action.id} "${action.name}" (${action.config.actionType})\n`,
+      );
+    }
   }
 }

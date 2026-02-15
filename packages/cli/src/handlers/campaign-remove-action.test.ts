@@ -7,42 +7,27 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    CampaignService: vi.fn(),
+    campaignRemoveAction: vi.fn(),
   };
 });
 
 import {
+  type CampaignRemoveActionOutput,
   ActionNotFoundError,
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
   InstanceNotRunningError,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignRemoveAction,
 } from "@lhremote/core";
 
 import { handleCampaignRemoveAction } from "./campaign-remove-action.js";
-import {
-  getStdout,
-  mockResolveAccount,
-  mockWithInstanceDatabase,
-} from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
-function mockCampaignService() {
-  vi.mocked(CampaignService).mockImplementation(function () {
-    return {
-      removeAction: vi.fn().mockResolvedValue(undefined),
-    } as unknown as CampaignService;
-  });
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithInstanceDatabase();
-  mockCampaignService();
-}
+const MOCK_RESULT: CampaignRemoveActionOutput = {
+  success: true as const,
+  campaignId: 1,
+  removedActionId: 10,
+};
 
 describe("handleCampaignRemoveAction", () => {
   const originalExitCode = process.exitCode;
@@ -62,7 +47,7 @@ describe("handleCampaignRemoveAction", () => {
   });
 
   it("removes action and prints confirmation", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignRemoveAction).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignRemoveAction(1, 10, {});
 
@@ -71,7 +56,7 @@ describe("handleCampaignRemoveAction", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignRemoveAction).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignRemoveAction(1, 10, { json: true });
 
@@ -83,15 +68,7 @@ describe("handleCampaignRemoveAction", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        removeAction: vi
-          .fn()
-          .mockRejectedValue(new CampaignNotFoundError(999)),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignRemoveAction).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleCampaignRemoveAction(999, 10, {});
 
@@ -100,15 +77,7 @@ describe("handleCampaignRemoveAction", () => {
   });
 
   it("sets exitCode 1 when action not found", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        removeAction: vi
-          .fn()
-          .mockRejectedValue(new ActionNotFoundError(99, 1)),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignRemoveAction).mockRejectedValue(new ActionNotFoundError(99, 1));
 
     await handleCampaignRemoveAction(1, 99, {});
 
@@ -119,15 +88,9 @@ describe("handleCampaignRemoveAction", () => {
   });
 
   it("sets exitCode 1 on CampaignExecutionError", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        removeAction: vi
-          .fn()
-          .mockRejectedValue(new CampaignExecutionError("in use")),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignRemoveAction).mockRejectedValue(
+      new CampaignExecutionError("in use"),
+    );
 
     await handleCampaignRemoveAction(1, 10, {});
 
@@ -136,8 +99,7 @@ describe("handleCampaignRemoveAction", () => {
   });
 
   it("sets exitCode 1 on InstanceNotRunningError", async () => {
-    mockResolveAccount();
-    vi.mocked(withInstanceDatabase).mockRejectedValue(
+    vi.mocked(campaignRemoveAction).mockRejectedValue(
       new InstanceNotRunningError("No LinkedHelper instance is running."),
     );
 
@@ -150,7 +112,7 @@ describe("handleCampaignRemoveAction", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(new Error("timeout"));
+    vi.mocked(campaignRemoveAction).mockRejectedValue(new Error("timeout"));
 
     await handleCampaignRemoveAction(1, 10, {});
 

@@ -7,19 +7,14 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    campaignUpdate: vi.fn(),
   };
 });
 
 import {
   type Campaign,
   CampaignNotFoundError,
-  CampaignRepository,
-  type DatabaseContext,
-  resolveAccount,
-  withDatabase,
+  campaignUpdate,
 } from "@lhremote/core";
 
 import { registerCampaignUpdate } from "./campaign-update.js";
@@ -37,22 +32,6 @@ const MOCK_CAMPAIGN: Campaign = {
   isValid: true,
   createdAt: "2026-02-07T10:00:00Z",
 };
-
-function mockCampaignRepo(campaign: Campaign = MOCK_CAMPAIGN) {
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return {
-      updateCampaign: vi.fn().mockReturnValue(campaign),
-    } as unknown as CampaignRepository;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-  );
-  mockCampaignRepo();
-}
 
 describe("registerCampaignUpdate", () => {
   beforeEach(() => {
@@ -79,7 +58,7 @@ describe("registerCampaignUpdate", () => {
   it("successfully updates a campaign name", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignUpdate(server);
-    setupSuccessPath();
+    vi.mocked(campaignUpdate).mockResolvedValue(MOCK_CAMPAIGN);
 
     const handler = getHandler("campaign-update");
     const result = await handler({
@@ -101,7 +80,7 @@ describe("registerCampaignUpdate", () => {
   it("successfully updates a campaign description", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignUpdate(server);
-    setupSuccessPath();
+    vi.mocked(campaignUpdate).mockResolvedValue(MOCK_CAMPAIGN);
 
     const handler = getHandler("campaign-update");
     const result = await handler({
@@ -145,17 +124,7 @@ describe("registerCampaignUpdate", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignUpdate(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        updateCampaign: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignUpdate).mockRejectedValue(new CampaignNotFoundError(999));
 
     const handler = getHandler("campaign-update");
     const result = await handler({
@@ -179,6 +148,7 @@ describe("registerCampaignUpdate", () => {
     registerCampaignUpdate,
     "campaign-update",
     () => ({ campaignId: 15, name: "New Name", cdpPort: 9222 }),
-    "Failed to connect to LinkedHelper",
+    (error) => vi.mocked(campaignUpdate).mockRejectedValue(error),
+    "Failed to update campaign",
   );
 });

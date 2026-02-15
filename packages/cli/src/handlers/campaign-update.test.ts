@@ -7,36 +7,30 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    campaignUpdate: vi.fn(),
   };
 });
 
 import {
+  type CampaignUpdateOutput,
   CampaignNotFoundError,
-  CampaignRepository,
-  resolveAccount,
+  campaignUpdate,
 } from "@lhremote/core";
 
 import { handleCampaignUpdate } from "./campaign-update.js";
-import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
-const MOCK_UPDATED = { id: 1, name: "Updated Name" };
-
-function mockRepo(updated = MOCK_UPDATED) {
-  const updateCampaign = vi.fn().mockReturnValue(updated);
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return { updateCampaign } as unknown as CampaignRepository;
-  });
-  return { updateCampaign };
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithDatabase();
-  return mockRepo();
-}
+const MOCK_RESULT: CampaignUpdateOutput = {
+  id: 1,
+  name: "Updated Name",
+  description: null,
+  state: "active",
+  liAccountId: 1,
+  isPaused: false,
+  isArchived: false,
+  isValid: true,
+  createdAt: "2025-01-01T00:00:00Z",
+};
 
 describe("handleCampaignUpdate", () => {
   const originalExitCode = process.exitCode;
@@ -56,7 +50,7 @@ describe("handleCampaignUpdate", () => {
   });
 
   it("updates campaign name and prints confirmation", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignUpdate).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignUpdate(1, { name: "Updated Name" });
 
@@ -65,7 +59,7 @@ describe("handleCampaignUpdate", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignUpdate).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignUpdate(1, { name: "Updated Name", json: true });
 
@@ -75,30 +69,43 @@ describe("handleCampaignUpdate", () => {
     expect(parsed.name).toBe("Updated Name");
   });
 
-  it("passes name update to repository", async () => {
-    const { updateCampaign } = setupSuccessPath();
+  it("passes name update to operation", async () => {
+    vi.mocked(campaignUpdate).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignUpdate(1, { name: "New Name" });
 
-    expect(updateCampaign).toHaveBeenCalledWith(1, { name: "New Name" });
+    expect(campaignUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 1,
+        updates: { name: "New Name" },
+      }),
+    );
   });
 
-  it("passes description update to repository", async () => {
-    const { updateCampaign } = setupSuccessPath();
+  it("passes description update to operation", async () => {
+    vi.mocked(campaignUpdate).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignUpdate(1, { description: "New desc" });
 
-    expect(updateCampaign).toHaveBeenCalledWith(1, {
-      description: "New desc",
-    });
+    expect(campaignUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 1,
+        updates: { description: "New desc" },
+      }),
+    );
   });
 
   it("passes null description when --clear-description", async () => {
-    const { updateCampaign } = setupSuccessPath();
+    vi.mocked(campaignUpdate).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignUpdate(1, { clearDescription: true });
 
-    expect(updateCampaign).toHaveBeenCalledWith(1, { description: null });
+    expect(campaignUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 1,
+        updates: { description: null },
+      }),
+    );
   });
 
   it("sets exitCode 1 when no update options provided", async () => {
@@ -111,15 +118,7 @@ describe("handleCampaignUpdate", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        updateCampaign: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignUpdate).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleCampaignUpdate(999, { name: "x" });
 
@@ -128,7 +127,7 @@ describe("handleCampaignUpdate", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(new Error("timeout"));
+    vi.mocked(campaignUpdate).mockRejectedValue(new Error("timeout"));
 
     await handleCampaignUpdate(1, { name: "x" });
 

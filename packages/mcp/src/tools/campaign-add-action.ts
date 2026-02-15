@@ -3,18 +3,10 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  CampaignRepository,
-  resolveAccount,
-  withDatabase,
+  campaignAddAction,
 } from "@lhremote/core";
 import { z } from "zod";
-import {
-  buildCdpOptions,
-  cdpConnectionSchema,
-  mcpCatchAll,
-  mcpError,
-  mcpSuccess,
-} from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-add-action | campaign-add-action} MCP tool. */
 export function registerCampaignAddAction(server: McpServer): void {
@@ -75,42 +67,13 @@ export function registerCampaignAddAction(server: McpServer): void {
         }
       }
 
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withDatabase(accountId, ({ db }) => {
-          const campaignRepo = new CampaignRepository(db);
-          const campaign = campaignRepo.getCampaign(campaignId);
-
-          const actionConfig: import("@lhremote/core").CampaignActionConfig = {
-            name,
-            actionType,
-            actionSettings: parsedSettings,
-          };
-          if (description !== undefined) {
-            actionConfig.description = description;
-          }
-          if (coolDown !== undefined) {
-            actionConfig.coolDown = coolDown;
-          }
-          if (maxActionResultsPerIteration !== undefined) {
-            actionConfig.maxActionResultsPerIteration =
-              maxActionResultsPerIteration;
-          }
-
-          const action = campaignRepo.addAction(
-            campaignId,
-            actionConfig,
-            campaign.liAccountId,
-          );
-
-          return mcpSuccess(JSON.stringify(action, null, 2));
-        }, { readOnly: false });
+        const result = await campaignAddAction({
+          campaignId, name, actionType, description, coolDown,
+          maxActionResultsPerIteration, actionSettings: parsedSettings,
+          cdpPort, cdpHost, allowRemote,
+        });
+        return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to add action to campaign");
       }

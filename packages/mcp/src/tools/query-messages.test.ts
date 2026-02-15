@@ -7,21 +7,16 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    MessageRepository: vi.fn(),
+    queryMessages: vi.fn(),
   };
 });
 
 import {
   type Chat,
   type ConversationThread,
-  type DatabaseContext,
   type Message,
   ChatNotFoundError,
-  MessageRepository,
-  resolveAccount,
-  withDatabase,
+  queryMessages,
 } from "@lhremote/core";
 
 import { registerQueryMessages } from "./query-messages.js";
@@ -59,42 +54,6 @@ const MOCK_THREAD: ConversationThread = {
   messages: [MOCK_MESSAGE],
 };
 
-function mockRepo(overrides?: {
-  listChats?: Chat[];
-  thread?: ConversationThread;
-  searchMessages?: Message[];
-}) {
-  vi.mocked(MessageRepository).mockImplementation(function () {
-    return {
-      listChats: vi.fn().mockReturnValue(overrides?.listChats ?? [MOCK_CHAT]),
-      getThread: vi.fn().mockReturnValue(overrides?.thread ?? MOCK_THREAD),
-      searchMessages: vi
-        .fn()
-        .mockReturnValue(overrides?.searchMessages ?? [MOCK_MESSAGE]),
-    } as unknown as MessageRepository;
-  });
-}
-
-function mockRepoChatNotFound() {
-  vi.mocked(MessageRepository).mockImplementation(function () {
-    return {
-      listChats: vi.fn().mockReturnValue([]),
-      getThread: vi.fn().mockImplementation((chatId: number) => {
-        throw new ChatNotFoundError(chatId);
-      }),
-      searchMessages: vi.fn().mockReturnValue([]),
-    } as unknown as MessageRepository;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-  );
-  mockRepo();
-}
-
 describe("registerQueryMessages", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -120,7 +79,12 @@ describe("registerQueryMessages", () => {
   it("returns conversations list when no filters provided", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryMessages(server);
-    setupSuccessPath();
+
+    vi.mocked(queryMessages).mockResolvedValue({
+      kind: "conversations",
+      conversations: [MOCK_CHAT],
+      total: 1,
+    });
 
     const handler = getHandler("query-messages");
     const result = await handler({ cdpPort: 9222 });
@@ -142,7 +106,12 @@ describe("registerQueryMessages", () => {
   it("returns conversations filtered by personId", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryMessages(server);
-    setupSuccessPath();
+
+    vi.mocked(queryMessages).mockResolvedValue({
+      kind: "conversations",
+      conversations: [MOCK_CHAT],
+      total: 1,
+    });
 
     const handler = getHandler("query-messages");
     const result = await handler({ personId: 456, cdpPort: 9222 });
@@ -164,7 +133,11 @@ describe("registerQueryMessages", () => {
   it("returns conversation thread when chatId provided", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryMessages(server);
-    setupSuccessPath();
+
+    vi.mocked(queryMessages).mockResolvedValue({
+      kind: "thread",
+      thread: MOCK_THREAD,
+    });
 
     const handler = getHandler("query-messages");
     const result = await handler({ chatId: 123, cdpPort: 9222 });
@@ -182,7 +155,12 @@ describe("registerQueryMessages", () => {
   it("returns search results when search provided", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryMessages(server);
-    setupSuccessPath();
+
+    vi.mocked(queryMessages).mockResolvedValue({
+      kind: "search",
+      messages: [MOCK_MESSAGE],
+      total: 1,
+    });
 
     const handler = getHandler("query-messages");
     const result = await handler({ search: "reaching out", cdpPort: 9222 });
@@ -205,11 +183,9 @@ describe("registerQueryMessages", () => {
     const { server, getHandler } = createMockServer();
     registerQueryMessages(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
+    vi.mocked(queryMessages).mockRejectedValue(
+      new ChatNotFoundError(999),
     );
-    mockRepoChatNotFound();
 
     const handler = getHandler("query-messages");
     const result = await handler({ chatId: 999, cdpPort: 9222 });
@@ -225,21 +201,13 @@ describe("registerQueryMessages", () => {
     });
   });
 
-  it("returns error on unexpected database failure", async () => {
+  it("returns error on unexpected failure", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryMessages(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
+    vi.mocked(queryMessages).mockRejectedValue(
+      new Error("database locked"),
     );
-    vi.mocked(MessageRepository).mockImplementation(function () {
-      return {
-        listChats: vi.fn().mockImplementation(() => {
-          throw new Error("database locked");
-        }),
-      } as unknown as MessageRepository;
-    });
 
     const handler = getHandler("query-messages");
     const result = await handler({ cdpPort: 9222 });
@@ -259,12 +227,18 @@ describe("registerQueryMessages", () => {
     registerQueryMessages,
     "query-messages",
     () => ({ cdpPort: 9222 }),
+    (error) => vi.mocked(queryMessages).mockRejectedValue(error),
+    "Failed to query messages",
   );
 
   it("chatId takes priority over search and personId", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryMessages(server);
-    setupSuccessPath();
+
+    vi.mocked(queryMessages).mockResolvedValue({
+      kind: "thread",
+      thread: MOCK_THREAD,
+    });
 
     const handler = getHandler("query-messages");
     const result = await handler({
@@ -287,7 +261,12 @@ describe("registerQueryMessages", () => {
   it("search takes priority over personId", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryMessages(server);
-    setupSuccessPath();
+
+    vi.mocked(queryMessages).mockResolvedValue({
+      kind: "search",
+      messages: [MOCK_MESSAGE],
+      total: 1,
+    });
 
     const handler = getHandler("query-messages");
     const result = await handler({

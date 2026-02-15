@@ -7,46 +7,34 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    campaignAddAction: vi.fn(),
   };
 });
 
 import {
+  type CampaignAddActionOutput,
   CampaignNotFoundError,
-  CampaignRepository,
-  resolveAccount,
+  campaignAddAction,
 } from "@lhremote/core";
 
 import { handleCampaignAddAction } from "./campaign-add-action.js";
-import {
-  getStdout,
-  mockResolveAccount,
-  mockWithDatabase,
-} from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
-const MOCK_CAMPAIGN = { id: 1, name: "Test", liAccountId: 42 };
-const MOCK_ACTION = {
+const MOCK_RESULT: CampaignAddActionOutput = {
   id: 10,
+  campaignId: 1,
   name: "Visit",
-  config: { actionType: "VisitAndExtract" },
+  description: null,
+  config: {
+    id: 100,
+    actionType: "VisitAndExtract",
+    actionSettings: {},
+    coolDown: 60000,
+    maxActionResultsPerIteration: 10,
+    isDraft: false,
+  },
+  versionId: 1,
 };
-
-function mockRepo(campaign = MOCK_CAMPAIGN, action = MOCK_ACTION) {
-  const getCampaign = vi.fn().mockReturnValue(campaign);
-  const addAction = vi.fn().mockReturnValue(action);
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return { getCampaign, addAction } as unknown as CampaignRepository;
-  });
-  return { getCampaign, addAction };
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithDatabase();
-  return mockRepo();
-}
 
 describe("handleCampaignAddAction", () => {
   const originalExitCode = process.exitCode;
@@ -66,7 +54,7 @@ describe("handleCampaignAddAction", () => {
   });
 
   it("adds action and prints confirmation", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignAddAction).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignAddAction(1, {
       name: "Visit",
@@ -80,7 +68,7 @@ describe("handleCampaignAddAction", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignAddAction).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignAddAction(1, {
       name: "Visit",
@@ -94,8 +82,8 @@ describe("handleCampaignAddAction", () => {
     expect(parsed.name).toBe("Visit");
   });
 
-  it("passes optional parameters to addAction", async () => {
-    const { addAction } = setupSuccessPath();
+  it("passes optional parameters to operation", async () => {
+    vi.mocked(campaignAddAction).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignAddAction(1, {
       name: "Visit",
@@ -105,21 +93,20 @@ describe("handleCampaignAddAction", () => {
       maxResults: 100,
     });
 
-    expect(addAction).toHaveBeenCalledWith(
-      1,
+    expect(campaignAddAction).toHaveBeenCalledWith(
       expect.objectContaining({
+        campaignId: 1,
         name: "Visit",
         actionType: "VisitAndExtract",
         description: "Visit and extract data",
         coolDown: 30,
         maxActionResultsPerIteration: 100,
       }),
-      42,
     );
   });
 
   it("parses action settings JSON", async () => {
-    const { addAction } = setupSuccessPath();
+    vi.mocked(campaignAddAction).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignAddAction(1, {
       name: "Visit",
@@ -127,12 +114,10 @@ describe("handleCampaignAddAction", () => {
       actionSettings: '{"extractEmails":true}',
     });
 
-    expect(addAction).toHaveBeenCalledWith(
-      1,
+    expect(campaignAddAction).toHaveBeenCalledWith(
       expect.objectContaining({
         actionSettings: { extractEmails: true },
       }),
-      42,
     );
   });
 
@@ -150,16 +135,7 @@ describe("handleCampaignAddAction", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        getCampaign: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-        addAction: vi.fn(),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignAddAction).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleCampaignAddAction(999, {
       name: "Visit",
@@ -171,7 +147,7 @@ describe("handleCampaignAddAction", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(new Error("timeout"));
+    vi.mocked(campaignAddAction).mockRejectedValue(new Error("timeout"));
 
     await handleCampaignAddAction(1, {
       name: "Visit",

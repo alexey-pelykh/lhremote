@@ -5,16 +5,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CampaignExecutionError,
   CampaignFormatError,
-  CampaignService,
+  campaignCreate,
   errorMessage,
   parseCampaignJson,
   parseCampaignYaml,
-  resolveAccount,
-  withInstanceDatabase,
 } from "@lhremote/core";
 import { z } from "zod";
 import {
-  buildCdpOptions,
   cdpConnectionSchema,
   mcpCatchAll,
   mcpError,
@@ -51,20 +48,9 @@ export function registerCampaignCreate(server: McpServer): void {
         return mcpError(`Failed to parse campaign configuration: ${message}`);
       }
 
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-          const campaignService = new CampaignService(instance, db);
-          const campaign = await campaignService.create(parsedConfig);
-
-          return mcpSuccess(JSON.stringify(campaign, null, 2));
-        });
+        const result = await campaignCreate({ config: parsedConfig, cdpPort, cdpHost, allowRemote });
+        return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CampaignExecutionError) {
           return mcpError(`Failed to create campaign: ${error.message}`);

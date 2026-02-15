@@ -7,9 +7,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    CampaignService: vi.fn(),
+    campaignStart: vi.fn(),
   };
 });
 
@@ -22,36 +20,24 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import {
+  type CampaignStartOutput,
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
   CampaignTimeoutError,
   InstanceNotRunningError,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignStart,
 } from "@lhremote/core";
 import { readFileSync } from "node:fs";
 
 import { handleCampaignStart } from "./campaign-start.js";
-import {
-  getStdout,
-  mockResolveAccount,
-  mockWithInstanceDatabase,
-} from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
-function mockCampaignService() {
-  vi.mocked(CampaignService).mockImplementation(function () {
-    return {
-      start: vi.fn().mockResolvedValue(undefined),
-    } as unknown as CampaignService;
-  });
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithInstanceDatabase();
-  mockCampaignService();
-}
+const MOCK_RESULT: CampaignStartOutput = {
+  success: true as const,
+  campaignId: 1,
+  personsQueued: 3,
+  message: "Campaign 1 started with 3 persons queued.",
+};
 
 describe("handleCampaignStart", () => {
   const originalExitCode = process.exitCode;
@@ -71,7 +57,7 @@ describe("handleCampaignStart", () => {
   });
 
   it("starts campaign with --person-ids", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignStart).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignStart(1, { personIds: "100,200,300" });
 
@@ -80,8 +66,8 @@ describe("handleCampaignStart", () => {
   });
 
   it("starts campaign with --person-ids-file", async () => {
-    setupSuccessPath();
     vi.mocked(readFileSync).mockReturnValue("100\n200\n300");
+    vi.mocked(campaignStart).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignStart(1, { personIdsFile: "ids.txt" });
 
@@ -90,7 +76,7 @@ describe("handleCampaignStart", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignStart).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignStart(1, { personIds: "100", json: true });
 
@@ -98,7 +84,7 @@ describe("handleCampaignStart", () => {
     const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.success).toBe(true);
     expect(parsed.campaignId).toBe(1);
-    expect(parsed.personsQueued).toBe(1);
+    expect(parsed.personsQueued).toBe(3);
   });
 
   it("sets exitCode 1 when both person-ids options provided", async () => {
@@ -141,13 +127,7 @@ describe("handleCampaignStart", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        start: vi.fn().mockRejectedValue(new CampaignNotFoundError(999)),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignStart).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleCampaignStart(999, { personIds: "100" });
 
@@ -156,15 +136,9 @@ describe("handleCampaignStart", () => {
   });
 
   it("sets exitCode 1 on CampaignTimeoutError", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        start: vi.fn().mockRejectedValue(
-          new CampaignTimeoutError("timed out after 60s"),
-        ),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignStart).mockRejectedValue(
+      new CampaignTimeoutError("timed out after 60s"),
+    );
 
     await handleCampaignStart(1, { personIds: "100" });
 
@@ -175,15 +149,9 @@ describe("handleCampaignStart", () => {
   });
 
   it("sets exitCode 1 on CampaignExecutionError", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        start: vi.fn().mockRejectedValue(
-          new CampaignExecutionError("execution failed"),
-        ),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignStart).mockRejectedValue(
+      new CampaignExecutionError("execution failed"),
+    );
 
     await handleCampaignStart(1, { personIds: "100" });
 
@@ -194,8 +162,7 @@ describe("handleCampaignStart", () => {
   });
 
   it("sets exitCode 1 on InstanceNotRunningError", async () => {
-    mockResolveAccount();
-    vi.mocked(withInstanceDatabase).mockRejectedValue(
+    vi.mocked(campaignStart).mockRejectedValue(
       new InstanceNotRunningError("No LinkedHelper instance is running."),
     );
 
@@ -208,7 +175,7 @@ describe("handleCampaignStart", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(new Error("timeout"));
+    vi.mocked(campaignStart).mockRejectedValue(new Error("timeout"));
 
     await handleCampaignStart(1, { personIds: "100" });
 

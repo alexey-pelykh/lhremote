@@ -3,13 +3,12 @@
 
 import {
   ActionNotFoundError,
-  CampaignExcludeListRepository,
   CampaignNotFoundError,
   DEFAULT_CDP_PORT,
   errorMessage,
   ExcludeListNotFoundError,
-  resolveAccount,
-  withDatabase,
+  campaignExcludeList,
+  type CampaignExcludeListOutput,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-targeting | campaign-exclude-list} CLI command. */
@@ -23,53 +22,14 @@ export async function handleCampaignExcludeList(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
-
-  let accountId: number;
+  let result: CampaignExcludeListOutput;
   try {
-    accountId = await resolveAccount(cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
-    });
-  } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    await withDatabase(accountId, ({ db }) => {
-      const excludeListRepo = new CampaignExcludeListRepository(db);
-      const entries = excludeListRepo.getExcludeList(campaignId, options.actionId);
-
-      const level = options.actionId !== undefined ? "action" : "campaign";
-      const targetLabel =
-        options.actionId !== undefined
-          ? `action ${String(options.actionId)} in campaign ${String(campaignId)}`
-          : `campaign ${String(campaignId)}`;
-
-      if (options.json) {
-        const response = {
-          campaignId,
-          ...(options.actionId !== undefined
-            ? { actionId: options.actionId }
-            : {}),
-          level,
-          count: entries.length,
-          personIds: entries.map((e) => e.personId),
-        };
-        process.stdout.write(JSON.stringify(response, null, 2) + "\n");
-      } else {
-        process.stdout.write(
-          `Exclude list for ${targetLabel}: ${String(entries.length)} person(s)\n`,
-        );
-        if (entries.length > 0) {
-          process.stdout.write(
-            `Person IDs: ${entries.map((e) => String(e.personId)).join(", ")}\n`,
-          );
-        }
-      }
+    result = await campaignExcludeList({
+      campaignId,
+      actionId: options.actionId,
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
@@ -85,5 +45,24 @@ export async function handleCampaignExcludeList(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
+    return;
+  }
+
+  const targetLabel =
+    options.actionId !== undefined
+      ? `action ${String(options.actionId)} in campaign ${String(campaignId)}`
+      : `campaign ${String(campaignId)}`;
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(
+      `Exclude list for ${targetLabel}: ${String(result.count)} person(s)\n`,
+    );
+    if (result.count > 0) {
+      process.stdout.write(
+        `Person IDs: ${result.personIds.map((id) => String(id)).join(", ")}\n`,
+      );
+    }
   }
 }

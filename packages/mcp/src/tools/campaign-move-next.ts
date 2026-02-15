@@ -4,13 +4,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ActionNotFoundError,
-  CampaignRepository,
   NoNextActionError,
-  resolveAccount,
-  withDatabase,
+  campaignMoveNext,
 } from "@lhremote/core";
 import { z } from "zod";
-import { buildCdpOptions, cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-move-next | campaign-move-next} MCP tool. */
 export function registerCampaignMoveNext(server: McpServer): void {
@@ -35,36 +33,9 @@ export function registerCampaignMoveNext(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ campaignId, actionId, personIds, cdpPort, cdpHost, allowRemote }) => {
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withDatabase(accountId, ({ db }) => {
-          const campaignRepo = new CampaignRepository(db);
-          const { nextActionId } = campaignRepo.moveToNextAction(
-            campaignId,
-            actionId,
-            personIds,
-          );
-
-          return mcpSuccess(
-            JSON.stringify(
-              {
-                success: true,
-                campaignId,
-                fromActionId: actionId,
-                toActionId: nextActionId,
-                personsMoved: personIds.length,
-              },
-              null,
-              2,
-            ),
-          );
-        }, { readOnly: false });
+        const result = await campaignMoveNext({ campaignId, actionId, personIds, cdpPort, cdpHost, allowRemote });
+        return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof ActionNotFoundError) {
           return mcpError(`Action ${String(actionId)} not found in campaign ${String(campaignId)}.`);

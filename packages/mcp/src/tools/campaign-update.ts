@@ -3,18 +3,10 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  CampaignRepository,
-  resolveAccount,
-  withDatabase,
+  campaignUpdate,
 } from "@lhremote/core";
 import { z } from "zod";
-import {
-  buildCdpOptions,
-  cdpConnectionSchema,
-  mcpCatchAll,
-  mcpError,
-  mcpSuccess,
-} from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-update | campaign-update} MCP tool. */
 export function registerCampaignUpdate(server: McpServer): void {
@@ -44,24 +36,13 @@ export function registerCampaignUpdate(server: McpServer): void {
         return mcpError("At least one of name or description must be provided.");
       }
 
-      let accountId: number;
-      try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
+      const updates: { name?: string; description?: string | null } = {};
+      if (name !== undefined) updates.name = name;
+      if (description !== undefined) updates.description = description;
 
       try {
-        return await withDatabase(accountId, ({ db }) => {
-          const campaignRepo = new CampaignRepository(db);
-          const updates: { name?: string; description?: string | null } = {};
-          if (name !== undefined) updates.name = name;
-          if (description !== undefined) updates.description = description;
-
-          const campaign = campaignRepo.updateCampaign(campaignId, updates);
-
-          return mcpSuccess(JSON.stringify(campaign, null, 2));
-        }, { readOnly: false });
+        const result = await campaignUpdate({ campaignId, updates, cdpPort, cdpHost, allowRemote });
+        return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to update campaign");
       }

@@ -5,18 +5,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ActionNotFoundError,
   CampaignExecutionError,
-  CampaignService,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignReorderActions,
 } from "@lhremote/core";
 import { z } from "zod";
-import {
-  buildCdpOptions,
-  cdpConnectionSchema,
-  mcpCatchAll,
-  mcpError,
-  mcpSuccess,
-} from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-reorder-actions | campaign-reorder-actions} MCP tool. */
 export function registerCampaignReorderActions(server: McpServer): void {
@@ -36,33 +28,9 @@ export function registerCampaignReorderActions(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ campaignId, actionIds, cdpPort, cdpHost, allowRemote }) => {
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-          const campaignService = new CampaignService(instance, db);
-          const updatedActions = await campaignService.reorderActions(
-            campaignId,
-            actionIds,
-          );
-
-          return mcpSuccess(
-            JSON.stringify(
-              {
-                success: true,
-                campaignId,
-                actions: updatedActions,
-              },
-              null,
-              2,
-            ),
-          );
-        });
+        const result = await campaignReorderActions({ campaignId, actionIds, cdpPort, cdpHost, allowRemote });
+        return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof ActionNotFoundError) {
           return mcpError(`One or more action IDs not found in campaign ${String(campaignId)}.`);

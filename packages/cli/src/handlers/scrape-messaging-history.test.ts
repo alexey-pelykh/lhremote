@@ -7,26 +7,18 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    MessageRepository: vi.fn(),
+    scrapeMessagingHistory: vi.fn(),
   };
 });
 
 import {
+  type ScrapeMessagingHistoryOutput,
   InstanceNotRunningError,
-  MessageRepository,
-  resolveAccount,
-  withInstanceDatabase,
+  scrapeMessagingHistory,
 } from "@lhremote/core";
 
 import { handleScrapeMessagingHistory } from "./scrape-messaging-history.js";
-import {
-  getStderr,
-  getStdout,
-  mockResolveAccount,
-  mockWithInstanceDatabase,
-} from "./testing/mock-helpers.js";
+import { getStderr, getStdout } from "./testing/mock-helpers.js";
 
 const MOCK_STATS = {
   totalChats: 42,
@@ -35,19 +27,11 @@ const MOCK_STATS = {
   latestMessage: "2025-01-15T14:00:00Z",
 };
 
-function mockRepo(stats = MOCK_STATS) {
-  vi.mocked(MessageRepository).mockImplementation(function () {
-    return {
-      getMessageStats: vi.fn().mockReturnValue(stats),
-    } as unknown as MessageRepository;
-  });
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockRepo();
-  mockWithInstanceDatabase();
-}
+const MOCK_RESULT: ScrapeMessagingHistoryOutput = {
+  success: true as const,
+  actionType: "ScrapeMessagingHistory",
+  stats: MOCK_STATS,
+};
 
 describe("handleScrapeMessagingHistory", () => {
   const originalExitCode = process.exitCode;
@@ -67,7 +51,7 @@ describe("handleScrapeMessagingHistory", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(scrapeMessagingHistory).mockResolvedValue(MOCK_RESULT);
 
     await handleScrapeMessagingHistory({ json: true });
 
@@ -79,7 +63,7 @@ describe("handleScrapeMessagingHistory", () => {
   });
 
   it("prints human-readable output by default", async () => {
-    setupSuccessPath();
+    vi.mocked(scrapeMessagingHistory).mockResolvedValue(MOCK_RESULT);
 
     await handleScrapeMessagingHistory({});
 
@@ -92,7 +76,7 @@ describe("handleScrapeMessagingHistory", () => {
   });
 
   it("prints progress to stderr", async () => {
-    setupSuccessPath();
+    vi.mocked(scrapeMessagingHistory).mockResolvedValue(MOCK_RESULT);
 
     await handleScrapeMessagingHistory({});
 
@@ -102,14 +86,16 @@ describe("handleScrapeMessagingHistory", () => {
   });
 
   it("omits date range when no messages", async () => {
-    mockResolveAccount();
-    mockRepo({
-      totalChats: 0,
-      totalMessages: 0,
-      earliestMessage: null as unknown as string,
-      latestMessage: null as unknown as string,
+    vi.mocked(scrapeMessagingHistory).mockResolvedValue({
+      success: true as const,
+      actionType: "ScrapeMessagingHistory",
+      stats: {
+        totalChats: 0,
+        totalMessages: 0,
+        earliestMessage: null as unknown as string,
+        latestMessage: null as unknown as string,
+      },
     });
-    mockWithInstanceDatabase();
 
     await handleScrapeMessagingHistory({});
 
@@ -120,7 +106,7 @@ describe("handleScrapeMessagingHistory", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(
+    vi.mocked(scrapeMessagingHistory).mockRejectedValue(
       new Error("No accounts found."),
     );
 
@@ -131,8 +117,7 @@ describe("handleScrapeMessagingHistory", () => {
   });
 
   it("sets exitCode 1 when instance not running", async () => {
-    mockResolveAccount();
-    vi.mocked(withInstanceDatabase).mockRejectedValue(
+    vi.mocked(scrapeMessagingHistory).mockRejectedValue(
       new InstanceNotRunningError(
         "No LinkedHelper instance is running. Use start-instance first.",
       ),
@@ -145,8 +130,7 @@ describe("handleScrapeMessagingHistory", () => {
   });
 
   it("sets exitCode 1 on unexpected error", async () => {
-    mockResolveAccount();
-    vi.mocked(withInstanceDatabase).mockRejectedValue(
+    vi.mocked(scrapeMessagingHistory).mockRejectedValue(
       new Error("connection reset"),
     );
 

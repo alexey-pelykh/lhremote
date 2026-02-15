@@ -7,9 +7,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignExcludeListRepository: vi.fn(),
+    campaignExcludeRemove: vi.fn(),
   };
 });
 
@@ -22,29 +20,25 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import {
+  type CampaignExcludeRemoveOutput,
   ActionNotFoundError,
   CampaignNotFoundError,
-  CampaignExcludeListRepository,
   ExcludeListNotFoundError,
-  resolveAccount,
+  campaignExcludeRemove,
 } from "@lhremote/core";
 import { readFileSync } from "node:fs";
 
 import { handleCampaignExcludeRemove } from "./campaign-exclude-remove.js";
-import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
-function mockRepo(removed = 2) {
-  const removeFromExcludeList = vi.fn().mockReturnValue(removed);
-  vi.mocked(CampaignExcludeListRepository).mockImplementation(function () {
-    return { removeFromExcludeList } as unknown as CampaignExcludeListRepository;
-  });
-  return { removeFromExcludeList };
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithDatabase();
-  return mockRepo();
+function mockResult(removed: number, notInList = 0): CampaignExcludeRemoveOutput {
+  return {
+    success: true as const,
+    campaignId: 1,
+    level: "campaign",
+    removed,
+    notInList,
+  };
 }
 
 describe("handleCampaignExcludeRemove", () => {
@@ -65,7 +59,7 @@ describe("handleCampaignExcludeRemove", () => {
   });
 
   it("removes persons from campaign-level exclude list", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignExcludeRemove).mockResolvedValue(mockResult(2));
 
     await handleCampaignExcludeRemove(1, { personIds: "100,200" });
 
@@ -76,7 +70,11 @@ describe("handleCampaignExcludeRemove", () => {
   });
 
   it("removes persons from action-level exclude list", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignExcludeRemove).mockResolvedValue({
+      ...mockResult(2),
+      actionId: 10,
+      level: "action",
+    });
 
     await handleCampaignExcludeRemove(1, {
       personIds: "100,200",
@@ -90,9 +88,7 @@ describe("handleCampaignExcludeRemove", () => {
   });
 
   it("shows not-in-list count", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    mockRepo(1); // only 1 of 2 actually removed
+    vi.mocked(campaignExcludeRemove).mockResolvedValue(mockResult(1, 1));
 
     await handleCampaignExcludeRemove(1, { personIds: "100,200" });
 
@@ -102,8 +98,8 @@ describe("handleCampaignExcludeRemove", () => {
   });
 
   it("reads from --person-ids-file", async () => {
-    setupSuccessPath();
     vi.mocked(readFileSync).mockReturnValue("100\n200");
+    vi.mocked(campaignExcludeRemove).mockResolvedValue(mockResult(2));
 
     await handleCampaignExcludeRemove(1, { personIdsFile: "ids.txt" });
 
@@ -111,7 +107,7 @@ describe("handleCampaignExcludeRemove", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignExcludeRemove).mockResolvedValue(mockResult(2));
 
     await handleCampaignExcludeRemove(1, { personIds: "100,200", json: true });
 
@@ -125,7 +121,11 @@ describe("handleCampaignExcludeRemove", () => {
   });
 
   it("includes actionId in JSON when action-level", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignExcludeRemove).mockResolvedValue({
+      ...mockResult(1),
+      actionId: 10,
+      level: "action",
+    });
 
     await handleCampaignExcludeRemove(1, {
       personIds: "100",
@@ -169,15 +169,7 @@ describe("handleCampaignExcludeRemove", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignExcludeListRepository).mockImplementation(function () {
-      return {
-        removeFromExcludeList: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-      } as unknown as CampaignExcludeListRepository;
-    });
+    vi.mocked(campaignExcludeRemove).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleCampaignExcludeRemove(999, { personIds: "100" });
 
@@ -186,15 +178,7 @@ describe("handleCampaignExcludeRemove", () => {
   });
 
   it("sets exitCode 1 when action not found", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignExcludeListRepository).mockImplementation(function () {
-      return {
-        removeFromExcludeList: vi.fn().mockImplementation(() => {
-          throw new ActionNotFoundError(99, 1);
-        }),
-      } as unknown as CampaignExcludeListRepository;
-    });
+    vi.mocked(campaignExcludeRemove).mockRejectedValue(new ActionNotFoundError(99, 1));
 
     await handleCampaignExcludeRemove(1, { personIds: "100", actionId: 99 });
 
@@ -205,15 +189,9 @@ describe("handleCampaignExcludeRemove", () => {
   });
 
   it("sets exitCode 1 on ExcludeListNotFoundError", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignExcludeListRepository).mockImplementation(function () {
-      return {
-        removeFromExcludeList: vi.fn().mockImplementation(() => {
-          throw new ExcludeListNotFoundError("campaign", 1);
-        }),
-      } as unknown as CampaignExcludeListRepository;
-    });
+    vi.mocked(campaignExcludeRemove).mockRejectedValue(
+      new ExcludeListNotFoundError("campaign", 1),
+    );
 
     await handleCampaignExcludeRemove(1, { personIds: "100" });
 
@@ -224,7 +202,7 @@ describe("handleCampaignExcludeRemove", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(new Error("timeout"));
+    vi.mocked(campaignExcludeRemove).mockRejectedValue(new Error("timeout"));
 
     await handleCampaignExcludeRemove(1, { personIds: "100" });
 

@@ -6,12 +6,11 @@ import { readFileSync } from "node:fs";
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
   DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
-  resolveAccount,
-  withInstanceDatabase,
+  importPeopleFromUrls,
+  type ImportPeopleFromUrlsOutput,
 } from "@lhremote/core";
 
 function parseUrls(raw: string): string[] {
@@ -41,8 +40,6 @@ export async function handleImportPeopleFromUrls(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
-
   // Reject conflicting options
   if (options.urls && options.urlsFile) {
     process.stderr.write("Use only one of --urls or --urls-file.\n");
@@ -75,53 +72,14 @@ export async function handleImportPeopleFromUrls(
     return;
   }
 
-  let accountId: number;
+  let result: ImportPeopleFromUrlsOutput;
   try {
-    accountId = await resolveAccount(cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
-    });
-  } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-      const campaignService = new CampaignService(instance, db);
-      const result = await campaignService.importPeopleFromUrls(
-        campaignId,
-        linkedInUrls,
-      );
-
-      if (options.json) {
-        const response = {
-          success: true,
-          campaignId,
-          actionId: result.actionId,
-          imported: result.successful,
-          alreadyInQueue: result.alreadyInQueue,
-          alreadyProcessed: result.alreadyProcessed,
-          failed: result.failed,
-        };
-        process.stdout.write(JSON.stringify(response, null, 2) + "\n");
-      } else {
-        process.stdout.write(
-          `Imported ${String(result.successful)} people into campaign ${String(campaignId)} action ${String(result.actionId)}.` +
-            (result.alreadyInQueue > 0
-              ? ` ${String(result.alreadyInQueue)} already in queue.`
-              : "") +
-            (result.alreadyProcessed > 0
-              ? ` ${String(result.alreadyProcessed)} already processed.`
-              : "") +
-            (result.failed > 0
-              ? ` ${String(result.failed)} failed.`
-              : "") +
-            "\n",
-        );
-      }
+    result = await importPeopleFromUrls({
+      campaignId,
+      linkedInUrls,
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
@@ -137,5 +95,24 @@ export async function handleImportPeopleFromUrls(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
+    return;
+  }
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(
+      `Imported ${String(result.imported)} people into campaign ${String(campaignId)} action ${String(result.actionId)}.` +
+        (result.alreadyInQueue > 0
+          ? ` ${String(result.alreadyInQueue)} already in queue.`
+          : "") +
+        (result.alreadyProcessed > 0
+          ? ` ${String(result.alreadyProcessed)} already processed.`
+          : "") +
+        (result.failed > 0
+          ? ` ${String(result.failed)} failed.`
+          : "") +
+        "\n",
+    );
   }
 }

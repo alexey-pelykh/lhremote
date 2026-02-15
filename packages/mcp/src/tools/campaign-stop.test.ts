@@ -7,45 +7,25 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    CampaignService: vi.fn(),
+    campaignStop: vi.fn(),
   };
 });
 
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
-  type InstanceDatabaseContext,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignStop,
 } from "@lhremote/core";
 
 import { registerCampaignStop } from "./campaign-stop.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
-function mockCampaignService() {
-  vi.mocked(CampaignService).mockImplementation(function () {
-    return {
-      stop: vi.fn().mockResolvedValue(undefined),
-    } as unknown as CampaignService;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withInstanceDatabase).mockImplementation(
-    async (_cdpPort, _accountId, callback) =>
-      callback({
-        accountId: 1,
-        instance: {},
-        db: {},
-      } as unknown as InstanceDatabaseContext),
-  );
-  mockCampaignService();
-}
+const STOP_RESULT = {
+  success: true as const,
+  campaignId: 15,
+  message: "Campaign paused",
+};
 
 describe("registerCampaignStop", () => {
   beforeEach(() => {
@@ -72,7 +52,7 @@ describe("registerCampaignStop", () => {
   it("successfully stops a campaign", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStop(server);
-    setupSuccessPath();
+    vi.mocked(campaignStop).mockResolvedValue(STOP_RESULT);
 
     const handler = getHandler("campaign-stop");
     const result = await handler({
@@ -84,15 +64,7 @@ describe("registerCampaignStop", () => {
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            {
-              success: true,
-              campaignId: 15,
-              message: "Campaign paused",
-            },
-            null,
-            2,
-          ),
+          text: JSON.stringify(STOP_RESULT, null, 2),
         },
       ],
     });
@@ -102,20 +74,7 @@ describe("registerCampaignStop", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStop(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
-    );
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        stop: vi.fn().mockRejectedValue(new CampaignNotFoundError(999)),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignStop).mockRejectedValue(new CampaignNotFoundError(999));
 
     const handler = getHandler("campaign-stop");
     const result = await handler({
@@ -138,34 +97,20 @@ describe("registerCampaignStop", () => {
     registerCampaignStop,
     "campaign-stop",
     () => ({ campaignId: 15, cdpPort: 9222 }),
-    "Failed to connect to LinkedHelper",
+    (error) => vi.mocked(campaignStop).mockRejectedValue(error),
+    "Failed to stop campaign",
   );
 
   it("returns error when campaign execution fails", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStop(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
+    vi.mocked(campaignStop).mockRejectedValue(
+      new CampaignExecutionError(
+        "Failed to stop campaign 15: UI error",
+        15,
+      ),
     );
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        stop: vi
-          .fn()
-          .mockRejectedValue(
-            new CampaignExecutionError(
-              "Failed to stop campaign 15: UI error",
-              15,
-            ),
-          ),
-      } as unknown as CampaignService;
-    });
 
     const handler = getHandler("campaign-stop");
     const result = await handler({
