@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2025 Alexey Pelykh
+// Copyright (C) 2026 Oleksii PELYKH
 
 import type { CampaignAction, CampaignActionConfig } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
