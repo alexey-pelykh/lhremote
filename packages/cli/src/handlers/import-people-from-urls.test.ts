@@ -7,9 +7,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    CampaignService: vi.fn(),
+    importPeopleFromUrls: vi.fn(),
   };
 });
 
@@ -22,43 +20,26 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import {
+  type ImportPeopleFromUrlsOutput,
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
   InstanceNotRunningError,
-  resolveAccount,
-  withInstanceDatabase,
+  importPeopleFromUrls,
 } from "@lhremote/core";
 import { readFileSync } from "node:fs";
 
 import { handleImportPeopleFromUrls } from "./import-people-from-urls.js";
-import {
-  getStdout,
-  mockResolveAccount,
-  mockWithInstanceDatabase,
-} from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
-const MOCK_RESULT = {
+const MOCK_RESULT: ImportPeopleFromUrlsOutput = {
+  success: true as const,
+  campaignId: 1,
   actionId: 10,
-  successful: 3,
+  imported: 3,
   alreadyInQueue: 1,
   alreadyProcessed: 0,
   failed: 0,
 };
-
-function mockCampaignService(result = MOCK_RESULT) {
-  vi.mocked(CampaignService).mockImplementation(function () {
-    return {
-      importPeopleFromUrls: vi.fn().mockResolvedValue(result),
-    } as unknown as CampaignService;
-  });
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithInstanceDatabase();
-  mockCampaignService();
-}
 
 describe("handleImportPeopleFromUrls", () => {
   const originalExitCode = process.exitCode;
@@ -78,7 +59,7 @@ describe("handleImportPeopleFromUrls", () => {
   });
 
   it("imports people from --urls and prints result", async () => {
-    setupSuccessPath();
+    vi.mocked(importPeopleFromUrls).mockResolvedValue(MOCK_RESULT);
 
     await handleImportPeopleFromUrls(1, {
       urls: "https://linkedin.com/in/alice,https://linkedin.com/in/bob",
@@ -91,10 +72,10 @@ describe("handleImportPeopleFromUrls", () => {
   });
 
   it("imports from --urls-file", async () => {
-    setupSuccessPath();
     vi.mocked(readFileSync).mockReturnValue(
       "https://linkedin.com/in/alice\nhttps://linkedin.com/in/bob",
     );
+    vi.mocked(importPeopleFromUrls).mockResolvedValue(MOCK_RESULT);
 
     await handleImportPeopleFromUrls(1, { urlsFile: "urls.txt" });
 
@@ -103,7 +84,7 @@ describe("handleImportPeopleFromUrls", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(importPeopleFromUrls).mockResolvedValue(MOCK_RESULT);
 
     await handleImportPeopleFromUrls(1, {
       urls: "https://linkedin.com/in/alice",
@@ -120,11 +101,9 @@ describe("handleImportPeopleFromUrls", () => {
   });
 
   it("shows already-processed and failed counts when non-zero", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    mockCampaignService({
-      actionId: 10,
-      successful: 1,
+    vi.mocked(importPeopleFromUrls).mockResolvedValue({
+      ...MOCK_RESULT,
+      imported: 1,
       alreadyInQueue: 0,
       alreadyProcessed: 2,
       failed: 1,
@@ -140,11 +119,8 @@ describe("handleImportPeopleFromUrls", () => {
   });
 
   it("omits zero counts from human output", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    mockCampaignService({
-      actionId: 10,
-      successful: 3,
+    vi.mocked(importPeopleFromUrls).mockResolvedValue({
+      ...MOCK_RESULT,
       alreadyInQueue: 0,
       alreadyProcessed: 0,
       failed: 0,
@@ -191,15 +167,7 @@ describe("handleImportPeopleFromUrls", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        importPeopleFromUrls: vi
-          .fn()
-          .mockRejectedValue(new CampaignNotFoundError(999)),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(importPeopleFromUrls).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleImportPeopleFromUrls(999, {
       urls: "https://linkedin.com/in/alice",
@@ -210,15 +178,9 @@ describe("handleImportPeopleFromUrls", () => {
   });
 
   it("sets exitCode 1 on CampaignExecutionError", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        importPeopleFromUrls: vi
-          .fn()
-          .mockRejectedValue(new CampaignExecutionError("import failed")),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(importPeopleFromUrls).mockRejectedValue(
+      new CampaignExecutionError("import failed"),
+    );
 
     await handleImportPeopleFromUrls(1, {
       urls: "https://linkedin.com/in/alice",
@@ -231,8 +193,7 @@ describe("handleImportPeopleFromUrls", () => {
   });
 
   it("sets exitCode 1 on InstanceNotRunningError", async () => {
-    mockResolveAccount();
-    vi.mocked(withInstanceDatabase).mockRejectedValue(
+    vi.mocked(importPeopleFromUrls).mockRejectedValue(
       new InstanceNotRunningError("No LinkedHelper instance is running."),
     );
 
@@ -247,7 +208,7 @@ describe("handleImportPeopleFromUrls", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(new Error("timeout"));
+    vi.mocked(importPeopleFromUrls).mockRejectedValue(new Error("timeout"));
 
     await handleImportPeopleFromUrls(1, {
       urls: "https://linkedin.com/in/alice",

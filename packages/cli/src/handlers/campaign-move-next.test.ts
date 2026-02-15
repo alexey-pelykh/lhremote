@@ -7,9 +7,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    campaignMoveNext: vi.fn(),
   };
 });
 
@@ -22,29 +20,25 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import {
+  type CampaignMoveNextOutput,
   ActionNotFoundError,
   CampaignNotFoundError,
-  CampaignRepository,
   NoNextActionError,
-  resolveAccount,
+  campaignMoveNext,
 } from "@lhremote/core";
 import { readFileSync } from "node:fs";
 
 import { handleCampaignMoveNext } from "./campaign-move-next.js";
-import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
-function mockRepo(nextActionId = 11) {
-  const moveToNextAction = vi.fn().mockReturnValue({ nextActionId });
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return { moveToNextAction } as unknown as CampaignRepository;
-  });
-  return { moveToNextAction };
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithDatabase();
-  return mockRepo();
+function mockResult(personsMoved: number): CampaignMoveNextOutput {
+  return {
+    success: true as const,
+    campaignId: 1,
+    fromActionId: 10,
+    toActionId: 11,
+    personsMoved,
+  };
 }
 
 describe("handleCampaignMoveNext", () => {
@@ -65,7 +59,7 @@ describe("handleCampaignMoveNext", () => {
   });
 
   it("moves persons to next action with --person-ids", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignMoveNext).mockResolvedValue(mockResult(2));
 
     await handleCampaignMoveNext(1, 10, { personIds: "100,200" });
 
@@ -76,8 +70,8 @@ describe("handleCampaignMoveNext", () => {
   });
 
   it("moves persons with --person-ids-file", async () => {
-    setupSuccessPath();
     vi.mocked(readFileSync).mockReturnValue("100\n200\n300");
+    vi.mocked(campaignMoveNext).mockResolvedValue(mockResult(3));
 
     await handleCampaignMoveNext(1, 10, { personIdsFile: "ids.txt" });
 
@@ -86,7 +80,7 @@ describe("handleCampaignMoveNext", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignMoveNext).mockResolvedValue(mockResult(1));
 
     await handleCampaignMoveNext(1, 10, { personIds: "100", json: true });
 
@@ -99,12 +93,18 @@ describe("handleCampaignMoveNext", () => {
     expect(parsed.personsMoved).toBe(1);
   });
 
-  it("passes person IDs to repository", async () => {
-    const { moveToNextAction } = setupSuccessPath();
+  it("passes person IDs to operation", async () => {
+    vi.mocked(campaignMoveNext).mockResolvedValue(mockResult(2));
 
     await handleCampaignMoveNext(1, 10, { personIds: "100,200" });
 
-    expect(moveToNextAction).toHaveBeenCalledWith(1, 10, [100, 200]);
+    expect(campaignMoveNext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 1,
+        actionId: 10,
+        personIds: [100, 200],
+      }),
+    );
   });
 
   it("sets exitCode 1 when both person-ids options provided", async () => {
@@ -147,15 +147,7 @@ describe("handleCampaignMoveNext", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        moveToNextAction: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignMoveNext).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleCampaignMoveNext(999, 10, { personIds: "100" });
 
@@ -164,15 +156,7 @@ describe("handleCampaignMoveNext", () => {
   });
 
   it("sets exitCode 1 when action not found", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        moveToNextAction: vi.fn().mockImplementation(() => {
-          throw new ActionNotFoundError(99, 1);
-        }),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignMoveNext).mockRejectedValue(new ActionNotFoundError(99, 1));
 
     await handleCampaignMoveNext(1, 99, { personIds: "100" });
 
@@ -183,15 +167,7 @@ describe("handleCampaignMoveNext", () => {
   });
 
   it("sets exitCode 1 when no next action", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        moveToNextAction: vi.fn().mockImplementation(() => {
-          throw new NoNextActionError(10, 1);
-        }),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignMoveNext).mockRejectedValue(new NoNextActionError(10, 1));
 
     await handleCampaignMoveNext(1, 10, { personIds: "100" });
 
@@ -202,7 +178,7 @@ describe("handleCampaignMoveNext", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(new Error("timeout"));
+    vi.mocked(campaignMoveNext).mockRejectedValue(new Error("timeout"));
 
     await handleCampaignMoveNext(1, 10, { personIds: "100" });
 

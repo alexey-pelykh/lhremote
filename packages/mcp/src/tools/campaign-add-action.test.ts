@@ -7,19 +7,14 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    campaignAddAction: vi.fn(),
   };
 });
 
 import {
   type CampaignAction,
   CampaignNotFoundError,
-  CampaignRepository,
-  type DatabaseContext,
-  resolveAccount,
-  withDatabase,
+  campaignAddAction,
 } from "@lhremote/core";
 
 import { registerCampaignAddAction } from "./campaign-add-action.js";
@@ -41,28 +36,6 @@ const MOCK_ACTION: CampaignAction = {
   },
   versionId: 5000,
 };
-
-function mockCampaignRepo(overrides: Record<string, unknown> = {}) {
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return {
-      getCampaign: vi.fn().mockReturnValue({
-        id: 15,
-        name: "Test Campaign",
-        liAccountId: 1,
-      }),
-      addAction: vi.fn().mockReturnValue(MOCK_ACTION),
-      ...overrides,
-    } as unknown as CampaignRepository;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-  );
-  mockCampaignRepo();
-}
 
 describe("registerCampaignAddAction", () => {
   beforeEach(() => {
@@ -89,7 +62,7 @@ describe("registerCampaignAddAction", () => {
   it("successfully adds action with required params", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignAddAction(server);
-    setupSuccessPath();
+    vi.mocked(campaignAddAction).mockResolvedValue(MOCK_ACTION);
 
     const handler = getHandler("campaign-add-action");
     const result = await handler({
@@ -137,18 +110,7 @@ describe("registerCampaignAddAction", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignAddAction(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        getCampaign: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-        addAction: vi.fn(),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignAddAction).mockRejectedValue(new CampaignNotFoundError(999));
 
     const handler = getHandler("campaign-add-action");
     const result = await handler({
@@ -173,5 +135,6 @@ describe("registerCampaignAddAction", () => {
     registerCampaignAddAction,
     "campaign-add-action",
     () => ({ campaignId: 15, name: "Visit", actionType: "VisitAndExtract", cdpPort: 9222 }),
+    (error) => vi.mocked(campaignAddAction).mockRejectedValue(error),
   );
 });

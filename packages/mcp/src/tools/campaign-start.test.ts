@@ -7,46 +7,27 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    CampaignService: vi.fn(),
+    campaignStart: vi.fn(),
   };
 });
 
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
   CampaignTimeoutError,
-  type InstanceDatabaseContext,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignStart,
 } from "@lhremote/core";
 
 import { registerCampaignStart } from "./campaign-start.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
-function mockCampaignService() {
-  vi.mocked(CampaignService).mockImplementation(function () {
-    return {
-      start: vi.fn().mockResolvedValue(undefined),
-    } as unknown as CampaignService;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withInstanceDatabase).mockImplementation(
-    async (_cdpPort, _accountId, callback) =>
-      callback({
-        accountId: 1,
-        instance: {},
-        db: {},
-      } as unknown as InstanceDatabaseContext),
-  );
-  mockCampaignService();
-}
+const START_RESULT = {
+  success: true as const,
+  campaignId: 15,
+  personsQueued: 3,
+  message: "Campaign started. Use campaign-status to monitor progress.",
+};
 
 describe("registerCampaignStart", () => {
   beforeEach(() => {
@@ -73,7 +54,7 @@ describe("registerCampaignStart", () => {
   it("successfully starts a campaign", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStart(server);
-    setupSuccessPath();
+    vi.mocked(campaignStart).mockResolvedValue(START_RESULT);
 
     const handler = getHandler("campaign-start");
     const result = await handler({
@@ -86,17 +67,7 @@ describe("registerCampaignStart", () => {
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            {
-              success: true,
-              campaignId: 15,
-              personsQueued: 3,
-              message:
-                "Campaign started. Use campaign-status to monitor progress.",
-            },
-            null,
-            2,
-          ),
+          text: JSON.stringify(START_RESULT, null, 2),
         },
       ],
     });
@@ -106,20 +77,7 @@ describe("registerCampaignStart", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStart(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
-    );
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        start: vi.fn().mockRejectedValue(new CampaignNotFoundError(999)),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignStart).mockRejectedValue(new CampaignNotFoundError(999));
 
     const handler = getHandler("campaign-start");
     const result = await handler({
@@ -143,34 +101,20 @@ describe("registerCampaignStart", () => {
     registerCampaignStart,
     "campaign-start",
     () => ({ campaignId: 15, personIds: [1], cdpPort: 9222 }),
-    "Failed to connect to LinkedHelper",
+    (error) => vi.mocked(campaignStart).mockRejectedValue(error),
+    "Failed to start campaign",
   );
 
   it("returns error when campaign runner times out", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStart(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
+    vi.mocked(campaignStart).mockRejectedValue(
+      new CampaignTimeoutError(
+        "Campaign runner did not reach idle state within 60000ms",
+        15,
+      ),
     );
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        start: vi
-          .fn()
-          .mockRejectedValue(
-            new CampaignTimeoutError(
-              "Campaign runner did not reach idle state within 60000ms",
-              15,
-            ),
-          ),
-      } as unknown as CampaignService;
-    });
 
     const handler = getHandler("campaign-start");
     const result = await handler({
@@ -194,27 +138,12 @@ describe("registerCampaignStart", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStart(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
+    vi.mocked(campaignStart).mockRejectedValue(
+      new CampaignExecutionError(
+        "Failed to unpause campaign 15: UI error",
+        15,
+      ),
     );
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        start: vi
-          .fn()
-          .mockRejectedValue(
-            new CampaignExecutionError(
-              "Failed to unpause campaign 15: UI error",
-              15,
-            ),
-          ),
-      } as unknown as CampaignService;
-    });
 
     const handler = getHandler("campaign-start");
     const result = await handler({

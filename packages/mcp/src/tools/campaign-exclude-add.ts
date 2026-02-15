@@ -4,19 +4,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ActionNotFoundError,
-  CampaignExcludeListRepository,
   ExcludeListNotFoundError,
-  resolveAccount,
-  withDatabase,
+  campaignExcludeAdd,
 } from "@lhremote/core";
 import { z } from "zod";
-import {
-  buildCdpOptions,
-  cdpConnectionSchema,
-  mcpCatchAll,
-  mcpError,
-  mcpSuccess,
-} from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-exclude-add | campaign-exclude-add} MCP tool. */
 export function registerCampaignExcludeAdd(server: McpServer): void {
@@ -44,44 +36,12 @@ export function registerCampaignExcludeAdd(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ campaignId, personIds, actionId, cdpPort, cdpHost, allowRemote }) => {
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withDatabase(accountId, ({ db }) => {
-          const excludeListRepo = new CampaignExcludeListRepository(db);
-          const added = excludeListRepo.addToExcludeList(
-            campaignId,
-            personIds,
-            actionId,
-          );
-
-          const level = actionId !== undefined ? "action" : "campaign";
-          const targetLabel =
-            actionId !== undefined
-              ? `action ${String(actionId)} in campaign ${String(campaignId)}`
-              : `campaign ${String(campaignId)}`;
-
-          return mcpSuccess(
-            JSON.stringify(
-              {
-                success: true,
-                campaignId,
-                ...(actionId !== undefined ? { actionId } : {}),
-                level,
-                added,
-                alreadyExcluded: personIds.length - added,
-                message: `Added ${String(added)} person(s) to exclude list for ${targetLabel}.`,
-              },
-              null,
-              2,
-            ),
-          );
-        }, { readOnly: false });
+        const result = await campaignExcludeAdd({ campaignId, personIds, actionId, cdpPort, cdpHost, allowRemote });
+        const targetLabel = actionId !== undefined
+          ? `action ${String(actionId)} in campaign ${String(campaignId)}`
+          : `campaign ${String(campaignId)}`;
+        return mcpSuccess(JSON.stringify({ ...result, message: `Added ${String(result.added)} person(s) to exclude list for ${targetLabel}.` }, null, 2));
       } catch (error) {
         if (error instanceof ActionNotFoundError) {
           return mcpError(`Action ${String(actionId)} not found in campaign ${String(campaignId)}.`);

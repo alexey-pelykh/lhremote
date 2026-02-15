@@ -7,43 +7,28 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    campaignMoveNext: vi.fn(),
   };
 });
 
 import {
   ActionNotFoundError,
   CampaignNotFoundError,
-  CampaignRepository,
-  type DatabaseContext,
   NoNextActionError,
-  resolveAccount,
-  withDatabase,
+  campaignMoveNext,
 } from "@lhremote/core";
 
 import { registerCampaignMoveNext } from "./campaign-move-next.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
-function mockCampaignRepo() {
-  const moveToNextAction = vi.fn().mockReturnValue({ nextActionId: 6 });
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return {
-      moveToNextAction,
-    } as unknown as CampaignRepository;
-  });
-  return { moveToNextAction };
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-  );
-  mockCampaignRepo();
-}
+const MOVE_RESULT = {
+  success: true as const,
+  campaignId: 10,
+  fromActionId: 5,
+  toActionId: 6,
+  personsMoved: 2,
+};
 
 describe("registerCampaignMoveNext", () => {
   beforeEach(() => {
@@ -70,7 +55,7 @@ describe("registerCampaignMoveNext", () => {
   it("successfully moves persons to next action", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignMoveNext(server);
-    setupSuccessPath();
+    vi.mocked(campaignMoveNext).mockResolvedValue(MOVE_RESULT);
 
     const handler = getHandler("campaign-move-next");
     const result = await handler({
@@ -84,31 +69,16 @@ describe("registerCampaignMoveNext", () => {
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            {
-              success: true,
-              campaignId: 10,
-              fromActionId: 5,
-              toActionId: 6,
-              personsMoved: 2,
-            },
-            null,
-            2,
-          ),
+          text: JSON.stringify(MOVE_RESULT, null, 2),
         },
       ],
     });
   });
 
-  it("calls moveToNextAction with correct arguments", async () => {
+  it("calls campaignMoveNext with correct arguments", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignMoveNext(server);
-
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    const { moveToNextAction } = mockCampaignRepo();
+    vi.mocked(campaignMoveNext).mockResolvedValue(MOVE_RESULT);
 
     const handler = getHandler("campaign-move-next");
     await handler({
@@ -118,24 +88,21 @@ describe("registerCampaignMoveNext", () => {
       cdpPort: 9222,
     });
 
-    expect(moveToNextAction).toHaveBeenCalledWith(10, 5, [100, 200]);
+    expect(campaignMoveNext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 10,
+        actionId: 5,
+        personIds: [100, 200],
+        cdpPort: 9222,
+      }),
+    );
   });
 
   it("returns error for non-existent campaign", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignMoveNext(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        moveToNextAction: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignMoveNext).mockRejectedValue(new CampaignNotFoundError(999));
 
     const handler = getHandler("campaign-move-next");
     const result = await handler({
@@ -160,17 +127,7 @@ describe("registerCampaignMoveNext", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignMoveNext(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        moveToNextAction: vi.fn().mockImplementation(() => {
-          throw new ActionNotFoundError(999, 10);
-        }),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignMoveNext).mockRejectedValue(new ActionNotFoundError(999, 10));
 
     const handler = getHandler("campaign-move-next");
     const result = await handler({
@@ -195,17 +152,7 @@ describe("registerCampaignMoveNext", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignMoveNext(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        moveToNextAction: vi.fn().mockImplementation(() => {
-          throw new NoNextActionError(7, 10);
-        }),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignMoveNext).mockRejectedValue(new NoNextActionError(7, 10));
 
     const handler = getHandler("campaign-move-next");
     const result = await handler({
@@ -230,5 +177,6 @@ describe("registerCampaignMoveNext", () => {
     registerCampaignMoveNext,
     "campaign-move-next",
     () => ({ campaignId: 10, actionId: 5, personIds: [100], cdpPort: 9222 }),
+    (error) => vi.mocked(campaignMoveNext).mockRejectedValue(error),
   );
 });

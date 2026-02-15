@@ -2,13 +2,13 @@
 // Copyright (C) 2025 Alexey Pelykh
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { LinkedHelperNotRunningError, resolveAccount } from "@lhremote/core";
-import { describe, expect, it, vi } from "vitest";
+import { LinkedHelperNotRunningError } from "@lhremote/core";
+import { describe, expect, it } from "vitest";
 
 import { createMockServer } from "./mock-server.js";
 
 /**
- * Shared infrastructure error tests for MCP tools that use `resolveAccount`.
+ * Shared infrastructure error tests for MCP tools that delegate to core operations.
  *
  * Covers the two error paths common to all such tools:
  * - `LinkedHelperNotRunningError` → fixed "LinkedHelper is not running" message
@@ -17,6 +17,7 @@ import { createMockServer } from "./mock-server.js";
  * @param registerTool - Function that registers the tool under test on an MCP server.
  * @param toolName - The registered tool name (used to look up the handler).
  * @param getArgs - Returns the arguments to invoke the handler with.
+ * @param mockOperation - A function that configures the mocked operation to reject with the given error.
  * @param connectionErrorPrefix - The expected prefix in the generic connection error message
  *   (e.g. `"Failed to connect to LinkedHelper"`). If omitted, the generic connection error
  *   test is skipped (some tools only test the `LinkedHelperNotRunningError` path).
@@ -25,6 +26,7 @@ export function describeInfrastructureErrors(
   registerTool: (server: McpServer) => void,
   toolName: string,
   getArgs: () => Record<string, unknown>,
+  mockOperation: (error: Error) => void,
   connectionErrorPrefix?: string,
 ): void {
   describe("infrastructure errors", () => {
@@ -32,9 +34,7 @@ export function describeInfrastructureErrors(
       const { server, getHandler } = createMockServer();
       registerTool(server);
 
-      vi.mocked(resolveAccount).mockRejectedValue(
-        new LinkedHelperNotRunningError(9222),
-      );
+      mockOperation(new LinkedHelperNotRunningError(9222));
 
       const handler = getHandler(toolName);
       const result = await handler(getArgs());
@@ -55,9 +55,7 @@ export function describeInfrastructureErrors(
         const { server, getHandler } = createMockServer();
         registerTool(server);
 
-        vi.mocked(resolveAccount).mockRejectedValue(
-          new Error("connection refused"),
-        );
+        mockOperation(new Error("connection refused"));
 
         const handler = getHandler(toolName);
         const result = await handler(getArgs());

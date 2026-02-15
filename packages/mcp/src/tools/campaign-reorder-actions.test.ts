@@ -7,9 +7,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    CampaignService: vi.fn(),
+    campaignReorderActions: vi.fn(),
   };
 });
 
@@ -17,11 +15,8 @@ import {
   ActionNotFoundError,
   type CampaignAction,
   CampaignNotFoundError,
-  CampaignService,
-  type InstanceDatabaseContext,
   InstanceNotRunningError,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignReorderActions,
 } from "@lhremote/core";
 
 import { registerCampaignReorderActions } from "./campaign-reorder-actions.js";
@@ -61,26 +56,11 @@ const MOCK_ACTIONS: CampaignAction[] = [
   },
 ];
 
-function mockCampaignService(actions: CampaignAction[] = MOCK_ACTIONS) {
-  vi.mocked(CampaignService).mockImplementation(function () {
-    return {
-      reorderActions: vi.fn().mockResolvedValue(actions),
-    } as unknown as CampaignService;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withInstanceDatabase).mockImplementation(
-    async (_cdpPort, _accountId, callback) =>
-      callback({
-        accountId: 1,
-        instance: {},
-        db: {},
-      } as unknown as InstanceDatabaseContext),
-  );
-  mockCampaignService();
-}
+const REORDER_RESULT = {
+  success: true as const,
+  campaignId: 15,
+  actions: MOCK_ACTIONS,
+};
 
 describe("registerCampaignReorderActions", () => {
   beforeEach(() => {
@@ -107,7 +87,7 @@ describe("registerCampaignReorderActions", () => {
   it("successfully reorders actions", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignReorderActions(server);
-    setupSuccessPath();
+    vi.mocked(campaignReorderActions).mockResolvedValue(REORDER_RESULT);
 
     const handler = getHandler("campaign-reorder-actions");
     const result = await handler({
@@ -120,15 +100,7 @@ describe("registerCampaignReorderActions", () => {
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            {
-              success: true,
-              campaignId: 15,
-              actions: MOCK_ACTIONS,
-            },
-            null,
-            2,
-          ),
+          text: JSON.stringify(REORDER_RESULT, null, 2),
         },
       ],
     });
@@ -138,22 +110,7 @@ describe("registerCampaignReorderActions", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignReorderActions(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
-    );
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        reorderActions: vi
-          .fn()
-          .mockRejectedValue(new CampaignNotFoundError(999)),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignReorderActions).mockRejectedValue(new CampaignNotFoundError(999));
 
     const handler = getHandler("campaign-reorder-actions");
     const result = await handler({
@@ -177,22 +134,7 @@ describe("registerCampaignReorderActions", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignReorderActions(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
-    );
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        reorderActions: vi
-          .fn()
-          .mockRejectedValue(new ActionNotFoundError(999, 15)),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignReorderActions).mockRejectedValue(new ActionNotFoundError(999, 15));
 
     const handler = getHandler("campaign-reorder-actions");
     const result = await handler({
@@ -216,14 +158,14 @@ describe("registerCampaignReorderActions", () => {
     registerCampaignReorderActions,
     "campaign-reorder-actions",
     () => ({ campaignId: 15, actionIds: [50, 51], cdpPort: 9222 }),
+    (error) => vi.mocked(campaignReorderActions).mockRejectedValue(error),
   );
 
   it("returns error when instance is not running", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignReorderActions(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockRejectedValue(
+    vi.mocked(campaignReorderActions).mockRejectedValue(
       new InstanceNotRunningError("Instance not running"),
     );
 

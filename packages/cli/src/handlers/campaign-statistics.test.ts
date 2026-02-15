@@ -7,21 +7,19 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignStatisticsRepository: vi.fn(),
+    campaignStatistics: vi.fn(),
   };
 });
 
 import {
+  type CampaignStatisticsOutput,
   ActionNotFoundError,
   CampaignNotFoundError,
-  CampaignStatisticsRepository,
-  resolveAccount,
+  campaignStatistics,
 } from "@lhremote/core";
 
 import { handleCampaignStatistics } from "./campaign-statistics.js";
-import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
 const MOCK_ACTION = {
   actionId: 1,
@@ -45,7 +43,8 @@ const MOCK_ACTION = {
   ],
 };
 
-const MOCK_STATISTICS = {
+const MOCK_RESULT: CampaignStatisticsOutput = {
+  campaignId: 1,
   totals: {
     successful: 80,
     replied: 10,
@@ -56,20 +55,6 @@ const MOCK_STATISTICS = {
   },
   actions: [MOCK_ACTION],
 };
-
-function mockRepo(statistics = MOCK_STATISTICS) {
-  const getStatistics = vi.fn().mockReturnValue(statistics);
-  vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
-    return { getStatistics } as unknown as CampaignStatisticsRepository;
-  });
-  return { getStatistics };
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithDatabase();
-  return mockRepo();
-}
 
 describe("handleCampaignStatistics", () => {
   const originalExitCode = process.exitCode;
@@ -89,7 +74,7 @@ describe("handleCampaignStatistics", () => {
   });
 
   it("prints human-readable statistics", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignStatistics).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignStatistics(1, {});
 
@@ -106,7 +91,7 @@ describe("handleCampaignStatistics", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignStatistics).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignStatistics(1, { json: true });
 
@@ -117,21 +102,22 @@ describe("handleCampaignStatistics", () => {
   });
 
   it("passes actionId and maxErrors options", async () => {
-    const { getStatistics } = setupSuccessPath();
+    vi.mocked(campaignStatistics).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignStatistics(1, { actionId: 5, maxErrors: 3 });
 
-    expect(getStatistics).toHaveBeenCalledWith(1, {
-      actionId: 5,
-      maxErrors: 3,
-    });
+    expect(campaignStatistics).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 1,
+        actionId: 5,
+        maxErrors: 3,
+      }),
+    );
   });
 
   it("omits timeline when firstResultAt is null", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    mockRepo({
-      ...MOCK_STATISTICS,
+    vi.mocked(campaignStatistics).mockResolvedValue({
+      ...MOCK_RESULT,
       actions: [
         {
           ...MOCK_ACTION,
@@ -148,10 +134,8 @@ describe("handleCampaignStatistics", () => {
   });
 
   it("shows exception label for exception errors", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    mockRepo({
-      ...MOCK_STATISTICS,
+    vi.mocked(campaignStatistics).mockResolvedValue({
+      ...MOCK_RESULT,
       actions: [
         {
           ...MOCK_ACTION,
@@ -168,15 +152,7 @@ describe("handleCampaignStatistics", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
-      return {
-        getStatistics: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-      } as unknown as CampaignStatisticsRepository;
-    });
+    vi.mocked(campaignStatistics).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleCampaignStatistics(999, {});
 
@@ -185,15 +161,7 @@ describe("handleCampaignStatistics", () => {
   });
 
   it("sets exitCode 1 when action not found", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
-      return {
-        getStatistics: vi.fn().mockImplementation(() => {
-          throw new ActionNotFoundError(99, 1);
-        }),
-      } as unknown as CampaignStatisticsRepository;
-    });
+    vi.mocked(campaignStatistics).mockRejectedValue(new ActionNotFoundError(99, 1));
 
     await handleCampaignStatistics(1, { actionId: 99 });
 
@@ -204,7 +172,7 @@ describe("handleCampaignStatistics", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(new Error("timeout"));
+    vi.mocked(campaignStatistics).mockRejectedValue(new Error("timeout"));
 
     await handleCampaignStatistics(1, {});
 

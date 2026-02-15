@@ -4,12 +4,11 @@
 import {
   ActionNotFoundError,
   CampaignNotFoundError,
-  CampaignRepository,
   DEFAULT_CDP_PORT,
   errorMessage,
   NoNextActionError,
-  resolveAccount,
-  withDatabase,
+  campaignMoveNext,
+  type CampaignMoveNextOutput,
 } from "@lhremote/core";
 
 import { resolvePersonIds } from "./person-ids.js";
@@ -27,8 +26,6 @@ export async function handleCampaignMoveNext(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
-
   let personIds: number[];
   try {
     personIds = resolvePersonIds(options);
@@ -39,43 +36,16 @@ export async function handleCampaignMoveNext(
     return;
   }
 
-  let accountId: number;
+  let result: CampaignMoveNextOutput;
   try {
-    accountId = await resolveAccount(cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+    result = await campaignMoveNext({
+      campaignId,
+      actionId,
+      personIds,
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
     });
-  } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    await withDatabase(accountId, ({ db }) => {
-      const repo = new CampaignRepository(db);
-      const { nextActionId } = repo.moveToNextAction(
-        campaignId,
-        actionId,
-        personIds,
-      );
-
-      if (options.json) {
-        const response = {
-          success: true,
-          campaignId,
-          fromActionId: actionId,
-          toActionId: nextActionId,
-          personsMoved: personIds.length,
-        };
-        process.stdout.write(JSON.stringify(response, null, 2) + "\n");
-      } else {
-        process.stdout.write(
-          `Campaign ${String(campaignId)}: ${String(personIds.length)} persons moved from action ${String(actionId)} to action ${String(nextActionId)}.\n`,
-        );
-      }
-    }, { readOnly: false });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
       process.stderr.write(`Campaign ${String(campaignId)} not found.\n`);
@@ -92,5 +62,14 @@ export async function handleCampaignMoveNext(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
+    return;
+  }
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(
+      `Campaign ${String(campaignId)}: ${String(result.personsMoved)} persons moved from action ${String(actionId)} to action ${String(result.toActionId)}.\n`,
+    );
   }
 }

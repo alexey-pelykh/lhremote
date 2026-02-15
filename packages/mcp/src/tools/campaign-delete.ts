@@ -4,18 +4,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CampaignExecutionError,
-  CampaignService,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignDelete,
 } from "@lhremote/core";
 import { z } from "zod";
-import {
-  buildCdpOptions,
-  cdpConnectionSchema,
-  mcpCatchAll,
-  mcpError,
-  mcpSuccess,
-} from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-delete | campaign-delete} MCP tool. */
 export function registerCampaignDelete(server: McpServer): void {
@@ -31,26 +23,9 @@ export function registerCampaignDelete(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ campaignId, cdpPort, cdpHost, allowRemote }) => {
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-          const campaignService = new CampaignService(instance, db);
-          await campaignService.delete(campaignId);
-
-          return mcpSuccess(
-            JSON.stringify(
-              { success: true, campaignId, action: "archived" },
-              null,
-              2,
-            ),
-          );
-        });
+        const result = await campaignDelete({ campaignId, cdpPort, cdpHost, allowRemote });
+        return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CampaignExecutionError) {
           return mcpError(`Failed to delete campaign: ${error.message}`);

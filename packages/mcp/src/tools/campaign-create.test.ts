@@ -7,9 +7,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    CampaignService: vi.fn(),
+    campaignCreate: vi.fn(),
     parseCampaignYaml: vi.fn(),
     parseCampaignJson: vi.fn(),
   };
@@ -19,12 +17,9 @@ import {
   type Campaign,
   CampaignExecutionError,
   CampaignFormatError,
-  CampaignService,
-  type InstanceDatabaseContext,
+  campaignCreate,
   parseCampaignJson,
   parseCampaignYaml,
-  resolveAccount,
-  withInstanceDatabase,
 } from "@lhremote/core";
 
 import { registerCampaignCreate } from "./campaign-create.js";
@@ -60,29 +55,6 @@ const MOCK_CAMPAIGN: Campaign = {
   createdAt: "2025-01-01T00:00:00.000Z",
 };
 
-function mockCampaignService(campaign: Campaign = MOCK_CAMPAIGN) {
-  vi.mocked(CampaignService).mockImplementation(function () {
-    return {
-      create: vi.fn().mockResolvedValue(campaign),
-    } as unknown as CampaignService;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withInstanceDatabase).mockImplementation(
-    async (_cdpPort, _accountId, callback) =>
-      callback({
-        accountId: 1,
-        instance: {},
-        db: {},
-      } as unknown as InstanceDatabaseContext),
-  );
-  mockCampaignService();
-  vi.mocked(parseCampaignYaml).mockReturnValue(PARSED_CONFIG);
-  vi.mocked(parseCampaignJson).mockReturnValue(PARSED_CONFIG);
-}
-
 describe("registerCampaignCreate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -108,7 +80,9 @@ describe("registerCampaignCreate", () => {
   it("successfully creates campaign from YAML config", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignCreate(server);
-    setupSuccessPath();
+
+    vi.mocked(parseCampaignYaml).mockReturnValue(PARSED_CONFIG);
+    vi.mocked(campaignCreate).mockResolvedValue(MOCK_CAMPAIGN);
 
     const handler = getHandler("campaign-create");
     const result = await handler({
@@ -131,7 +105,9 @@ describe("registerCampaignCreate", () => {
   it("successfully creates campaign from JSON config", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignCreate(server);
-    setupSuccessPath();
+
+    vi.mocked(parseCampaignJson).mockReturnValue(PARSED_CONFIG);
+    vi.mocked(campaignCreate).mockResolvedValue(MOCK_CAMPAIGN);
 
     const handler = getHandler("campaign-create");
     const result = await handler({
@@ -207,25 +183,10 @@ describe("registerCampaignCreate", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignCreate(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
-    );
     vi.mocked(parseCampaignYaml).mockReturnValue(PARSED_CONFIG);
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        create: vi
-          .fn()
-          .mockRejectedValue(
-            new CampaignExecutionError("Failed to create campaign: UI error"),
-          ),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignCreate).mockRejectedValue(
+      new CampaignExecutionError("Failed to create campaign: UI error"),
+    );
 
     const handler = getHandler("campaign-create");
     const result = await handler({

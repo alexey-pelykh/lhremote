@@ -7,9 +7,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    campaignGet: vi.fn(),
   };
 });
 
@@ -17,10 +15,7 @@ import {
   type Campaign,
   type CampaignAction,
   CampaignNotFoundError,
-  CampaignRepository,
-  type DatabaseContext,
-  resolveAccount,
-  withDatabase,
+  campaignGet,
 } from "@lhremote/core";
 
 import { registerCampaignGet } from "./campaign-get.js";
@@ -57,26 +52,6 @@ const MOCK_ACTIONS: CampaignAction[] = [
   },
 ];
 
-function mockCampaignRepo(
-  campaign: Campaign = MOCK_CAMPAIGN,
-  actions: CampaignAction[] = MOCK_ACTIONS,
-) {
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return {
-      getCampaign: vi.fn().mockReturnValue(campaign),
-      getCampaignActions: vi.fn().mockReturnValue(actions),
-    } as unknown as CampaignRepository;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-  );
-  mockCampaignRepo();
-}
-
 describe("registerCampaignGet", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -102,7 +77,9 @@ describe("registerCampaignGet", () => {
   it("returns campaign details with actions", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignGet(server);
-    setupSuccessPath();
+
+    const resultData = { ...MOCK_CAMPAIGN, actions: MOCK_ACTIONS };
+    vi.mocked(campaignGet).mockResolvedValue(resultData);
 
     const handler = getHandler("campaign-get");
     const result = await handler({ campaignId: 15, cdpPort: 9222 });
@@ -111,11 +88,7 @@ describe("registerCampaignGet", () => {
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            { ...MOCK_CAMPAIGN, actions: MOCK_ACTIONS },
-            null,
-            2,
-          ),
+          text: JSON.stringify(resultData, null, 2),
         },
       ],
     });
@@ -125,18 +98,7 @@ describe("registerCampaignGet", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignGet(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        getCampaign: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-        getCampaignActions: vi.fn(),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignGet).mockRejectedValue(new CampaignNotFoundError(999));
 
     const handler = getHandler("campaign-get");
     const result = await handler({ campaignId: 999, cdpPort: 9222 });
@@ -156,6 +118,7 @@ describe("registerCampaignGet", () => {
     registerCampaignGet,
     "campaign-get",
     () => ({ campaignId: 15, cdpPort: 9222 }),
-    "Failed to connect to LinkedHelper",
+    (error) => vi.mocked(campaignGet).mockRejectedValue(error),
+    "Failed to get campaign",
   );
 });

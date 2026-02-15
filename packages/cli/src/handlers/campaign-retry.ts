@@ -3,11 +3,10 @@
 
 import {
   CampaignNotFoundError,
-  CampaignStatisticsRepository,
   DEFAULT_CDP_PORT,
   errorMessage,
-  resolveAccount,
-  withDatabase,
+  campaignRetry,
+  type CampaignRetryOutput,
 } from "@lhremote/core";
 
 import { resolvePersonIds } from "./person-ids.js";
@@ -24,8 +23,6 @@ export async function handleCampaignRetry(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
-
   let personIds: number[];
   try {
     personIds = resolvePersonIds(options);
@@ -36,39 +33,15 @@ export async function handleCampaignRetry(
     return;
   }
 
-  let accountId: number;
+  let result: CampaignRetryOutput;
   try {
-    accountId = await resolveAccount(cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+    result = await campaignRetry({
+      campaignId,
+      personIds,
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
     });
-  } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    await withDatabase(accountId, ({ db }) => {
-      const statisticsRepo = new CampaignStatisticsRepository(db);
-      statisticsRepo.resetForRerun(campaignId, personIds);
-
-      if (options.json) {
-        const response = {
-          success: true,
-          campaignId,
-          personsReset: personIds.length,
-          message:
-            "Persons reset for retry. Use campaign-start to run the campaign.",
-        };
-        process.stdout.write(JSON.stringify(response, null, 2) + "\n");
-      } else {
-        process.stdout.write(
-          `Campaign ${String(campaignId)}: ${String(personIds.length)} persons reset for retry.\n`,
-        );
-      }
-    }, { readOnly: false });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
       process.stderr.write(`Campaign ${String(campaignId)} not found.\n`);
@@ -77,5 +50,14 @@ export async function handleCampaignRetry(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
+    return;
+  }
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(
+      `Campaign ${String(campaignId)}: ${String(result.personsReset)} persons reset for retry.\n`,
+    );
   }
 }

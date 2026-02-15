@@ -7,11 +7,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
-    serializeCampaignJson: vi.fn(),
-    serializeCampaignYaml: vi.fn(),
+    campaignExport: vi.fn(),
   };
 });
 
@@ -24,36 +20,26 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import {
+  type CampaignExportOutput,
   CampaignNotFoundError,
-  CampaignRepository,
-  resolveAccount,
-  serializeCampaignJson,
-  serializeCampaignYaml,
+  campaignExport,
 } from "@lhremote/core";
 import { writeFileSync } from "node:fs";
 
 import { handleCampaignExport } from "./campaign-export.js";
-import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
-const MOCK_CAMPAIGN = { id: 1, name: "Test Campaign" };
-const MOCK_ACTIONS = [{ id: 10, name: "Visit" }];
+const MOCK_YAML_RESULT: CampaignExportOutput = {
+  campaignId: 1,
+  format: "yaml",
+  config: "name: Test Campaign\n",
+};
 
-function mockRepo(campaign = MOCK_CAMPAIGN, actions = MOCK_ACTIONS) {
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return {
-      getCampaign: vi.fn().mockReturnValue(campaign),
-      getCampaignActions: vi.fn().mockReturnValue(actions),
-    } as unknown as CampaignRepository;
-  });
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithDatabase();
-  mockRepo();
-  vi.mocked(serializeCampaignYaml).mockReturnValue("name: Test Campaign\n");
-  vi.mocked(serializeCampaignJson).mockReturnValue('{"name":"Test Campaign"}\n');
-}
+const MOCK_JSON_RESULT: CampaignExportOutput = {
+  campaignId: 1,
+  format: "json",
+  config: '{"name":"Test Campaign"}\n',
+};
 
 describe("handleCampaignExport", () => {
   const originalExitCode = process.exitCode;
@@ -73,26 +59,30 @@ describe("handleCampaignExport", () => {
   });
 
   it("exports campaign as YAML to stdout by default", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignExport).mockResolvedValue(MOCK_YAML_RESULT);
 
     await handleCampaignExport(1, {});
 
     expect(process.exitCode).toBeUndefined();
-    expect(serializeCampaignYaml).toHaveBeenCalled();
+    expect(campaignExport).toHaveBeenCalledWith(
+      expect.objectContaining({ format: "yaml" }),
+    );
     expect(getStdout(stdoutSpy)).toContain("name: Test Campaign");
   });
 
   it("exports campaign as JSON when --format json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignExport).mockResolvedValue(MOCK_JSON_RESULT);
 
     await handleCampaignExport(1, { format: "json" });
 
     expect(process.exitCode).toBeUndefined();
-    expect(serializeCampaignJson).toHaveBeenCalled();
+    expect(campaignExport).toHaveBeenCalledWith(
+      expect.objectContaining({ format: "json" }),
+    );
   });
 
   it("writes to file when --output specified", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignExport).mockResolvedValue(MOCK_YAML_RESULT);
 
     await handleCampaignExport(1, { output: "campaign.yaml" });
 
@@ -115,16 +105,7 @@ describe("handleCampaignExport", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        getCampaign: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-        getCampaignActions: vi.fn(),
-      } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignExport).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleCampaignExport(999, {});
 
@@ -133,7 +114,7 @@ describe("handleCampaignExport", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(new Error("timeout"));
+    vi.mocked(campaignExport).mockRejectedValue(new Error("timeout"));
 
     await handleCampaignExport(1, {});
 

@@ -16,28 +16,58 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
+    queryMessages: vi.fn(),
   };
 });
 
-import { DatabaseClient, resolveAccount, withDatabase } from "@lhremote/core";
-import type { DatabaseContext } from "@lhremote/core";
+import {
+  ChatNotFoundError,
+  DatabaseClient,
+  MessageRepository,
+  queryMessages,
+  type QueryMessagesInput,
+} from "@lhremote/core";
 
 import { registerQueryMessages } from "./query-messages.js";
 import { createMockServer } from "./testing/mock-server.js";
 
+/**
+ * Run the real query-messages logic against the fixture DB.
+ * This replaces the mock so the MCP tool handler exercises real DB queries.
+ */
+function fixtureQueryMessages(input: QueryMessagesInput) {
+  const client = new DatabaseClient(FIXTURE_PATH);
+  try {
+    const repo = new MessageRepository(client);
+    const limit = input.limit ?? 20;
+    const offset = input.offset ?? 0;
+
+    if (input.chatId != null) {
+      const thread = repo.getThread(input.chatId, { limit });
+      return { kind: "thread" as const, thread };
+    }
+
+    if (input.search != null) {
+      const messages = repo.searchMessages(input.search, { limit });
+      return { kind: "search" as const, messages, total: messages.length };
+    }
+
+    const conversations = repo.listChats({
+      ...(input.personId != null && { personId: input.personId }),
+      limit,
+      offset,
+    });
+    return { kind: "conversations" as const, conversations, total: conversations.length };
+  } finally {
+    client.close();
+  }
+}
+
 describe("registerQueryMessages (integration)", () => {
   beforeEach(() => {
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) => {
-      const client = new DatabaseClient(FIXTURE_PATH);
-      try {
-        return callback({ accountId: 1, db: client } as DatabaseContext);
-      } finally {
-        client.close();
-      }
-    });
+    vi.mocked(queryMessages).mockImplementation(async (input) =>
+      fixtureQueryMessages(input),
+    );
   });
 
   afterEach(() => {
@@ -123,6 +153,10 @@ describe("registerQueryMessages (integration)", () => {
   });
 
   it("returns error for nonexistent chatId", async () => {
+    vi.mocked(queryMessages).mockRejectedValue(
+      new ChatNotFoundError(999),
+    );
+
     const { server, getHandler } = createMockServer();
     registerQueryMessages(server);
 

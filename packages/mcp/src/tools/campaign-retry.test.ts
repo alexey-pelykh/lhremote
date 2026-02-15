@@ -7,41 +7,25 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignStatisticsRepository: vi.fn(),
+    campaignRetry: vi.fn(),
   };
 });
 
 import {
   CampaignNotFoundError,
-  CampaignStatisticsRepository,
-  type DatabaseContext,
-  resolveAccount,
-  withDatabase,
+  campaignRetry,
 } from "@lhremote/core";
 
 import { registerCampaignRetry } from "./campaign-retry.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
-function mockCampaignRepo() {
-  const resetForRerun = vi.fn();
-  vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
-    return {
-      resetForRerun,
-    } as unknown as CampaignStatisticsRepository;
-  });
-  return { resetForRerun };
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-  );
-  mockCampaignRepo();
-}
+const RETRY_RESULT = {
+  success: true as const,
+  campaignId: 10,
+  personsReset: 2,
+  message: "Persons reset for retry. Use campaign-start to run the campaign.",
+};
 
 describe("registerCampaignRetry", () => {
   beforeEach(() => {
@@ -68,7 +52,7 @@ describe("registerCampaignRetry", () => {
   it("successfully resets persons for retry", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignRetry(server);
-    setupSuccessPath();
+    vi.mocked(campaignRetry).mockResolvedValue(RETRY_RESULT);
 
     const handler = getHandler("campaign-retry");
     const result = await handler({
@@ -81,31 +65,16 @@ describe("registerCampaignRetry", () => {
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            {
-              success: true,
-              campaignId: 10,
-              personsReset: 2,
-              message:
-                "Persons reset for retry. Use campaign-start to run the campaign.",
-            },
-            null,
-            2,
-          ),
+          text: JSON.stringify(RETRY_RESULT, null, 2),
         },
       ],
     });
   });
 
-  it("calls resetForRerun with correct arguments", async () => {
+  it("calls campaignRetry with correct arguments", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignRetry(server);
-
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    const { resetForRerun } = mockCampaignRepo();
+    vi.mocked(campaignRetry).mockResolvedValue(RETRY_RESULT);
 
     const handler = getHandler("campaign-retry");
     await handler({
@@ -114,24 +83,20 @@ describe("registerCampaignRetry", () => {
       cdpPort: 9222,
     });
 
-    expect(resetForRerun).toHaveBeenCalledWith(10, [100, 200]);
+    expect(campaignRetry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 10,
+        personIds: [100, 200],
+        cdpPort: 9222,
+      }),
+    );
   });
 
   it("returns error for non-existent campaign", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignRetry(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
-      return {
-        resetForRerun: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-      } as unknown as CampaignStatisticsRepository;
-    });
+    vi.mocked(campaignRetry).mockRejectedValue(new CampaignNotFoundError(999));
 
     const handler = getHandler("campaign-retry");
     const result = await handler({
@@ -155,6 +120,7 @@ describe("registerCampaignRetry", () => {
     registerCampaignRetry,
     "campaign-retry",
     () => ({ campaignId: 10, personIds: [100], cdpPort: 9222 }),
-    "Failed to connect to LinkedHelper",
+    (error) => vi.mocked(campaignRetry).mockRejectedValue(error),
+    "Failed to reset persons for retry",
   );
 });

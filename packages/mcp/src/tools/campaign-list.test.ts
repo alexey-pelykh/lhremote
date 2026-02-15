@@ -7,18 +7,13 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignRepository: vi.fn(),
+    campaignList: vi.fn(),
   };
 });
 
 import {
   type CampaignSummary,
-  CampaignRepository,
-  type DatabaseContext,
-  resolveAccount,
-  withDatabase,
+  campaignList,
 } from "@lhremote/core";
 
 import { registerCampaignList } from "./campaign-list.js";
@@ -46,22 +41,6 @@ const MOCK_CAMPAIGNS: CampaignSummary[] = [
   },
 ];
 
-function mockCampaignRepo(campaigns: CampaignSummary[] = MOCK_CAMPAIGNS) {
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return {
-      listCampaigns: vi.fn().mockReturnValue(campaigns),
-    } as unknown as CampaignRepository;
-  });
-}
-
-function setupSuccessPath(campaigns?: CampaignSummary[]) {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-  );
-  mockCampaignRepo(campaigns);
-}
-
 describe("registerCampaignList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -87,7 +66,9 @@ describe("registerCampaignList", () => {
   it("returns list of campaigns", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignList(server);
-    setupSuccessPath();
+
+    const resultData = { campaigns: MOCK_CAMPAIGNS, total: 2 };
+    vi.mocked(campaignList).mockResolvedValue(resultData);
 
     const handler = getHandler("campaign-list");
     const result = await handler({ includeArchived: false, cdpPort: 9222 });
@@ -96,11 +77,7 @@ describe("registerCampaignList", () => {
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            { campaigns: MOCK_CAMPAIGNS, total: 2 },
-            null,
-            2,
-          ),
+          text: JSON.stringify(resultData, null, 2),
         },
       ],
     });
@@ -109,7 +86,9 @@ describe("registerCampaignList", () => {
   it("returns empty list when no campaigns", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignList(server);
-    setupSuccessPath([]);
+
+    const resultData = { campaigns: [], total: 0 };
+    vi.mocked(campaignList).mockResolvedValue(resultData);
 
     const handler = getHandler("campaign-list");
     const result = await handler({ includeArchived: false, cdpPort: 9222 });
@@ -118,36 +97,31 @@ describe("registerCampaignList", () => {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ campaigns: [], total: 0 }, null, 2),
+          text: JSON.stringify(resultData, null, 2),
         },
       ],
     });
   });
 
-  it("passes includeArchived option to repository", async () => {
+  it("passes includeArchived option to operation", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignList(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-
-    const listCampaigns = vi.fn().mockReturnValue([]);
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return { listCampaigns } as unknown as CampaignRepository;
-    });
+    vi.mocked(campaignList).mockResolvedValue({ campaigns: [], total: 0 });
 
     const handler = getHandler("campaign-list");
     await handler({ includeArchived: true, cdpPort: 9222 });
 
-    expect(listCampaigns).toHaveBeenCalledWith({ includeArchived: true });
+    expect(campaignList).toHaveBeenCalledWith(
+      expect.objectContaining({ includeArchived: true }),
+    );
   });
 
   describeInfrastructureErrors(
     registerCampaignList,
     "campaign-list",
     () => ({ includeArchived: false, cdpPort: 9222 }),
-    "Failed to connect to LinkedHelper",
+    (error) => vi.mocked(campaignList).mockRejectedValue(error),
+    "Failed to list campaigns",
   );
 });

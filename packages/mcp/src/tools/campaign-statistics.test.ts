@@ -7,9 +7,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignStatisticsRepository: vi.fn(),
+    campaignStatistics: vi.fn(),
   };
 });
 
@@ -17,11 +15,8 @@ import {
   AccountResolutionError,
   ActionNotFoundError,
   CampaignNotFoundError,
-  CampaignStatisticsRepository,
   type CampaignStatistics,
-  type DatabaseContext,
-  resolveAccount,
-  withDatabase,
+  campaignStatistics,
 } from "@lhremote/core";
 
 import { registerCampaignStatistics } from "./campaign-statistics.js";
@@ -59,27 +54,6 @@ const SAMPLE_STATISTICS: CampaignStatistics = {
   },
 };
 
-function mockCampaignRepo(
-  overrides: Record<string, unknown> = {},
-) {
-  const getStatistics = vi.fn().mockReturnValue(SAMPLE_STATISTICS);
-  vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
-    return {
-      getStatistics,
-      ...overrides,
-    } as unknown as CampaignStatisticsRepository;
-  });
-  return { getStatistics };
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-    callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-  );
-  mockCampaignRepo();
-}
-
 describe("registerCampaignStatistics", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -105,7 +79,7 @@ describe("registerCampaignStatistics", () => {
   it("returns statistics for a campaign", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
-    setupSuccessPath();
+    vi.mocked(campaignStatistics).mockResolvedValue(SAMPLE_STATISTICS);
 
     const handler = getHandler("campaign-statistics");
     const result = await handler({
@@ -124,15 +98,10 @@ describe("registerCampaignStatistics", () => {
     });
   });
 
-  it("passes actionId and maxErrors to getStatistics", async () => {
+  it("passes actionId and maxErrors to operation", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
-
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    const { getStatistics } = mockCampaignRepo();
+    vi.mocked(campaignStatistics).mockResolvedValue(SAMPLE_STATISTICS);
 
     const handler = getHandler("campaign-statistics");
     await handler({
@@ -142,27 +111,20 @@ describe("registerCampaignStatistics", () => {
       cdpPort: 9222,
     });
 
-    expect(getStatistics).toHaveBeenCalledWith(10, {
-      actionId: 42,
-      maxErrors: 3,
-    });
+    expect(campaignStatistics).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 10,
+        actionId: 42,
+        maxErrors: 3,
+      }),
+    );
   });
 
   it("returns error for non-existent campaign", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
-      return {
-        getStatistics: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-      } as unknown as CampaignStatisticsRepository;
-    });
+    vi.mocked(campaignStatistics).mockRejectedValue(new CampaignNotFoundError(999));
 
     const handler = getHandler("campaign-statistics");
     const result = await handler({
@@ -186,17 +148,7 @@ describe("registerCampaignStatistics", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withDatabase).mockImplementation(async (_accountId, callback) =>
-      callback({ accountId: 1, db: {} } as unknown as DatabaseContext),
-    );
-    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
-      return {
-        getStatistics: vi.fn().mockImplementation(() => {
-          throw new ActionNotFoundError(999, 10);
-        }),
-      } as unknown as CampaignStatisticsRepository;
-    });
+    vi.mocked(campaignStatistics).mockRejectedValue(new ActionNotFoundError(999, 10));
 
     const handler = getHandler("campaign-statistics");
     const result = await handler({
@@ -221,14 +173,15 @@ describe("registerCampaignStatistics", () => {
     registerCampaignStatistics,
     "campaign-statistics",
     () => ({ campaignId: 10, cdpPort: 9222, maxErrors: 5 }),
-    "Failed to connect to LinkedHelper",
+    (error) => vi.mocked(campaignStatistics).mockRejectedValue(error),
+    "Failed to get campaign statistics",
   );
 
   it("returns error when no accounts found", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
 
-    vi.mocked(resolveAccount).mockRejectedValue(
+    vi.mocked(campaignStatistics).mockRejectedValue(
       new AccountResolutionError("no-accounts"),
     );
 
@@ -254,7 +207,7 @@ describe("registerCampaignStatistics", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignStatistics(server);
 
-    vi.mocked(resolveAccount).mockRejectedValue(
+    vi.mocked(campaignStatistics).mockRejectedValue(
       new AccountResolutionError("multiple-accounts"),
     );
 

@@ -6,9 +6,8 @@ import {
   DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
-  MessageRepository,
-  resolveAccount,
-  withInstanceDatabase,
+  scrapeMessagingHistory,
+  type ScrapeMessagingHistoryOutput,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | scrape-messaging-history} CLI command. */
@@ -18,46 +17,15 @@ export async function handleScrapeMessagingHistory(options: {
   allowRemote?: boolean;
   json?: boolean;
 }): Promise<void> {
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
+  process.stderr.write("Scraping messaging history from LinkedIn...\n");
 
-  let accountId: number;
+  let result: ScrapeMessagingHistoryOutput;
   try {
-    accountId = await resolveAccount(cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+    result = await scrapeMessagingHistory({
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
     });
-  } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-      process.stderr.write("Scraping messaging history from LinkedIn...\n");
-
-      // Execute the scrape action (may take several minutes)
-      await instance.executeAction("ScrapeMessagingHistory");
-
-      process.stderr.write("Done.\n");
-
-      // Query stats from the database
-      const repo = new MessageRepository(db);
-      const stats = repo.getMessageStats();
-
-      if (options.json) {
-        process.stdout.write(
-          JSON.stringify(
-            { success: true, actionType: "ScrapeMessagingHistory", stats },
-            null,
-            2,
-          ) + "\n",
-        );
-      } else {
-        printStats(stats);
-      }
-    }, { instanceTimeout: 300_000 });
   } catch (error) {
     if (error instanceof InstanceNotRunningError) {
       process.stderr.write(`${error.message}\n`);
@@ -66,6 +34,15 @@ export async function handleScrapeMessagingHistory(options: {
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
+    return;
+  }
+
+  process.stderr.write("Done.\n");
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    printStats(result.stats);
   }
 }
 

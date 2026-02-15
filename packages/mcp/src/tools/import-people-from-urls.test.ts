@@ -7,51 +7,19 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    CampaignService: vi.fn(),
+    importPeopleFromUrls: vi.fn(),
   };
 });
 
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
-  type InstanceDatabaseContext,
-  resolveAccount,
-  withInstanceDatabase,
+  importPeopleFromUrls,
 } from "@lhremote/core";
 
 import { registerImportPeopleFromUrls } from "./import-people-from-urls.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
-
-function mockCampaignService() {
-  vi.mocked(CampaignService).mockImplementation(function () {
-    return {
-      importPeopleFromUrls: vi.fn().mockResolvedValue({
-        actionId: 85,
-        successful: 2,
-        alreadyInQueue: 0,
-        alreadyProcessed: 0,
-        failed: 0,
-      }),
-    } as unknown as CampaignService;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withInstanceDatabase).mockImplementation(
-    async (_cdpPort, _accountId, callback) =>
-      callback({
-        accountId: 1,
-        instance: {},
-        db: {},
-      } as unknown as InstanceDatabaseContext),
-  );
-  mockCampaignService();
-}
 
 describe("registerImportPeopleFromUrls", () => {
   beforeEach(() => {
@@ -78,7 +46,16 @@ describe("registerImportPeopleFromUrls", () => {
   it("successfully imports people from URLs", async () => {
     const { server, getHandler } = createMockServer();
     registerImportPeopleFromUrls(server);
-    setupSuccessPath();
+
+    vi.mocked(importPeopleFromUrls).mockResolvedValue({
+      success: true,
+      campaignId: 14,
+      actionId: 85,
+      imported: 2,
+      alreadyInQueue: 0,
+      alreadyProcessed: 0,
+      failed: 0,
+    });
 
     const handler = getHandler("import-people-from-urls");
     const result = await handler({
@@ -112,26 +89,43 @@ describe("registerImportPeopleFromUrls", () => {
     });
   });
 
+  it("passes correct arguments to operation", async () => {
+    const { server, getHandler } = createMockServer();
+    registerImportPeopleFromUrls(server);
+
+    vi.mocked(importPeopleFromUrls).mockResolvedValue({
+      success: true,
+      campaignId: 14,
+      actionId: 85,
+      imported: 1,
+      alreadyInQueue: 0,
+      alreadyProcessed: 0,
+      failed: 0,
+    });
+
+    const handler = getHandler("import-people-from-urls");
+    await handler({
+      campaignId: 14,
+      linkedInUrls: ["https://www.linkedin.com/in/alice"],
+      cdpPort: 9222,
+    });
+
+    expect(importPeopleFromUrls).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 14,
+        linkedInUrls: ["https://www.linkedin.com/in/alice"],
+        cdpPort: 9222,
+      }),
+    );
+  });
+
   it("returns error for non-existent campaign", async () => {
     const { server, getHandler } = createMockServer();
     registerImportPeopleFromUrls(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
+    vi.mocked(importPeopleFromUrls).mockRejectedValue(
+      new CampaignNotFoundError(999),
     );
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        importPeopleFromUrls: vi
-          .fn()
-          .mockRejectedValue(new CampaignNotFoundError(999)),
-      } as unknown as CampaignService;
-    });
 
     const handler = getHandler("import-people-from-urls");
     const result = await handler({
@@ -151,41 +145,16 @@ describe("registerImportPeopleFromUrls", () => {
     });
   });
 
-  describeInfrastructureErrors(
-    registerImportPeopleFromUrls,
-    "import-people-from-urls",
-    () => ({
-      campaignId: 14,
-      linkedInUrls: ["https://www.linkedin.com/in/alice"],
-      cdpPort: 9222,
-    }),
-  );
-
   it("returns error when campaign has no actions", async () => {
     const { server, getHandler } = createMockServer();
     registerImportPeopleFromUrls(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
+    vi.mocked(importPeopleFromUrls).mockRejectedValue(
+      new CampaignExecutionError(
+        "Campaign 14 has no actions",
+        14,
+      ),
     );
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        importPeopleFromUrls: vi
-          .fn()
-          .mockRejectedValue(
-            new CampaignExecutionError(
-              "Campaign 14 has no actions",
-              14,
-            ),
-          ),
-      } as unknown as CampaignService;
-    });
 
     const handler = getHandler("import-people-from-urls");
     const result = await handler({
@@ -204,4 +173,16 @@ describe("registerImportPeopleFromUrls", () => {
       ],
     });
   });
+
+  describeInfrastructureErrors(
+    registerImportPeopleFromUrls,
+    "import-people-from-urls",
+    () => ({
+      campaignId: 14,
+      linkedInUrls: ["https://www.linkedin.com/in/alice"],
+      cdpPort: 9222,
+    }),
+    (error) => vi.mocked(importPeopleFromUrls).mockRejectedValue(error),
+    "Failed to import people",
+  );
 });

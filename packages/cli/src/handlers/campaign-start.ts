@@ -4,13 +4,12 @@
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
   CampaignTimeoutError,
   DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignStart,
+  type CampaignStartOutput,
 } from "@lhremote/core";
 
 import { resolvePersonIds } from "./person-ids.js";
@@ -27,8 +26,6 @@ export async function handleCampaignStart(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
-
   let personIds: number[];
   try {
     personIds = resolvePersonIds(options);
@@ -39,37 +36,14 @@ export async function handleCampaignStart(
     return;
   }
 
-  let accountId: number;
+  let result: CampaignStartOutput;
   try {
-    accountId = await resolveAccount(cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
-    });
-  } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-      const campaignService = new CampaignService(instance, db);
-      await campaignService.start(campaignId, personIds);
-
-      if (options.json) {
-        const response = {
-          success: true,
-          campaignId,
-          personsQueued: personIds.length,
-          message: "Campaign started. Use campaign-status to monitor progress.",
-        };
-        process.stdout.write(JSON.stringify(response, null, 2) + "\n");
-      } else {
-        process.stdout.write(
-          `Campaign ${String(campaignId)} started with ${String(personIds.length)} persons queued.\n`,
-        );
-      }
+    result = await campaignStart({
+      campaignId,
+      personIds,
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
@@ -85,5 +59,14 @@ export async function handleCampaignStart(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
+    return;
+  }
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(
+      `Campaign ${String(campaignId)} started with ${String(result.personsQueued)} persons queued.\n`,
+    );
   }
 }

@@ -3,11 +3,10 @@
 
 import {
   CampaignNotFoundError,
-  CampaignRepository,
   DEFAULT_CDP_PORT,
   errorMessage,
-  resolveAccount,
-  withDatabase,
+  campaignAddAction,
+  type CampaignAddActionOutput,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-actions | campaign-add-action} CLI command. */
@@ -26,8 +25,6 @@ export async function handleCampaignAddAction(
     json?: boolean;
   },
 ): Promise<void> {
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
-
   // Parse action settings JSON if provided
   let parsedSettings: Record<string, unknown> = {};
   if (options.actionSettings !== undefined) {
@@ -43,53 +40,20 @@ export async function handleCampaignAddAction(
     }
   }
 
-  let accountId: number;
+  let result: CampaignAddActionOutput;
   try {
-    accountId = await resolveAccount(cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+    result = await campaignAddAction({
+      campaignId,
+      name: options.name,
+      actionType: options.actionType,
+      description: options.description,
+      coolDown: options.coolDown,
+      maxActionResultsPerIteration: options.maxResults,
+      actionSettings: parsedSettings,
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
     });
-  } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    await withDatabase(accountId, ({ db }) => {
-      const repo = new CampaignRepository(db);
-      const campaign = repo.getCampaign(campaignId);
-
-      const actionConfig: import("@lhremote/core").CampaignActionConfig = {
-        name: options.name,
-        actionType: options.actionType,
-        actionSettings: parsedSettings,
-      };
-      if (options.description !== undefined) {
-        actionConfig.description = options.description;
-      }
-      if (options.coolDown !== undefined) {
-        actionConfig.coolDown = options.coolDown;
-      }
-      if (options.maxResults !== undefined) {
-        actionConfig.maxActionResultsPerIteration = options.maxResults;
-      }
-
-      const action = repo.addAction(
-        campaignId,
-        actionConfig,
-        campaign.liAccountId,
-      );
-
-      if (options.json) {
-        process.stdout.write(JSON.stringify(action, null, 2) + "\n");
-      } else {
-        process.stdout.write(
-          `Action added: #${action.id} "${action.name}" (${action.config.actionType}) to campaign #${campaign.id}\n`,
-        );
-      }
-    }, { readOnly: false });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
       process.stderr.write(`Campaign ${String(campaignId)} not found.\n`);
@@ -98,5 +62,14 @@ export async function handleCampaignAddAction(
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
+    return;
+  }
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(
+      `Action added: #${result.id} "${result.name}" (${result.config.actionType}) to campaign #${String(campaignId)}\n`,
+    );
   }
 }

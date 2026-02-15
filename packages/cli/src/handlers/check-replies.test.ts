@@ -7,27 +7,19 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    MessageRepository: vi.fn(),
+    checkReplies: vi.fn(),
   };
 });
 
 import {
+  type CheckRepliesOutput,
   type ConversationMessages,
   InstanceNotRunningError,
-  MessageRepository,
-  resolveAccount,
-  withInstanceDatabase,
+  checkReplies,
 } from "@lhremote/core";
 
 import { handleCheckReplies } from "./check-replies.js";
-import {
-  getStderr,
-  getStdout,
-  mockResolveAccount,
-  mockWithInstanceDatabase,
-} from "./testing/mock-helpers.js";
+import { getStderr, getStdout } from "./testing/mock-helpers.js";
 
 const MOCK_CONVERSATIONS: ConversationMessages[] = [
   {
@@ -50,29 +42,11 @@ const MOCK_CONVERSATIONS: ConversationMessages[] = [
   },
 ];
 
-function mockResolveAccountError(error: Error) {
-  vi.mocked(resolveAccount).mockRejectedValue(error);
-}
-
-function mockRepo(conversations: ConversationMessages[] = MOCK_CONVERSATIONS) {
-  vi.mocked(MessageRepository).mockImplementation(function () {
-    return {
-      getMessagesSince: vi.fn().mockReturnValue(conversations),
-    } as unknown as MessageRepository;
-  });
-}
-
-function mockInstanceWithRepo(
-  conversations: ConversationMessages[] = MOCK_CONVERSATIONS,
-) {
-  mockRepo(conversations);
-  mockWithInstanceDatabase();
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockInstanceWithRepo();
-}
+const MOCK_RESULT: CheckRepliesOutput = {
+  newMessages: MOCK_CONVERSATIONS,
+  totalNew: 1,
+  checkedAt: "2025-01-15T12:00:00Z",
+};
 
 describe("handleCheckReplies", () => {
   const originalExitCode = process.exitCode;
@@ -82,20 +56,17 @@ describe("handleCheckReplies", () => {
   beforeEach(() => {
     process.exitCode = undefined;
     vi.clearAllMocks();
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-01-15T12:00:00Z"));
     stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
     stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   });
 
   afterEach(() => {
     process.exitCode = originalExitCode;
-    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(checkReplies).mockResolvedValue(MOCK_RESULT);
 
     await handleCheckReplies({ json: true });
 
@@ -107,7 +78,7 @@ describe("handleCheckReplies", () => {
   });
 
   it("prints human-readable output by default", async () => {
-    setupSuccessPath();
+    vi.mocked(checkReplies).mockResolvedValue(MOCK_RESULT);
 
     await handleCheckReplies({});
 
@@ -119,7 +90,7 @@ describe("handleCheckReplies", () => {
   });
 
   it("prints progress to stderr", async () => {
-    setupSuccessPath();
+    vi.mocked(checkReplies).mockResolvedValue(MOCK_RESULT);
 
     await handleCheckReplies({});
 
@@ -129,42 +100,37 @@ describe("handleCheckReplies", () => {
   });
 
   it("prints 'No new messages' when empty", async () => {
-    mockResolveAccount();
-    mockInstanceWithRepo([]);
+    vi.mocked(checkReplies).mockResolvedValue({
+      newMessages: [],
+      totalNew: 0,
+      checkedAt: "2025-01-15T12:00:00Z",
+    });
 
     await handleCheckReplies({});
 
     expect(getStdout(stdoutSpy)).toContain("No new messages found.");
   });
 
-  it("uses since parameter when provided", async () => {
-    mockResolveAccount();
-    const getMessagesSince = vi.fn().mockReturnValue([]);
-    vi.mocked(MessageRepository).mockImplementation(function () {
-      return { getMessagesSince } as unknown as MessageRepository;
+  it("passes since parameter when provided", async () => {
+    vi.mocked(checkReplies).mockResolvedValue({
+      newMessages: [],
+      totalNew: 0,
+      checkedAt: "2025-01-15T12:00:00Z",
     });
-    mockWithInstanceDatabase();
 
     await handleCheckReplies({ since: "2025-01-14T00:00:00Z" });
 
-    expect(getMessagesSince).toHaveBeenCalledWith("2025-01-14T00:00:00Z");
-  });
-
-  it("defaults to last 24 hours when since is omitted", async () => {
-    mockResolveAccount();
-    const getMessagesSince = vi.fn().mockReturnValue([]);
-    vi.mocked(MessageRepository).mockImplementation(function () {
-      return { getMessagesSince } as unknown as MessageRepository;
-    });
-    mockWithInstanceDatabase();
-
-    await handleCheckReplies({});
-
-    expect(getMessagesSince).toHaveBeenCalledWith("2025-01-14T12:00:00.000Z");
+    expect(checkReplies).toHaveBeenCalledWith(
+      expect.objectContaining({
+        since: "2025-01-14T00:00:00Z",
+      }),
+    );
   });
 
   it("sets exitCode on error", async () => {
-    mockResolveAccountError(new Error("No accounts found."));
+    vi.mocked(checkReplies).mockRejectedValue(
+      new Error("No accounts found."),
+    );
 
     await handleCheckReplies({});
 
@@ -173,8 +139,7 @@ describe("handleCheckReplies", () => {
   });
 
   it("sets exitCode when no instance running", async () => {
-    mockResolveAccount();
-    vi.mocked(withInstanceDatabase).mockRejectedValue(
+    vi.mocked(checkReplies).mockRejectedValue(
       new InstanceNotRunningError(
         "No LinkedHelper instance is running. Use start-instance first.",
       ),
@@ -189,26 +154,29 @@ describe("handleCheckReplies", () => {
   });
 
   it("pluralizes message count correctly", async () => {
-    mockResolveAccount();
-    mockInstanceWithRepo([
-      {
-        chatId: 1,
-        personId: 1,
-        personName: "Alice",
-        messages: [
-          {
-            id: 1, type: "DEFAULT", text: "msg1", subject: null,
-            sendAt: "2025-01-15T10:00:00Z", attachmentsCount: 0,
-            senderPersonId: 1, senderFirstName: "Alice", senderLastName: null,
-          },
-          {
-            id: 2, type: "DEFAULT", text: "msg2", subject: null,
-            sendAt: "2025-01-15T10:05:00Z", attachmentsCount: 0,
-            senderPersonId: 1, senderFirstName: "Alice", senderLastName: null,
-          },
-        ],
-      },
-    ]);
+    vi.mocked(checkReplies).mockResolvedValue({
+      newMessages: [
+        {
+          chatId: 1,
+          personId: 1,
+          personName: "Alice",
+          messages: [
+            {
+              id: 1, type: "DEFAULT", text: "msg1", subject: null,
+              sendAt: "2025-01-15T10:00:00Z", attachmentsCount: 0,
+              senderPersonId: 1, senderFirstName: "Alice", senderLastName: null,
+            },
+            {
+              id: 2, type: "DEFAULT", text: "msg2", subject: null,
+              sendAt: "2025-01-15T10:05:00Z", attachmentsCount: 0,
+              senderPersonId: 1, senderFirstName: "Alice", senderLastName: null,
+            },
+          ],
+        },
+      ],
+      totalNew: 2,
+      checkedAt: "2025-01-15T12:00:00Z",
+    });
 
     await handleCheckReplies({});
 

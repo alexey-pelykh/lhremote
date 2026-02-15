@@ -4,12 +4,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ChatNotFoundError,
-  MessageRepository,
-  resolveAccount,
-  withDatabase,
+  queryMessages,
 } from "@lhremote/core";
 import { z } from "zod";
-import { buildCdpOptions, cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#query-messages | query-messages} MCP tool. */
 export function registerQueryMessages(server: McpServer): void {
@@ -48,49 +46,11 @@ export function registerQueryMessages(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ personId, chatId, search, limit, offset, cdpPort, cdpHost, allowRemote }) => {
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      const effectiveLimit = limit ?? 20;
-      const effectiveOffset = offset ?? 0;
-
-      try {
-        return await withDatabase(accountId, ({ db }) => {
-          const repo = new MessageRepository(db);
-
-          if (chatId != null) {
-            const thread = repo.getThread(chatId, {
-              limit: effectiveLimit,
-            });
-            return mcpSuccess(JSON.stringify(thread, null, 2));
-          }
-
-          if (search != null) {
-            const messages = repo.searchMessages(search, {
-              limit: effectiveLimit,
-            });
-            return mcpSuccess(
-              JSON.stringify({ messages, total: messages.length }, null, 2),
-            );
-          }
-
-          const conversations = repo.listChats({
-            ...(personId != null && { personId }),
-            limit: effectiveLimit,
-            offset: effectiveOffset,
-          });
-          return mcpSuccess(
-            JSON.stringify(
-              { conversations, total: conversations.length },
-              null,
-              2,
-            ),
-          );
-        });
+        const result = await queryMessages({ personId, chatId, search, limit, offset, cdpPort, cdpHost, allowRemote });
+        if (result.kind === "thread") return mcpSuccess(JSON.stringify(result.thread, null, 2));
+        if (result.kind === "search") return mcpSuccess(JSON.stringify({ messages: result.messages, total: result.total }, null, 2));
+        return mcpSuccess(JSON.stringify({ conversations: result.conversations, total: result.total }, null, 2));
       } catch (error) {
         if (error instanceof ChatNotFoundError) {
           return mcpError("Chat not found.");

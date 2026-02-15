@@ -7,9 +7,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withDatabase: vi.fn(),
-    CampaignStatisticsRepository: vi.fn(),
+    campaignRetry: vi.fn(),
   };
 });
 
@@ -22,27 +20,22 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import {
+  type CampaignRetryOutput,
   CampaignNotFoundError,
-  CampaignStatisticsRepository,
-  resolveAccount,
+  campaignRetry,
 } from "@lhremote/core";
 import { readFileSync } from "node:fs";
 
 import { handleCampaignRetry } from "./campaign-retry.js";
-import { getStdout, mockResolveAccount, mockWithDatabase } from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
-function mockRepo() {
-  const resetForRerun = vi.fn();
-  vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
-    return { resetForRerun } as unknown as CampaignStatisticsRepository;
-  });
-  return { resetForRerun };
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithDatabase();
-  return mockRepo();
+function mockResult(personsReset: number): CampaignRetryOutput {
+  return {
+    success: true as const,
+    campaignId: 1,
+    personsReset,
+    message: `${personsReset} persons reset for retry`,
+  };
 }
 
 describe("handleCampaignRetry", () => {
@@ -63,7 +56,7 @@ describe("handleCampaignRetry", () => {
   });
 
   it("resets persons for retry with --person-ids", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignRetry).mockResolvedValue(mockResult(2));
 
     await handleCampaignRetry(1, { personIds: "100,200" });
 
@@ -72,8 +65,8 @@ describe("handleCampaignRetry", () => {
   });
 
   it("resets persons for retry with --person-ids-file", async () => {
-    setupSuccessPath();
     vi.mocked(readFileSync).mockReturnValue("100\n200\n300");
+    vi.mocked(campaignRetry).mockResolvedValue(mockResult(3));
 
     await handleCampaignRetry(1, { personIdsFile: "ids.txt" });
 
@@ -82,7 +75,7 @@ describe("handleCampaignRetry", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignRetry).mockResolvedValue(mockResult(1));
 
     await handleCampaignRetry(1, { personIds: "100", json: true });
 
@@ -93,12 +86,17 @@ describe("handleCampaignRetry", () => {
     expect(parsed.personsReset).toBe(1);
   });
 
-  it("passes person IDs to repository", async () => {
-    const { resetForRerun } = setupSuccessPath();
+  it("passes person IDs to operation", async () => {
+    vi.mocked(campaignRetry).mockResolvedValue(mockResult(2));
 
     await handleCampaignRetry(1, { personIds: "100,200" });
 
-    expect(resetForRerun).toHaveBeenCalledWith(1, [100, 200]);
+    expect(campaignRetry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 1,
+        personIds: [100, 200],
+      }),
+    );
   });
 
   it("sets exitCode 1 when both person-ids options provided", async () => {
@@ -141,15 +139,7 @@ describe("handleCampaignRetry", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithDatabase();
-    vi.mocked(CampaignStatisticsRepository).mockImplementation(function () {
-      return {
-        resetForRerun: vi.fn().mockImplementation(() => {
-          throw new CampaignNotFoundError(999);
-        }),
-      } as unknown as CampaignStatisticsRepository;
-    });
+    vi.mocked(campaignRetry).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleCampaignRetry(999, { personIds: "100" });
 
@@ -158,7 +148,7 @@ describe("handleCampaignRetry", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(new Error("timeout"));
+    vi.mocked(campaignRetry).mockRejectedValue(new Error("timeout"));
 
     await handleCampaignRetry(1, { personIds: "100" });
 

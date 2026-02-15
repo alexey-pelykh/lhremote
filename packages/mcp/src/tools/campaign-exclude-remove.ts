@@ -4,19 +4,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ActionNotFoundError,
-  CampaignExcludeListRepository,
   ExcludeListNotFoundError,
-  resolveAccount,
-  withDatabase,
+  campaignExcludeRemove,
 } from "@lhremote/core";
 import { z } from "zod";
-import {
-  buildCdpOptions,
-  cdpConnectionSchema,
-  mcpCatchAll,
-  mcpError,
-  mcpSuccess,
-} from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-exclude-remove | campaign-exclude-remove} MCP tool. */
 export function registerCampaignExcludeRemove(server: McpServer): void {
@@ -44,44 +36,12 @@ export function registerCampaignExcludeRemove(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ campaignId, personIds, actionId, cdpPort, cdpHost, allowRemote }) => {
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withDatabase(accountId, ({ db }) => {
-          const excludeListRepo = new CampaignExcludeListRepository(db);
-          const removed = excludeListRepo.removeFromExcludeList(
-            campaignId,
-            personIds,
-            actionId,
-          );
-
-          const level = actionId !== undefined ? "action" : "campaign";
-          const targetLabel =
-            actionId !== undefined
-              ? `action ${String(actionId)} in campaign ${String(campaignId)}`
-              : `campaign ${String(campaignId)}`;
-
-          return mcpSuccess(
-            JSON.stringify(
-              {
-                success: true,
-                campaignId,
-                ...(actionId !== undefined ? { actionId } : {}),
-                level,
-                removed,
-                notInList: personIds.length - removed,
-                message: `Removed ${String(removed)} person(s) from exclude list for ${targetLabel}.`,
-              },
-              null,
-              2,
-            ),
-          );
-        }, { readOnly: false });
+        const result = await campaignExcludeRemove({ campaignId, personIds, actionId, cdpPort, cdpHost, allowRemote });
+        const targetLabel = actionId !== undefined
+          ? `action ${String(actionId)} in campaign ${String(campaignId)}`
+          : `campaign ${String(campaignId)}`;
+        return mcpSuccess(JSON.stringify({ ...result, message: `Removed ${String(result.removed)} person(s) from exclude list for ${targetLabel}.` }, null, 2));
       } catch (error) {
         if (error instanceof ActionNotFoundError) {
           return mcpError(`Action ${String(actionId)} not found in campaign ${String(campaignId)}.`);

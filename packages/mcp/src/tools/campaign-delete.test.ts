@@ -7,45 +7,21 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    CampaignService: vi.fn(),
+    campaignDelete: vi.fn(),
   };
 });
 
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
-  type InstanceDatabaseContext,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignDelete,
 } from "@lhremote/core";
 
 import { registerCampaignDelete } from "./campaign-delete.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
-function mockCampaignService() {
-  vi.mocked(CampaignService).mockImplementation(function () {
-    return {
-      delete: vi.fn().mockResolvedValue(undefined),
-    } as unknown as CampaignService;
-  });
-}
-
-function setupSuccessPath() {
-  vi.mocked(resolveAccount).mockResolvedValue(1);
-  vi.mocked(withInstanceDatabase).mockImplementation(
-    async (_cdpPort, _accountId, callback) =>
-      callback({
-        accountId: 1,
-        instance: {},
-        db: {},
-      } as unknown as InstanceDatabaseContext),
-  );
-  mockCampaignService();
-}
+const DELETE_RESULT = { success: true as const, campaignId: 15, action: "archived" as const };
 
 describe("registerCampaignDelete", () => {
   beforeEach(() => {
@@ -72,7 +48,7 @@ describe("registerCampaignDelete", () => {
   it("successfully deletes a campaign", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignDelete(server);
-    setupSuccessPath();
+    vi.mocked(campaignDelete).mockResolvedValue(DELETE_RESULT);
 
     const handler = getHandler("campaign-delete");
     const result = await handler({
@@ -84,11 +60,7 @@ describe("registerCampaignDelete", () => {
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            { success: true, campaignId: 15, action: "archived" },
-            null,
-            2,
-          ),
+          text: JSON.stringify(DELETE_RESULT, null, 2),
         },
       ],
     });
@@ -98,20 +70,7 @@ describe("registerCampaignDelete", () => {
     const { server, getHandler } = createMockServer();
     registerCampaignDelete(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
-    );
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        delete: vi.fn().mockRejectedValue(new CampaignNotFoundError(999)),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignDelete).mockRejectedValue(new CampaignNotFoundError(999));
 
     const handler = getHandler("campaign-delete");
     const result = await handler({
@@ -134,34 +93,20 @@ describe("registerCampaignDelete", () => {
     registerCampaignDelete,
     "campaign-delete",
     () => ({ campaignId: 15, cdpPort: 9222 }),
-    "Failed to connect to LinkedHelper",
+    (error) => vi.mocked(campaignDelete).mockRejectedValue(error),
+    "Failed to delete campaign",
   );
 
   it("returns error when campaign execution fails", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignDelete(server);
 
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    vi.mocked(withInstanceDatabase).mockImplementation(
-      async (_cdpPort, _accountId, callback) =>
-        callback({
-          accountId: 1,
-          instance: {},
-          db: {},
-        } as unknown as InstanceDatabaseContext),
+    vi.mocked(campaignDelete).mockRejectedValue(
+      new CampaignExecutionError(
+        "Failed to delete campaign 15: UI error",
+        15,
+      ),
     );
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        delete: vi
-          .fn()
-          .mockRejectedValue(
-            new CampaignExecutionError(
-              "Failed to delete campaign 15: UI error",
-              15,
-            ),
-          ),
-      } as unknown as CampaignService;
-    });
 
     const handler = getHandler("campaign-delete");
     const result = await handler({

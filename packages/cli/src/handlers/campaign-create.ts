@@ -7,14 +7,13 @@ import {
   type CampaignConfig,
   CampaignExecutionError,
   CampaignFormatError,
-  CampaignService,
   DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   parseCampaignJson,
   parseCampaignYaml,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignCreate,
+  type CampaignCreateOutput,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-create} CLI command. */
@@ -27,8 +26,6 @@ export async function handleCampaignCreate(options: {
   allowRemote?: boolean;
   json?: boolean;
 }): Promise<void> {
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
-
   // Validate input options
   const inputCount = [options.file, options.yaml, options.jsonInput].filter(
     Boolean,
@@ -79,31 +76,13 @@ export async function handleCampaignCreate(options: {
     return;
   }
 
-  let accountId: number;
+  let result: CampaignCreateOutput;
   try {
-    accountId = await resolveAccount(cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
-    });
-  } catch (error) {
-    const message = errorMessage(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-      const campaignService = new CampaignService(instance, db);
-      const campaign = await campaignService.create(config);
-
-      if (options.json) {
-        process.stdout.write(JSON.stringify(campaign, null, 2) + "\n");
-      } else {
-        process.stdout.write(
-          `Campaign created: #${campaign.id} "${campaign.name}"\n`,
-        );
-      }
+    result = await campaignCreate({
+      config,
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
     });
   } catch (error) {
     if (error instanceof CampaignExecutionError) {
@@ -115,5 +94,14 @@ export async function handleCampaignCreate(options: {
       process.stderr.write(`${message}\n`);
     }
     process.exitCode = 1;
+    return;
+  }
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(
+      `Campaign created: #${result.id} "${result.name}"\n`,
+    );
   }
 }

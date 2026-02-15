@@ -3,17 +3,10 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  CampaignRepository,
-  resolveAccount,
-  withDatabase,
+  campaignList,
 } from "@lhremote/core";
 import { z } from "zod";
-import {
-  buildCdpOptions,
-  cdpConnectionSchema,
-  mcpCatchAll,
-  mcpSuccess,
-} from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-list | campaign-list} MCP tool. */
 export function registerCampaignList(server: McpServer): void {
@@ -29,26 +22,9 @@ export function registerCampaignList(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ includeArchived, cdpPort, cdpHost, allowRemote }) => {
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withDatabase(accountId, ({ db }) => {
-          const campaignRepo = new CampaignRepository(db);
-          const campaigns = campaignRepo.listCampaigns({ includeArchived });
-
-          return mcpSuccess(
-            JSON.stringify(
-              { campaigns, total: campaigns.length },
-              null,
-              2,
-            ),
-          );
-        });
+        const result = await campaignList({ includeArchived, cdpPort, cdpHost, allowRemote });
+        return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to list campaigns");
       }

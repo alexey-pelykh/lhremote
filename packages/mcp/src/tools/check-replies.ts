@@ -3,12 +3,10 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  MessageRepository,
-  resolveAccount,
-  withInstanceDatabase,
+  checkReplies,
 } from "@lhremote/core";
 import { z } from "zod";
-import { buildCdpOptions, cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
+import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#check-replies | check-replies} MCP tool. */
 export function registerCheckReplies(server: McpServer): void {
@@ -25,42 +23,9 @@ export function registerCheckReplies(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ since, cdpPort, cdpHost, allowRemote }) => {
-      const cutoff =
-        since ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-      let accountId: number;
       try {
-        accountId = await resolveAccount(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
-
-      try {
-        return await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-          // Execute the CheckForReplies action
-          await instance.executeAction("CheckForReplies");
-
-          // Query messages from the database
-          const repo = new MessageRepository(db);
-          const conversations = repo.getMessagesSince(cutoff);
-
-          const totalNew = conversations.reduce(
-            (sum, c) => sum + c.messages.length,
-            0,
-          );
-
-          return mcpSuccess(
-            JSON.stringify(
-              {
-                newMessages: conversations,
-                totalNew,
-                checkedAt: new Date().toISOString(),
-              },
-              null,
-              2,
-            ),
-          );
-        }, { instanceTimeout: 120_000 });
+        const result = await checkReplies({ since, cdpPort, cdpHost, allowRemote });
+        return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to check replies");
       }

@@ -7,47 +7,58 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
   return {
     ...actual,
-    resolveAccount: vi.fn(),
-    withInstanceDatabase: vi.fn(),
-    CampaignService: vi.fn(),
+    campaignReorderActions: vi.fn(),
   };
 });
 
 import {
+  type CampaignReorderActionsOutput,
   ActionNotFoundError,
   CampaignExecutionError,
   CampaignNotFoundError,
-  CampaignService,
   InstanceNotRunningError,
-  resolveAccount,
-  withInstanceDatabase,
+  campaignReorderActions,
 } from "@lhremote/core";
 
 import { handleCampaignReorderActions } from "./campaign-reorder-actions.js";
-import {
-  getStdout,
-  mockResolveAccount,
-  mockWithInstanceDatabase,
-} from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
-const MOCK_REORDERED = [
-  { id: 2, name: "Send Message", config: { actionType: "MessageToPerson" } },
-  { id: 1, name: "Visit Profile", config: { actionType: "VisitAndExtract" } },
-];
-
-function mockCampaignService(reordered = MOCK_REORDERED) {
-  vi.mocked(CampaignService).mockImplementation(function () {
-    return {
-      reorderActions: vi.fn().mockResolvedValue(reordered),
-    } as unknown as CampaignService;
-  });
-}
-
-function setupSuccessPath() {
-  mockResolveAccount();
-  mockWithInstanceDatabase();
-  mockCampaignService();
-}
+const MOCK_RESULT: CampaignReorderActionsOutput = {
+  success: true as const,
+  campaignId: 1,
+  actions: [
+    {
+      id: 2,
+      campaignId: 1,
+      name: "Send Message",
+      description: null,
+      config: {
+        id: 101,
+        actionType: "MessageToPerson",
+        actionSettings: {},
+        coolDown: 60000,
+        maxActionResultsPerIteration: 10,
+        isDraft: false,
+      },
+      versionId: 1,
+    },
+    {
+      id: 1,
+      campaignId: 1,
+      name: "Visit Profile",
+      description: null,
+      config: {
+        id: 100,
+        actionType: "VisitAndExtract",
+        actionSettings: {},
+        coolDown: 60000,
+        maxActionResultsPerIteration: 10,
+        isDraft: false,
+      },
+      versionId: 1,
+    },
+  ],
+};
 
 describe("handleCampaignReorderActions", () => {
   const originalExitCode = process.exitCode;
@@ -67,7 +78,7 @@ describe("handleCampaignReorderActions", () => {
   });
 
   it("reorders actions and prints confirmation", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignReorderActions).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignReorderActions(1, { actionIds: "2,1" });
 
@@ -79,7 +90,7 @@ describe("handleCampaignReorderActions", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignReorderActions).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignReorderActions(1, { actionIds: "2,1", json: true });
 
@@ -100,15 +111,7 @@ describe("handleCampaignReorderActions", () => {
   });
 
   it("sets exitCode 1 when campaign not found", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        reorderActions: vi
-          .fn()
-          .mockRejectedValue(new CampaignNotFoundError(999)),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignReorderActions).mockRejectedValue(new CampaignNotFoundError(999));
 
     await handleCampaignReorderActions(999, { actionIds: "1,2" });
 
@@ -117,15 +120,7 @@ describe("handleCampaignReorderActions", () => {
   });
 
   it("sets exitCode 1 when action not found", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        reorderActions: vi
-          .fn()
-          .mockRejectedValue(new ActionNotFoundError(99, 1)),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignReorderActions).mockRejectedValue(new ActionNotFoundError(99, 1));
 
     await handleCampaignReorderActions(1, { actionIds: "99,1" });
 
@@ -136,15 +131,9 @@ describe("handleCampaignReorderActions", () => {
   });
 
   it("sets exitCode 1 on CampaignExecutionError", async () => {
-    mockResolveAccount();
-    mockWithInstanceDatabase();
-    vi.mocked(CampaignService).mockImplementation(function () {
-      return {
-        reorderActions: vi
-          .fn()
-          .mockRejectedValue(new CampaignExecutionError("count mismatch")),
-      } as unknown as CampaignService;
-    });
+    vi.mocked(campaignReorderActions).mockRejectedValue(
+      new CampaignExecutionError("count mismatch"),
+    );
 
     await handleCampaignReorderActions(1, { actionIds: "1" });
 
@@ -155,8 +144,7 @@ describe("handleCampaignReorderActions", () => {
   });
 
   it("sets exitCode 1 on InstanceNotRunningError", async () => {
-    mockResolveAccount();
-    vi.mocked(withInstanceDatabase).mockRejectedValue(
+    vi.mocked(campaignReorderActions).mockRejectedValue(
       new InstanceNotRunningError("No LinkedHelper instance is running."),
     );
 
@@ -169,7 +157,7 @@ describe("handleCampaignReorderActions", () => {
   });
 
   it("sets exitCode 1 when resolveAccount fails", async () => {
-    vi.mocked(resolveAccount).mockRejectedValue(new Error("timeout"));
+    vi.mocked(campaignReorderActions).mockRejectedValue(new Error("timeout"));
 
     await handleCampaignReorderActions(1, { actionIds: "1,2" });
 
