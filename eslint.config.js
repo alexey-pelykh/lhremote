@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2025 Alexey Pelykh
+// Copyright (C) 2026 Oleksii PELYKH
 
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
@@ -29,7 +29,7 @@ export default tseslint.config(
         "line",
         [
           " SPDX-License-Identifier: AGPL-3.0-only",
-          " Copyright (C) 2025 Alexey Pelykh",
+          " Copyright (C) 2026 Oleksii PELYKH",
         ],
       ],
     },

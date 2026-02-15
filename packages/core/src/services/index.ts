@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2025 Alexey Pelykh
+// Copyright (C) 2026 Oleksii PELYKH
 
 export { AppService, type AppServiceOptions } from "./app.js";
 export { InstanceService, type ActionResult } from "./instance.js";
