@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-02-16
+
 ### Added
 
 - `campaign-create` tool for creating campaigns from YAML/JSON definitions with action chains
@@ -31,25 +33,32 @@ All notable changes to this project will be documented in this file.
 - Action execution service for running LinkedHelper actions programmatically
 - Action types catalog with advanced configuration schemas for all LinkedHelper action types
 - `MessageRepository` for conversation and message database access
+- `CampaignFormatError` integrated into domain error hierarchy
 - URL validation for `navigateToProfile` to reject malformed LinkedIn URLs
 - URL scheme validation in `CDPClient.navigate()` to reject non-HTTP(S) schemes
+- Security warnings for `allowRemote` CDP parameter
 - Claude Code plugin with `lhremote-mcp` skill for IDE integration
 - SPDX license headers on all source files
 - ESLint rule to enforce SPDX license headers on new files
 - Dependency license compatibility check in CI
+- CODEOWNERS for security-sensitive files
 - Issue templates for bug reports and feature requests
 - Dependabot configuration for automated dependency updates
 - CONTRIBUTING guide with development setup instructions
 - Getting started guide
 - Architecture Decision Records (ADRs)
-- Security documentation for localhost trust model and loopback validation
+- Security documentation for localhost trust model, loopback validation, and MCP trust model
 - npm provenance attestation for release publishing
 - GitHub Pages documentation site built via pandoc on every CI run
-- Test coverage reporting with Codecov integration
+- Test coverage reporting with Codecov integration and coverage thresholds
 
 ### Changed
 
 - Replaced `better-sqlite3` with Node.js built-in `node:sqlite` module
+- Extracted operations layer for 21 MCP/CLI tools, reducing duplication between CLI and MCP
+- Decomposed `CampaignRepository` into focused repositories
+- Enriched error reporting in `checkStatus` and CDP reconnection
+- Exported `WrongPortError` from public API
 - Pinned GitHub Actions to commit SHAs for supply-chain security
 - Added `timeout-minutes` to all CI workflow jobs
 - Moved E2E tests out of core to dedicated package
@@ -57,9 +66,12 @@ All notable changes to this project will be documented in this file.
 - Converted root devDependencies to pnpm workspace catalog refs
 - Added `fail-fast: false` to CI matrix strategy
 - Pinned npm version in release workflow
+- Added license-check to release validation job
 
 ### Fixed
 
+- Bare `parseInt` usage on `--max-results` CLI option (now uses explicit radix)
+- Removed unused options from `launch-app`/`quit-app` CLI commands
 - Windows compatibility for pnpm execution in CI scripts
 - Explicit timer advancement for polling tests
 - LIKE wildcard escaping for search queries
