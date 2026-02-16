@@ -39,5 +39,5 @@ export async function campaignStart(
       personsQueued: input.personIds.length,
       message: "Campaign started. Use campaign-status to monitor progress.",
     };
-  });
+  }, { db: { readOnly: false } });
 }

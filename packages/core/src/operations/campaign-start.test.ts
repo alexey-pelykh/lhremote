@@ -93,6 +93,23 @@ describe("campaignStart", () => {
     expect(resolveAccount).toHaveBeenCalledWith(9222, {});
   });
 
+  it("passes db readOnly: false to withInstanceDatabase", async () => {
+    setupMocks();
+
+    await campaignStart({
+      campaignId: 42,
+      cdpPort: 9222,
+      personIds: [100],
+    });
+
+    expect(withInstanceDatabase).toHaveBeenCalledWith(
+      9222,
+      1,
+      expect.any(Function),
+      { db: { readOnly: false } },
+    );
+  });
+
   it("propagates resolveAccount errors", async () => {
     vi.mocked(resolveAccount).mockRejectedValue(new Error("connection refused"));
 
