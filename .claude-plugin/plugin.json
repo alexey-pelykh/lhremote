@@ -1,5 +1,13 @@
 {
   "name": "lhremote",
-  "version": "0.1.0",
-  "description": "LinkedHelper automation toolkit — MCP server and workflow guidance for Claude Code"
+  "version": "0.2.1",
+  "description": "LinkedHelper automation toolkit — MCP server and workflow guidance for Claude Code",
+  "author": {
+    "name": "Alexey Pelykh",
+    "url": "https://github.com/alexey-pelykh"
+  },
+  "homepage": "https://github.com/alexey-pelykh/lhremote",
+  "repository": "https://github.com/alexey-pelykh/lhremote",
+  "license": "AGPL-3.0-only",
+  "keywords": ["linkedhelper", "linkedin", "automation", "mcp"]
 }
