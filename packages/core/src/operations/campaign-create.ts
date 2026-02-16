@@ -36,5 +36,5 @@ export async function campaignCreate(
   return withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
     const campaignService = new CampaignService(instance, db);
     return campaignService.create(input.config);
-  });
+  }, { db: { readOnly: false } });
 }
