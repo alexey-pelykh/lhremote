@@ -156,6 +156,32 @@ When you are done, stop the campaign:
 lhremote campaign-stop <campaignId>
 ```
 
+## Using lhremote with Claude Code (plugin)
+
+The easiest way to use lhremote with Claude Code is via the plugin system. This installs the MCP server and workflow skill automatically.
+
+### Install the plugin
+
+From within Claude Code, add the marketplace and install:
+
+```shell
+/plugin marketplace add alexey-pelykh/lhremote
+/plugin install lhremote@lhremote
+```
+
+This sets up:
+
+- **MCP server** — Claude Code can call all lhremote tools directly
+- **Workflow skill** — Claude Code learns lhremote discovery flows, campaign patterns, and error handling
+
+### Verify the installation
+
+Run `/plugin` and check the **Installed** tab to confirm lhremote appears. Then try asking Claude Code to interact with LinkedHelper:
+
+```
+Find LinkedHelper and check its status
+```
+
 ## Using lhremote with Claude Desktop (MCP)
 
 lhremote includes a built-in [MCP](https://modelcontextprotocol.io) server that lets AI assistants like Claude control LinkedHelper directly.

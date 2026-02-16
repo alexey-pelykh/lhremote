@@ -1,0 +1,25 @@
+{
+  "name": "lhremote",
+  "owner": {
+    "name": "Alexey Pelykh"
+  },
+  "metadata": {
+    "description": "LinkedHelper automation toolkit for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "lhremote",
+      "source": "./",
+      "description": "LinkedHelper automation toolkit — MCP server and workflow guidance for Claude Code",
+      "version": "0.2.1",
+      "author": {
+        "name": "Alexey Pelykh"
+      },
+      "homepage": "https://github.com/alexey-pelykh/lhremote",
+      "repository": "https://github.com/alexey-pelykh/lhremote",
+      "license": "AGPL-3.0-only",
+      "keywords": ["linkedhelper", "linkedin", "automation", "mcp"],
+      "category": "productivity"
+    }
+  ]
+}
