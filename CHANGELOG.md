@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-02-16
+
+### Fixed
+
+- Database opened read-only in `campaign-create` and `campaign-start` operations, causing "attempt to write a readonly database" errors
+- Campaign config format documentation in MCP skill showing internal field names instead of portable document format
+
 ## [0.2.0] — 2026-02-16
 
 ### Added
