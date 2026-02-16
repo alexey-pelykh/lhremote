@@ -55,15 +55,14 @@ Use `describe-actions` to see available action types and their configuration sch
 `campaign-create` accepts YAML (default) or JSON configuration:
 
 ```yaml
+version: "1"
 name: "Visit & Connect"
 actions:
-  - name: "Visit profiles"
-    actionType: "VisitAndExtract"
-    coolDown: 60000
-    maxActionResultsPerIteration: 10
-  - name: "Send connection request"
-    actionType: "InvitePerson"
-    actionSettings:
+  - type: "VisitAndExtract"
+    cooldownMs: 60000
+    maxActionsPerRun: 10
+  - type: "InvitePerson"
+    config:
       message: "Hi {firstName}, I'd like to connect!"
 ```
 

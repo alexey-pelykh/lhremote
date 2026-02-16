@@ -24,7 +24,13 @@ export function registerCampaignCreate(server: McpServer): void {
     "campaign-create",
     "Create a new LinkedHelper campaign from YAML or JSON configuration",
     {
-      config: z.string().describe("Campaign configuration in YAML or JSON format"),
+      config: z.string().describe(
+        "Campaign configuration in YAML or JSON format. " +
+        "Required fields: version (must be \"1\"), name, actions (array). " +
+        "Each action needs: type (e.g. \"VisitAndExtract\", \"InvitePerson\"). " +
+        "Optional per-action: cooldownMs, maxActionsPerRun, config (action-specific settings). " +
+        "Use describe-actions to discover available action types and their config schemas.",
+      ),
       format: z
         .enum(["yaml", "json"])
         .optional()
