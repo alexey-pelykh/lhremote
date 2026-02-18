@@ -5,8 +5,11 @@ import { CDPClient, CDPConnectionError, CDPEvaluationError } from "../cdp/index.
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type {
   Account,
+  InstanceIssue,
   InstanceStatus,
+  PopupState,
   StartInstanceResult,
+  UIHealthStatus,
 } from "../types/index.js";
 import {
   LinkedHelperNotRunningError,
@@ -177,6 +180,81 @@ export class LauncherService {
     );
 
     return accounts ?? [];
+  }
+
+  /**
+   * Query the active issues on a LinkedHelper instance.
+   *
+   * Issues are stored in `account.instance[0].issues.items[]` and
+   * include both dialog issues (requiring button selection) and
+   * critical error issues (informational blockers).
+   */
+  async getInstanceIssues(liId: number): Promise<InstanceIssue[]> {
+    const client = this.ensureConnected();
+
+    return this.launcherEvaluate<InstanceIssue[]>(
+      client,
+      `(async () => {
+        const remote = require('@electron/remote');
+        const mainWindow = remote.getGlobal('mainWindow');
+        const getAccount = mainWindow.getLinkedInAccount
+          ?? mainWindow.source?.linkedInAccounts?.getAccount;
+        if (!getAccount) return [];
+        const account = await getAccount({ id: ${String(liId)}, refetch: true });
+        if (!account?.instance?.[0]) return [];
+        const items = account.instance[0].issues?.items ?? [];
+        return items.map(item => ({
+          type: item.type,
+          id: item.id,
+          data: item.data,
+        }));
+      })()`,
+      true,
+    );
+  }
+
+  /**
+   * Inspect the launcher DOM for a blocking popup overlay.
+   *
+   * Popups are managed via `popupBS` BehaviorSubject in the frontend.
+   * A non-null backdrop element (`.Dialog_PopupBackdrop_cjqpj`) indicates
+   * the UI is blocked.
+   */
+  async getPopupState(): Promise<PopupState | null> {
+    const client = this.ensureConnected();
+
+    return this.launcherEvaluate<PopupState | null>(
+      client,
+      `(() => {
+        const backdrop = document.querySelector('.Dialog_PopupBackdrop_cjqpj');
+        if (!backdrop) return null;
+        const popup = document.querySelector('.Dialog_Popup_qpTvf');
+        const body = popup?.querySelector('.Dialog_Body_RPquM');
+        const controls = popup?.querySelector('.Dialog_Controls_oL8HA');
+        return {
+          blocked: true,
+          message: body?.textContent?.trim() ?? undefined,
+          closable: controls ? controls.querySelectorAll('button').length > 0 : false,
+        };
+      })()`,
+    );
+  }
+
+  /**
+   * Check the overall UI health of a LinkedHelper instance.
+   *
+   * Combines instance issue queries with popup overlay detection
+   * to produce an aggregated health status.
+   */
+  async checkUIHealth(liId: number): Promise<UIHealthStatus> {
+    const [issues, popup] = await Promise.all([
+      this.getInstanceIssues(liId),
+      this.getPopupState(),
+    ]);
+
+    const healthy = issues.length === 0 && (popup === null || !popup.blocked);
+
+    return { healthy, issues, popup };
   }
 
   /** Whether the service is currently connected to the launcher. */

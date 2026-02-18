@@ -24,6 +24,7 @@ export { handleCheckReplies } from "./check-replies.js";
 export { handleDescribeActions } from "./describe-actions.js";
 export { handleCheckStatus } from "./check-status.js";
 export { handleFindApp } from "./find-app.js";
+export { handleGetErrors } from "./get-errors.js";
 export { handleQueryMessages } from "./query-messages.js";
 export { handleQueryProfile } from "./query-profile.js";
 export { handleQueryProfiles } from "./query-profiles.js";

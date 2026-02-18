@@ -7,6 +7,7 @@ import {
   DEFAULT_CDP_PORT,
   errorMessage,
   LinkedHelperNotRunningError,
+  UIBlockedError,
 } from "@lhremote/core";
 import { z } from "zod";
 
@@ -92,6 +93,11 @@ export function mapErrorToMcpResponse(error: unknown): McpResult | undefined {
   if (error instanceof CampaignNotFoundError) {
     return mcpError(
       `Campaign ${String(error.campaignId)} not found.`,
+    );
+  }
+  if (error instanceof UIBlockedError) {
+    return mcpError(
+      `${error.message}\n\nUI Health:\n${JSON.stringify(error.health, null, 2)}`,
     );
   }
   return undefined;

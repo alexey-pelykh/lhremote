@@ -68,7 +68,8 @@ describe("createProgram", () => {
     expect(commandNames).toContain("campaign-exclude-list");
     expect(commandNames).toContain("campaign-exclude-add");
     expect(commandNames).toContain("campaign-exclude-remove");
-    expect(commandNames).toHaveLength(32);
+    expect(commandNames).toContain("get-errors");
+    expect(commandNames).toHaveLength(33);
   });
 
   describe("launch-app", () => {

@@ -21,6 +21,8 @@ export type {
   CampaignStatus,
   CampaignSummary,
   CampaignUpdateConfig,
+  CriticalErrorIssueData,
+  DialogIssueData,
   ExcludeListEntry,
   Chat,
   ChatParticipant,
@@ -34,12 +36,14 @@ export type {
   GetStatisticsOptions,
   ImportPeopleResult,
   InstanceInfo,
+  InstanceIssue,
   InstanceStatus,
   ListCampaignsOptions,
   Message,
   MessageStats,
   MessageSummary,
   MiniProfile,
+  PopupState,
   Position,
   Profile,
   ProfileSearchOptions,
@@ -49,6 +53,7 @@ export type {
   Skill,
   StartInstanceParams,
   StartInstanceResult,
+  UIHealthStatus,
 } from "./types/index.js";
 
 // Services
@@ -75,6 +80,7 @@ export {
   ServiceError,
   StartInstanceError,
   startInstanceWithRecovery,
+  UIBlockedError,
   type StartInstanceOutcome,
   checkStatus,
   type AccountInstanceStatus,
@@ -207,6 +213,10 @@ export {
   campaignExcludeList,
   type CampaignExcludeListInput,
   type CampaignExcludeListOutput,
+  // Error detection
+  getErrors,
+  type GetErrorsInput,
+  type GetErrorsOutput,
   // Messaging
   queryMessages,
   type QueryMessagesInput,

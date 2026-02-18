@@ -107,6 +107,7 @@ describe("createServer", () => {
     expect(names).toContain("campaign-exclude-list");
     expect(names).toContain("campaign-exclude-add");
     expect(names).toContain("campaign-exclude-remove");
-    expect(names).toHaveLength(32);
+    expect(names).toContain("get-errors");
+    expect(names).toHaveLength(33);
   });
 });
