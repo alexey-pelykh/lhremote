@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 export { AppService, type AppServiceOptions } from "./app.js";
-export { InstanceService, type ActionResult } from "./instance.js";
+export { InstanceService, type ActionResult, type HealthChecker } from "./instance.js";
 export {
   startInstanceWithRecovery,
   waitForInstancePort,
@@ -41,5 +41,6 @@ export {
   LinkedHelperNotRunningError,
   ServiceError,
   StartInstanceError,
+  UIBlockedError,
   WrongPortError,
 } from "./errors.js";

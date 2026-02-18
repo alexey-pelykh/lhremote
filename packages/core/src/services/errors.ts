@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { DEFAULT_CDP_PORT } from "../constants.js";
+import type { UIHealthStatus } from "../types/index.js";
 
 /**
  * Base class for all service-layer errors.
@@ -152,5 +153,39 @@ export class CampaignTimeoutError extends ServiceError {
     super(message, options);
     this.name = "CampaignTimeoutError";
     this.campaignId = campaignId;
+  }
+}
+
+/**
+ * Thrown when the LinkedHelper UI is in a blocked state due to
+ * a dialog, critical error, or blocking popup.
+ *
+ * The {@link health} property contains the full UI health status
+ * including active issues and popup state.
+ */
+export class UIBlockedError extends ServiceError {
+  readonly health: UIHealthStatus;
+
+  constructor(health: UIHealthStatus, options?: ErrorOptions) {
+    const reasons: string[] = [];
+
+    for (const issue of health.issues) {
+      if (issue.type === "dialog") {
+        reasons.push(`Dialog: ${issue.data.options.message}`);
+      } else {
+        reasons.push(`Critical error: ${issue.data.message}`);
+      }
+    }
+
+    if (health.popup?.blocked) {
+      reasons.push(`Popup: ${health.popup.message ?? "blocking overlay active"}`);
+    }
+
+    super(
+      `LinkedHelper UI is blocked — ${reasons.join("; ")}`,
+      options,
+    );
+    this.name = "UIBlockedError";
+    this.health = health;
   }
 }

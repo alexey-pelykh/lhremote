@@ -35,6 +35,14 @@ export type {
 } from "./messaging.js";
 
 export type {
+  CriticalErrorIssueData,
+  DialogIssueData,
+  InstanceIssue,
+  PopupState,
+  UIHealthStatus,
+} from "./ui-health.js";
+
+export type {
   ActionConfig,
   ActionErrorSummary,
   ActionPeopleCounts,

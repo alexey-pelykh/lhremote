@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { CDPClient, discoverTargets } from "../cdp/index.js";
+import { CDPClient, CDPTimeoutError, discoverTargets } from "../cdp/index.js";
 import type { CdpTarget } from "../types/cdp.js";
 import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
-import { ActionExecutionError, InstanceNotRunningError, InvalidProfileUrlError, ServiceError } from "./errors.js";
+import { ActionExecutionError, InstanceNotRunningError, InvalidProfileUrlError, ServiceError, UIBlockedError } from "./errors.js";
 
 /**
  * Result of a LinkedHelper action execution.
@@ -26,6 +26,13 @@ const CONNECT_TIMEOUT = 30_000;
 const CONNECT_POLL_INTERVAL = 1_000;
 
 /**
+ * A callback that checks UI health after a CDP evaluation.
+ *
+ * Should throw {@link UIBlockedError} if the UI is in a blocked state.
+ */
+export type HealthChecker = () => Promise<void>;
+
+/**
  * Controls a running LinkedHelper instance via CDP.
  *
  * An instance has two CDP targets on the same port:
@@ -42,12 +49,25 @@ export class InstanceService {
   private readonly allowRemote: boolean;
   private linkedInClient: CDPClient | null = null;
   private uiClient: CDPClient | null = null;
+  private healthChecker: HealthChecker | null = null;
 
   constructor(port: number, options?: { host?: string; timeout?: number; allowRemote?: boolean }) {
     this.port = port;
     this.host = options?.host ?? "127.0.0.1";
     this.timeout = options?.timeout;
     this.allowRemote = options?.allowRemote ?? false;
+  }
+
+  /**
+   * Set a post-evaluation health check callback.
+   *
+   * When set, every {@link evaluateUI} and {@link executeAction} call
+   * will invoke the checker after the CDP evaluation completes.
+   * On {@link CDPTimeoutError}, the checker is also invoked to diagnose
+   * the cause of the timeout.
+   */
+  setHealthChecker(checker: HealthChecker | null): void {
+    this.healthChecker = checker;
   }
 
   /**
@@ -159,10 +179,14 @@ export class InstanceService {
         true,
       );
     } catch (error) {
+      if (error instanceof CDPTimeoutError) {
+        await this.runHealthCheck();
+      }
       const message = errorMessage(error);
       throw new ActionExecutionError(actionName, `Action '${actionName}' failed: ${message}`, { cause: error });
     }
 
+    await this.runHealthCheck();
     return { success: true, actionType: actionName };
   }
 
@@ -191,7 +215,16 @@ export class InstanceService {
     awaitPromise = true,
   ): Promise<T> {
     const client = this.ensureUiClient();
-    return client.evaluate<T>(expression, awaitPromise);
+    try {
+      const result = await client.evaluate<T>(expression, awaitPromise);
+      await this.runHealthCheck();
+      return result;
+    } catch (error) {
+      if (error instanceof CDPTimeoutError) {
+        await this.runHealthCheck();
+      }
+      throw error;
+    }
   }
 
   /** Whether both clients are currently connected. */
@@ -216,6 +249,23 @@ export class InstanceService {
       throw new ServiceError("InstanceService is not connected (UI target)");
     }
     return this.uiClient;
+  }
+
+  /**
+   * Run the health checker if one is configured.
+   *
+   * Non-UIBlockedError failures (e.g. launcher connection lost) are
+   * silently ignored so that health check infrastructure issues do
+   * not mask the original operation result.
+   */
+  private async runHealthCheck(): Promise<void> {
+    if (!this.healthChecker) return;
+    try {
+      await this.healthChecker();
+    } catch (error) {
+      if (error instanceof UIBlockedError) throw error;
+      // Health check infrastructure failure — do not mask the original result.
+    }
   }
 }
 

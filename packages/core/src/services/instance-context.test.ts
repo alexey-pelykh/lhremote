@@ -16,9 +16,14 @@ vi.mock("./instance.js", () => ({
   InstanceService: vi.fn(),
 }));
 
+vi.mock("./launcher.js", () => ({
+  LauncherService: vi.fn(),
+}));
+
 import { discoverInstancePort } from "../cdp/index.js";
 import { DatabaseClient, discoverDatabase } from "../db/index.js";
 import { InstanceService } from "./instance.js";
+import { LauncherService } from "./launcher.js";
 import { InstanceNotRunningError } from "./errors.js";
 import { withDatabase, withInstanceDatabase } from "./instance-context.js";
 
@@ -26,6 +31,7 @@ const mockedDiscoverInstancePort = vi.mocked(discoverInstancePort);
 const mockedDiscoverDatabase = vi.mocked(discoverDatabase);
 const mockedDatabaseClient = vi.mocked(DatabaseClient);
 const mockedInstanceService = vi.mocked(InstanceService);
+const mockedLauncherService = vi.mocked(LauncherService);
 
 function createMockDb(overrides: Partial<DatabaseClient> = {}) {
   const db = {
@@ -42,12 +48,29 @@ function createMockInstance(overrides: Partial<InstanceService> = {}) {
   const instance = {
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn(),
+    setHealthChecker: vi.fn(),
     ...overrides,
   } as unknown as InstanceService;
   mockedInstanceService.mockImplementation(function () {
     return instance;
   });
   return instance;
+}
+
+function createMockLauncher() {
+  const launcher = {
+    connect: vi.fn().mockResolvedValue(undefined),
+    disconnect: vi.fn(),
+    checkUIHealth: vi.fn().mockResolvedValue({
+      healthy: true,
+      issues: [],
+      popup: null,
+    }),
+  } as unknown as LauncherService;
+  mockedLauncherService.mockImplementation(function () {
+    return launcher;
+  });
+  return launcher;
 }
 
 describe("withDatabase", () => {
@@ -135,6 +158,7 @@ describe("withDatabase", () => {
 describe("withInstanceDatabase", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    createMockLauncher();
   });
 
   afterEach(() => {

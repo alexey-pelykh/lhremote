@@ -101,6 +101,13 @@ export {
   type CampaignExcludeListOutput,
 } from "./campaign-exclude-list.js";
 
+// Error detection
+export {
+  getErrors,
+  type GetErrorsInput,
+  type GetErrorsOutput,
+} from "./get-errors.js";
+
 // Messaging
 export {
   queryMessages,

@@ -29,6 +29,7 @@ import {
   handleCheckStatus,
   handleDescribeActions,
   handleFindApp,
+  handleGetErrors,
   handleLaunchApp,
   handleListAccounts,
   handleQueryMessages,
@@ -443,6 +444,15 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleCheckStatus);
+
+  program
+    .command("get-errors")
+    .description("Query current UI errors, dialogs, and blocking popups")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleGetErrors);
 
   return program;
 }

@@ -24,35 +24,39 @@ let clientInstances: ClientMocks[] = [];
 /** Lookup by target ID after connect() is called. */
 let clientsByTargetId: Map<string, ClientMocks> = new Map();
 
-vi.mock("../cdp/index.js", () => ({
-  CDPClient: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-    const mocks: ClientMocks = {
-      connect: vi.fn().mockImplementation(async (targetId?: string) => {
-        if (targetId) {
-          clientsByTargetId.set(targetId, mocks);
-        }
-      }),
-      disconnect: vi.fn(),
-      send: vi.fn().mockResolvedValue(undefined),
-      navigate: vi.fn().mockResolvedValue({ frameId: "F1" }),
-      evaluate: vi.fn().mockResolvedValue(undefined),
-      waitForEvent: vi.fn().mockResolvedValue(undefined),
-      isConnected: vi.fn<() => boolean>().mockReturnValue(true),
-    };
-    clientInstances.push(mocks);
+vi.mock("../cdp/index.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../cdp/index.js")>();
+  return {
+    ...actual,
+    CDPClient: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+      const mocks: ClientMocks = {
+        connect: vi.fn().mockImplementation(async (targetId?: string) => {
+          if (targetId) {
+            clientsByTargetId.set(targetId, mocks);
+          }
+        }),
+        disconnect: vi.fn(),
+        send: vi.fn().mockResolvedValue(undefined),
+        navigate: vi.fn().mockResolvedValue({ frameId: "F1" }),
+        evaluate: vi.fn().mockResolvedValue(undefined),
+        waitForEvent: vi.fn().mockResolvedValue(undefined),
+        isConnected: vi.fn<() => boolean>().mockReturnValue(true),
+      };
+      clientInstances.push(mocks);
 
-    this.connect = mocks.connect;
-    this.disconnect = mocks.disconnect;
-    this.send = mocks.send;
-    this.navigate = mocks.navigate;
-    this.evaluate = mocks.evaluate;
-    this.waitForEvent = mocks.waitForEvent;
-    Object.defineProperty(this, "isConnected", {
-      get: mocks.isConnected,
-    });
-  }),
-  discoverTargets: vi.fn(),
-}));
+      this.connect = mocks.connect;
+      this.disconnect = mocks.disconnect;
+      this.send = mocks.send;
+      this.navigate = mocks.navigate;
+      this.evaluate = mocks.evaluate;
+      this.waitForEvent = mocks.waitForEvent;
+      Object.defineProperty(this, "isConnected", {
+        get: mocks.isConnected,
+      });
+    }),
+    discoverTargets: vi.fn(),
+  };
+});
 
 import { discoverTargets } from "../cdp/index.js";
 

@@ -26,6 +26,7 @@ import { registerCheckReplies } from "./check-replies.js";
 import { registerCheckStatus } from "./check-status.js";
 import { registerDescribeActions } from "./describe-actions.js";
 import { registerFindApp } from "./find-app.js";
+import { registerGetErrors } from "./get-errors.js";
 import { registerLaunchApp } from "./launch-app.js";
 import { registerListAccounts } from "./list-accounts.js";
 import { registerQuitApp } from "./quit-app.js";
@@ -59,6 +60,7 @@ export {
   registerCheckStatus,
   registerDescribeActions,
   registerFindApp,
+  registerGetErrors,
   registerImportPeopleFromUrls,
   registerLaunchApp,
   registerListAccounts,
@@ -91,6 +93,7 @@ export function registerAllTools(server: McpServer): void {
   registerCampaignStop(server);
   registerCampaignUpdate(server);
   registerFindApp(server);
+  registerGetErrors(server);
   registerLaunchApp(server);
   registerQuitApp(server);
   registerListAccounts(server);

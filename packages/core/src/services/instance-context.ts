@@ -4,7 +4,8 @@
 import { DatabaseClient, type DatabaseClientOptions, discoverDatabase } from "../db/index.js";
 import { discoverInstancePort } from "../cdp/index.js";
 import { InstanceService } from "./instance.js";
-import { InstanceNotRunningError } from "./errors.js";
+import { LauncherService } from "./launcher.js";
+import { InstanceNotRunningError, UIBlockedError } from "./errors.js";
 
 /**
  * Resources available when only database access is needed.
@@ -49,6 +50,11 @@ export async function withDatabase<T>(
  *
  * All resources are cleaned up automatically when the callback finishes.
  *
+ * A launcher connection is opened alongside the instance so that
+ * post-evaluation UI health checks can detect blocking dialogs and
+ * popups.  If the launcher connection fails the operation proceeds
+ * without health checking.
+ *
  * @throws {InstanceNotRunningError} if no instance port can be discovered.
  */
 export async function withInstanceDatabase<T>(
@@ -58,6 +64,7 @@ export async function withInstanceDatabase<T>(
   options?: {
     instanceTimeout?: number;
     db?: DatabaseClientOptions;
+    launcher?: { host?: string; allowRemote?: boolean };
   },
 ): Promise<T> {
   const instancePort = await discoverInstancePort(cdpPort);
@@ -71,15 +78,36 @@ export async function withInstanceDatabase<T>(
     instancePort,
     options?.instanceTimeout != null ? { timeout: options.instanceTimeout } : undefined,
   );
+  let launcher: LauncherService | null = null;
   let db: DatabaseClient | null = null;
 
   try {
     await instance.connect();
+
+    // Open a launcher connection for health checking.
+    try {
+      launcher = new LauncherService(cdpPort, options?.launcher);
+      await launcher.connect();
+      const connectedLauncher = launcher;
+      instance.setHealthChecker(async () => {
+        const health = await connectedLauncher.checkUIHealth(accountId);
+        if (!health.healthy) {
+          throw new UIBlockedError(health);
+        }
+      });
+    } catch {
+      // Launcher connection failed — proceed without health checking.
+      launcher?.disconnect();
+      launcher = null;
+    }
+
     const dbPath = discoverDatabase(accountId);
     db = new DatabaseClient(dbPath, options?.db);
     return await callback({ accountId, instance, db });
   } finally {
+    instance.setHealthChecker(null);
     instance.disconnect();
+    launcher?.disconnect();
     db?.close();
   }
 }
