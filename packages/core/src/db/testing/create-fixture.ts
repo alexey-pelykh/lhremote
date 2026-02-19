@@ -489,7 +489,7 @@ db.exec(`
     person_id INTEGER NOT NULL,
     state INTEGER NOT NULL DEFAULT 1,
     li_account_id INTEGER NOT NULL,
-    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    created_at DATETIME NOT NULL,
     updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
     FOREIGN KEY(action_id) REFERENCES actions(id),
     FOREIGN KEY(action_version_id) REFERENCES action_versions(id),

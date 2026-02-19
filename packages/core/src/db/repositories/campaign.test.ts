@@ -450,8 +450,8 @@ describe("CampaignRepository", () => {
     it("moves person from middle action to last action", () => {
       // First insert person 1 into action 6 (middle) so we can move to action 7
       db.exec(
-        `INSERT INTO action_target_people (action_id, action_version_id, person_id, state, li_account_id)
-         VALUES (6, 6, 1, 2, 1)`,
+        `INSERT INTO action_target_people (action_id, action_version_id, person_id, state, li_account_id, created_at)
+         VALUES (6, 6, 1, 2, 1, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))`,
       );
 
       const result = repo.moveToNextAction(5, 6, [1]);
@@ -507,8 +507,8 @@ describe("CampaignRepository", () => {
     it("requeues person already in next action target list", () => {
       // Insert person 1 into action 6 with state=2 (already processed)
       db.exec(
-        `INSERT INTO action_target_people (action_id, action_version_id, person_id, state, li_account_id)
-         VALUES (6, 6, 1, 2, 1)`,
+        `INSERT INTO action_target_people (action_id, action_version_id, person_id, state, li_account_id, created_at)
+         VALUES (6, 6, 1, 2, 1, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))`,
       );
 
       repo.moveToNextAction(5, 5, [1]);
