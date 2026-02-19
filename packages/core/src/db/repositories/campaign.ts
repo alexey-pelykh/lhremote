@@ -358,8 +358,8 @@ export class CampaignRepository {
       ),
       insertTarget: db.prepare(
         `INSERT INTO action_target_people
-           (action_id, action_version_id, person_id, state, li_account_id)
-         VALUES (?, ?, ?, 1, ?)`,
+           (action_id, action_version_id, person_id, state, li_account_id, created_at)
+         VALUES (?, ?, ?, 1, ?, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))`,
       ),
       countTarget: db.prepare(
         `SELECT COUNT(*) AS cnt FROM action_target_people
