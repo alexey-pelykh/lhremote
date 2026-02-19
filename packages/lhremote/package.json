@@ -25,6 +25,7 @@
   "bin": {
     "lhremote": "./dist/cli.js"
   },
+  "mcpName": "io.github.alexey-pelykh/lhremote",
   "keywords": [
     "linkedhelper",
     "linkedin",
