@@ -5,7 +5,7 @@ import { CDPClient, CDPTimeoutError, discoverTargets } from "../cdp/index.js";
 import type { CdpTarget } from "../types/cdp.js";
 import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
-import { ActionExecutionError, InstanceNotRunningError, InvalidProfileUrlError, ServiceError, UIBlockedError } from "./errors.js";
+import { ActionExecutionError, InstanceNotRunningError, ServiceError, UIBlockedError } from "./errors.js";
 
 /**
  * Result of a LinkedHelper action execution.
@@ -40,7 +40,7 @@ export type HealthChecker = () => Promise<void>;
  * - **Instance UI**: The Electron page hosting the LinkedHelper UI
  *
  * This service connects to both targets and provides methods for
- * profile navigation and data extraction.
+ * data extraction and action execution.
  */
 export class InstanceService {
   private readonly port: number;
@@ -136,23 +136,6 @@ export class InstanceService {
   }
 
   /**
-   * Navigate the LinkedIn webview to a profile URL.
-   *
-   * Enables the Page domain, navigates, and waits for the load event.
-   *
-   * @throws {InvalidProfileUrlError} if the URL is not a valid LinkedIn profile path.
-   */
-  async navigateToProfile(url: string): Promise<void> {
-    assertLinkedInProfileUrl(url);
-
-    const client = this.ensureLinkedInClient();
-
-    await client.send("Page.enable");
-    await client.navigate(url);
-    await client.waitForEvent("Page.loadEventFired");
-  }
-
-  /**
    * Execute a LinkedHelper action via the instance UI.
    *
    * This tells LinkedHelper to run the given action type with the
@@ -227,13 +210,6 @@ export class InstanceService {
     );
   }
 
-  private ensureLinkedInClient(): CDPClient {
-    if (!this.linkedInClient) {
-      throw new ServiceError("InstanceService is not connected (LinkedIn target)");
-    }
-    return this.linkedInClient;
-  }
-
   private ensureUiClient(): CDPClient {
     if (!this.uiClient) {
       throw new ServiceError("InstanceService is not connected (UI target)");
@@ -256,14 +232,6 @@ export class InstanceService {
       if (error instanceof UIBlockedError) throw error;
       // Health check infrastructure failure — do not mask the original result.
     }
-  }
-}
-
-const LINKEDIN_PROFILE_URL_RE = /^https:\/\/www\.linkedin\.com\/in\/[^/]+\/?$/;
-
-function assertLinkedInProfileUrl(url: string): void {
-  if (!LINKEDIN_PROFILE_URL_RE.test(url)) {
-    throw new InvalidProfileUrlError(url);
   }
 }
 
