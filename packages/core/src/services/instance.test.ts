@@ -410,25 +410,4 @@ describe("InstanceService", () => {
     });
   });
 
-  describe("triggerExtraction", () => {
-    it("delegates to executeAction with SaveCurrentProfile", async () => {
-      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
-      await service.connect();
-
-      await service.triggerExtraction();
-
-      const uiClient = getClientMocks("UI1");
-
-      expect(uiClient.evaluate).toHaveBeenCalledWith(
-        expect.stringContaining("SaveCurrentProfile"),
-        true,
-      );
-    });
-
-    it("throws ServiceError when not connected", async () => {
-      await expect(service.triggerExtraction()).rejects.toThrow(
-        ServiceError,
-      );
-    });
-  });
 });

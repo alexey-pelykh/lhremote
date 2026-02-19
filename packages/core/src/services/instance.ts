@@ -191,16 +191,6 @@ export class InstanceService {
   }
 
   /**
-   * Trigger the SaveCurrentProfile action via the instance UI.
-   *
-   * This tells LinkedHelper to extract data from the currently
-   * displayed LinkedIn profile and save it to the database.
-   */
-  async triggerExtraction(): Promise<void> {
-    await this.executeAction("SaveCurrentProfile");
-  }
-
-  /**
    * Evaluate a JavaScript expression in the LinkedHelper UI context.
    *
    * Provides access to `window.mainWindowService.mainWindow.source.*`
