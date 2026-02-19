@@ -172,6 +172,9 @@ importers:
       '@lhremote/mcp':
         specifier: workspace:^
         version: link:../mcp
+      yaml:
+        specifier: 'catalog:'
+        version: 2.8.2
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
