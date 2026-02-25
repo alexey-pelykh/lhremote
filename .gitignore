@@ -7,6 +7,9 @@
 # MCP configuration with credentials
 .mcp.json.local
 
+# MCP Registry publisher tokens (created by mcp-publisher in cwd)
+.mcpregistry_*
+
 # Build output (CI: gh-pages, etc.)
 build/gh-pages/
 
