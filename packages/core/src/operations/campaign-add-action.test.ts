@@ -26,7 +26,7 @@ const MOCK_ACTION = {
   campaignId: 42,
   name: "Send Connection",
   description: null,
-  config: { actionType: "send_connection_request" },
+  config: { actionType: "InvitePerson" },
   versionId: 1,
 };
 
@@ -64,7 +64,7 @@ describe("campaignAddAction", () => {
     const result = await campaignAddAction({
       campaignId: 42,
       name: "Send Connection",
-      actionType: "send_connection_request",
+      actionType: "InvitePerson",
       cdpPort: 9222,
     });
 
@@ -79,7 +79,7 @@ describe("campaignAddAction", () => {
     await campaignAddAction({
       campaignId: 42,
       name: "Send Connection",
-      actionType: "send_connection_request",
+      actionType: "InvitePerson",
       cdpPort: 1234,
       cdpHost: "192.168.1.1",
       allowRemote: true,
@@ -97,7 +97,7 @@ describe("campaignAddAction", () => {
     await campaignAddAction({
       campaignId: 42,
       name: "Send Connection",
-      actionType: "send_connection_request",
+      actionType: "InvitePerson",
       cdpPort: 9222,
     });
 
@@ -111,7 +111,7 @@ describe("campaignAddAction", () => {
       campaignAddAction({
         campaignId: 42,
         name: "Send Connection",
-        actionType: "send_connection_request",
+        actionType: "InvitePerson",
         cdpPort: 9222,
       }),
     ).rejects.toThrow("connection refused");
@@ -127,7 +127,7 @@ describe("campaignAddAction", () => {
       campaignAddAction({
         campaignId: 42,
         name: "Send Connection",
-        actionType: "send_connection_request",
+        actionType: "InvitePerson",
         cdpPort: 9222,
       }),
     ).rejects.toThrow("database not found");
@@ -154,7 +154,7 @@ describe("campaignAddAction", () => {
       campaignAddAction({
         campaignId: 42,
         name: "Send Connection",
-        actionType: "send_connection_request",
+        actionType: "InvitePerson",
         cdpPort: 9222,
       }),
     ).rejects.toThrow("campaign not found");

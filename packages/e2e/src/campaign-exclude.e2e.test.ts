@@ -49,7 +49,7 @@ name: E2E Exclude Campaign
 description: Created by E2E campaign exclude tests
 actions:
   - type: VisitAndExtract
-  - type: SendConnectionRequest
+  - type: InvitePerson
 `.trimStart();
 
 /** Test person LH ID — https://www.linkedin.com/in/ollybriz/ */

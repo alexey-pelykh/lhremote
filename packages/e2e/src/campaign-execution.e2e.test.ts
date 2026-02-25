@@ -55,7 +55,7 @@ name: E2E Execution Campaign
 description: Created by E2E campaign execution tests
 actions:
   - type: VisitAndExtract
-  - type: SendConnectionRequest
+  - type: InvitePerson
 `.trimStart();
 
 /** Test person LH ID — https://www.linkedin.com/in/ollybriz/ */

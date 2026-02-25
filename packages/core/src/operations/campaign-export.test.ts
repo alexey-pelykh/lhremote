@@ -33,7 +33,7 @@ const MOCK_CAMPAIGN = {
 };
 
 const MOCK_ACTIONS = [
-  { id: 1, actionType: "visit", position: 0 },
+  { id: 1, actionType: "VisitAndExtract", position: 0 },
 ];
 
 function setupMocks() {
