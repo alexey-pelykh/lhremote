@@ -45,7 +45,7 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "devtools-protocol": "^0.0.1585077",
+    "devtools-protocol": "^0.0.1589152",
     "get-port": "catalog:",
     "pid-port": "catalog:",
     "ps-list": "catalog:",
