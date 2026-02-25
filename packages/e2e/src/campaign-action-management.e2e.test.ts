@@ -49,7 +49,7 @@ name: E2E Action Management Campaign
 description: Created by E2E campaign action management tests
 actions:
   - type: VisitAndExtract
-  - type: SendConnectionRequest
+  - type: InvitePerson
 `.trimStart();
 
 /**
@@ -207,9 +207,9 @@ describeE2E("Campaign action management", () => {
 
       // Capture the action IDs from the campaign creation
       const visitAction = parsed.actions.find((a) => a.config.actionType === "VisitAndExtract");
-      const connectAction = parsed.actions.find((a) => a.config.actionType === "SendConnectionRequest");
+      const connectAction = parsed.actions.find((a) => a.config.actionType === "InvitePerson");
       assertDefined(visitAction, "VisitAndExtract action not found");
-      assertDefined(connectAction, "SendConnectionRequest action not found");
+      assertDefined(connectAction, "InvitePerson action not found");
 
       firstActionId = visitAction.id;
       secondActionId = connectAction.id;
@@ -439,9 +439,9 @@ describeE2E("Campaign action management", () => {
 
       // Capture the action IDs from the campaign creation
       const visitAction = parsed.actions.find((a) => a.config.actionType === "VisitAndExtract");
-      const connectAction = parsed.actions.find((a) => a.config.actionType === "SendConnectionRequest");
+      const connectAction = parsed.actions.find((a) => a.config.actionType === "InvitePerson");
       assertDefined(visitAction, "VisitAndExtract action not found");
-      assertDefined(connectAction, "SendConnectionRequest action not found");
+      assertDefined(connectAction, "InvitePerson action not found");
 
       firstActionId = visitAction.id;
       secondActionId = connectAction.id;

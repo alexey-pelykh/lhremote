@@ -38,7 +38,7 @@ const MOCK_CONFIG = {
   actions: [
     {
       name: "Send Connection",
-      actionType: "send_connection_request",
+      actionType: "InvitePerson",
       actionSettings: {},
     },
   ],

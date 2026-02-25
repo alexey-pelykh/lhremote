@@ -28,8 +28,8 @@ const MOCK_CAMPAIGN = {
 };
 
 const MOCK_ACTIONS = [
-  { id: 1, campaignId: 42, name: "Visit", description: null, config: { id: 1, actionType: "visit", actionSettings: {}, coolDown: 60000, maxActionResultsPerIteration: 10, isDraft: false }, versionId: 1 },
-  { id: 2, campaignId: 42, name: "Connect", description: null, config: { id: 2, actionType: "connect", actionSettings: {}, coolDown: 60000, maxActionResultsPerIteration: 10, isDraft: false }, versionId: 1 },
+  { id: 1, campaignId: 42, name: "Visit", description: null, config: { id: 1, actionType: "VisitAndExtract", actionSettings: {}, coolDown: 60000, maxActionResultsPerIteration: 10, isDraft: false }, versionId: 1 },
+  { id: 2, campaignId: 42, name: "Connect", description: null, config: { id: 2, actionType: "InvitePerson", actionSettings: {}, coolDown: 60000, maxActionResultsPerIteration: 10, isDraft: false }, versionId: 1 },
 ];
 
 function setupMocks() {
@@ -69,7 +69,7 @@ describe("campaignGet", () => {
     expect(result.name).toBe("Test Campaign");
     expect(result.actions).toHaveLength(2);
     const firstAction = result.actions[0] as (typeof result.actions)[number];
-    expect(firstAction.config.actionType).toBe("visit");
+    expect(firstAction.config.actionType).toBe("VisitAndExtract");
   });
 
   it("passes connection options to resolveAccount", async () => {
