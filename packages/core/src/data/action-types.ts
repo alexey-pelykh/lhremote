@@ -49,7 +49,10 @@ export interface ActionTypeCatalog {
 const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
   {
     name: "VisitAndExtract",
-    description: "Visit a LinkedIn profile and extract data (name, positions, education, skills).",
+    description:
+      "Visit a LinkedIn profile and extract data (name, positions, education, skills). " +
+      "Rate limiting: start at ~50 visits/day and scale to 100\u2013200/day after confirming no LinkedIn warnings. " +
+      "Use cooldownMs (default 60 000 ms) and maxActionsPerRun in campaign settings to control pacing.",
     category: "people",
     configSchema: {
       extractCurrentOrganizations: {
