@@ -25,6 +25,12 @@ export function registerQueryProfiles(server: McpServer): void {
         .string()
         .optional()
         .describe("Filter by company name (LIKE match)"),
+      includeHistory: z
+        .boolean()
+        .optional()
+        .describe(
+          "When true, company filter also searches past positions (company history), not just the current position",
+        ),
       limit: z
         .number()
         .int()
@@ -38,7 +44,7 @@ export function registerQueryProfiles(server: McpServer): void {
         .optional()
         .describe("Pagination offset (default: 0)"),
     },
-    async ({ query, company, limit, offset }) => {
+    async ({ query, company, includeHistory, limit, offset }) => {
       const databases = discoverAllDatabases();
       if (databases.size === 0) {
         return mcpError("No LinkedHelper databases found.");
@@ -55,6 +61,7 @@ export function registerQueryProfiles(server: McpServer): void {
           const result = repo.search({
             ...(query !== undefined && { query }),
             ...(company !== undefined && { company }),
+            ...(includeHistory !== undefined && { includeHistory }),
           });
           allProfiles.push(...result.profiles);
           totalCount += result.total;

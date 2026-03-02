@@ -65,8 +65,10 @@ export interface Profile {
 export interface ProfileSearchOptions {
   /** Match against first_name, last_name, headline */
   query?: string;
-  /** Match against current position company */
+  /** Match against current position company (or all positions when includeHistory is true) */
   company?: string;
+  /** When true, company filter also searches past positions in addition to current */
+  includeHistory?: boolean;
   /** Maximum number of results (default 20) */
   limit?: number;
   /** Pagination offset (default 0) */

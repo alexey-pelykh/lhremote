@@ -282,5 +282,60 @@ describe("ProfileRepository (integration)", () => {
       expect(partial.total).toBe(1);
       expect(partial.profiles[0]?.firstName).toBe("Grace");
     });
+
+    it("does not match past positions without includeHistory", () => {
+      // Ada's past company "Difference Engine Co" should not be searchable by default
+      const result = repo.search({ company: "Difference Engine" });
+
+      expect(result.total).toBe(0);
+      expect(result.profiles).toHaveLength(0);
+    });
+
+    it("matches past positions when includeHistory is true", () => {
+      const result = repo.search({
+        company: "Difference Engine",
+        includeHistory: true,
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.firstName).toBe("Ada");
+    });
+
+    it("still matches current company when includeHistory is true", () => {
+      const result = repo.search({
+        company: "Babbage",
+        includeHistory: true,
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles[0]?.firstName).toBe("Ada");
+      expect(result.profiles[0]?.company).toBe("Babbage Industries");
+    });
+
+    it("combines query and company with includeHistory using AND logic", () => {
+      // Ada + her past company should match
+      const match = repo.search({
+        query: "Ada",
+        company: "Difference Engine",
+        includeHistory: true,
+      });
+      expect(match.total).toBe(1);
+      expect(match.profiles[0]?.firstName).toBe("Ada");
+
+      // Grace + Ada's past company should not match
+      const noMatch = repo.search({
+        query: "Grace",
+        company: "Difference Engine",
+        includeHistory: true,
+      });
+      expect(noMatch.total).toBe(0);
+    });
+
+    it("includeHistory without company filter returns all profiles", () => {
+      // includeHistory only affects company filtering; with no company specified, all profiles return
+      const result = repo.search({ includeHistory: true });
+      expect(result.total).toBe(4);
+    });
   });
 });

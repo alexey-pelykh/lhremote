@@ -265,5 +265,53 @@ describe("ProfileRepository", () => {
       expect(result.profiles).toHaveLength(1);
       expect(result.profiles[0]?.firstName).toBe("Alan");
     });
+
+    it("does not match past positions by default", () => {
+      const result = repo.search({ company: "Difference Engine" });
+
+      expect(result.total).toBe(0);
+      expect(result.profiles).toHaveLength(0);
+    });
+
+    it("matches past positions when includeHistory is true", () => {
+      const result = repo.search({
+        company: "Difference Engine",
+        includeHistory: true,
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.firstName).toBe("Ada");
+    });
+
+    it("still matches current company when includeHistory is true", () => {
+      const result = repo.search({
+        company: "Babbage",
+        includeHistory: true,
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles).toHaveLength(1);
+      expect(result.profiles[0]?.firstName).toBe("Ada");
+    });
+
+    it("combines query and company with includeHistory", () => {
+      const result = repo.search({
+        query: "Ada",
+        company: "Difference Engine",
+        includeHistory: true,
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.profiles[0]?.firstName).toBe("Ada");
+
+      // Query for Grace but company filter for past position of Ada should return empty
+      const noMatch = repo.search({
+        query: "Grace",
+        company: "Difference Engine",
+        includeHistory: true,
+      });
+      expect(noMatch.total).toBe(0);
+    });
   });
 });
