@@ -130,6 +130,28 @@ describe("registerQueryProfiles", () => {
     });
   });
 
+  it("passes includeHistory to repository when specified", async () => {
+    const { server, getHandler } = createMockServer();
+    registerQueryProfiles(server);
+    vi.mocked(discoverAllDatabases).mockReturnValue(
+      new Map([[1, "/path/to/db"]]),
+    );
+    mockDb();
+
+    const searchFn = vi.fn().mockReturnValue({ profiles: [], total: 0 });
+    vi.mocked(ProfileRepository).mockImplementation(function () {
+      return { search: searchFn } as unknown as ProfileRepository;
+    });
+
+    const handler = getHandler("query-profiles");
+    await handler({ company: "Acme", includeHistory: true });
+
+    expect(searchFn).toHaveBeenCalledWith({
+      company: "Acme",
+      includeHistory: true,
+    });
+  });
+
   it("returns error when no databases found", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryProfiles(server);

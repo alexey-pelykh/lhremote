@@ -272,6 +272,28 @@ describe("handleQueryProfiles", () => {
     });
   });
 
+  it("passes includeHistory to repository when specified", async () => {
+    vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+    mockDiscovery();
+    mockDb();
+
+    const searchFn = vi.fn().mockReturnValue({ profiles: [], total: 0 });
+    vi.mocked(ProfileRepository).mockImplementation(function () {
+      return { search: searchFn } as unknown as ProfileRepository;
+    });
+
+    await handleQueryProfiles({
+      company: "Acme",
+      includeHistory: true,
+    });
+
+    expect(searchFn).toHaveBeenCalledWith({
+      company: "Acme",
+      includeHistory: true,
+    });
+  });
+
   it("applies limit/offset to merged results across databases", async () => {
     const stdoutSpy = vi
       .spyOn(process.stdout, "write")

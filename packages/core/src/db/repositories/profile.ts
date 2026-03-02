@@ -96,6 +96,7 @@ export class ProfileRepository {
   private readonly stmtSkills;
   private readonly stmtEmails;
   private readonly stmtSearch;
+  private readonly stmtSearchWithHistory;
   private readonly stmtProfileCount;
 
   constructor(client: DatabaseClient) {
@@ -170,6 +171,25 @@ export class ProfileRepository {
        ORDER BY mp.first_name, mp.last_name
        LIMIT ? OFFSET ?`,
     );
+
+    this.stmtSearchWithHistory = db.prepare(
+      `SELECT
+         p.id,
+         mp.first_name,
+         mp.last_name,
+         mp.headline,
+         cp.company,
+         cp.position AS title,
+         COUNT(*) OVER() AS total
+       FROM people p
+       LEFT JOIN person_mini_profile mp ON p.id = mp.person_id
+       LEFT JOIN person_current_position cp ON p.id = cp.person_id
+       WHERE (? IS NULL OR mp.first_name LIKE ? ESCAPE '\\' OR mp.last_name LIKE ? ESCAPE '\\' OR mp.headline LIKE ? ESCAPE '\\')
+         AND (? IS NULL OR cp.company LIKE ? ESCAPE '\\'
+              OR p.id IN (SELECT pp.person_id FROM person_positions pp WHERE pp.company_name LIKE ? ESCAPE '\\'))
+       ORDER BY mp.first_name, mp.last_name
+       LIMIT ? OFFSET ?`,
+    );
   }
 
   /**
@@ -208,21 +228,33 @@ export class ProfileRepository {
    * Search for profiles by name, headline, or company.
    */
   search(options: ProfileSearchOptions = {}): ProfileSearchResult {
-    const { query, company, limit = 20, offset = 0 } = options;
+    const { query, company, includeHistory = false, limit = 20, offset = 0 } = options;
 
     const queryPattern = query ? `%${escapeLike(query)}%` : null;
     const companyPattern = company ? `%${escapeLike(company)}%` : null;
 
-    const rows = this.stmtSearch.all(
-      queryPattern,
-      queryPattern,
-      queryPattern,
-      queryPattern,
-      companyPattern,
-      companyPattern,
-      limit,
-      offset,
-    ) as unknown as ProfileSearchRow[];
+    const rows = includeHistory
+      ? (this.stmtSearchWithHistory.all(
+          queryPattern,
+          queryPattern,
+          queryPattern,
+          queryPattern,
+          companyPattern,
+          companyPattern,
+          companyPattern,
+          limit,
+          offset,
+        ) as unknown as ProfileSearchRow[])
+      : (this.stmtSearch.all(
+          queryPattern,
+          queryPattern,
+          queryPattern,
+          queryPattern,
+          companyPattern,
+          companyPattern,
+          limit,
+          offset,
+        ) as unknown as ProfileSearchRow[]);
 
     const total = rows.length > 0 ? (rows[0] as ProfileSearchRow).total : 0;
 

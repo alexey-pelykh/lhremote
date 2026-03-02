@@ -13,11 +13,12 @@ import {
 export async function handleQueryProfiles(options: {
   query?: string;
   company?: string;
+  includeHistory?: boolean;
   limit?: number;
   offset?: number;
   json?: boolean;
 }): Promise<void> {
-  const { query, company, limit = 20, offset = 0 } = options;
+  const { query, company, includeHistory, limit = 20, offset = 0 } = options;
 
   const databases = discoverAllDatabases();
   if (databases.size === 0) {
@@ -37,6 +38,7 @@ export async function handleQueryProfiles(options: {
       const result = repo.search({
         ...(query !== undefined && { query }),
         ...(company !== undefined && { company }),
+        ...(includeHistory !== undefined && { includeHistory }),
       });
       allProfiles.push(...result.profiles);
       totalCount += result.total;

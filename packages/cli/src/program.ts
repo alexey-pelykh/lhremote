@@ -410,6 +410,7 @@ export function createProgram(): Command {
     .description("Search for profiles in the local database")
     .option("--query <text>", "Search name or headline")
     .option("--company <name>", "Filter by company")
+    .option("--include-history", "Search past positions too (not just current)")
     .option("--limit <n>", "Max results (default: 20)", parsePositiveInt)
     .option("--offset <n>", "Pagination offset (default: 0)", parseNonNegativeInt)
     .option("--json", "Output as JSON")
