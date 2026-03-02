@@ -125,6 +125,7 @@ export {
   type ScrapeMessagingHistoryOutput,
 } from "./scrape-messaging-history.js";
 export {
+  IMPORT_CHUNK_SIZE,
   importPeopleFromUrls,
   type ImportPeopleFromUrlsInput,
   type ImportPeopleFromUrlsOutput,

@@ -7,6 +7,9 @@ import { CampaignService } from "../services/campaign.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
+/** Maximum URLs per CDP call to avoid payload limits and timeouts. */
+export const IMPORT_CHUNK_SIZE = 200;
+
 export interface ImportPeopleFromUrlsInput extends ConnectionOptions {
   readonly campaignId: number;
   readonly linkedInUrls: string[];
@@ -16,6 +19,7 @@ export interface ImportPeopleFromUrlsOutput {
   readonly success: true;
   readonly campaignId: number;
   readonly actionId: number;
+  readonly totalUrls: number;
   readonly imported: number;
   readonly alreadyInQueue: number;
   readonly alreadyProcessed: number;
@@ -34,19 +38,35 @@ export async function importPeopleFromUrls(
 
   return withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
     const campaignService = new CampaignService(instance, db);
-    const result = await campaignService.importPeopleFromUrls(
-      input.campaignId,
-      input.linkedInUrls,
-    );
+
+    let actionId = 0;
+    let imported = 0;
+    let alreadyInQueue = 0;
+    let alreadyProcessed = 0;
+    let failed = 0;
+
+    for (let i = 0; i < input.linkedInUrls.length; i += IMPORT_CHUNK_SIZE) {
+      const chunk = input.linkedInUrls.slice(i, i + IMPORT_CHUNK_SIZE);
+      const result = await campaignService.importPeopleFromUrls(
+        input.campaignId,
+        chunk,
+      );
+      actionId = result.actionId;
+      imported += result.successful;
+      alreadyInQueue += result.alreadyInQueue;
+      alreadyProcessed += result.alreadyProcessed;
+      failed += result.failed;
+    }
 
     return {
       success: true as const,
       campaignId: input.campaignId,
-      actionId: result.actionId,
-      imported: result.successful,
-      alreadyInQueue: result.alreadyInQueue,
-      alreadyProcessed: result.alreadyProcessed,
-      failed: result.failed,
+      actionId,
+      totalUrls: input.linkedInUrls.length,
+      imported,
+      alreadyInQueue,
+      alreadyProcessed,
+      failed,
     };
   });
 }

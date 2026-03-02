@@ -19,7 +19,7 @@ import type { InstanceDatabaseContext } from "../services/instance-context.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { CampaignService } from "../services/campaign.js";
-import { importPeopleFromUrls } from "./import-people-from-urls.js";
+import { IMPORT_CHUNK_SIZE, importPeopleFromUrls } from "./import-people-from-urls.js";
 
 const MOCK_IMPORT_RESULT = {
   actionId: 1,
@@ -57,7 +57,7 @@ describe("importPeopleFromUrls", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns import results", async () => {
+  it("returns import results with totalUrls", async () => {
     setupMocks();
 
     const result = await importPeopleFromUrls({
@@ -69,6 +69,7 @@ describe("importPeopleFromUrls", () => {
     expect(result.success).toBe(true);
     expect(result.campaignId).toBe(42);
     expect(result.actionId).toBe(1);
+    expect(result.totalUrls).toBe(2);
     expect(result.imported).toBe(3);
     expect(result.alreadyInQueue).toBe(1);
     expect(result.alreadyProcessed).toBe(0);
@@ -154,5 +155,102 @@ describe("importPeopleFromUrls", () => {
         cdpPort: 9222,
       }),
     ).rejects.toThrow("campaign not found");
+  });
+
+  it("sends all URLs in one call when under chunk size", async () => {
+    const mockImport = vi.fn().mockResolvedValue(MOCK_IMPORT_RESULT);
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withInstanceDatabase).mockImplementation(
+      async (_cdpPort, _accountId, callback) =>
+        callback({
+          accountId: 1,
+          instance: {},
+          db: {},
+        } as unknown as InstanceDatabaseContext),
+    );
+    vi.mocked(CampaignService).mockImplementation(function () {
+      return { importPeopleFromUrls: mockImport } as unknown as CampaignService;
+    });
+
+    const urls = Array.from({ length: 50 }, (_, i) => `https://linkedin.com/in/user-${String(i)}`);
+    await importPeopleFromUrls({ campaignId: 42, linkedInUrls: urls, cdpPort: 9222 });
+
+    expect(mockImport).toHaveBeenCalledTimes(1);
+    expect(mockImport).toHaveBeenCalledWith(42, urls);
+  });
+
+  it("chunks URLs exceeding IMPORT_CHUNK_SIZE into multiple calls", async () => {
+    const mockImport = vi.fn().mockResolvedValue({
+      actionId: 1,
+      successful: 100,
+      alreadyInQueue: 0,
+      alreadyProcessed: 0,
+      failed: 0,
+    });
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withInstanceDatabase).mockImplementation(
+      async (_cdpPort, _accountId, callback) =>
+        callback({
+          accountId: 1,
+          instance: {},
+          db: {},
+        } as unknown as InstanceDatabaseContext),
+    );
+    vi.mocked(CampaignService).mockImplementation(function () {
+      return { importPeopleFromUrls: mockImport } as unknown as CampaignService;
+    });
+
+    const totalUrls = IMPORT_CHUNK_SIZE + 50;
+    const urls = Array.from({ length: totalUrls }, (_, i) => `https://linkedin.com/in/user-${String(i)}`);
+    await importPeopleFromUrls({ campaignId: 42, linkedInUrls: urls, cdpPort: 9222 });
+
+    expect(mockImport).toHaveBeenCalledTimes(2);
+    expect(mockImport).toHaveBeenNthCalledWith(1, 42, urls.slice(0, IMPORT_CHUNK_SIZE));
+    expect(mockImport).toHaveBeenNthCalledWith(2, 42, urls.slice(IMPORT_CHUNK_SIZE));
+  });
+
+  it("aggregates results across chunks", async () => {
+    const mockImport = vi.fn()
+      .mockResolvedValueOnce({
+        actionId: 1,
+        successful: 150,
+        alreadyInQueue: 30,
+        alreadyProcessed: 15,
+        failed: 5,
+      })
+      .mockResolvedValueOnce({
+        actionId: 1,
+        successful: 40,
+        alreadyInQueue: 5,
+        alreadyProcessed: 3,
+        failed: 2,
+      });
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(withInstanceDatabase).mockImplementation(
+      async (_cdpPort, _accountId, callback) =>
+        callback({
+          accountId: 1,
+          instance: {},
+          db: {},
+        } as unknown as InstanceDatabaseContext),
+    );
+    vi.mocked(CampaignService).mockImplementation(function () {
+      return { importPeopleFromUrls: mockImport } as unknown as CampaignService;
+    });
+
+    const totalUrls = IMPORT_CHUNK_SIZE + 50;
+    const urls = Array.from({ length: totalUrls }, (_, i) => `https://linkedin.com/in/user-${String(i)}`);
+    const result = await importPeopleFromUrls({ campaignId: 42, linkedInUrls: urls, cdpPort: 9222 });
+
+    expect(result).toEqual({
+      success: true,
+      campaignId: 42,
+      actionId: 1,
+      totalUrls,
+      imported: 190,
+      alreadyInQueue: 35,
+      alreadyProcessed: 18,
+      failed: 7,
+    });
   });
 });

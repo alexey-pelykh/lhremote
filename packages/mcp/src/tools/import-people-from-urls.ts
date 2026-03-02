@@ -13,7 +13,7 @@ import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpe
 export function registerImportPeopleFromUrls(server: McpServer): void {
   server.tool(
     "import-people-from-urls",
-    "Import LinkedIn profile URLs into a campaign action's target list. Idempotent — re-importing an already-targeted person is a no-op.",
+    "Import LinkedIn profile URLs into a campaign action's target list. Idempotent — re-importing an already-targeted person is a no-op. Large URL sets are automatically chunked into batches of 200. For bulk imports of 1 000+ URLs, consider using the CLI with --urls-file for better throughput.",
     {
       campaignId: z
         .number()

@@ -35,6 +35,7 @@ const MOCK_RESULT: ImportPeopleFromUrlsOutput = {
   success: true as const,
   campaignId: 1,
   actionId: 10,
+  totalUrls: 3,
   imported: 3,
   alreadyInQueue: 1,
   alreadyProcessed: 0,
