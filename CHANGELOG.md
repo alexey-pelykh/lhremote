@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-03-02
+
+### Added
+
+- `includeHistory` option for `query-profiles` to search across past positions (company history), not just current employer
+- Automatic chunking for `import-people-from-urls` — large URL sets are split into batches of 200 with aggregated results
+- Rate limiting guidance section in Getting Started guide with recommended daily limits for VisitAndExtract campaigns
+- Rate limiting note in `VisitAndExtract` action type description (surfaced by `describe-actions`)
+
+### Changed
+
+- Replaced SHA-pinned GitHub Actions with major version tags for readability and reduced Dependabot noise
+- Added MCP Registry metadata for tool discoverability
+
+## [0.2.2] — 2026-02-19
+
+### Added
+
+- Detection and surfacing of LinkedHelper UI errors, dialogs, and blocking popups
+- Claude Code plugin packaging for IDE integration
+
+### Fixed
+
+- Missing `created_at` in `moveToNextAction` INSERT causing database errors
+- Test fixture schema alignment with real LinkedHelper database
+
+### Changed
+
+- Removed unused `InstanceService.navigateToProfile` method
+- Removed unused `InstanceService.triggerExtraction` method
+
 ## [0.2.1] — 2026-02-16
 
 ### Fixed
