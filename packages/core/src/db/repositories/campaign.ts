@@ -6,6 +6,7 @@ import type {
   ActionSettings,
   CampaignActionConfig,
   CampaignActionResult,
+  CampaignActionUpdateConfig,
   Campaign,
   CampaignAction,
   CampaignPersonEntry,
@@ -635,6 +636,90 @@ export class CampaignRepository {
       db.exec("ROLLBACK");
       throw e;
     }
+  }
+
+  /**
+   * Update an existing action's configuration.
+   *
+   * Only provided fields are updated. `actionSettings` uses merge semantics:
+   * provided keys override existing values, unspecified keys are preserved.
+   *
+   * @throws {CampaignNotFoundError} if no campaign exists with the given ID.
+   * @throws {ActionNotFoundError} if the action does not belong to the campaign.
+   */
+  updateAction(
+    campaignId: number,
+    actionId: number,
+    updates: CampaignActionUpdateConfig,
+  ): CampaignAction {
+    // Verify campaign exists and find the action
+    const actions = this.getCampaignActions(campaignId);
+    const action = actions.find((a) => a.id === actionId);
+    if (!action) {
+      throw new ActionNotFoundError(actionId, campaignId);
+    }
+
+    const { db } = this.client;
+
+    db.exec("BEGIN");
+    try {
+      // Update action_configs table
+      const configClauses: string[] = [];
+      const configParams: (string | number)[] = [];
+
+      if (updates.coolDown !== undefined) {
+        configClauses.push("coolDown = ?");
+        configParams.push(updates.coolDown);
+      }
+      if (updates.maxActionResultsPerIteration !== undefined) {
+        configClauses.push("maxActionResultsPerIteration = ?");
+        configParams.push(updates.maxActionResultsPerIteration);
+      }
+      if (updates.actionSettings !== undefined) {
+        // Merge: existing settings + provided overrides
+        const merged = { ...action.config.actionSettings, ...updates.actionSettings };
+        configClauses.push("actionSettings = ?");
+        configParams.push(JSON.stringify(merged));
+      }
+
+      if (configClauses.length > 0) {
+        configParams.push(action.config.id);
+        const sql = `UPDATE action_configs SET ${configClauses.join(", ")} WHERE id = ?`;
+        db.prepare(sql).run(...configParams);
+      }
+
+      // Update actions table
+      const actionClauses: string[] = [];
+      const actionParams: (string | number | null)[] = [];
+
+      if (updates.name !== undefined) {
+        actionClauses.push("name = ?");
+        actionParams.push(updates.name);
+      }
+      if (updates.description !== undefined) {
+        actionClauses.push("description = ?");
+        actionParams.push(updates.description);
+      }
+
+      if (actionClauses.length > 0) {
+        actionParams.push(actionId);
+        const sql = `UPDATE actions SET ${actionClauses.join(", ")} WHERE id = ?`;
+        db.prepare(sql).run(...actionParams);
+      }
+
+      db.exec("COMMIT");
+    } catch (e) {
+      db.exec("ROLLBACK");
+      throw e;
+    }
+
+    // Return the updated action
+    const updatedActions = this.getCampaignActions(campaignId);
+    const updated = updatedActions.find((a) => a.id === actionId);
+    if (!updated) {
+      throw new ActionNotFoundError(actionId, campaignId);
+    }
+    return updated;
   }
 
   /**

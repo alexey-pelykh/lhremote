@@ -254,6 +254,26 @@ export interface CampaignUpdateConfig {
 }
 
 /**
+ * Configuration for updating an existing action in a campaign.
+ *
+ * All fields are optional — only provided fields are updated.
+ * `actionSettings` uses merge semantics: provided keys override
+ * existing values, unspecified keys are preserved.
+ */
+export interface CampaignActionUpdateConfig {
+  /** New display name for the action. */
+  name?: string;
+  /** New description for the action (null to clear). */
+  description?: string | null;
+  /** Milliseconds between action executions. */
+  coolDown?: number;
+  /** Maximum results per iteration (-1 for unlimited). */
+  maxActionResultsPerIteration?: number;
+  /** Action-specific settings (merged with existing settings). */
+  actionSettings?: ActionSettings;
+}
+
+/**
  * Aggregated results from a campaign run.
  */
 export interface CampaignRunResult {

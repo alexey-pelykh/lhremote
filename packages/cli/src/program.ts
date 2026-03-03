@@ -25,6 +25,7 @@ import {
   handleCampaignStatus,
   handleCampaignStop,
   handleCampaignUpdate,
+  handleCampaignUpdateAction,
   handleImportPeopleFromUrls,
   handleCheckReplies,
   handleCheckStatus,
@@ -366,6 +367,31 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleCampaignRemoveAction);
+
+  program
+    .command("campaign-update-action")
+    .description("Update an existing action's configuration in a campaign")
+    .argument("<campaignId>", "Campaign ID", parsePositiveInt)
+    .argument("<actionId>", "Action ID to update", parsePositiveInt)
+    .option("--name <name>", "New display name for the action")
+    .option("--description <text>", "New action description")
+    .option("--clear-description", "Clear the action description")
+    .option(
+      "--cool-down <ms>",
+      "Milliseconds between action executions",
+      parsePositiveInt,
+    )
+    .option(
+      "--max-results <n>",
+      "Maximum results per iteration (-1 for unlimited)",
+      parseMaxResults,
+    )
+    .option("--action-settings <json>", "Action-specific settings as JSON (merged with existing)")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleCampaignUpdateAction);
 
   program
     .command("campaign-reorder-actions")

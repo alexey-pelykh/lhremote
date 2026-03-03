@@ -50,6 +50,7 @@ export type {
   ActionStatistics,
   CampaignActionConfig,
   CampaignActionResult,
+  CampaignActionUpdateConfig,
   ActionSettings,
   ActionTargetPerson,
   Campaign,
