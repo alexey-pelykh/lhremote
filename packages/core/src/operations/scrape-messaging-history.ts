@@ -21,6 +21,10 @@ export interface ScrapeMessagingHistoryOutput {
 export async function scrapeMessagingHistory(
   input: ScrapeMessagingHistoryInput,
 ): Promise<ScrapeMessagingHistoryOutput> {
+  if (input.personIds.length === 0) {
+    throw new Error("At least one personId is required");
+  }
+
   const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
 
   const accountId = await resolveAccount(cdpPort, {

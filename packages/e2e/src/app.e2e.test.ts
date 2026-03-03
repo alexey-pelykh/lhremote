@@ -49,6 +49,20 @@ import {
 } from "@lhremote/mcp/tools";
 import { createMockServer } from "@lhremote/mcp/testing";
 
+/**
+ * Person ID for scrape-messaging-history E2E tests.
+ * Read from `LHREMOTE_E2E_PERSON_ID` — must be a positive integer.
+ */
+function getE2EPersonId(): number {
+  const raw = process.env.LHREMOTE_E2E_PERSON_ID;
+  if (!raw) throw new Error("LHREMOTE_E2E_PERSON_ID must be set");
+  const id = Number.parseInt(raw, 10);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error("LHREMOTE_E2E_PERSON_ID must be a positive integer");
+  }
+  return id;
+}
+
 /** Type-narrowing assertion — fails the test with `message` when `value` is nullish. */
 function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {
   expect(value, message).toBeDefined();
@@ -592,7 +606,7 @@ describeE2E("App lifecycle", () => {
           .spyOn(process.stderr, "write")
           .mockReturnValue(true);
 
-        await handleScrapeMessagingHistory({ cdpPort: port, json: true });
+        await handleScrapeMessagingHistory({ personId: [getE2EPersonId()], cdpPort: port, json: true });
 
         if (process.exitCode === 1) {
           const errOutput = stderrSpy.mock.calls
@@ -628,7 +642,7 @@ describeE2E("App lifecycle", () => {
           .mockReturnValue(true);
         vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
-        await handleScrapeMessagingHistory({ cdpPort: port });
+        await handleScrapeMessagingHistory({ personId: [getE2EPersonId()], cdpPort: port });
 
         expect(process.exitCode).toBeUndefined();
         expect(stdoutSpy).toHaveBeenCalled();
@@ -886,7 +900,7 @@ describeE2E("App lifecycle", () => {
         registerScrapeMessagingHistory(server);
 
         const handler = getHandler("scrape-messaging-history");
-        const result = (await handler({ cdpPort: port })) as {
+        const result = (await handler({ personIds: [getE2EPersonId()], cdpPort: port })) as {
           isError?: boolean;
           content: { type: string; text: string }[];
         };

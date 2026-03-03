@@ -58,6 +58,12 @@ describe("scrapeMessagingHistory", () => {
     vi.restoreAllMocks();
   });
 
+  it("throws when personIds is empty", async () => {
+    await expect(
+      scrapeMessagingHistory({ personIds: [], cdpPort: 9222 }),
+    ).rejects.toThrow("At least one personId is required");
+  });
+
   it("returns success with stats after scraping", async () => {
     setupMocks();
 
