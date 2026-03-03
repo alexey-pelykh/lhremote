@@ -242,6 +242,16 @@ export interface ImportPeopleResult {
 }
 
 /**
+ * Result of removing people from a campaign's target list.
+ */
+export interface RemovePeopleResult {
+  /** Action ID the people were removed from. */
+  actionId: number;
+  /** Number of people successfully removed. */
+  removed: number;
+}
+
+/**
  * Configuration for updating an existing campaign.
  *
  * At least one field must be provided.

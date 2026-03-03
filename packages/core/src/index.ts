@@ -39,6 +39,7 @@ export type {
   GetResultsOptions,
   GetStatisticsOptions,
   ImportPeopleResult,
+  RemovePeopleResult,
   InstanceInfo,
   InstanceIssue,
   InstanceStatus,
@@ -243,6 +244,9 @@ export {
   importPeopleFromUrls,
   type ImportPeopleFromUrlsInput,
   type ImportPeopleFromUrlsOutput,
+  campaignRemovePeople,
+  type CampaignRemovePeopleInput,
+  type CampaignRemovePeopleOutput,
 } from "./operations/index.js";
 
 // Constants

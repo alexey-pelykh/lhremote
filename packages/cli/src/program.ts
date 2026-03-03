@@ -18,6 +18,7 @@ import {
   handleCampaignListPeople,
   handleCampaignMoveNext,
   handleCampaignRemoveAction,
+  handleCampaignRemovePeople,
   handleCampaignReorderActions,
   handleCampaignRetry,
   handleCampaignStart,
@@ -418,6 +419,18 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleImportPeopleFromUrls);
+
+  program
+    .command("campaign-remove-people")
+    .description("Remove people from a campaign's target list entirely")
+    .argument("<campaignId>", "Campaign ID to remove people from", parsePositiveInt)
+    .option("--person-ids <ids>", "Comma-separated person IDs")
+    .option("--person-ids-file <path>", "File containing person IDs")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleCampaignRemovePeople);
 
   program
     .command("describe-actions")

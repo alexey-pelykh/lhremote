@@ -70,8 +70,9 @@ describe("createProgram", () => {
     expect(commandNames).toContain("campaign-exclude-remove");
     expect(commandNames).toContain("campaign-list-people");
     expect(commandNames).toContain("campaign-update-action");
+    expect(commandNames).toContain("campaign-remove-people");
     expect(commandNames).toContain("get-errors");
-    expect(commandNames).toHaveLength(35);
+    expect(commandNames).toHaveLength(36);
   });
 
   describe("launch-app", () => {
