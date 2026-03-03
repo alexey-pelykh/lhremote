@@ -12,6 +12,7 @@ import { registerCampaignExcludeRemove } from "./campaign-exclude-remove.js";
 import { registerCampaignExport } from "./campaign-export.js";
 import { registerCampaignGet } from "./campaign-get.js";
 import { registerCampaignList } from "./campaign-list.js";
+import { registerCampaignListPeople } from "./campaign-list-people.js";
 import { registerCampaignMoveNext } from "./campaign-move-next.js";
 import { registerCampaignRemoveAction } from "./campaign-remove-action.js";
 import { registerCampaignReorderActions } from "./campaign-reorder-actions.js";
@@ -47,6 +48,7 @@ export {
   registerCampaignExport,
   registerCampaignGet,
   registerCampaignList,
+  registerCampaignListPeople,
   registerCampaignMoveNext,
   registerCampaignRemoveAction,
   registerCampaignReorderActions,
@@ -83,6 +85,7 @@ export function registerAllTools(server: McpServer): void {
   registerCampaignExport(server);
   registerCampaignGet(server);
   registerCampaignList(server);
+  registerCampaignListPeople(server);
   registerCampaignMoveNext(server);
   registerCampaignRemoveAction(server);
   registerCampaignReorderActions(server);

@@ -122,6 +122,43 @@ export interface GetResultsOptions {
 }
 
 /**
+ * Processing state of a person in a campaign action target list.
+ */
+export type CampaignPersonState = "queued" | "processed" | "successful" | "failed";
+
+/**
+ * A person assigned to a campaign with their processing state.
+ */
+export interface CampaignPersonEntry {
+  /** Internal person ID. */
+  personId: number;
+  /** First name from mini profile. */
+  firstName: string;
+  /** Last name from mini profile. */
+  lastName: string | null;
+  /** LinkedIn public ID (slug). */
+  publicId: string | null;
+  /** Processing state in the action target list. */
+  status: CampaignPersonState;
+  /** Action ID the person is currently assigned to. */
+  currentActionId: number;
+}
+
+/**
+ * Options for listing people in a campaign.
+ */
+export interface ListCampaignPeopleOptions {
+  /** Filter to people in a specific action. */
+  actionId?: number;
+  /** Filter by processing status. */
+  status?: CampaignPersonState;
+  /** Maximum number of results (default: 20). */
+  limit?: number;
+  /** Pagination offset (default: 0). */
+  offset?: number;
+}
+
+/**
  * Configuration for creating a new campaign.
  */
 export interface CampaignConfig {

@@ -8,10 +8,13 @@ import type {
   CampaignActionResult,
   Campaign,
   CampaignAction,
+  CampaignPersonEntry,
+  CampaignPersonState,
   CampaignState,
   CampaignSummary,
   CampaignUpdateConfig,
   GetResultsOptions,
+  ListCampaignPeopleOptions,
   ListCampaignsOptions,
 } from "../../types/index.js";
 import type { DatabaseSync } from "node:sqlite";
@@ -66,6 +69,30 @@ interface ActionResultRow {
   company: string | null;
   title: string | null;
 }
+
+interface CampaignPersonRow {
+  person_id: number;
+  first_name: string;
+  last_name: string | null;
+  public_id: string | null;
+  state: number;
+  action_id: number;
+  total: number;
+}
+
+const PERSON_STATE_MAP: Record<number, CampaignPersonState> = {
+  1: "queued",
+  2: "processed",
+  3: "successful",
+  4: "failed",
+};
+
+const PERSON_STATE_REVERSE: Record<string, number> = {
+  queued: 1,
+  processed: 2,
+  successful: 3,
+  failed: 4,
+};
 
 function deriveCampaignState(
   isPaused: number | null,
@@ -288,6 +315,85 @@ export class CampaignRepository {
             }
           : null,
     }));
+  }
+
+  /**
+   * List people assigned to a campaign, with optional filtering and pagination.
+   *
+   * @throws {CampaignNotFoundError} if no campaign exists with the given ID.
+   * @throws {ActionNotFoundError} if actionId is specified but doesn't belong to the campaign.
+   */
+  listPeople(
+    campaignId: number,
+    options: ListCampaignPeopleOptions = {},
+  ): { people: CampaignPersonEntry[]; total: number } {
+    // Verify campaign exists
+    this.getCampaign(campaignId);
+
+    const { actionId, status, limit = 20, offset = 0 } = options;
+
+    // If actionId is provided, verify it belongs to this campaign
+    if (actionId !== undefined) {
+      const actions = this.getCampaignActions(campaignId);
+      if (!actions.some((a) => a.id === actionId)) {
+        throw new ActionNotFoundError(actionId, campaignId);
+      }
+    }
+
+    const conditions: string[] = ["a.campaign_id = ?"];
+    const params: (number | string)[] = [campaignId];
+
+    if (actionId !== undefined) {
+      conditions.push("atp.action_id = ?");
+      params.push(actionId);
+    }
+
+    if (status !== undefined) {
+      const stateNum = PERSON_STATE_REVERSE[status];
+      if (stateNum !== undefined) {
+        conditions.push("atp.state = ?");
+        params.push(stateNum);
+      }
+    }
+
+    const where = conditions.join(" AND ");
+
+    const sql = `
+      SELECT
+        atp.person_id,
+        COALESCE(mp.first_name, '') AS first_name,
+        mp.last_name,
+        pei.external_id AS public_id,
+        atp.state,
+        atp.action_id,
+        COUNT(*) OVER() AS total
+      FROM action_target_people atp
+      JOIN actions a ON atp.action_id = a.id
+      LEFT JOIN person_mini_profile mp ON atp.person_id = mp.person_id
+      LEFT JOIN person_external_ids pei
+        ON atp.person_id = pei.person_id AND pei.type_group = 'public'
+      WHERE ${where}
+      ORDER BY atp.person_id
+      LIMIT ? OFFSET ?`;
+
+    const rows = this.client.db.prepare(sql).all(
+      ...params,
+      limit,
+      offset,
+    ) as unknown as CampaignPersonRow[];
+
+    const total = rows.length > 0 ? (rows[0] as CampaignPersonRow).total : 0;
+
+    const people: CampaignPersonEntry[] = rows.map((r) => ({
+      personId: r.person_id,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      publicId: r.public_id,
+      status: PERSON_STATE_MAP[r.state] ?? "queued",
+      currentActionId: r.action_id,
+    }));
+
+    return { people, total };
   }
 
   /**

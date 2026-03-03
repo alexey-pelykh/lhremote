@@ -10,6 +10,7 @@ export { handleCampaignExcludeRemove } from "./campaign-exclude-remove.js";
 export { handleCampaignExport } from "./campaign-export.js";
 export { handleCampaignGet } from "./campaign-get.js";
 export { handleCampaignList } from "./campaign-list.js";
+export { handleCampaignListPeople } from "./campaign-list-people.js";
 export { handleCampaignMoveNext } from "./campaign-move-next.js";
 export { handleCampaignRemoveAction } from "./campaign-remove-action.js";
 export { handleCampaignReorderActions } from "./campaign-reorder-actions.js";

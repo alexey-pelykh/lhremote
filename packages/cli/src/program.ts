@@ -15,6 +15,7 @@ import {
   handleCampaignExport,
   handleCampaignGet,
   handleCampaignList,
+  handleCampaignListPeople,
   handleCampaignMoveNext,
   handleCampaignRemoveAction,
   handleCampaignReorderActions,
@@ -133,6 +134,20 @@ export function createProgram(): Command {
     .option("--include-archived", "Include archived campaigns")
     .option("--json", "Output as JSON")
     .action(handleCampaignList);
+
+  program
+    .command("campaign-list-people")
+    .description("List people assigned to a campaign")
+    .argument("<campaignId>", "Campaign ID", parsePositiveInt)
+    .option("--action-id <id>", "Filter to a specific action", parsePositiveInt)
+    .option("--status <status>", "Filter by status (queued, processed, successful, failed)")
+    .option("--limit <n>", "Max results (default: 20)", parsePositiveInt)
+    .option("--offset <n>", "Pagination offset (default: 0)", parseNonNegativeInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleCampaignListPeople);
 
   program
     .command("campaign-create")

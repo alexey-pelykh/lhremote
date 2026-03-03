@@ -54,6 +54,8 @@ export type {
   Campaign,
   CampaignAction,
   CampaignConfig,
+  CampaignPersonEntry,
+  CampaignPersonState,
   CampaignRunResult,
   CampaignState,
   ResultProfileData,
@@ -65,6 +67,7 @@ export type {
   ImportPeopleResult,
   CampaignStatus,
   CampaignSummary,
+  ListCampaignPeopleOptions,
   ListCampaignsOptions,
   RunnerState,
 } from "./campaign.js";

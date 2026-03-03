@@ -30,6 +30,13 @@ export {
   type CampaignDeleteOutput,
 } from "./campaign-delete.js";
 
+// Campaign people
+export {
+  campaignListPeople,
+  type CampaignListPeopleInput,
+  type CampaignListPeopleOutput,
+} from "./campaign-list-people.js";
+
 // Campaign execution
 export {
   campaignStart,

@@ -15,6 +15,8 @@ export type {
   Campaign,
   CampaignAction,
   CampaignConfig,
+  CampaignPersonEntry,
+  CampaignPersonState,
   CampaignRunResult,
   CampaignState,
   ResultProfileData,
@@ -39,6 +41,7 @@ export type {
   InstanceInfo,
   InstanceIssue,
   InstanceStatus,
+  ListCampaignPeopleOptions,
   ListCampaignsOptions,
   Message,
   MessageStats,
@@ -172,6 +175,10 @@ export {
   campaignDelete,
   type CampaignDeleteInput,
   type CampaignDeleteOutput,
+  // Campaign people
+  campaignListPeople,
+  type CampaignListPeopleInput,
+  type CampaignListPeopleOutput,
   // Campaign execution
   campaignStart,
   type CampaignStartInput,
