@@ -81,6 +81,11 @@ export {
   type CampaignRemoveActionOutput,
 } from "./campaign-remove-action.js";
 export {
+  campaignUpdateAction,
+  type CampaignUpdateActionInput,
+  type CampaignUpdateActionOutput,
+} from "./campaign-update-action.js";
+export {
   campaignReorderActions,
   type CampaignReorderActionsInput,
   type CampaignReorderActionsOutput,
