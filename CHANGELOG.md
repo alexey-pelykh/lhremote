@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-03-03
+
+### Added
+
+- `query-profiles-bulk` tool for batch profile lookups by multiple person IDs
+- `campaign-remove-people` tool to remove targets from a campaign
+- `campaign-update-action` tool for updating action settings
+- `campaign-list-people` tool to enumerate campaign targets
+- `includePositions` option for `query-profile` to include career history (positions)
+- Profile data included in `campaign-status` results
+
+### Fixed
+
+- `scrape-messaging-history` now requires `personIds` parameter — previously crashed with empty config when no person IDs were provided
+- Runtime validation for empty `personIds` at the core operation boundary
+
 ## [0.3.0] — 2026-03-02
 
 ### Added
