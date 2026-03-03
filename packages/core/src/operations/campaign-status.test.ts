@@ -33,9 +33,9 @@ const MOCK_STATUS = {
 const MOCK_RESULTS = {
   campaignId: 42,
   results: [
-    { id: 1, actionVersionId: 1, personId: 100, result: 3, platform: "linkedin", createdAt: "2026-01-01T00:00:00Z" },
-    { id: 2, actionVersionId: 1, personId: 101, result: 3, platform: "linkedin", createdAt: "2026-01-01T00:01:00Z" },
-    { id: 3, actionVersionId: 1, personId: 102, result: 3, platform: "linkedin", createdAt: "2026-01-01T00:02:00Z" },
+    { id: 1, actionVersionId: 1, personId: 100, result: 3, platform: "linkedin", createdAt: "2026-01-01T00:00:00Z", profile: { firstName: "Alice", lastName: "Smith", headline: "Engineer", company: "Acme", title: "Software Engineer" } },
+    { id: 2, actionVersionId: 1, personId: 101, result: 3, platform: "linkedin", createdAt: "2026-01-01T00:01:00Z", profile: { firstName: "Bob", lastName: null, headline: null, company: null, title: null } },
+    { id: 3, actionVersionId: 1, personId: 102, result: 3, platform: "linkedin", createdAt: "2026-01-01T00:02:00Z", profile: null },
   ],
   actionCounts: MOCK_STATUS.actionCounts,
 };
@@ -108,6 +108,34 @@ describe("campaignStatus", () => {
     });
 
     expect(result.results).toHaveLength(1);
+  });
+
+  it("includes profile data in results", async () => {
+    setupMocks();
+
+    const result = await campaignStatus({
+      campaignId: 42,
+      cdpPort: 9222,
+      includeResults: true,
+    });
+
+    const results = result.results ?? [];
+    expect(results).toHaveLength(3);
+    expect(results.at(0)?.profile).toEqual({
+      firstName: "Alice",
+      lastName: "Smith",
+      headline: "Engineer",
+      company: "Acme",
+      title: "Software Engineer",
+    });
+    expect(results.at(1)?.profile).toEqual({
+      firstName: "Bob",
+      lastName: null,
+      headline: null,
+      company: null,
+      title: null,
+    });
+    expect(results.at(2)?.profile).toBeNull();
   });
 
   it("defaults limit to 20", async () => {

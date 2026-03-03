@@ -72,9 +72,21 @@ export async function handleCampaignStatus(
       if (results.length > 0) {
         process.stdout.write(`\nResults (${String(results.length)}):\n`);
         for (const r of results) {
-          process.stdout.write(
-            `  Person ${String(r.personId)}: result=${String(r.result)} (action version #${String(r.actionVersionId)})\n`,
-          );
+          let line = `  Person ${String(r.personId)}`;
+          if (r.profile) {
+            const name = [r.profile.firstName, r.profile.lastName]
+              .filter(Boolean)
+              .join(" ");
+            if (name) line += ` (${name})`;
+          }
+          line += `: result=${String(r.result)} (action version #${String(r.actionVersionId)})`;
+          if (r.profile) {
+            const details: string[] = [];
+            if (r.profile.title) details.push(r.profile.title);
+            if (r.profile.company) details.push(`at ${r.profile.company}`);
+            if (details.length > 0) line += `\n    ${details.join(" ")}`;
+          }
+          process.stdout.write(line + "\n");
         }
       } else {
         process.stdout.write("\nNo results yet.\n");

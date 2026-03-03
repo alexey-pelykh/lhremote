@@ -178,6 +178,53 @@ describe("CampaignRepository", () => {
       expect(result?.createdAt).toBeDefined();
     });
 
+    it("includes profile data from person_mini_profile and person_current_position", () => {
+      const results = repo.getResults(1);
+
+      // Person 1 (Ada Lovelace): full profile
+      const ada = results.find((r) => r.personId === 1);
+      expect(ada?.profile).toEqual({
+        firstName: "Ada",
+        lastName: "Lovelace",
+        headline: "Principal Analytical Engine Programmer",
+        company: "Babbage Industries",
+        title: "Lead Programmer",
+      });
+
+      // Person 2 (Charlie): mini_profile only, no current position
+      const charlie = results.find((r) => r.personId === 2);
+      expect(charlie?.profile).toEqual({
+        firstName: "Charlie",
+        lastName: null,
+        headline: null,
+        company: null,
+        title: null,
+      });
+
+      // Person 3 (Grace Hopper): full profile
+      const grace = results.find((r) => r.personId === 3);
+      expect(grace?.profile).toEqual({
+        firstName: "Grace",
+        lastName: "Hopper",
+        headline: "Compiler Pioneer at COBOL Systems",
+        company: "COBOL Systems Inc",
+        title: "Distinguished Engineer",
+      });
+    });
+
+    it("returns null profile when person has no mini_profile", () => {
+      // Insert a person without mini_profile
+      db.exec(`
+        INSERT INTO people (id, original_id) VALUES (99, 99);
+        INSERT INTO action_results (action_version_id, person_id, result, platform, created_at)
+        VALUES (1, 99, 1, 'LINKEDIN', '2025-01-16T00:00:00.000Z');
+      `);
+
+      const results = repo.getResults(1);
+      const orphan = results.find((r) => r.personId === 99);
+      expect(orphan?.profile).toBeNull();
+    });
+
     it("respects limit parameter", () => {
       const results = repo.getResults(1, { limit: 1 });
       expect(results).toHaveLength(1);
