@@ -23,6 +23,13 @@ Example: `(feat) mcp: add campaign-create tool`
 
 Do **not** add issue numbers (e.g. `(#12)`) to commit messages. GitHub links PRs to issues via `Closes #N` in the PR body, not in commits.
 
+### PR Workflow
+
+- Never push directly to `main` — always create a feature/fix branch, even for small changes (`enforce_admins` is enabled)
+- Run `pnpm lint` before pushing
+- PR body must include `Closes #N` to link the related issue
+- Use Copilot review; address feedback and re-request until no actionable comments remain
+
 ## Testing
 
 | Tier | Scope | Environment | Dependency |
@@ -35,6 +42,7 @@ Do **not** add issue numbers (e.g. `(#12)`) to commit messages. GitHub links PRs
 - Integration tests use `*.integration.test.ts` suffix.
 - Test helper `packages/core/src/cdp/testing/launch-chromium.ts` manages Chromium lifecycle.
 - Chromium is installed in CI via `npx playwright-core install chromium --with-deps`.
+- E2E tests live in `packages/e2e/src/` and are **not** run in CI. Always run `pnpm test:e2e` locally before submitting PRs that add or modify E2E tests.
 
 ## Infrastructure
 
