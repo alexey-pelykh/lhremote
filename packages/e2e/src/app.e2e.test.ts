@@ -549,7 +549,7 @@ describeE2E("App lifecycle", () => {
         .spyOn(process.stdout, "write")
         .mockReturnValue(true);
 
-      await handleQueryProfile({ publicId: "williamhgates", json: true });
+      await handleQueryProfile({ publicId: "williamhgates", includePositions: true, json: true });
 
       expect(process.exitCode).toBeUndefined();
       expect(stdoutSpy).toHaveBeenCalled();
@@ -826,7 +826,7 @@ describeE2E("App lifecycle", () => {
       registerQueryProfile(server);
 
       const handler = getHandler("query-profile");
-      const result = (await handler({ publicId: "williamhgates" })) as {
+      const result = (await handler({ publicId: "williamhgates", includePositions: true })) as {
         isError?: boolean;
         content: { type: string; text: string }[];
       };

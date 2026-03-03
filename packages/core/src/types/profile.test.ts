@@ -13,7 +13,7 @@ import type {
 } from "./profile.js";
 
 describe("Profile types", () => {
-  it("should allow constructing a full Profile", () => {
+  it("should allow constructing a full Profile with positions", () => {
     const profile: Profile = {
       id: 1,
       miniProfile: {
@@ -53,10 +53,30 @@ describe("Profile types", () => {
     expect(profile.miniProfile.firstName).toBe("Jane");
     expect(profile.externalIds).toHaveLength(2);
     expect(profile.currentPosition?.company).toBe("Acme Corp");
-    expect(profile.positions[0]?.isCurrent).toBe(true);
+    expect(profile.positions?.[0]?.isCurrent).toBe(true);
     expect(profile.education[0]?.school).toBe("MIT");
     expect(profile.skills[0]?.name).toBe("TypeScript");
     expect(profile.emails[0]).toBe("jane@example.com");
+  });
+
+  it("should allow constructing a Profile without positions", () => {
+    const profile: Profile = {
+      id: 2,
+      miniProfile: {
+        firstName: "Bob",
+        lastName: null,
+        headline: null,
+        avatar: null,
+      },
+      externalIds: [],
+      currentPosition: null,
+      education: [],
+      skills: [],
+      emails: [],
+    };
+
+    expect(profile.id).toBe(2);
+    expect(profile.positions).toBeUndefined();
   });
 
   it("should allow nullable fields", () => {
@@ -91,7 +111,6 @@ describe("Profile types", () => {
       miniProfile: mini,
       externalIds: [],
       currentPosition: null,
-      positions: [],
       education: [],
       skills: [],
       emails: [],

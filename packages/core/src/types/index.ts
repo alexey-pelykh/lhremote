@@ -9,6 +9,7 @@ export type {
   MiniProfile,
   Position,
   Profile,
+  ProfileFindOptions,
   ProfileSearchOptions,
   ProfileSearchResult,
   ProfileSummary,

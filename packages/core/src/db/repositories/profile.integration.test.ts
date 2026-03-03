@@ -54,17 +54,8 @@ describe("ProfileRepository (integration)", () => {
       expect(profile.currentPosition?.company).toBe("Babbage Industries");
       expect(profile.currentPosition?.title).toBe("Lead Programmer");
 
-      // Position history with year-month formatting
-      expect(profile.positions.length).toBeGreaterThanOrEqual(2);
-      const currentPos = profile.positions.find((p) => p.isCurrent);
-      expect(currentPos?.company).toBe("Babbage Industries");
-      expect(currentPos?.startDate).toBe("2020-03");
-      expect(currentPos?.endDate).toBeNull();
-
-      const pastPos = profile.positions.find((p) => !p.isCurrent);
-      expect(pastPos?.company).toBe("Difference Engine Co");
-      expect(pastPos?.startDate).toBe("2015-09");
-      expect(pastPos?.endDate).toBe("2019-12");
+      // Positions omitted by default
+      expect(profile.positions).toBeUndefined();
 
       // Education with year-only formatting
       expect(profile.education.length).toBeGreaterThanOrEqual(1);
@@ -84,6 +75,22 @@ describe("ProfileRepository (integration)", () => {
       expect(profile.emails).toContain("ada@example.test");
     });
 
+    it("includes position history when includePositions is true", () => {
+      const profile = repo.findById(1, { includePositions: true });
+      const positions = profile.positions ?? [];
+
+      expect(positions.length).toBeGreaterThanOrEqual(2);
+      const currentPos = positions.find((p) => p.isCurrent);
+      expect(currentPos?.company).toBe("Babbage Industries");
+      expect(currentPos?.startDate).toBe("2020-03");
+      expect(currentPos?.endDate).toBeNull();
+
+      const pastPos = positions.find((p) => !p.isCurrent);
+      expect(pastPos?.company).toBe("Difference Engine Co");
+      expect(pastPos?.startDate).toBe("2015-09");
+      expect(pastPos?.endDate).toBe("2019-12");
+    });
+
     it("assembles a minimal profile without optional data", () => {
       const profile = repo.findById(2);
 
@@ -93,7 +100,7 @@ describe("ProfileRepository (integration)", () => {
       expect(profile.miniProfile.headline).toBeNull();
       expect(profile.miniProfile.avatar).toBeNull();
       expect(profile.currentPosition).toBeNull();
-      expect(profile.positions).toEqual([]);
+      expect(profile.positions).toBeUndefined();
       expect(profile.education).toEqual([]);
       expect(profile.skills).toEqual([]);
       expect(profile.emails).toEqual([]);
@@ -146,8 +153,8 @@ describe("ProfileRepository (integration)", () => {
     });
 
     it("current position and position history agree on current role", () => {
-      const profile = repo.findById(1);
-      const currentPos = profile.positions.find((p) => p.isCurrent);
+      const profile = repo.findById(1, { includePositions: true });
+      const currentPos = profile.positions?.find((p) => p.isCurrent);
 
       expect(profile.currentPosition).not.toBeNull();
       expect(currentPos).toBeDefined();

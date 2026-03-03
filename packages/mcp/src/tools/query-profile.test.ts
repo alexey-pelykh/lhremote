@@ -37,15 +37,6 @@ const MOCK_PROFILE: Profile = {
     { externalId: "987654321", typeGroup: "member", isMemberId: true },
   ],
   currentPosition: { company: "Acme Corp", title: "Engineering Manager" },
-  positions: [
-    {
-      company: "Acme Corp",
-      title: "Engineering Manager",
-      startDate: "2020-01",
-      endDate: null,
-      isCurrent: true,
-    },
-  ],
   education: [
     {
       school: "MIT",
@@ -59,6 +50,26 @@ const MOCK_PROFILE: Profile = {
   emails: ["jane@acme.com"],
 };
 
+const MOCK_PROFILE_WITH_POSITIONS: Profile = {
+  ...MOCK_PROFILE,
+  positions: [
+    {
+      company: "Acme Corp",
+      title: "Engineering Manager",
+      startDate: "2020-01",
+      endDate: null,
+      isCurrent: true,
+    },
+    {
+      company: "Startup Inc",
+      title: "Senior Engineer",
+      startDate: "2018-06",
+      endDate: "2019-12",
+      isCurrent: false,
+    },
+  ],
+};
+
 function mockDb() {
   const close = vi.fn();
   vi.mocked(DatabaseClient).mockImplementation(function () {
@@ -67,11 +78,15 @@ function mockDb() {
   return { close };
 }
 
-function mockRepo(profile: Profile = MOCK_PROFILE) {
+function mockRepo(profile: Profile = MOCK_PROFILE, profileWithPositions: Profile = MOCK_PROFILE_WITH_POSITIONS) {
   vi.mocked(ProfileRepository).mockImplementation(function () {
     return {
-      findById: vi.fn().mockReturnValue(profile),
-      findByPublicId: vi.fn().mockReturnValue(profile),
+      findById: vi.fn().mockImplementation((_id: number, options?: { includePositions?: boolean }) =>
+        options?.includePositions ? profileWithPositions : profile,
+      ),
+      findByPublicId: vi.fn().mockImplementation((_slug: string, options?: { includePositions?: boolean }) =>
+        options?.includePositions ? profileWithPositions : profile,
+      ),
     } as unknown as ProfileRepository;
   });
 }
@@ -150,6 +165,37 @@ describe("registerQueryProfile", () => {
         {
           type: "text",
           text: JSON.stringify(MOCK_PROFILE, null, 2),
+        },
+      ],
+    });
+  });
+
+  it("does not include positions by default", async () => {
+    const { server, getHandler } = createMockServer();
+    registerQueryProfile(server);
+    setupSuccessPath();
+
+    const handler = getHandler("query-profile");
+    const result = await handler({ personId: 1 });
+
+    const content = (result as { content: Array<{ text: string }> }).content;
+    const parsed = JSON.parse(content[0]?.text ?? "{}");
+    expect(parsed.positions).toBeUndefined();
+  });
+
+  it("includes positions when includePositions is true", async () => {
+    const { server, getHandler } = createMockServer();
+    registerQueryProfile(server);
+    setupSuccessPath();
+
+    const handler = getHandler("query-profile");
+    const result = await handler({ personId: 1, includePositions: true });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(MOCK_PROFILE_WITH_POSITIONS, null, 2),
         },
       ],
     });

@@ -53,10 +53,18 @@ export interface Profile {
   miniProfile: MiniProfile;
   externalIds: ExternalId[];
   currentPosition: CurrentPosition | null;
-  positions: Position[];
+  positions?: Position[];
   education: Education[];
   skills: Skill[];
   emails: string[];
+}
+
+/**
+ * Options for looking up a single profile.
+ */
+export interface ProfileFindOptions {
+  /** When true, include full position history in the response (default: false) */
+  includePositions?: boolean;
 }
 
 /**

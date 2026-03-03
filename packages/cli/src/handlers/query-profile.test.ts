@@ -35,15 +35,6 @@ const MOCK_PROFILE: Profile = {
     { externalId: "987654321", typeGroup: "member", isMemberId: true },
   ],
   currentPosition: { company: "Acme Corp", title: "Engineering Manager" },
-  positions: [
-    {
-      company: "Acme Corp",
-      title: "Engineering Manager",
-      startDate: "2020-01",
-      endDate: null,
-      isCurrent: true,
-    },
-  ],
   education: [
     {
       school: "MIT",
@@ -57,11 +48,35 @@ const MOCK_PROFILE: Profile = {
   emails: ["jane@acme.com"],
 };
 
-function mockRepo(profile: Profile = MOCK_PROFILE) {
+const MOCK_PROFILE_WITH_POSITIONS: Profile = {
+  ...MOCK_PROFILE,
+  positions: [
+    {
+      company: "Acme Corp",
+      title: "Engineering Manager",
+      startDate: "2020-01",
+      endDate: null,
+      isCurrent: true,
+    },
+    {
+      company: "Startup Inc",
+      title: "Senior Engineer",
+      startDate: "2018-06",
+      endDate: "2019-12",
+      isCurrent: false,
+    },
+  ],
+};
+
+function mockRepo(profile: Profile = MOCK_PROFILE, profileWithPositions: Profile = MOCK_PROFILE_WITH_POSITIONS) {
   vi.mocked(ProfileRepository).mockImplementation(function () {
     return {
-      findById: vi.fn().mockReturnValue(profile),
-      findByPublicId: vi.fn().mockReturnValue(profile),
+      findById: vi.fn().mockImplementation((_id: number, options?: { includePositions?: boolean }) =>
+        options?.includePositions ? profileWithPositions : profile,
+      ),
+      findByPublicId: vi.fn().mockImplementation((_slug: string, options?: { includePositions?: boolean }) =>
+        options?.includePositions ? profileWithPositions : profile,
+      ),
     } as unknown as ProfileRepository;
   });
 }
@@ -209,6 +224,56 @@ describe("handleQueryProfile", () => {
     expect(stdoutSpy).toHaveBeenCalledWith("Jane Doe (#12345)\n");
   });
 
+  it("prints positions when --include-positions is set", async () => {
+    const stdoutSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockReturnValue(true);
+
+    setupSuccessPath();
+
+    await handleQueryProfile({ personId: 12345, includePositions: true });
+
+    expect(process.exitCode).toBeUndefined();
+    expect(stdoutSpy).toHaveBeenCalledWith("\nPositions:\n");
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      "  Engineering Manager at Acme Corp (2020-01 – present)\n",
+    );
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      "  Senior Engineer at Startup Inc (2018-06 – 2019-12)\n",
+    );
+  });
+
+  it("does not print positions section by default", async () => {
+    const stdoutSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockReturnValue(true);
+
+    setupSuccessPath();
+
+    await handleQueryProfile({ personId: 12345 });
+
+    const calls = stdoutSpy.mock.calls.map((c) => String(c[0]));
+    expect(calls).not.toContainEqual(expect.stringContaining("Positions:"));
+  });
+
+  it("includes positions in JSON output when --include-positions is set", async () => {
+    const stdoutSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockReturnValue(true);
+
+    setupSuccessPath();
+
+    await handleQueryProfile({ personId: 12345, includePositions: true, json: true });
+
+    expect(process.exitCode).toBeUndefined();
+    const output = stdoutSpy.mock.calls
+      .map((call) => String(call[0]))
+      .join("");
+    const parsed = JSON.parse(output);
+    expect(parsed.positions).toHaveLength(2);
+    expect(parsed.positions[0].company).toBe("Acme Corp");
+  });
+
   it("handles profile with no headline or current position", async () => {
     const stdoutSpy = vi
       .spyOn(process.stdout, "write")
@@ -224,7 +289,6 @@ describe("handleQueryProfile", () => {
       },
       externalIds: [],
       currentPosition: null,
-      positions: [],
       education: [],
       skills: [],
       emails: [],

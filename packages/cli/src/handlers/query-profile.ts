@@ -14,9 +14,10 @@ import {
 export async function handleQueryProfile(options: {
   personId?: number;
   publicId?: string;
+  includePositions?: boolean;
   json?: boolean;
 }): Promise<void> {
-  const { personId, publicId } = options;
+  const { personId, publicId, includePositions } = options;
 
   if ((personId == null) === (publicId == null)) {
     process.stderr.write(
@@ -39,10 +40,11 @@ export async function handleQueryProfile(options: {
     const db = new DatabaseClient(dbPath);
     try {
       const repo = new ProfileRepository(db);
+      const findOptions = { includePositions: includePositions === true };
       found =
         personId != null
-          ? repo.findById(personId)
-          : repo.findByPublicId(publicId as string);
+          ? repo.findById(personId, findOptions)
+          : repo.findByPublicId(publicId as string, findOptions);
       break;
     } catch (error) {
       if (error instanceof ProfileNotFoundError) {
@@ -83,6 +85,17 @@ export async function handleQueryProfile(options: {
       ].filter(Boolean);
       if (parts.length > 0) {
         process.stdout.write(`\nCurrent: ${parts.join(" at ")}\n`);
+      }
+    }
+
+    if (found.positions && found.positions.length > 0) {
+      process.stdout.write("\nPositions:\n");
+      for (const pos of found.positions) {
+        const role = [pos.title, pos.company].filter(Boolean).join(" at ");
+        const dates = [pos.startDate ?? "?", pos.endDate ?? "present"].join(
+          " – ",
+        );
+        process.stdout.write(`  ${role} (${dates})\n`);
       }
     }
 

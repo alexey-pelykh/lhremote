@@ -50,6 +50,7 @@ export type {
   PopupState,
   Position,
   Profile,
+  ProfileFindOptions,
   ProfileSearchOptions,
   ProfileSearchResult,
   ProfileSummary,

@@ -38,7 +38,7 @@ describe("ProfileRepository", () => {
   });
 
   describe("findById", () => {
-    it("returns a fully assembled profile", () => {
+    it("returns a fully assembled profile without positions by default", () => {
       const profile = repo.findById(1);
 
       expect(profile.id).toBe(1);
@@ -71,21 +71,7 @@ describe("ProfileRepository", () => {
         title: "Lead Programmer",
       });
 
-      expect(profile.positions).toHaveLength(2);
-      expect(profile.positions).toContainEqual({
-        company: "Babbage Industries",
-        title: "Lead Programmer",
-        startDate: "2020-03",
-        endDate: null,
-        isCurrent: true,
-      });
-      expect(profile.positions).toContainEqual({
-        company: "Difference Engine Co",
-        title: "Junior Analyst",
-        startDate: "2015-09",
-        endDate: "2019-12",
-        isCurrent: false,
-      });
+      expect(profile.positions).toBeUndefined();
 
       expect(profile.education).toHaveLength(2);
       expect(profile.education).toContainEqual({
@@ -111,6 +97,26 @@ describe("ProfileRepository", () => {
       expect(profile.emails).toEqual(["ada@example.test"]);
     });
 
+    it("includes positions when includePositions is true", () => {
+      const profile = repo.findById(1, { includePositions: true });
+
+      expect(profile.positions).toHaveLength(2);
+      expect(profile.positions).toContainEqual({
+        company: "Babbage Industries",
+        title: "Lead Programmer",
+        startDate: "2020-03",
+        endDate: null,
+        isCurrent: true,
+      });
+      expect(profile.positions).toContainEqual({
+        company: "Difference Engine Co",
+        title: "Junior Analyst",
+        startDate: "2015-09",
+        endDate: "2019-12",
+        isCurrent: false,
+      });
+    });
+
     it("throws ProfileNotFoundError for a missing ID", () => {
       expect(() => repo.findById(999)).toThrow(ProfileNotFoundError);
       expect(() => repo.findById(999)).toThrow("Profile not found for id 999");
@@ -126,10 +132,16 @@ describe("ProfileRepository", () => {
       expect(profile.miniProfile.avatar).toBeNull();
       expect(profile.externalIds).toHaveLength(1);
       expect(profile.currentPosition).toBeNull();
-      expect(profile.positions).toEqual([]);
+      expect(profile.positions).toBeUndefined();
       expect(profile.education).toEqual([]);
       expect(profile.skills).toEqual([]);
       expect(profile.emails).toEqual([]);
+    });
+
+    it("returns empty positions array when includePositions is true but person has none", () => {
+      const profile = repo.findById(2, { includePositions: true });
+
+      expect(profile.positions).toEqual([]);
     });
 
     it("handles multiple emails", () => {

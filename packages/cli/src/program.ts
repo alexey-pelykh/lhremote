@@ -417,6 +417,7 @@ export function createProgram(): Command {
     .description("Look up a cached profile from the local database")
     .option("--person-id <id>", "Look up by internal person ID", parsePositiveInt)
     .option("--public-id <slug>", "Look up by LinkedIn public ID")
+    .option("--include-positions", "Include full position history (career history)")
     .option("--json", "Output as JSON")
     .action(handleQueryProfile);
 

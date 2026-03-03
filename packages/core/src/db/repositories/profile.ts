@@ -9,6 +9,7 @@ import type {
   MiniProfile,
   Position,
   Profile,
+  ProfileFindOptions,
   ProfileSearchOptions,
   ProfileSearchResult,
   ProfileSummary,
@@ -205,10 +206,10 @@ export class ProfileRepository {
    *
    * @throws {ProfileNotFoundError} if no person exists with the given ID.
    */
-  findById(id: number): Profile {
+  findById(id: number, options?: ProfileFindOptions): Profile {
     const row = this.stmtPersonById.get(id) as { id: number } | undefined;
     if (!row) throw new ProfileNotFoundError(id);
-    return this.assembleProfile(row.id);
+    return this.assembleProfile(row.id, options);
   }
 
   /**
@@ -216,12 +217,12 @@ export class ProfileRepository {
    *
    * @throws {ProfileNotFoundError} if no person matches the public ID.
    */
-  findByPublicId(slug: string): Profile {
+  findByPublicId(slug: string, options?: ProfileFindOptions): Profile {
     const row = this.stmtPersonByPublicId.get(slug) as
       | { id: number }
       | undefined;
     if (!row) throw new ProfileNotFoundError(slug);
-    return this.assembleProfile(row.id);
+    return this.assembleProfile(row.id, options);
   }
 
   /**
@@ -270,7 +271,9 @@ export class ProfileRepository {
     return { profiles, total };
   }
 
-  private assembleProfile(personId: number): Profile {
+  private assembleProfile(personId: number, options?: ProfileFindOptions): Profile {
+    const { includePositions = false } = options ?? {};
+
     const miniRow = this.stmtMiniProfile.get(personId) as
       | MiniProfileRow
       | undefined;
@@ -298,15 +301,17 @@ export class ProfileRepository {
       ? { company: cpRow.company, title: cpRow.position }
       : null;
 
-    const positions: Position[] = (
-      this.stmtPositions.all(personId) as unknown as PositionRow[]
-    ).map((r) => ({
-      company: r.company_name,
-      title: r.title,
-      startDate: formatDate(r.start_year, r.start_month),
-      endDate: formatDate(r.end_year, r.end_month),
-      isCurrent: r.is_default != null,
-    }));
+    const positions: Position[] | undefined = includePositions
+      ? (
+          this.stmtPositions.all(personId) as unknown as PositionRow[]
+        ).map((r) => ({
+          company: r.company_name,
+          title: r.title,
+          startDate: formatDate(r.start_year, r.start_month),
+          endDate: formatDate(r.end_year, r.end_month),
+          isCurrent: r.is_default != null,
+        }))
+      : undefined;
 
     const education: Education[] = (
       this.stmtEducation.all(personId) as unknown as EducationRow[]
@@ -331,7 +336,7 @@ export class ProfileRepository {
       miniProfile,
       externalIds,
       currentPosition,
-      positions,
+      ...(positions !== undefined && { positions }),
       education,
       skills,
       emails,

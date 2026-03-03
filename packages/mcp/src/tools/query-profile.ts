@@ -29,8 +29,14 @@ export function registerQueryProfile(server: McpServer): void {
         .describe(
           "Look up by LinkedIn public ID (profile URL slug, e.g. jane-doe-12345)",
         ),
+      includePositions: z
+        .boolean()
+        .optional()
+        .describe(
+          "When true, include full position history (career history) in the response",
+        ),
     },
-    async ({ personId, publicId }) => {
+    async ({ personId, publicId, includePositions }) => {
       if ((personId == null) === (publicId == null)) {
         return mcpError(
           "Exactly one of personId or publicId must be provided.",
@@ -46,10 +52,11 @@ export function registerQueryProfile(server: McpServer): void {
         const db = new DatabaseClient(dbPath);
         try {
           const repo = new ProfileRepository(db);
+          const findOptions = { includePositions: includePositions === true };
           const profile =
             personId != null
-              ? repo.findById(personId)
-              : repo.findByPublicId(publicId as string);
+              ? repo.findById(personId, findOptions)
+              : repo.findByPublicId(publicId as string, findOptions);
 
           return mcpSuccess(JSON.stringify(profile, null, 2));
         } catch (error) {
