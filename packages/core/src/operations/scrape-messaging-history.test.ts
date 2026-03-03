@@ -62,6 +62,7 @@ describe("scrapeMessagingHistory", () => {
     setupMocks();
 
     const result = await scrapeMessagingHistory({
+      personIds: [100, 200],
       cdpPort: 9222,
     });
 
@@ -70,20 +71,25 @@ describe("scrapeMessagingHistory", () => {
     expect(result.stats).toBe(MOCK_STATS);
   });
 
-  it("calls instance.executeAction with ScrapeMessagingHistory", async () => {
+  it("calls instance.executeAction with ScrapeMessagingHistory and personIds", async () => {
     setupMocks();
 
     await scrapeMessagingHistory({
+      personIds: [100, 200],
       cdpPort: 9222,
     });
 
-    expect(mockInstance.executeAction).toHaveBeenCalledWith("ScrapeMessagingHistory");
+    expect(mockInstance.executeAction).toHaveBeenCalledWith(
+      "ScrapeMessagingHistory",
+      { personIds: [100, 200] },
+    );
   });
 
   it("passes instanceTimeout to withInstanceDatabase", async () => {
     setupMocks();
 
     await scrapeMessagingHistory({
+      personIds: [100],
       cdpPort: 9222,
     });
 
@@ -99,6 +105,7 @@ describe("scrapeMessagingHistory", () => {
     setupMocks();
 
     await scrapeMessagingHistory({
+      personIds: [100],
       cdpPort: 1234,
       cdpHost: "192.168.1.1",
       allowRemote: true,
@@ -114,6 +121,7 @@ describe("scrapeMessagingHistory", () => {
     setupMocks();
 
     await scrapeMessagingHistory({
+      personIds: [100],
       cdpPort: 9222,
     });
 
@@ -124,7 +132,7 @@ describe("scrapeMessagingHistory", () => {
     vi.mocked(resolveAccount).mockRejectedValue(new Error("connection refused"));
 
     await expect(
-      scrapeMessagingHistory({ cdpPort: 9222 }),
+      scrapeMessagingHistory({ personIds: [100], cdpPort: 9222 }),
     ).rejects.toThrow("connection refused");
   });
 
@@ -135,7 +143,7 @@ describe("scrapeMessagingHistory", () => {
     );
 
     await expect(
-      scrapeMessagingHistory({ cdpPort: 9222 }),
+      scrapeMessagingHistory({ personIds: [100], cdpPort: 9222 }),
     ).rejects.toThrow("instance not running");
   });
 
@@ -158,7 +166,7 @@ describe("scrapeMessagingHistory", () => {
     });
 
     await expect(
-      scrapeMessagingHistory({ cdpPort: 9222 }),
+      scrapeMessagingHistory({ personIds: [100], cdpPort: 9222 }),
     ).rejects.toThrow("query failed");
   });
 });

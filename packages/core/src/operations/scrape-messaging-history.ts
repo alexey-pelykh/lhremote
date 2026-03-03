@@ -8,7 +8,9 @@ import { MessageRepository } from "../db/index.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
-export type ScrapeMessagingHistoryInput = ConnectionOptions;
+export interface ScrapeMessagingHistoryInput extends ConnectionOptions {
+  readonly personIds: number[];
+}
 
 export interface ScrapeMessagingHistoryOutput {
   readonly success: true;
@@ -27,7 +29,9 @@ export async function scrapeMessagingHistory(
   });
 
   return withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
-    await instance.executeAction("ScrapeMessagingHistory");
+    await instance.executeAction("ScrapeMessagingHistory", {
+      personIds: input.personIds,
+    });
 
     const repo = new MessageRepository(db);
     const stats = repo.getMessageStats();

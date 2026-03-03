@@ -12,16 +12,24 @@ import {
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | scrape-messaging-history} CLI command. */
 export async function handleScrapeMessagingHistory(options: {
+  personId: number[];
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
   json?: boolean;
 }): Promise<void> {
+  if (options.personId.length === 0) {
+    process.stderr.write("At least one --person-id is required.\n");
+    process.exitCode = 1;
+    return;
+  }
+
   process.stderr.write("Scraping messaging history from LinkedIn...\n");
 
   let result: ScrapeMessagingHistoryOutput;
   try {
     result = await scrapeMessagingHistory({
+      personIds: options.personId,
       cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,

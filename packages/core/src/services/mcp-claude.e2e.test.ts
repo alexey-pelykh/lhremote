@@ -156,8 +156,11 @@ describeE2E("MCP tools via Claude CLI", () => {
     it(
       "scrape-messaging-history scrapes and returns stats",
       () => {
+        const personId = process.env.LHREMOTE_E2E_PERSON_ID;
+        expect(personId, "LHREMOTE_E2E_PERSON_ID must be set").toBeTruthy();
+
         const result = runClaude(
-          "Use the scrape-messaging-history tool to scrape messaging history. " +
+          `Use the scrape-messaging-history tool with personIds [${personId}] to scrape messaging history. ` +
           "Report the raw JSON from the tool response, nothing else.",
           300_000,
         );

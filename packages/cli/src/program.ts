@@ -496,6 +496,7 @@ export function createProgram(): Command {
     .description(
       "Scrape messaging history from LinkedIn into the local database",
     )
+    .option("--person-id <id>", "Person ID to scrape (repeatable, at least one required)", collectPositiveInt, [])
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")

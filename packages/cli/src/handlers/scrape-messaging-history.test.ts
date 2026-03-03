@@ -50,10 +50,18 @@ describe("handleScrapeMessagingHistory", () => {
     vi.restoreAllMocks();
   });
 
+  it("exits with error when no person IDs provided", async () => {
+    await handleScrapeMessagingHistory({ personId: [] });
+
+    expect(process.exitCode).toBe(1);
+    expect(getStderr(stderrSpy)).toContain("At least one --person-id is required");
+    expect(scrapeMessagingHistory).not.toHaveBeenCalled();
+  });
+
   it("prints JSON with --json", async () => {
     vi.mocked(scrapeMessagingHistory).mockResolvedValue(MOCK_RESULT);
 
-    await handleScrapeMessagingHistory({ json: true });
+    await handleScrapeMessagingHistory({ personId: [100], json: true });
 
     expect(process.exitCode).toBeUndefined();
     const output = JSON.parse(getStdout(stdoutSpy));
@@ -65,7 +73,7 @@ describe("handleScrapeMessagingHistory", () => {
   it("prints human-readable output by default", async () => {
     vi.mocked(scrapeMessagingHistory).mockResolvedValue(MOCK_RESULT);
 
-    await handleScrapeMessagingHistory({});
+    await handleScrapeMessagingHistory({ personId: [100] });
 
     expect(process.exitCode).toBeUndefined();
     const output = getStdout(stdoutSpy);
@@ -78,7 +86,7 @@ describe("handleScrapeMessagingHistory", () => {
   it("prints progress to stderr", async () => {
     vi.mocked(scrapeMessagingHistory).mockResolvedValue(MOCK_RESULT);
 
-    await handleScrapeMessagingHistory({});
+    await handleScrapeMessagingHistory({ personId: [100] });
 
     const stderr = getStderr(stderrSpy);
     expect(stderr).toContain("Scraping messaging history");
@@ -97,7 +105,7 @@ describe("handleScrapeMessagingHistory", () => {
       },
     });
 
-    await handleScrapeMessagingHistory({});
+    await handleScrapeMessagingHistory({ personId: [100] });
 
     expect(process.exitCode).toBeUndefined();
     const output = getStdout(stdoutSpy);
@@ -110,7 +118,7 @@ describe("handleScrapeMessagingHistory", () => {
       new Error("No accounts found."),
     );
 
-    await handleScrapeMessagingHistory({});
+    await handleScrapeMessagingHistory({ personId: [100] });
 
     expect(process.exitCode).toBe(1);
     expect(getStderr(stderrSpy)).toContain("No accounts found.");
@@ -123,7 +131,7 @@ describe("handleScrapeMessagingHistory", () => {
       ),
     );
 
-    await handleScrapeMessagingHistory({});
+    await handleScrapeMessagingHistory({ personId: [100] });
 
     expect(process.exitCode).toBe(1);
     expect(getStderr(stderrSpy)).toContain("No LinkedHelper instance is running.");
@@ -134,7 +142,7 @@ describe("handleScrapeMessagingHistory", () => {
       new Error("connection reset"),
     );
 
-    await handleScrapeMessagingHistory({});
+    await handleScrapeMessagingHistory({ personId: [100] });
 
     expect(process.exitCode).toBe(1);
     expect(getStderr(stderrSpy)).toContain("connection reset");

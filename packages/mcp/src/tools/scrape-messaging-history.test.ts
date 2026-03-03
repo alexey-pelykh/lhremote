@@ -61,7 +61,7 @@ describe("registerScrapeMessagingHistory", () => {
     });
 
     const handler = getHandler("scrape-messaging-history");
-    const result = await handler({ cdpPort: 9222 });
+    const result = await handler({ personIds: [100, 200], cdpPort: 9222 });
 
     expect(result).toEqual({
       content: [
@@ -92,10 +92,10 @@ describe("registerScrapeMessagingHistory", () => {
     });
 
     const handler = getHandler("scrape-messaging-history");
-    await handler({ cdpPort: 9222 });
+    await handler({ personIds: [100, 200], cdpPort: 9222 });
 
     expect(scrapeMessagingHistory).toHaveBeenCalledWith(
-      expect.objectContaining({ cdpPort: 9222 }),
+      expect.objectContaining({ personIds: [100, 200], cdpPort: 9222 }),
     );
   });
 
@@ -108,7 +108,7 @@ describe("registerScrapeMessagingHistory", () => {
     );
 
     const handler = getHandler("scrape-messaging-history");
-    const result = await handler({ cdpPort: 9222 });
+    const result = await handler({ personIds: [100], cdpPort: 9222 });
 
     expect(result).toEqual({
       isError: true,
@@ -125,7 +125,7 @@ describe("registerScrapeMessagingHistory", () => {
     );
 
     const handler = getHandler("scrape-messaging-history");
-    const result = await handler({ cdpPort: 9222 });
+    const result = await handler({ personIds: [100], cdpPort: 9222 });
 
     expect(result).toEqual({
       isError: true,
@@ -147,7 +147,7 @@ describe("registerScrapeMessagingHistory", () => {
     );
 
     const handler = getHandler("scrape-messaging-history");
-    const result = await handler({ cdpPort: 9222 });
+    const result = await handler({ personIds: [100], cdpPort: 9222 });
 
     expect(result).toEqual({
       isError: true,
@@ -163,7 +163,7 @@ describe("registerScrapeMessagingHistory", () => {
   describeInfrastructureErrors(
     registerScrapeMessagingHistory,
     "scrape-messaging-history",
-    () => ({ cdpPort: 9222 }),
+    () => ({ personIds: [100], cdpPort: 9222 }),
     (error) => vi.mocked(scrapeMessagingHistory).mockRejectedValue(error),
     "Failed to scrape messaging history",
   );
