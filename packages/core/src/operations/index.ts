@@ -142,3 +142,8 @@ export {
   type ImportPeopleFromUrlsInput,
   type ImportPeopleFromUrlsOutput,
 } from "./import-people-from-urls.js";
+export {
+  campaignRemovePeople,
+  type CampaignRemovePeopleInput,
+  type CampaignRemovePeopleOutput,
+} from "./campaign-remove-people.js";

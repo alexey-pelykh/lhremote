@@ -67,6 +67,7 @@ export type {
   GetResultsOptions,
   GetStatisticsOptions,
   ImportPeopleResult,
+  RemovePeopleResult,
   CampaignStatus,
   CampaignSummary,
   ListCampaignPeopleOptions,

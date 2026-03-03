@@ -11,6 +11,7 @@ import type {
   CampaignSummary,
   CampaignUpdateConfig,
   ImportPeopleResult,
+  RemovePeopleResult,
   RunnerState,
 } from "../types/index.js";
 import type { DatabaseClient } from "../db/index.js";
@@ -176,6 +177,73 @@ export class CampaignService {
       const message = errorMessage(error);
       throw new CampaignExecutionError(
         `Failed to import people into campaign ${String(campaignId)}: ${message}`,
+        campaignId,
+        { cause: error },
+      );
+    }
+  }
+
+  /**
+   * Remove people from a campaign's target list via CDP.
+   *
+   * Resolves the campaign's first action, then calls
+   * `people.actions.createActionVersion()` with `removeFromTarget`
+   * to remove the specified person IDs from the action's target list.
+   *
+   * @throws {CampaignNotFoundError} if the campaign does not exist.
+   * @throws {CampaignExecutionError} if the campaign has no actions or the CDP call fails.
+   */
+  async removePeople(
+    campaignId: number,
+    personIds: number[],
+  ): Promise<RemovePeopleResult> {
+    const actions = this.campaignRepo.getCampaignActions(campaignId);
+    if (actions.length === 0) {
+      throw new CampaignExecutionError(
+        `Campaign ${String(campaignId)} has no actions`,
+        campaignId,
+      );
+    }
+
+    const firstAction = actions[0] as (typeof actions)[0];
+    const actionId = firstAction.id;
+
+    try {
+      const stats = await this.instance.evaluateUI<{
+        total: {
+          removeFromTarget: {
+            successful: number;
+          };
+        };
+      }>(
+        `(async function() {
+          const actions = window.mainWindowService.mainWindow.source.people.actions;
+          const { stats } = await actions.createActionVersion(
+            {
+              actionId: ${String(actionId)},
+              removeFromTarget: {
+                request: {},
+                type: "people",
+                filter: ${JSON.stringify(personIds)}
+              }
+            },
+            undefined,
+            undefined,
+            { total: { removeFromTarget: true } }
+          );
+          return stats;
+        })()`,
+      );
+
+      return {
+        actionId,
+        removed: stats.total.removeFromTarget.successful,
+      };
+    } catch (error) {
+      if (error instanceof CampaignExecutionError) throw error;
+      const message = errorMessage(error);
+      throw new CampaignExecutionError(
+        `Failed to remove people from campaign ${String(campaignId)}: ${message}`,
         campaignId,
         { cause: error },
       );
