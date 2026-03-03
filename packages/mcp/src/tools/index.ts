@@ -38,6 +38,7 @@ import { registerStopInstance } from "./stop-instance.js";
 import { registerQueryMessages } from "./query-messages.js";
 import { registerQueryProfile } from "./query-profile.js";
 import { registerQueryProfiles } from "./query-profiles.js";
+import { registerQueryProfilesBulk } from "./query-profiles-bulk.js";
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
 
 export {
@@ -73,6 +74,7 @@ export {
   registerQueryMessages,
   registerQueryProfile,
   registerQueryProfiles,
+  registerQueryProfilesBulk,
   registerQuitApp,
   registerScrapeMessagingHistory,
   registerStartInstance,
@@ -111,6 +113,7 @@ export function registerAllTools(server: McpServer): void {
   registerQueryMessages(server);
   registerQueryProfile(server);
   registerQueryProfiles(server);
+  registerQueryProfilesBulk(server);
   registerScrapeMessagingHistory(server);
   registerCheckReplies(server);
   registerCheckStatus(server);

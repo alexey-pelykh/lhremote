@@ -31,6 +31,7 @@ export { handleGetErrors } from "./get-errors.js";
 export { handleQueryMessages } from "./query-messages.js";
 export { handleQueryProfile } from "./query-profile.js";
 export { handleQueryProfiles } from "./query-profiles.js";
+export { handleQueryProfilesBulk } from "./query-profiles-bulk.js";
 export { handleScrapeMessagingHistory } from "./scrape-messaging-history.js";
 export { handleLaunchApp } from "./launch-app.js";
 export { handleListAccounts } from "./list-accounts.js";

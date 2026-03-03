@@ -87,6 +87,7 @@ function formatDate(
  * LinkedHelper's SQLite database.
  */
 export class ProfileRepository {
+  private readonly db;
   private readonly stmtPersonById;
   private readonly stmtPersonByPublicId;
   private readonly stmtMiniProfile;
@@ -102,6 +103,7 @@ export class ProfileRepository {
 
   constructor(client: DatabaseClient) {
     const { db } = client;
+    this.db = db;
 
     this.stmtPersonById = db.prepare(
       "SELECT id FROM people WHERE id = ?",
@@ -223,6 +225,55 @@ export class ProfileRepository {
       | undefined;
     if (!row) throw new ProfileNotFoundError(slug);
     return this.assembleProfile(row.id, options);
+  }
+
+  /**
+   * Looks up multiple profiles by their internal database IDs.
+   *
+   * Returns an array in the same order as the input IDs.
+   * Entries are `null` when no person exists with the given ID.
+   */
+  findByIds(ids: number[], options?: ProfileFindOptions): (Profile | null)[] {
+    if (ids.length === 0) return [];
+
+    const placeholders = ids.map(() => "?").join(", ");
+    const rows = this.db
+      .prepare(`SELECT id FROM people WHERE id IN (${placeholders})`)
+      .all(...ids) as { id: number }[];
+
+    const found = new Set(rows.map((r) => r.id));
+    return ids.map((id) =>
+      found.has(id) ? this.assembleProfile(id, options) : null,
+    );
+  }
+
+  /**
+   * Looks up multiple profiles by LinkedIn public IDs.
+   *
+   * Returns an array in the same order as the input slugs.
+   * Entries are `null` when no person matches the public ID.
+   */
+  findByPublicIds(
+    slugs: string[],
+    options?: ProfileFindOptions,
+  ): (Profile | null)[] {
+    if (slugs.length === 0) return [];
+
+    const placeholders = slugs.map(() => "?").join(", ");
+    const rows = this.db
+      .prepare(
+        `SELECT pei.external_id, p.id
+         FROM people p
+         JOIN person_external_ids pei ON p.id = pei.person_id
+         WHERE pei.type_group = 'public' AND pei.external_id IN (${placeholders})`,
+      )
+      .all(...slugs) as { external_id: string; id: number }[];
+
+    const slugToId = new Map(rows.map((r) => [r.external_id, r.id]));
+    return slugs.map((slug) => {
+      const personId = slugToId.get(slug);
+      return personId != null ? this.assembleProfile(personId, options) : null;
+    });
   }
 
   /**

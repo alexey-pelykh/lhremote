@@ -178,6 +178,87 @@ describe("ProfileRepository", () => {
     });
   });
 
+  describe("findByIds", () => {
+    it("returns profiles in the same order as input IDs", () => {
+      const results = repo.findByIds([3, 1]);
+
+      expect(results).toHaveLength(2);
+      expect(results[0]?.id).toBe(3);
+      expect(results[0]?.miniProfile.firstName).toBe("Grace");
+      expect(results[1]?.id).toBe(1);
+      expect(results[1]?.miniProfile.firstName).toBe("Ada");
+    });
+
+    it("returns null for IDs that do not exist", () => {
+      const results = repo.findByIds([1, 999, 3]);
+
+      expect(results).toHaveLength(3);
+      expect(results[0]?.id).toBe(1);
+      expect(results[1]).toBeNull();
+      expect(results[2]?.id).toBe(3);
+    });
+
+    it("returns empty array for empty input", () => {
+      expect(repo.findByIds([])).toEqual([]);
+    });
+
+    it("passes includePositions option to assembled profiles", () => {
+      const results = repo.findByIds([1], { includePositions: true });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]?.positions).toHaveLength(2);
+    });
+
+    it("returns all nulls when no IDs match", () => {
+      const results = repo.findByIds([900, 901]);
+
+      expect(results).toEqual([null, null]);
+    });
+  });
+
+  describe("findByPublicIds", () => {
+    it("returns profiles in the same order as input slugs", () => {
+      const results = repo.findByPublicIds([
+        "grace-hopper-test",
+        "ada-lovelace-test",
+      ]);
+
+      expect(results).toHaveLength(2);
+      expect(results[0]?.id).toBe(3);
+      expect(results[1]?.id).toBe(1);
+    });
+
+    it("returns null for slugs that do not exist", () => {
+      const results = repo.findByPublicIds([
+        "ada-lovelace-test",
+        "nonexistent",
+      ]);
+
+      expect(results).toHaveLength(2);
+      expect(results[0]?.id).toBe(1);
+      expect(results[1]).toBeNull();
+    });
+
+    it("returns empty array for empty input", () => {
+      expect(repo.findByPublicIds([])).toEqual([]);
+    });
+
+    it("passes includePositions option to assembled profiles", () => {
+      const results = repo.findByPublicIds(["ada-lovelace-test"], {
+        includePositions: true,
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]?.positions).toHaveLength(2);
+    });
+
+    it("returns all nulls when no slugs match", () => {
+      const results = repo.findByPublicIds(["no-one", "nobody"]);
+
+      expect(results).toEqual([null, null]);
+    });
+  });
+
   describe("search", () => {
     it("returns all profiles when no filters specified", () => {
       const result = repo.search({});

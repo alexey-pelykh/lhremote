@@ -111,6 +111,6 @@ describe("createServer", () => {
     expect(names).toContain("campaign-update-action");
     expect(names).toContain("campaign-remove-people");
     expect(names).toContain("get-errors");
-    expect(names).toHaveLength(36);
+    expect(names).toHaveLength(37);
   });
 });

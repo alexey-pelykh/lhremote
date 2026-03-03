@@ -38,6 +38,7 @@ import {
   handleQueryMessages,
   handleQueryProfile,
   handleQueryProfiles,
+  handleQueryProfilesBulk,
   handleScrapeMessagingHistory,
   handleQuitApp,
   handleStartInstance,
@@ -76,6 +77,16 @@ function parseNonNegativeInt(value: string): number {
     );
   }
   return n;
+}
+
+/** Collect repeatable positive integer values into an array. */
+function collectPositiveInt(value: string, previous: number[]): number[] {
+  return [...previous, parsePositiveInt(value)];
+}
+
+/** Collect repeatable string values into an array. */
+function collectString(value: string, previous: string[]): string[] {
+  return [...previous, value];
 }
 
 /**
@@ -470,6 +481,15 @@ export function createProgram(): Command {
     .option("--offset <n>", "Pagination offset (default: 0)", parseNonNegativeInt)
     .option("--json", "Output as JSON")
     .action(handleQueryProfiles);
+
+  program
+    .command("query-profiles-bulk")
+    .description("Look up multiple cached profiles from the local database in a single call")
+    .option("--person-id <id>", "Look up by internal person ID (repeatable)", collectPositiveInt, [])
+    .option("--public-id <slug>", "Look up by LinkedIn public ID (repeatable)", collectString, [])
+    .option("--include-positions", "Include full position history (career history)")
+    .option("--json", "Output as JSON")
+    .action(handleQueryProfilesBulk);
 
   program
     .command("scrape-messaging-history")
