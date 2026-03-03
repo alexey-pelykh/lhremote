@@ -33,8 +33,8 @@ const MOCK_STATUS_RESULT: CampaignStatusOutput = {
 };
 
 const MOCK_RESULTS: CampaignStatusOutput["results"] = [
-  { id: 1, personId: 100, result: 3, actionVersionId: 1, platform: "linkedin", createdAt: "2026-01-01T00:00:00Z" },
-  { id: 2, personId: 101, result: 0, actionVersionId: 1, platform: "linkedin", createdAt: "2026-01-01T00:01:00Z" },
+  { id: 1, personId: 100, result: 3, actionVersionId: 1, platform: "linkedin", createdAt: "2026-01-01T00:00:00Z", profile: { firstName: "Alice", lastName: "Smith", headline: "Engineer", company: "Acme", title: "Software Engineer" } },
+  { id: 2, personId: 101, result: 0, actionVersionId: 1, platform: "linkedin", createdAt: "2026-01-01T00:01:00Z", profile: null },
 ];
 
 describe("handleCampaignStatus", () => {
@@ -91,7 +91,9 @@ describe("handleCampaignStatus", () => {
     expect(process.exitCode).toBeUndefined();
     const output = getStdout(stdoutSpy);
     expect(output).toContain("Results (2):");
-    expect(output).toContain("Person 100: result=3");
+    expect(output).toContain("Person 100 (Alice Smith): result=3");
+    expect(output).toContain("Software Engineer");
+    expect(output).toContain("at Acme");
     expect(output).toContain("Person 101: result=0");
   });
 
@@ -105,6 +107,25 @@ describe("handleCampaignStatus", () => {
 
     const parsed = JSON.parse(getStdout(stdoutSpy));
     expect(parsed.results).toHaveLength(2);
+  });
+
+  it("includes profile data in JSON results", async () => {
+    vi.mocked(campaignStatus).mockResolvedValue({
+      ...MOCK_STATUS_RESULT,
+      results: MOCK_RESULTS,
+    });
+
+    await handleCampaignStatus(1, { includeResults: true, json: true });
+
+    const parsed = JSON.parse(getStdout(stdoutSpy));
+    expect(parsed.results[0].profile).toEqual({
+      firstName: "Alice",
+      lastName: "Smith",
+      headline: "Engineer",
+      company: "Acme",
+      title: "Software Engineer",
+    });
+    expect(parsed.results[1].profile).toBeNull();
   });
 
   it("prints 'No results yet' when results empty", async () => {

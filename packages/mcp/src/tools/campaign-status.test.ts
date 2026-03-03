@@ -43,6 +43,7 @@ const defaultResults = [
     result: 3,
     platform: "linkedin",
     createdAt: "2026-02-07T10:00:00Z",
+    profile: { firstName: "Alice", lastName: "Smith", headline: "Engineer", company: "Acme", title: "Software Engineer" },
   },
   {
     id: 2,
@@ -51,6 +52,7 @@ const defaultResults = [
     result: 3,
     platform: "linkedin",
     createdAt: "2026-02-07T10:01:00Z",
+    profile: null,
   },
 ] as CampaignActionResult[];
 

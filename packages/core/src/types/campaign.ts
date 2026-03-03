@@ -70,6 +70,19 @@ export interface CampaignAction {
 }
 
 /**
+ * Profile data extracted during campaign execution (e.g., VisitAndExtract).
+ *
+ * Sourced from `person_mini_profile` and `person_current_position` tables.
+ */
+export interface ResultProfileData {
+  firstName: string;
+  lastName: string | null;
+  headline: string | null;
+  company: string | null;
+  title: string | null;
+}
+
+/**
  * Result of a campaign action execution.
  */
 export interface CampaignActionResult {
@@ -79,6 +92,8 @@ export interface CampaignActionResult {
   result: number;
   platform: string | null;
   createdAt: string;
+  /** Profile data for the person, joined from profile tables. */
+  profile: ResultProfileData | null;
 }
 
 /**

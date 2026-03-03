@@ -109,6 +109,7 @@ const MOCK_RESULTS: CampaignActionResult[] = [
     result: 1,
     platform: "LINKEDIN",
     createdAt: "2025-01-15T12:00:00Z",
+    profile: { firstName: "Ada", lastName: "Lovelace", headline: "Engineer", company: "Acme", title: "Lead" },
   },
 ];
 

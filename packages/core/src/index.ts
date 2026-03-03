@@ -17,6 +17,7 @@ export type {
   CampaignConfig,
   CampaignRunResult,
   CampaignState,
+  ResultProfileData,
   CampaignStatistics,
   CampaignStatus,
   CampaignSummary,

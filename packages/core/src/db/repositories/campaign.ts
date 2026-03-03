@@ -60,6 +60,11 @@ interface ActionResultRow {
   result: number;
   platform: string | null;
   created_at: string;
+  first_name: string | null;
+  last_name: string | null;
+  headline: string | null;
+  company: string | null;
+  title: string | null;
 }
 
 function deriveCampaignState(
@@ -146,10 +151,14 @@ export class CampaignRepository {
 
     this.stmtGetResults = db.prepare(
       `SELECT ar.id, ar.action_version_id, ar.person_id, ar.result,
-              ar.platform, ar.created_at
+              ar.platform, ar.created_at,
+              mp.first_name, mp.last_name, mp.headline,
+              cp.company, cp.position AS title
        FROM action_results ar
        JOIN action_versions av ON ar.action_version_id = av.id
        JOIN actions a ON av.action_id = a.id
+       LEFT JOIN person_mini_profile mp ON ar.person_id = mp.person_id
+       LEFT JOIN person_current_position cp ON ar.person_id = cp.person_id
        WHERE a.campaign_id = ?
        ORDER BY ar.created_at DESC
        LIMIT ?`,
@@ -268,6 +277,16 @@ export class CampaignRepository {
       result: r.result,
       platform: r.platform,
       createdAt: r.created_at,
+      profile:
+        r.first_name != null
+          ? {
+              firstName: r.first_name,
+              lastName: r.last_name,
+              headline: r.headline,
+              company: r.company,
+              title: r.title,
+            }
+          : null,
     }));
   }
 
