@@ -18,10 +18,10 @@
   },
   "devDependencies": {
     "@eslint/js": "catalog:",
+    "@tony.ganchev/eslint-plugin-header": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "eslint": "catalog:",
     "eslint-config-prettier": "catalog:",
-    "eslint-plugin-header": "catalog:",
     "prettier": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:",
