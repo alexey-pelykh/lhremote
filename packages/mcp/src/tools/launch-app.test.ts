@@ -67,7 +67,7 @@ describe("registerLaunchApp", () => {
     const handler = getHandler("launch-app");
     await handler({ cdpPort: 4567 });
 
-    expect(AppService).toHaveBeenCalledWith(4567);
+    expect(AppService).toHaveBeenCalledWith(4567, {});
   });
 
   it("returns error response on AppNotFoundError", async () => {

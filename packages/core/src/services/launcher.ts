@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { CDPClient, CDPConnectionError, CDPEvaluationError } from "../cdp/index.js";
+import { CDPClient, CDPConnectionError, CDPEvaluationError, findApp } from "../cdp/index.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type {
   Account,
@@ -13,6 +13,7 @@ import type {
 } from "../types/index.js";
 import {
   LinkedHelperNotRunningError,
+  LinkedHelperUnreachableError,
   ServiceError,
   StartInstanceError,
   WrongPortError,
@@ -51,6 +52,10 @@ export class LauncherService {
       await client.connect();
     } catch (error) {
       if (error instanceof CDPConnectionError) {
+        const apps = await findApp();
+        if (apps.length > 0) {
+          throw new LinkedHelperUnreachableError(apps);
+        }
         throw new LinkedHelperNotRunningError(this.port);
       }
       throw error;

@@ -83,6 +83,7 @@ export {
   InvalidProfileUrlError,
   LauncherService,
   LinkedHelperNotRunningError,
+  LinkedHelperUnreachableError,
   resolveAccount,
   ServiceError,
   StartInstanceError,

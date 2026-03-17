@@ -7,6 +7,7 @@ import {
   DEFAULT_CDP_PORT,
   errorMessage,
   LinkedHelperNotRunningError,
+  LinkedHelperUnreachableError,
   UIBlockedError,
 } from "@lhremote/core";
 import { z } from "zod";
@@ -84,6 +85,13 @@ export function mcpSuccess(text: string): McpResult {
  * caller can fall through to domain-specific handling.
  */
 export function mapErrorToMcpResponse(error: unknown): McpResult | undefined {
+  if (error instanceof LinkedHelperUnreachableError) {
+    const pids = error.processes.map((p) => String(p.pid)).join(", ");
+    return mcpError(
+      `LinkedHelper is running (PID ${pids}) but CDP is not reachable. ` +
+        "Restart LinkedHelper or use launch-app with force: true.",
+    );
+  }
   if (error instanceof LinkedHelperNotRunningError) {
     return mcpError("LinkedHelper is not running. Use launch-app first.");
   }

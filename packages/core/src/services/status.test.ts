@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../cdp/index.js", () => ({
   discoverInstancePort: vi.fn(),
+  findApp: vi.fn(),
 }));
 
 vi.mock("../db/index.js", () => ({
@@ -16,13 +17,14 @@ vi.mock("./launcher.js", () => ({
   LauncherService: vi.fn(),
 }));
 
-import { discoverInstancePort } from "../cdp/index.js";
+import { discoverInstancePort, findApp } from "../cdp/index.js";
 import { DatabaseClient, discoverAllDatabases } from "../db/index.js";
 import { LauncherService } from "./launcher.js";
 import { checkStatus } from "./status.js";
 
 const mockedLauncherService = vi.mocked(LauncherService);
 const mockedDiscoverInstancePort = vi.mocked(discoverInstancePort);
+const mockedFindApp = vi.mocked(findApp);
 const mockedDiscoverAllDatabases = vi.mocked(discoverAllDatabases);
 const mockedDatabaseClient = vi.mocked(DatabaseClient);
 
@@ -55,6 +57,7 @@ describe("checkStatus", () => {
         disconnect: vi.fn(),
       } as unknown as LauncherService;
     });
+    mockedFindApp.mockResolvedValue([]);
     mockedDiscoverAllDatabases.mockReturnValue(new Map());
 
     const report = await checkStatus(9222);
@@ -74,6 +77,7 @@ describe("checkStatus", () => {
         disconnect: vi.fn(),
       } as unknown as LauncherService;
     });
+    mockedFindApp.mockResolvedValue([]);
 
     const dbMap = new Map<number, string>();
     dbMap.set(1, "/path/to/db.db");
@@ -274,6 +278,7 @@ describe("checkStatus", () => {
         disconnect: vi.fn(),
       } as unknown as LauncherService;
     });
+    mockedFindApp.mockResolvedValue([]);
     mockedDiscoverAllDatabases.mockImplementation(() => {
       throw new Error("no dir");
     });
