@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+import type { DiscoveredApp } from "../cdp/index.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { UIHealthStatus } from "../types/index.js";
 
@@ -46,6 +47,28 @@ export class LinkedHelperNotRunningError extends ServiceError {
       `LinkedHelper is not running (no CDP endpoint at port ${String(port)})`,
     );
     this.name = "LinkedHelperNotRunningError";
+  }
+}
+
+/**
+ * Thrown when the LinkedHelper application is running as an OS process
+ * but its CDP endpoint is not reachable (e.g., started without
+ * `--remote-debugging-port`, or CDP crashed).
+ *
+ * The {@link processes} property contains the discovered process info
+ * so callers can report PIDs and suggest corrective action.
+ */
+export class LinkedHelperUnreachableError extends ServiceError {
+  readonly processes: DiscoveredApp[];
+
+  constructor(processes: DiscoveredApp[]) {
+    const pids = processes.map((p) => String(p.pid)).join(", ");
+    super(
+      `LinkedHelper is running (PID ${pids}) but CDP is not reachable. ` +
+        "Restart LinkedHelper or use launch-app with force: true.",
+    );
+    this.name = "LinkedHelperUnreachableError";
+    this.processes = processes;
   }
 }
 

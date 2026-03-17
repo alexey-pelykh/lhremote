@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { discoverInstancePort } from "../cdp/index.js";
+import { type DiscoveredApp, discoverInstancePort, findApp } from "../cdp/index.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import { DatabaseClient, discoverAllDatabases } from "../db/index.js";
 import { ProfileRepository } from "../db/repositories/profile.js";
@@ -12,6 +12,8 @@ import { LauncherService } from "./launcher.js";
 export interface LauncherStatus {
   reachable: boolean;
   port: number;
+  /** Detected LH processes (populated only when launcher is unreachable). */
+  processes?: DiscoveredApp[];
 }
 
 /** Status of a single LinkedHelper account instance. */
@@ -60,6 +62,15 @@ export async function checkStatus(
     launcher.reachable = true;
   } catch (error: unknown) {
     warnings.push(`Launcher not reachable on port ${cdpPort.toString()}: ${errorMessage(error)}`);
+
+    // Enrich with process-level detection when CDP is unreachable
+    const apps = await findApp();
+    if (apps.length > 0) {
+      launcher.processes = apps;
+      warnings.push(
+        `LinkedHelper process(es) detected (PID ${apps.map((a) => String(a.pid)).join(", ")}) but CDP not reachable. Restart may be needed.`,
+      );
+    }
   }
 
   // 2. List accounts and discover instance CDP ports (only if launcher is reachable)

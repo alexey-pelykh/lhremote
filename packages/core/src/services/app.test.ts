@@ -19,18 +19,20 @@ vi.mock("node:fs", () => ({
 
 vi.mock("../cdp/index.js", () => ({
   discoverTargets: vi.fn(),
+  findApp: vi.fn(),
 }));
 
 vi.mock("get-port", () => ({
   default: vi.fn(),
 }));
 
-import { discoverTargets } from "../cdp/index.js";
+import { discoverTargets, findApp } from "../cdp/index.js";
 import getPort from "get-port";
 
 const mockedSpawn = vi.mocked(spawn);
 const mockedAccessSync = vi.mocked(accessSync);
 const mockedDiscoverTargets = vi.mocked(discoverTargets);
+const mockedFindApp = vi.mocked(findApp);
 const mockedGetPort = vi.mocked(getPort);
 
 /** Use zero probe delay in tests to avoid 3s waits. */
@@ -168,6 +170,7 @@ describe("AppService", () => {
   describe("launch", () => {
     beforeEach(() => {
       vi.stubGlobal("process", { ...process, platform: "darwin", env: {} });
+      mockedFindApp.mockResolvedValue([]);
     });
 
     it("skips launch if already running with explicit port", async () => {
@@ -265,6 +268,7 @@ describe("AppService", () => {
   describe("quit", () => {
     beforeEach(() => {
       vi.stubGlobal("process", { ...process, platform: "darwin", env: {} });
+      mockedFindApp.mockResolvedValue([]);
     });
 
     it("sends SIGTERM and waits for exit", async () => {

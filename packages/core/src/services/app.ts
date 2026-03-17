@@ -7,8 +7,8 @@ import { join } from "node:path";
 
 import getPort from "get-port";
 
-import { discoverTargets } from "../cdp/index.js";
-import { AppLaunchError, AppNotFoundError } from "./errors.js";
+import { discoverTargets, findApp } from "../cdp/index.js";
+import { AppLaunchError, AppNotFoundError, LinkedHelperUnreachableError } from "./errors.js";
 
 /** Default delay after spawn before checking if the app is reachable (ms). */
 const DEFAULT_LAUNCH_PROBE_DELAY = 3000;
@@ -22,6 +22,8 @@ const QUIT_FORCE_TIMEOUT = 5_000;
 export interface AppServiceOptions {
   /** Delay in ms after spawn before checking if the app is reachable (default 3000). */
   launchProbeDelay?: number;
+  /** Kill existing LinkedHelper processes before launching (default false). */
+  force?: boolean;
 }
 
 /**
@@ -35,6 +37,7 @@ export class AppService {
   private assignedPort: number | null;
   private childProcess: ChildProcess | null = null;
   private readonly launchProbeDelay: number;
+  private readonly force: boolean;
 
   /**
    * @param cdpPort - Explicit CDP port.  When omitted, `launch()` will
@@ -44,6 +47,7 @@ export class AppService {
   constructor(cdpPort?: number, options?: AppServiceOptions) {
     this.assignedPort = cdpPort ?? null;
     this.launchProbeDelay = options?.launchProbeDelay ?? DEFAULT_LAUNCH_PROBE_DELAY;
+    this.force = options?.force ?? false;
   }
 
   /**
@@ -71,6 +75,25 @@ export class AppService {
   async launch(): Promise<void> {
     if (this.assignedPort !== null && await this.isRunning()) {
       return;
+    }
+
+    // Proactive conflict detection: check for existing LH processes
+    const existingApps = await findApp();
+    if (existingApps.length > 0) {
+      const connectable = existingApps.find((a) => a.connectable);
+      if (connectable) {
+        // Already running with CDP — use that port
+        this.assignedPort = connectable.cdpPort;
+        return;
+      }
+      // Running but CDP unreachable
+      if (!this.force) {
+        throw new LinkedHelperUnreachableError(existingApps);
+      }
+      // Force mode: kill existing processes before relaunching
+      for (const app of existingApps) {
+        process.kill(app.pid, "SIGKILL");
+      }
     }
 
     if (this.assignedPort === null) {

@@ -39,6 +39,7 @@ export {
   InstanceNotRunningError,
   InvalidProfileUrlError,
   LinkedHelperNotRunningError,
+  LinkedHelperUnreachableError,
   ServiceError,
   StartInstanceError,
   UIBlockedError,

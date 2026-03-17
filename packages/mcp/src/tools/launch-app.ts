@@ -18,9 +18,15 @@ export function registerLaunchApp(server: McpServer): void {
         .positive()
         .optional()
         .describe("CDP port (default: auto-select)"),
+      force: z
+        .boolean()
+        .optional()
+        .describe("Kill existing LinkedHelper processes before launching"),
     },
-    async ({ cdpPort }) => {
-      const app = new AppService(cdpPort);
+    async ({ cdpPort, force }) => {
+      const app = new AppService(cdpPort, {
+        ...(force !== undefined && { force }),
+      });
 
       try {
         await app.launch();

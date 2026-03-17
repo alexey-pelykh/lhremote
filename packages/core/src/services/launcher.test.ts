@@ -33,10 +33,13 @@ vi.mock("../cdp/index.js", async (importOriginal) => {
     }),
     CDPConnectionError: original.CDPConnectionError,
     CDPEvaluationError: original.CDPEvaluationError,
+    findApp: vi.fn(),
   };
 });
 
-import { CDPConnectionError, CDPEvaluationError } from "../cdp/index.js";
+import { CDPConnectionError, CDPEvaluationError, findApp } from "../cdp/index.js";
+
+const mockFindApp = vi.mocked(findApp);
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -62,6 +65,7 @@ describe("LauncherService", () => {
       mockConnect.mockRejectedValue(
         new CDPConnectionError("connection refused"),
       );
+      mockFindApp.mockResolvedValue([]);
 
       await expect(service.connect()).rejects.toThrow(
         LinkedHelperNotRunningError,
