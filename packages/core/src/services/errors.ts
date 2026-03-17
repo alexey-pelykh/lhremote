@@ -152,6 +152,35 @@ export class ExtractionTimeoutError extends ServiceError {
 }
 
 /**
+ * Thrown when a collection operation fails during execution
+ * (canCollect, prepareCollecting, collect, or other CDP-based operations).
+ */
+export class CollectionError extends ServiceError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "CollectionError";
+  }
+}
+
+/**
+ * Thrown when a collection operation cannot proceed because the
+ * LinkedHelper instance is busy (running a campaign, another
+ * collection, or a single action).
+ */
+export class CollectionBusyError extends CollectionError {
+  readonly runnerState: string;
+
+  constructor(runnerState: string, options?: ErrorOptions) {
+    super(
+      `Cannot start collection — instance is busy (runner state: ${runnerState})`,
+      options,
+    );
+    this.name = "CollectionBusyError";
+    this.runnerState = runnerState;
+  }
+}
+
+/**
  * Thrown when a campaign operation fails during execution
  * (create, start, stop, or other CDP-based operations).
  */
