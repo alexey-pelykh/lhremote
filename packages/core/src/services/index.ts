@@ -30,12 +30,15 @@ export {
   type InstanceDatabaseContext,
 } from "./instance-context.js";
 export { detectSourceType, validateSourceType } from "./source-type-registry.js";
+export { CollectionService } from "./collection.js";
 export {
   ActionExecutionError,
   AppLaunchError,
   AppNotFoundError,
   CampaignExecutionError,
   CampaignTimeoutError,
+  CollectionBusyError,
+  CollectionError,
   ExtractionTimeoutError,
   InstanceNotRunningError,
   InvalidProfileUrlError,
