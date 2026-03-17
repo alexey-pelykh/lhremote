@@ -77,6 +77,8 @@ export {
   CampaignExecutionError,
   CampaignService,
   CampaignTimeoutError,
+  CollectionBusyError,
+  CollectionError,
   type DatabaseContext,
   detectSourceType,
   ExtractionTimeoutError,
@@ -185,6 +187,10 @@ export {
   campaignDelete,
   type CampaignDeleteInput,
   type CampaignDeleteOutput,
+  // People collection
+  collectPeople,
+  type CollectPeopleInput,
+  type CollectPeopleOutput,
   // Campaign people
   campaignListPeople,
   type CampaignListPeopleInput,

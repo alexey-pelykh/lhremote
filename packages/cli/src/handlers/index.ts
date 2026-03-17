@@ -27,6 +27,7 @@ export { handleCampaignUpdateAction } from "./campaign-update-action.js";
 export { handleCreateCollection } from "./create-collection.js";
 export { handleDeleteCollection } from "./delete-collection.js";
 export { handleCheckReplies } from "./check-replies.js";
+export { handleCollectPeople } from "./collect-people.js";
 export { handleDescribeActions } from "./describe-actions.js";
 export { handleCheckStatus } from "./check-status.js";
 export { handleFindApp } from "./find-app.js";
