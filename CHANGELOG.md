@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-03-17
+
+### Added
+
+- `LinkedHelperUnreachableError` to distinguish "LH not running" from "LH running but CDP unreachable"
+- Proactive process conflict detection in `AppService.launch()` — prevents spawning duplicate LinkedHelper instances
+- `force` option for `AppService.launch()` and `launch-app` MCP tool to kill stale processes before relaunching
+- Process-level detection in `checkStatus()` when launcher is unreachable — reports discovered PIDs in `StatusReport`
+- `LauncherService.connect()` now throws `LinkedHelperUnreachableError` (with PIDs) instead of the misleading `LinkedHelperNotRunningError` when LH processes are detected
+- MCP error mapping for `LinkedHelperUnreachableError` with actionable restart guidance
+
 ## [0.4.0] — 2026-03-03
 
 ### Added
