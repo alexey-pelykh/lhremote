@@ -35,6 +35,7 @@ import {
   handleListCollections,
   handleCheckReplies,
   handleCheckStatus,
+  handleCollectPeople,
   handleDescribeActions,
   handleFindApp,
   handleGetErrors,
@@ -436,6 +437,21 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleImportPeopleFromUrls);
+
+  program
+    .command("collect-people")
+    .description("Collect people from a LinkedIn page into a campaign")
+    .argument("<campaignId>", "Campaign ID to collect into", parsePositiveInt)
+    .argument("<sourceUrl>", "LinkedIn page URL to collect from")
+    .option("--limit <n>", "Max profiles to collect", parsePositiveInt)
+    .option("--max-pages <n>", "Max pages to process", parsePositiveInt)
+    .option("--page-size <n>", "Results per page", parsePositiveInt)
+    .option("--source-type <type>", "Explicit source type (bypasses URL detection)")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleCollectPeople);
 
   program
     .command("campaign-remove-people")

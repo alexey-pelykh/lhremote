@@ -148,6 +148,13 @@ export {
   type CampaignRemovePeopleOutput,
 } from "./campaign-remove-people.js";
 
+// People collection
+export {
+  collectPeople,
+  type CollectPeopleInput,
+  type CollectPeopleOutput,
+} from "./collect-people.js";
+
 // Collections (Lists)
 export {
   listCollections,
