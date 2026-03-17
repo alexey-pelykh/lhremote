@@ -147,3 +147,35 @@ export {
   type CampaignRemovePeopleInput,
   type CampaignRemovePeopleOutput,
 } from "./campaign-remove-people.js";
+
+// Collections (Lists)
+export {
+  listCollections,
+  type ListCollectionsInput,
+  type ListCollectionsOutput,
+} from "./list-collections.js";
+export {
+  createCollection,
+  type CreateCollectionInput,
+  type CreateCollectionOutput,
+} from "./create-collection.js";
+export {
+  deleteCollection,
+  type DeleteCollectionInput,
+  type DeleteCollectionOutput,
+} from "./delete-collection.js";
+export {
+  addPeopleToCollection,
+  type AddPeopleToCollectionInput,
+  type AddPeopleToCollectionOutput,
+} from "./add-people-to-collection.js";
+export {
+  removePeopleFromCollection,
+  type RemovePeopleFromCollectionInput,
+  type RemovePeopleFromCollectionOutput,
+} from "./remove-people-from-collection.js";
+export {
+  importPeopleFromCollection,
+  type ImportPeopleFromCollectionInput,
+  type ImportPeopleFromCollectionOutput,
+} from "./import-people-from-collection.js";

@@ -72,7 +72,13 @@ describe("createProgram", () => {
     expect(commandNames).toContain("campaign-update-action");
     expect(commandNames).toContain("campaign-remove-people");
     expect(commandNames).toContain("get-errors");
-    expect(commandNames).toHaveLength(37);
+    expect(commandNames).toContain("list-collections");
+    expect(commandNames).toContain("create-collection");
+    expect(commandNames).toContain("delete-collection");
+    expect(commandNames).toContain("add-people-to-collection");
+    expect(commandNames).toContain("remove-people-from-collection");
+    expect(commandNames).toContain("import-people-from-collection");
+    expect(commandNames).toHaveLength(43);
   });
 
   describe("launch-app", () => {

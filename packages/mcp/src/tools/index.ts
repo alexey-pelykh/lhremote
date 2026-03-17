@@ -3,6 +3,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import { registerAddPeopleToCollection } from "./add-people-to-collection.js";
 import { registerCampaignAddAction } from "./campaign-add-action.js";
 import { registerCampaignCreate } from "./campaign-create.js";
 import { registerCampaignDelete } from "./campaign-delete.js";
@@ -25,23 +26,29 @@ import { registerCampaignStatistics } from "./campaign-statistics.js";
 import { registerCampaignStatus } from "./campaign-status.js";
 import { registerCampaignStop } from "./campaign-stop.js";
 import { registerCampaignUpdate } from "./campaign-update.js";
+import { registerCreateCollection } from "./create-collection.js";
+import { registerDeleteCollection } from "./delete-collection.js";
 import { registerCheckReplies } from "./check-replies.js";
 import { registerCheckStatus } from "./check-status.js";
 import { registerDescribeActions } from "./describe-actions.js";
 import { registerFindApp } from "./find-app.js";
 import { registerGetErrors } from "./get-errors.js";
+import { registerImportPeopleFromCollection } from "./import-people-from-collection.js";
 import { registerLaunchApp } from "./launch-app.js";
+import { registerListCollections } from "./list-collections.js";
 import { registerListAccounts } from "./list-accounts.js";
 import { registerQuitApp } from "./quit-app.js";
 import { registerStartInstance } from "./start-instance.js";
 import { registerStopInstance } from "./stop-instance.js";
 import { registerQueryMessages } from "./query-messages.js";
+import { registerRemovePeopleFromCollection } from "./remove-people-from-collection.js";
 import { registerQueryProfile } from "./query-profile.js";
 import { registerQueryProfiles } from "./query-profiles.js";
 import { registerQueryProfilesBulk } from "./query-profiles-bulk.js";
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
 
 export {
+  registerAddPeopleToCollection,
   registerCampaignAddAction,
   registerCampaignCreate,
   registerCampaignDelete,
@@ -63,15 +70,20 @@ export {
   registerCampaignStatus,
   registerCampaignStop,
   registerCampaignUpdate,
+  registerCreateCollection,
+  registerDeleteCollection,
   registerCheckReplies,
   registerCheckStatus,
   registerDescribeActions,
   registerFindApp,
   registerGetErrors,
+  registerImportPeopleFromCollection,
   registerImportPeopleFromUrls,
   registerLaunchApp,
+  registerListCollections,
   registerListAccounts,
   registerQueryMessages,
+  registerRemovePeopleFromCollection,
   registerQueryProfile,
   registerQueryProfiles,
   registerQueryProfilesBulk,
@@ -82,6 +94,7 @@ export {
 };
 
 export function registerAllTools(server: McpServer): void {
+  registerAddPeopleToCollection(server);
   registerCampaignAddAction(server);
   registerCampaignCreate(server);
   registerCampaignDelete(server);
@@ -115,8 +128,13 @@ export function registerAllTools(server: McpServer): void {
   registerQueryProfiles(server);
   registerQueryProfilesBulk(server);
   registerScrapeMessagingHistory(server);
+  registerCreateCollection(server);
+  registerDeleteCollection(server);
   registerCheckReplies(server);
   registerCheckStatus(server);
   registerDescribeActions(server);
+  registerImportPeopleFromCollection(server);
   registerImportPeopleFromUrls(server);
+  registerListCollections(server);
+  registerRemovePeopleFromCollection(server);
 }
