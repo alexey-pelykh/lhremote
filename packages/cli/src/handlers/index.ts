@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+export { handleAddPeopleToCollection } from "./add-people-to-collection.js";
 export { handleCampaignAddAction } from "./campaign-add-action.js";
 export { handleCampaignCreate } from "./campaign-create.js";
 export { handleCampaignDelete } from "./campaign-delete.js";
@@ -23,18 +24,23 @@ export { handleImportPeopleFromUrls } from "./import-people-from-urls.js";
 export { handleCampaignStop } from "./campaign-stop.js";
 export { handleCampaignUpdate } from "./campaign-update.js";
 export { handleCampaignUpdateAction } from "./campaign-update-action.js";
+export { handleCreateCollection } from "./create-collection.js";
+export { handleDeleteCollection } from "./delete-collection.js";
 export { handleCheckReplies } from "./check-replies.js";
 export { handleDescribeActions } from "./describe-actions.js";
 export { handleCheckStatus } from "./check-status.js";
 export { handleFindApp } from "./find-app.js";
 export { handleGetErrors } from "./get-errors.js";
+export { handleImportPeopleFromCollection } from "./import-people-from-collection.js";
 export { handleQueryMessages } from "./query-messages.js";
 export { handleQueryProfile } from "./query-profile.js";
 export { handleQueryProfiles } from "./query-profiles.js";
 export { handleQueryProfilesBulk } from "./query-profiles-bulk.js";
 export { handleScrapeMessagingHistory } from "./scrape-messaging-history.js";
+export { handleListCollections } from "./list-collections.js";
 export { handleLaunchApp } from "./launch-app.js";
 export { handleListAccounts } from "./list-accounts.js";
+export { handleRemovePeopleFromCollection } from "./remove-people-from-collection.js";
 export { handleQuitApp } from "./quit-app.js";
 export { handleStartInstance } from "./start-instance.js";
 export { handleStopInstance } from "./stop-instance.js";

@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { Command, InvalidArgumentError, Option } from "commander";
 
 import {
+  handleAddPeopleToCollection,
   handleCampaignAddAction,
   handleCampaignCreate,
   handleCampaignDelete,
@@ -27,7 +28,11 @@ import {
   handleCampaignStop,
   handleCampaignUpdate,
   handleCampaignUpdateAction,
+  handleCreateCollection,
+  handleDeleteCollection,
+  handleImportPeopleFromCollection,
   handleImportPeopleFromUrls,
+  handleListCollections,
   handleCheckReplies,
   handleCheckStatus,
   handleDescribeActions,
@@ -39,6 +44,7 @@ import {
   handleQueryProfile,
   handleQueryProfiles,
   handleQueryProfilesBulk,
+  handleRemovePeopleFromCollection,
   handleScrapeMessagingHistory,
   handleQuitApp,
   handleStartInstance,
@@ -442,6 +448,67 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleCampaignRemovePeople);
+
+  program
+    .command("list-collections")
+    .description("List LinkedHelper collections (Lists)")
+    .option("--json", "Output as JSON")
+    .action(handleListCollections);
+
+  program
+    .command("create-collection")
+    .description("Create a new LinkedHelper collection (List)")
+    .argument("<name>", "Name for the new collection")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleCreateCollection);
+
+  program
+    .command("delete-collection")
+    .description("Delete a LinkedHelper collection (List) and its people associations")
+    .argument("<collectionId>", "Collection ID to delete", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleDeleteCollection);
+
+  program
+    .command("add-people-to-collection")
+    .description("Add people to a LinkedHelper collection (List)")
+    .argument("<collectionId>", "Collection ID", parsePositiveInt)
+    .option("--person-ids <ids>", "Comma-separated person IDs")
+    .option("--person-ids-file <path>", "File containing person IDs")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleAddPeopleToCollection);
+
+  program
+    .command("remove-people-from-collection")
+    .description("Remove people from a LinkedHelper collection (List)")
+    .argument("<collectionId>", "Collection ID", parsePositiveInt)
+    .option("--person-ids <ids>", "Comma-separated person IDs")
+    .option("--person-ids-file <path>", "File containing person IDs")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleRemovePeopleFromCollection);
+
+  program
+    .command("import-people-from-collection")
+    .description("Import people from a LinkedHelper collection (List) into a campaign")
+    .argument("<collectionId>", "Collection ID to import from", parsePositiveInt)
+    .argument("<campaignId>", "Campaign ID to import into", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleImportPeopleFromCollection);
 
   program
     .command("describe-actions")

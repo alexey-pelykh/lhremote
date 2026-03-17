@@ -17,6 +17,8 @@ export {
   CampaignExcludeListRepository,
   CampaignRepository,
   CampaignStatisticsRepository,
+  CollectionListRepository,
+  type CollectionSummary,
   MessageRepository,
   ProfileRepository,
 } from "./repositories/index.js";

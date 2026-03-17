@@ -769,6 +769,25 @@ db.exec(`
   UPDATE action_versions SET exclude_list_id = 6 WHERE id = 7;
 `);
 
+// ── Named Collections (Lists) Data ──────────────────────────────────
+
+// Collection 10: "Prospects" list with 2 people (Ada, Charlie)
+// Collection 11: "Clients" list with 1 person (Ada)
+// Collection 12: "Empty List" with no people
+db.exec(`
+  INSERT INTO collections (id, li_account_id, name, created_at, updated_at)
+  VALUES
+    (10, 1, 'Prospects', '${NOW}', '${NOW}'),
+    (11, 1, 'Clients', '${NOW}', '${NOW}'),
+    (12, 1, 'Empty List', '${NOW}', '${NOW}');
+
+  INSERT INTO collection_people (collection_id, person_id)
+  VALUES
+    (10, 1),
+    (10, 3),
+    (11, 1);
+`);
+
 // ── Write to disk ───────────────────────────────────────────────────
 
 await backup(db, FIXTURE_PATH);
