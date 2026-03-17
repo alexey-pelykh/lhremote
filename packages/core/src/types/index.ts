@@ -43,6 +43,8 @@ export type {
   UIHealthStatus,
 } from "./ui-health.js";
 
+export type { SourceTier, SourceType } from "./collection.js";
+
 export type {
   ActionConfig,
   ActionErrorSummary,

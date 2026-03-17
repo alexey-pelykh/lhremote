@@ -29,6 +29,7 @@ export {
   type DatabaseContext,
   type InstanceDatabaseContext,
 } from "./instance-context.js";
+export { detectSourceType, validateSourceType } from "./source-type-registry.js";
 export {
   ActionExecutionError,
   AppLaunchError,
