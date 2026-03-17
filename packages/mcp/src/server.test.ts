@@ -117,6 +117,7 @@ describe("createServer", () => {
     expect(names).toContain("add-people-to-collection");
     expect(names).toContain("remove-people-from-collection");
     expect(names).toContain("import-people-from-collection");
-    expect(names).toHaveLength(43);
+    expect(names).toContain("collect-people");
+    expect(names).toHaveLength(44);
   });
 });
