@@ -34,6 +34,8 @@ npm install @lhremote/core
 | `CampaignRepository` | Campaign CRUD and action-chain management |
 | `ProfileRepository` | Profile lookups and search |
 | `MessageRepository` | Messaging history queries |
+| `CampaignStatisticsRepository` | Campaign execution statistics queries |
+| `CollectionListRepository` | Collection (List) CRUD and people management |
 | `DatabaseClient` | SQLite database connection management |
 | `discoverDatabase` / `discoverAllDatabases` | Locate LinkedHelper database files on disk |
 
@@ -65,7 +67,40 @@ npm install @lhremote/core
 
 | Export | Description |
 |--------|-------------|
+| `campaignCreate` | Create a new campaign from parsed configuration |
+| `campaignGet` | Get detailed campaign information |
+| `campaignList` | List existing campaigns |
+| `campaignUpdate` | Update a campaign's name/description |
+| `campaignDelete` | Delete (archive) a campaign |
+| `campaignExport` | Export campaign configuration |
+| `campaignStart` | Start a campaign with target persons |
+| `campaignStop` | Stop a running campaign |
+| `campaignRetry` | Reset specified people for re-run |
+| `campaignMoveNext` | Move people from one action to the next |
 | `campaignStatus` | Retrieve campaign status with statistics and action details |
+| `campaignStatistics` | Get per-action statistics |
+| `campaignAddAction` | Add an action to a campaign |
+| `campaignRemoveAction` | Remove an action from a campaign |
+| `campaignUpdateAction` | Update an existing action's configuration |
+| `campaignReorderActions` | Reorder actions in a campaign |
+| `campaignExcludeList` | View the exclude list for a campaign or action |
+| `campaignExcludeAdd` | Add people to an exclude list |
+| `campaignExcludeRemove` | Remove people from an exclude list |
+| `campaignListPeople` | List people assigned to a campaign |
+| `campaignRemovePeople` | Remove people from a campaign target list |
+| `importPeopleFromUrls` | Import LinkedIn profile URLs into a campaign |
+| `collectPeople` | Collect people from a LinkedIn page into a campaign |
+| `queryProfilesBulk` | Look up multiple profiles in a single call |
+| `queryMessages` | Query messaging history |
+| `checkReplies` | Check for new message replies |
+| `scrapeMessagingHistory` | Scrape messaging history from LinkedIn |
+| `getErrors` | Query current UI errors and dialogs |
+| `listCollections` | List all LinkedHelper collections |
+| `createCollection` | Create a new collection |
+| `deleteCollection` | Delete a collection |
+| `addPeopleToCollection` | Add people to a collection |
+| `removePeopleFromCollection` | Remove people from a collection |
+| `importPeopleFromCollection` | Import collection people into a campaign |
 
 ### Constants & Utilities
 
@@ -106,6 +141,10 @@ npm install @lhremote/core
 | `CDPError` | General CDP protocol error |
 | `CDPEvaluationError` | CDP JavaScript evaluation failed |
 | `CDPTimeoutError` | CDP operation timed out |
+| `LinkedHelperUnreachableError` | LinkedHelper processes detected but CDP endpoint unreachable |
+| `CollectionError` | General collection operation error |
+| `CollectionBusyError` | Collection operation blocked (LinkedHelper busy) |
+| `UIBlockedError` | LinkedHelper UI blocked by dialog or popup |
 
 ## Usage
 

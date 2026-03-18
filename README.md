@@ -57,7 +57,7 @@ Add to your Claude Desktop configuration (`claude_desktop_config.json`):
 }
 ```
 
-Once configured, Claude can use all 32 tools directly. A typical workflow:
+Once configured, Claude can use all 44 tools directly. A typical workflow:
 
 1. **`find-app`** — Detect a running LinkedHelper instance (or **`launch-app`** to start one)
 2. **`list-accounts`** — See available LinkedIn accounts
@@ -77,7 +77,7 @@ The `lhremote` command provides the same functionality as the MCP server. Every 
 
 ```sh
 lhremote find-app [--json]
-lhremote launch-app [--cdp-port <port>]
+lhremote launch-app [--cdp-port <port>] [--force]
 lhremote quit-app [--cdp-port <port>]
 ```
 
@@ -99,11 +99,12 @@ lhremote campaign-get <campaignId> [--cdp-port <port>] [--json]
 lhremote campaign-export <campaignId> [--format yaml|json] [--output <path>] [--cdp-port <port>]
 lhremote campaign-update <campaignId> [--name <name>] [--description <text>] [--clear-description] [--cdp-port <port>] [--json]
 lhremote campaign-delete <campaignId> [--cdp-port <port>] [--json]
-lhremote campaign-start <campaignId> [--person-ids <ids>] [--person-ids-file <path>] [--cdp-port <port>] [--json]
+lhremote campaign-start <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
 lhremote campaign-stop <campaignId> [--cdp-port <port>] [--json]
 lhremote campaign-status <campaignId> [--include-results] [--limit <n>] [--cdp-port <port>] [--json]
 lhremote campaign-statistics <campaignId> [--action-id <id>] [--max-errors <n>] [--cdp-port <port>] [--json]
-lhremote campaign-retry <campaignId> [--person-ids <ids>] [--person-ids-file <path>] [--cdp-port <port>] [--json]
+lhremote campaign-retry <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
+lhremote campaign-list-people <campaignId> [--action-id <id>] [--status <status>] [--limit <n>] [--offset <n>] [--cdp-port <port>] [--json]
 ```
 
 ### Campaign Actions
@@ -111,8 +112,9 @@ lhremote campaign-retry <campaignId> [--person-ids <ids>] [--person-ids-file <pa
 ```sh
 lhremote campaign-add-action <campaignId> --name <name> --action-type <type> [--description <text>] [--cool-down <ms>] [--max-results <n>] [--action-settings <json>] [--cdp-port <port>] [--json]
 lhremote campaign-remove-action <campaignId> <actionId> [--cdp-port <port>] [--json]
+lhremote campaign-update-action <campaignId> <actionId> [--name <name>] [--description <text>] [--clear-description] [--cool-down <ms>] [--max-results <n>] [--action-settings <json>] [--cdp-port <port>] [--json]
 lhremote campaign-reorder-actions <campaignId> --action-ids <ids> [--cdp-port <port>] [--json]
-lhremote campaign-move-next <campaignId> <actionId> [--person-ids <ids>] [--person-ids-file <path>] [--cdp-port <port>] [--json]
+lhremote campaign-move-next <campaignId> <actionId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
 ```
 
 ### Campaign Targeting
@@ -121,23 +123,38 @@ lhremote campaign-move-next <campaignId> <actionId> [--person-ids <ids>] [--pers
 lhremote campaign-exclude-list <campaignId> [--action-id <id>] [--cdp-port <port>] [--json]
 lhremote campaign-exclude-add <campaignId> --person-ids <ids> | --person-ids-file <path> [--action-id <id>] [--cdp-port <port>] [--json]
 lhremote campaign-exclude-remove <campaignId> --person-ids <ids> | --person-ids-file <path> [--action-id <id>] [--cdp-port <port>] [--json]
+lhremote campaign-remove-people <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
 lhremote import-people-from-urls <campaignId> --urls <urls> | --urls-file <path> [--cdp-port <port>] [--json]
+lhremote collect-people <campaignId> <sourceUrl> [--limit <n>] [--max-pages <n>] [--page-size <n>] [--source-type <type>] [--cdp-port <port>] [--json]
+```
+
+### Collections
+
+```sh
+lhremote list-collections [--json]
+lhremote create-collection <name> [--cdp-port <port>] [--json]
+lhremote delete-collection <collectionId> [--cdp-port <port>] [--json]
+lhremote add-people-to-collection <collectionId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
+lhremote remove-people-from-collection <collectionId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
+lhremote import-people-from-collection <collectionId> <campaignId> [--cdp-port <port>] [--json]
 ```
 
 ### Profiles & Messaging
 
 ```sh
-lhremote query-profile --person-id <id> | --public-id <slug> [--json]
-lhremote query-profiles [--query <text>] [--company <name>] [--limit <n>] [--offset <n>] [--json]
+lhremote query-profile --person-id <id> | --public-id <slug> [--include-positions] [--json]
+lhremote query-profiles [--query <text>] [--company <name>] [--include-history] [--limit <n>] [--offset <n>] [--json]
+lhremote query-profiles-bulk --person-id <id>... | --public-id <slug>... [--include-positions] [--json]
 lhremote query-messages [--person-id <id>] [--chat-id <id>] [--search <text>] [--limit <n>] [--offset <n>] [--json]
 lhremote check-replies [--since <timestamp>] [--cdp-port <port>] [--json]
-lhremote scrape-messaging-history [--cdp-port <port>] [--json]
+lhremote scrape-messaging-history --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
 ```
 
 ### Utilities
 
 ```sh
 lhremote describe-actions [--category <category>] [--type <type>] [--json]
+lhremote get-errors [--cdp-port <port>] [--json]
 ```
 
 ## MCP Tools
@@ -169,6 +186,7 @@ Launch the LinkedHelper application with remote debugging enabled.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `cdpPort` | number | No | auto-select | CDP port to use |
+| `force` | boolean | No | false | Kill existing LinkedHelper processes before launching |
 
 #### `quit-app`
 
@@ -227,12 +245,12 @@ List existing campaigns with summary statistics.
 
 #### `campaign-create`
 
-Create a new campaign from YAML or JSON configuration. Provide exactly one of `yamlConfig` or `jsonConfig`.
+Create a new campaign from YAML or JSON configuration.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `yamlConfig` | string | No | — | YAML campaign configuration |
-| `jsonConfig` | string | No | — | JSON campaign configuration |
+| `config` | string | Yes | — | Campaign configuration in YAML or JSON format |
+| `format` | string | No | yaml | Configuration format (`yaml` or `json`) |
 | `cdpPort` | number | No | 9222 | CDP port |
 
 #### `campaign-get`
@@ -276,12 +294,12 @@ Delete (archive) a campaign.
 
 #### `campaign-start`
 
-Start a campaign with specified target persons.
+Start a campaign with specified target persons. Returns immediately (async execution).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
-| `personIds` | number[] | No | — | Person IDs to target |
+| `personIds` | number[] | Yes | — | Person IDs to target |
 | `cdpPort` | number | No | 9222 | CDP port |
 
 #### `campaign-stop`
@@ -322,7 +340,7 @@ Reset specified people for re-run in a campaign.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
-| `personIds` | number[] | No | — | Person IDs to retry |
+| `personIds` | number[] | Yes | — | Person IDs to retry |
 | `cdpPort` | number | No | 9222 | CDP port |
 
 ### Campaign Actions
@@ -352,6 +370,21 @@ Remove an action from a campaign's action chain.
 | `actionId` | number | Yes | — | Action ID to remove |
 | `cdpPort` | number | No | 9222 | CDP port |
 
+#### `campaign-update-action`
+
+Update an existing action's configuration in a campaign. Only provided fields are changed.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `actionId` | number | Yes | — | Action ID to update |
+| `name` | string | No | — | New display name |
+| `description` | string \| null | No | — | New description (null to clear) |
+| `coolDown` | number | No | — | Milliseconds between executions |
+| `maxActionResultsPerIteration` | number | No | — | Max results per iteration (-1 for unlimited) |
+| `actionSettings` | string | No | — | Action-specific settings as JSON (merged with existing) |
+| `cdpPort` | number | No | 9222 | CDP port |
+
 #### `campaign-reorder-actions`
 
 Reorder actions in a campaign's action chain.
@@ -370,7 +403,7 @@ Move people from one action to the next in a campaign.
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `actionId` | number | Yes | — | Action ID to move people from |
-| `personIds` | number[] | No | — | Person IDs to move |
+| `personIds` | number[] | Yes | — | Person IDs to move |
 | `cdpPort` | number | No | 9222 | CDP port |
 
 ### Campaign Targeting
@@ -407,6 +440,29 @@ Remove people from a campaign or action exclude list.
 | `actionId` | number | No | — | Action ID (for action-level list) |
 | `cdpPort` | number | No | 9222 | CDP port |
 
+#### `campaign-list-people`
+
+List people assigned to a campaign with their processing status.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `actionId` | number | No | — | Filter to a specific action |
+| `status` | string | No | — | Filter by status (`queued`, `processed`, `successful`, `failed`) |
+| `limit` | number | No | 20 | Max results |
+| `offset` | number | No | 0 | Pagination offset |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-remove-people`
+
+Remove people from a campaign's target list entirely. This is the inverse of `import-people-from-urls`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `personIds` | number[] | Yes | — | Person IDs to remove |
+| `cdpPort` | number | No | 9222 | CDP port |
+
 #### `import-people-from-urls`
 
 Import LinkedIn profile URLs into a campaign action target list. Idempotent — previously imported URLs are skipped.
@@ -415,6 +471,78 @@ Import LinkedIn profile URLs into a campaign action target list. Idempotent — 
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `urls` | string[] | Yes | — | LinkedIn profile URLs |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `collect-people`
+
+Collect people from a LinkedIn page into a campaign. Detects the source type from the URL automatically.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID to collect into |
+| `sourceUrl` | string | Yes | — | LinkedIn page URL (search results, company people, group members) |
+| `limit` | number | No | — | Max profiles to collect |
+| `maxPages` | number | No | — | Max pages to process |
+| `pageSize` | number | No | — | Results per page |
+| `sourceType` | string | No | — | Explicit source type (bypasses URL detection) |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+### Collections
+
+#### `list-collections`
+
+List all LinkedHelper collections (Lists) with people counts.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `create-collection`
+
+Create a new named LinkedHelper collection (List).
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `name` | string | Yes | — | Name for the new collection |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `delete-collection`
+
+Delete a LinkedHelper collection (List) and all its people associations.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `collectionId` | number | Yes | — | Collection ID to delete |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `add-people-to-collection`
+
+Add people to a LinkedHelper collection. Idempotent — adding an already-present person is a no-op.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `collectionId` | number | Yes | — | Collection ID |
+| `personIds` | number[] | Yes | — | Person IDs to add |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `remove-people-from-collection`
+
+Remove people from a LinkedHelper collection.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `collectionId` | number | Yes | — | Collection ID |
+| `personIds` | number[] | Yes | — | Person IDs to remove |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `import-people-from-collection`
+
+Import all people from a LinkedHelper collection into a campaign. Large sets are automatically chunked.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `collectionId` | number | Yes | — | Collection ID to import from |
+| `campaignId` | number | Yes | — | Campaign ID to import into |
 | `cdpPort` | number | No | 9222 | CDP port |
 
 ### Profiles & Messaging
@@ -427,6 +555,7 @@ Look up a cached LinkedIn profile from the local database by person ID or public
 |-----------|------|----------|---------|-------------|
 | `personId` | number | No | — | Internal person ID |
 | `publicId` | string | No | — | LinkedIn public ID (URL slug) |
+| `includePositions` | boolean | No | false | Include full position history (career history) |
 
 #### `query-profiles`
 
@@ -436,8 +565,19 @@ Search for profiles in the local database with name, headline, or company filter
 |-----------|------|----------|---------|-------------|
 | `query` | string | No | — | Search name or headline |
 | `company` | string | No | — | Filter by company |
+| `includeHistory` | boolean | No | false | Also search past positions (company history), not just current |
 | `limit` | number | No | 20 | Max results |
 | `offset` | number | No | 0 | Pagination offset |
+
+#### `query-profiles-bulk`
+
+Look up multiple cached LinkedIn profiles in a single call.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personIds` | number[] | No | — | Look up by internal person IDs |
+| `publicIds` | string[] | No | — | Look up by LinkedIn public IDs (URL slugs) |
+| `includePositions` | boolean | No | false | Include full position history |
 
 #### `query-messages`
 
@@ -462,10 +602,11 @@ Check for new message replies from LinkedIn.
 
 #### `scrape-messaging-history`
 
-Scrape all messaging history from LinkedIn into the local database. This is a long-running operation that navigates LinkedIn's messaging interface.
+Scrape messaging history from LinkedIn for specified people into the local database. This is a long-running operation that may take several minutes.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
+| `personIds` | number[] | Yes | — | Person IDs whose messaging history should be scraped |
 | `cdpPort` | number | No | 9222 | CDP port |
 
 ### Utilities
@@ -478,6 +619,14 @@ List available LinkedHelper action types with descriptions and configuration sch
 |-----------|------|----------|---------|-------------|
 | `category` | string | No | — | Filter by category (`people`, `messaging`, `engagement`, `crm`, `workflow`) |
 | `actionType` | string | No | — | Get details for a specific action type |
+
+#### `get-errors`
+
+Query current LinkedHelper UI errors, dialogs, and blocking popups.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `cdpPort` | number | No | 9222 | CDP port |
 
 ## Known Limitations
 
@@ -494,6 +643,12 @@ List available LinkedHelper action types with descriptions and configuration sch
 **Error**: `LinkedHelper is not running (no CDP endpoint at port 9222)`
 
 **Solution**: Use `launch-app` to start LinkedHelper, or start it manually. lhremote communicates with LinkedHelper via the Chrome DevTools Protocol (CDP), which requires the application to be running.
+
+### LinkedHelper is unreachable
+
+**Error**: `LinkedHelper processes detected but CDP endpoint is unreachable`
+
+**Solution**: LinkedHelper is running but its CDP port is not responding. This typically means a stale or zombie process. Use `launch-app --force` to kill stale processes and relaunch, or manually restart LinkedHelper.
 
 ### Application binary not found
 

@@ -67,16 +67,16 @@ gets full access to every registered tool.
 
 #### Tool Surface
 
-32 tools are registered via `registerAllTools()` in
+44 tools are registered via `registerAllTools()` in
 `packages/mcp/src/tools/index.ts`. They fall into three risk tiers:
 
 | Tier | Tools |
 |------|-------|
-| **Read-only** (no side effects) | `check-status`, `find-app`, `list-accounts`, `query-profile`, `query-profiles`, `query-messages`, `campaign-get`, `campaign-list`, `campaign-export`, `campaign-statistics`, `campaign-status`, `campaign-exclude-list`, `describe-actions`, `check-replies` |
-| **State-changing** (modifies LinkedHelper state) | `launch-app`, `quit-app`, `start-instance`, `stop-instance`, `campaign-create`, `campaign-update`, `campaign-start`, `campaign-stop`, `campaign-retry`, `campaign-move-next`, `campaign-add-action`, `campaign-remove-action`, `campaign-reorder-actions`, `campaign-exclude-add`, `campaign-exclude-remove`, `import-people-from-urls`, `scrape-messaging-history` |
-| **Destructive** (permanent data loss) | `campaign-delete` |
+| **Read-only** (no side effects) | `check-status`, `find-app`, `list-accounts`, `query-profile`, `query-profiles`, `query-profiles-bulk`, `query-messages`, `campaign-get`, `campaign-list`, `campaign-export`, `campaign-statistics`, `campaign-status`, `campaign-exclude-list`, `campaign-list-people`, `list-collections`, `describe-actions`, `check-replies`, `get-errors` |
+| **State-changing** (modifies LinkedHelper state) | `launch-app`, `quit-app`, `start-instance`, `stop-instance`, `campaign-create`, `campaign-update`, `campaign-start`, `campaign-stop`, `campaign-retry`, `campaign-move-next`, `campaign-add-action`, `campaign-remove-action`, `campaign-update-action`, `campaign-reorder-actions`, `campaign-exclude-add`, `campaign-exclude-remove`, `campaign-remove-people`, `import-people-from-urls`, `import-people-from-collection`, `collect-people`, `create-collection`, `add-people-to-collection`, `remove-people-from-collection`, `scrape-messaging-history` |
+| **Destructive** (permanent data loss) | `campaign-delete`, `delete-collection` |
 
-All 32 tools are available to any connected MCP client with equal
+All 44 tools are available to any connected MCP client with equal
 privilege. There is no per-tool access control or rate limiting.
 
 #### Prompt Injection Risk
@@ -92,7 +92,7 @@ natural-language interpretation layer.
 
 When `--allow-remote` is enabled, MCP tools connect to CDP endpoints on
 remote hosts. This extends the trust boundary from localhost to the
-network for **all 32 tools** — a remote MCP client gains the same tool
+network for **all 44 tools** — a remote MCP client gains the same tool
 access as a local one, over an unauthenticated CDP connection.
 
 ### Recommendations
@@ -103,7 +103,7 @@ access as a local one, over an unauthenticated CDP connection.
 - **Do not use `--allow-remote`** unless you understand the implications
   and have secured the network path (e.g., mutual TLS via a reverse proxy).
 - **Do not grant MCP access to untrusted AI agents.** Any MCP client
-  that can spawn `lhremote mcp` receives full access to all 32 tools,
+  that can spawn `lhremote mcp` receives full access to all 44 tools,
   including destructive operations.
 - **Review agent tool calls for destructive operations.** When using an
   AI agent as the MCP client, monitor its actions — especially
