@@ -54,10 +54,11 @@ lhremote check-replies --since 2025-01-01T00:00:00Z
 | Account & Instance | `list-accounts`, `start-instance`, `stop-instance`, `check-status` |
 | Campaigns | `campaign-list`, `campaign-create`, `campaign-get`, `campaign-export`, `campaign-update`, `campaign-delete`, `campaign-start`, `campaign-stop` |
 | Campaign Status | `campaign-status`, `campaign-statistics`, `campaign-retry` |
-| Campaign Actions | `campaign-add-action`, `campaign-remove-action`, `campaign-reorder-actions`, `campaign-move-next` |
-| Campaign Targeting | `campaign-exclude-list`, `campaign-exclude-add`, `campaign-exclude-remove`, `import-people-from-urls` |
-| Profiles & Messaging | `query-profile`, `query-profiles`, `query-messages`, `check-replies`, `scrape-messaging-history` |
-| Utilities | `describe-actions` |
+| Campaign Actions | `campaign-add-action`, `campaign-remove-action`, `campaign-update-action`, `campaign-reorder-actions`, `campaign-move-next` |
+| Campaign Targeting | `campaign-exclude-list`, `campaign-exclude-add`, `campaign-exclude-remove`, `campaign-list-people`, `campaign-remove-people`, `import-people-from-urls`, `collect-people` |
+| Collections | `list-collections`, `create-collection`, `delete-collection`, `add-people-to-collection`, `remove-people-from-collection`, `import-people-from-collection` |
+| Profiles & Messaging | `query-profile`, `query-profiles`, `query-profiles-bulk`, `query-messages`, `check-replies`, `scrape-messaging-history` |
+| Utilities | `describe-actions`, `get-errors` |
 
 See the [root README](https://github.com/alexey-pelykh/lhremote#cli-usage) for full command-line usage.
 
