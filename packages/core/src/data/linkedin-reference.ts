@@ -346,5 +346,5 @@ export function getFunctionById(id: number): FunctionEntry | undefined {
  * Validate whether a string is a known reference data type.
  */
 export function isReferenceDataType(value: string): value is ReferenceDataType {
-  return value in REFERENCE_DATA;
+  return Object.hasOwn(REFERENCE_DATA, value);
 }
