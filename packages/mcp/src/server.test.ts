@@ -118,6 +118,9 @@ describe("createServer", () => {
     expect(names).toContain("remove-people-from-collection");
     expect(names).toContain("import-people-from-collection");
     expect(names).toContain("collect-people");
-    expect(names).toHaveLength(44);
+    expect(names).toContain("build-linkedin-url");
+    expect(names).toContain("list-linkedin-reference-data");
+    expect(names).toContain("resolve-linkedin-entity");
+    expect(names).toHaveLength(47);
   });
 });

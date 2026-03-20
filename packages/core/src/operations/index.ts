@@ -186,3 +186,15 @@ export {
   type ImportPeopleFromCollectionInput,
   type ImportPeopleFromCollectionOutput,
 } from "./import-people-from-collection.js";
+
+// URL building & entity resolution
+export {
+  buildLinkedInUrl,
+  type BuildLinkedInUrlInput,
+  type BuildLinkedInUrlOutput,
+} from "./build-linkedin-url.js";
+export {
+  resolveLinkedInEntity,
+  type ResolveLinkedInEntityInput,
+  type ResolveLinkedInEntityOutput,
+} from "./resolve-linkedin-entity.js";

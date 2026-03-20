@@ -79,7 +79,10 @@ describe("createProgram", () => {
     expect(commandNames).toContain("remove-people-from-collection");
     expect(commandNames).toContain("import-people-from-collection");
     expect(commandNames).toContain("collect-people");
-    expect(commandNames).toHaveLength(44);
+    expect(commandNames).toContain("build-url");
+    expect(commandNames).toContain("resolve-entity");
+    expect(commandNames).toContain("list-reference-data");
+    expect(commandNames).toHaveLength(47);
   });
 
   describe("launch-app", () => {

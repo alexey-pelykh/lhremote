@@ -58,11 +58,28 @@ export type {
   ProfileSummary,
   RunnerState,
   Skill,
+  BasicSearchParams,
+  BooleanExpressionInput,
+  BooleanExpressionRaw,
+  BooleanExpressionStructured,
+  CompanySizeEntry,
+  ConnectionDegreeEntry,
+  EntityMatch,
+  EntityType,
+  FunctionEntry,
+  IndustryEntry,
+  ProfileLanguageEntry,
+  ReferenceDataType,
+  SNFilter,
+  SNFilterValue,
+  SNSearchParams,
+  SeniorityEntry,
   SourceTier,
   SourceType,
   StartInstanceParams,
   StartInstanceResult,
   UIHealthStatus,
+  UrlBuilderResult,
 } from "./types/index.js";
 
 // Services
@@ -80,7 +97,17 @@ export {
   CollectionBusyError,
   CollectionError,
   type DatabaseContext,
+  buildBasicSearchUrl,
+  buildBooleanExpression,
+  buildParameterisedUrl,
+  buildSNSearchUrl,
   detectSourceType,
+  getFixedUrl,
+  getParameterType,
+  isFixedUrlType,
+  isParameterisedType,
+  isSNSearchBuilderType,
+  isSearchBuilderType,
   ExtractionTimeoutError,
   type InstanceDatabaseContext,
   InstanceNotRunningError,
@@ -143,6 +170,11 @@ export {
   type ConfigFieldSchema,
   getActionTypeCatalog,
   getActionTypeInfo,
+  getFunctionById,
+  getIndustryById,
+  getLinkedInReferenceData,
+  getSeniorityById,
+  isReferenceDataType,
 } from "./data/index.js";
 
 // Errors (DB + CDP errors can propagate through the service layer)
@@ -280,6 +312,13 @@ export {
   importPeopleFromCollection,
   type ImportPeopleFromCollectionInput,
   type ImportPeopleFromCollectionOutput,
+  // URL building & entity resolution
+  buildLinkedInUrl,
+  type BuildLinkedInUrlInput,
+  type BuildLinkedInUrlOutput,
+  resolveLinkedInEntity,
+  type ResolveLinkedInEntityInput,
+  type ResolveLinkedInEntityOutput,
 } from "./operations/index.js";
 
 // Constants
