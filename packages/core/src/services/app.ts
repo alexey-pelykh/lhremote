@@ -73,27 +73,24 @@ export class AppService {
    * @throws {AppLaunchError} if the process fails to start.
    */
   async launch(): Promise<void> {
-    if (this.assignedPort !== null && await this.isRunning()) {
+    if (this.assignedPort !== null && !this.force && await this.isRunning()) {
       return;
     }
 
     // Proactive conflict detection: check for existing LH processes
     const existingApps = await findApp();
     if (existingApps.length > 0) {
-      const connectable = existingApps.find((a) => a.connectable);
-      if (connectable) {
-        // Already running with CDP — use that port
-        this.assignedPort = connectable.cdpPort;
-        return;
-      }
-      // Running but CDP unreachable
       if (!this.force) {
+        const connectable = existingApps.find((a) => a.connectable);
+        if (connectable) {
+          // Already running with CDP — use that port
+          this.assignedPort = connectable.cdpPort;
+          return;
+        }
         throw new LinkedHelperUnreachableError(existingApps);
       }
-      // Force mode: kill existing processes before relaunching
-      for (const app of existingApps) {
-        process.kill(app.pid, "SIGKILL");
-      }
+      // Force mode: kill all existing processes before relaunching
+      await killProcesses(existingApps.map((a) => a.pid));
     }
 
     if (this.assignedPort === null) {
@@ -255,6 +252,33 @@ function waitForExit(child: ChildProcess, timeout: number): Promise<boolean> {
 
     child.on("exit", onExit);
   });
+}
+
+/**
+ * Send SIGKILL to each PID and wait for the processes to exit.
+ */
+async function killProcesses(pids: number[]): Promise<void> {
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Process may have already exited
+    }
+  }
+
+  const deadline = Date.now() + QUIT_FORCE_TIMEOUT;
+  while (Date.now() < deadline) {
+    const alive = pids.filter((pid) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (alive.length === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 }
 
 function assertFileExists(path: string): void {
