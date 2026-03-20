@@ -84,13 +84,12 @@ function encodeFilter(filter: SNFilter): string {
 /**
  * Percent-encode a value for Rest.li URI format.
  *
- * Rest.li uses standard percent-encoding but keeps the parentheses/commas
- * structural (they are part of the Rest.li syntax, not data).
+ * Rest.li uses standard percent-encoding. Structural characters like
+ * parentheses and commas are added by the surrounding syntax, not as part
+ * of the encoded value, so we keep the `encodeURIComponent` output as-is.
  */
 function encodeRestLiValue(value: string): string {
-  return encodeURIComponent(value)
-    .replace(/%3A/gi, ":")
-    .replace(/%2C/gi, ",");
+  return encodeURIComponent(value);
 }
 
 /**

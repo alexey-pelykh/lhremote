@@ -272,16 +272,17 @@ export async function resolveLinkedInEntity(
     return { matches, strategy: "voyager" };
   }
 
-  // Try public endpoint first
+  // Try public endpoint first — only fall back to Voyager if the request
+  // itself failed (undefined), not when it succeeded with zero matches.
   const publicMatches = await tryPublicTypeahead(
     input.query,
     input.entityType,
   );
-  if (publicMatches !== undefined && publicMatches.length > 0) {
+  if (publicMatches !== undefined) {
     return { matches: publicMatches, strategy: "public" };
   }
 
-  // Fallback to Voyager
+  // Public endpoint failed — fallback to Voyager
   const voyagerMatches = await tryVoyagerTypeahead(
     input.query,
     input.entityType,

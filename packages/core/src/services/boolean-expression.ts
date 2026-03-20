@@ -82,10 +82,11 @@ export function buildBooleanExpression(input: BooleanExpressionInput): string {
   // Build the positive expression with AND between all parts
   let expression = parts.join(" AND ");
 
-  // NOT terms appended at the end
+  // NOT terms appended at the end (no leading space when expression is empty)
   if (input.not !== undefined && input.not.length > 0) {
     for (const term of input.not) {
-      expression += ` NOT ${quoteTerm(term)}`;
+      const notClause = `NOT ${quoteTerm(term)}`;
+      expression = expression === "" ? notClause : `${expression} ${notClause}`;
     }
   }
 

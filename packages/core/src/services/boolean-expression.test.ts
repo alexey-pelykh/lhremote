@@ -40,7 +40,7 @@ describe("buildBooleanExpression", () => {
     it("prefixes NOT terms with NOT", () => {
       expect(
         buildBooleanExpression({ not: ["intern"] }),
-      ).toBe(" NOT intern");
+      ).toBe("NOT intern");
     });
 
     it("wraps phrases in double quotes", () => {
@@ -76,7 +76,7 @@ describe("buildBooleanExpression", () => {
     it("auto-quotes multi-word terms in NOT", () => {
       expect(
         buildBooleanExpression({ not: ["junior developer"] }),
-      ).toBe(' NOT "junior developer"');
+      ).toBe('NOT "junior developer"');
     });
 
     it("returns empty string for empty structured input", () => {
