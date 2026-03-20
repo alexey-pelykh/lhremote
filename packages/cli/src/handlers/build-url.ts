@@ -48,35 +48,51 @@ export function handleBuildUrl(
       if (parts.length < 3) {
         process.stderr.write(
           `Invalid filter format: "${raw}"\n` +
-            'Expected: "TYPE:ID:TEXT:INCLUDED|EXCLUDED" or "TYPE:ID::INCLUDED|EXCLUDED"\n',
+            'Expected: "TYPE:ID:INCLUDED|EXCLUDED" or "TYPE:ID:TEXT:INCLUDED|EXCLUDED"\n',
         );
         process.exitCode = 1;
         return;
       }
 
-      // Length check above guarantees indices 0–2 exist
-      const type = parts[0] ?? "";
-      const id = parts[1] ?? "";
-      const rawText = parts[2] ?? "";
-      const text = rawText.length > 0 ? rawText : undefined;
-      const rawSelection = parts[3];
-      const selectionType: "INCLUDED" | "EXCLUDED" =
-        rawSelection === "EXCLUDED" ? "EXCLUDED" : "INCLUDED";
-
-      if (rawSelection !== undefined && rawSelection !== "INCLUDED" && rawSelection !== "EXCLUDED") {
+      // Last segment is selectionType, first is type, everything in
+      // between is ID (+ optional text). This supports IDs with colons
+      // (e.g. URNs like urn:li:organization:1441).
+      const rawSelection = parts[parts.length - 1] ?? "";
+      if (rawSelection !== "INCLUDED" && rawSelection !== "EXCLUDED") {
         process.stderr.write(
           `Invalid selectionType "${rawSelection}" in filter "${raw}"\n` +
-            "Must be INCLUDED or EXCLUDED\n",
+            "Last segment must be INCLUDED or EXCLUDED\n",
         );
         process.exitCode = 1;
         return;
+      }
+
+      const selectionType: "INCLUDED" | "EXCLUDED" = rawSelection;
+      const type = parts[0] ?? "";
+      const middle = parts.slice(1, parts.length - 1);
+
+      // middle contains ID and optional TEXT. The last middle segment
+      // is TEXT if it looks like display text (non-empty and not a URN
+      // component). For simplicity: if middle has 1 element, it's the ID.
+      // If >1, the last element is TEXT and the rest form the ID (joined
+      // with colons to reconstruct URN-style IDs).
+      let id: string;
+      let text: string | undefined;
+
+      if (middle.length <= 1) {
+        id = middle[0] ?? "";
+      } else {
+        id = middle.slice(0, -1).join(":");
+        const rawText = middle[middle.length - 1] ?? "";
+        text = rawText.length > 0 ? rawText : undefined;
       }
 
       const existing = filterMap.get(type);
+      const entry = { id, ...(text !== undefined && { text }), selectionType };
       if (existing !== undefined) {
-        existing.push({ id, ...(text !== undefined && { text }), selectionType });
+        existing.push(entry);
       } else {
-        filterMap.set(type, [{ id, ...(text !== undefined && { text }), selectionType }]);
+        filterMap.set(type, [entry]);
       }
     }
 
