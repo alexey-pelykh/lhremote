@@ -265,6 +265,82 @@ describe("AppService", () => {
     });
   });
 
+  describe("launch with force", () => {
+    let mockedProcessKill: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      mockedProcessKill = vi.fn().mockImplementation(
+        (_pid: number, signal: string | number) => {
+          if (signal === 0) throw new Error("ESRCH");
+        },
+      );
+      vi.stubGlobal("process", {
+        ...process,
+        platform: "darwin",
+        env: {},
+        kill: mockedProcessKill,
+      });
+      mockedFindApp.mockResolvedValue([]);
+    });
+
+    it("kills all processes when connectable app exists", async () => {
+      mockedFindApp.mockResolvedValue([
+        { pid: 111, cdpPort: 9222, connectable: true },
+        { pid: 222, cdpPort: null, connectable: false },
+      ]);
+      mockedAccessSync.mockReturnValue(undefined);
+      mockedGetPort.mockResolvedValue(54321);
+
+      const child = makeMockChild();
+      mockedSpawn.mockReturnValue(child);
+
+      const service = new AppService(undefined, { ...FAST_OPTIONS, force: true });
+      await service.launch();
+
+      expect(mockedProcessKill).toHaveBeenCalledWith(111, "SIGKILL");
+      expect(mockedProcessKill).toHaveBeenCalledWith(222, "SIGKILL");
+      expect(mockedSpawn).toHaveBeenCalled();
+      expect(service.cdpPort).toBe(54321);
+    });
+
+    it("kills unreachable processes before relaunching", async () => {
+      mockedFindApp.mockResolvedValue([
+        { pid: 333, cdpPort: null, connectable: false },
+      ]);
+      mockedAccessSync.mockReturnValue(undefined);
+      mockedGetPort.mockResolvedValue(54321);
+
+      const child = makeMockChild();
+      mockedSpawn.mockReturnValue(child);
+
+      const service = new AppService(undefined, { ...FAST_OPTIONS, force: true });
+      await service.launch();
+
+      expect(mockedProcessKill).toHaveBeenCalledWith(333, "SIGKILL");
+      expect(mockedSpawn).toHaveBeenCalled();
+    });
+
+    it("kills processes even when explicit port is already running", async () => {
+      mockedFindApp.mockResolvedValue([
+        { pid: 444, cdpPort: 9222, connectable: true },
+      ]);
+      mockedAccessSync.mockReturnValue(undefined);
+
+      const child = makeMockChild();
+      mockedSpawn.mockReturnValue(child);
+
+      const service = new AppService(9222, { ...FAST_OPTIONS, force: true });
+      await service.launch();
+
+      expect(mockedProcessKill).toHaveBeenCalledWith(444, "SIGKILL");
+      expect(mockedSpawn).toHaveBeenCalledWith(
+        expect.any(String),
+        ["--remote-debugging-port=9222"],
+        expect.any(Object),
+      );
+    });
+  });
+
   describe("quit", () => {
     beforeEach(() => {
       vi.stubGlobal("process", { ...process, platform: "darwin", env: {} });
