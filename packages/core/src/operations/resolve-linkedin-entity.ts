@@ -166,18 +166,24 @@ async function tryVoyagerTypeahead(
         });
         const url = "https://www.linkedin.com/voyager/api/typeahead/hitsV2?" + params;
 
-        // Extract CSRF token from cookies
+        // Extract CSRF token from cookies. The JSESSIONID value is
+        // typically stored as "ajax:<token>" (with quotes); strip quotes
+        // and use as-is for the Csrf-Token header.
         const jsessionid = document.cookie
           .split(";")
           .map(c => c.trim())
           .find(c => c.startsWith("JSESSIONID="));
-        const csrfToken = jsessionid
-          ? jsessionid.split("=")[1].replace(/"/g, "")
+        let csrfToken = jsessionid
+          ? jsessionid.substring(jsessionid.indexOf("=") + 1).replace(/"/g, "")
           : "";
+        // Ensure "ajax:" prefix is present exactly once
+        if (!csrfToken.startsWith("ajax:")) {
+          csrfToken = "ajax:" + csrfToken;
+        }
 
         const response = await fetch(url, {
           headers: {
-            "Csrf-Token": "ajax:" + csrfToken,
+            "Csrf-Token": csrfToken,
             "X-RestLi-Protocol-Version": "2.0.0",
           },
           credentials: "include",

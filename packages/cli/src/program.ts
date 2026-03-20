@@ -630,7 +630,7 @@ export function createProgram(): Command {
     .option("--network <code>", "Connection degree: F, S, O (SearchPage, repeatable)", collectString, [])
     .option("--profile-language <code>", "Profile language code (SearchPage, repeatable)", collectString, [])
     .option("--service-category <id>", "Service category ID (SearchPage, repeatable)", collectString, [])
-    .option("--filter <spec>", "SN filter TYPE:ID:TEXT:INCLUDED|EXCLUDED (SNSearchPage, repeatable)", collectString, [])
+    .option("--filter <spec>", "SN filter TYPE|ID|TEXT|INCLUDED (SNSearchPage, repeatable)", collectString, [])
     .option("--slug <slug>", "Company or school slug (OrganizationPeople, Alumni)")
     .option("--id <id>", "Entity ID (Group, Event, SNListPage, etc.)")
     .option("--json", "Output as JSON")

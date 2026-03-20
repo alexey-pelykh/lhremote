@@ -44,49 +44,44 @@ export function handleBuildUrl(
     >();
 
     for (const raw of options.filter) {
-      const parts = raw.split(":");
-      if (parts.length < 3) {
+      // Use pipe delimiter to avoid conflicts with colons in URN IDs
+      // (e.g. urn:li:organization:1441)
+      const segments = raw.split("|");
+      if (segments.length < 3 || segments.length > 4) {
         process.stderr.write(
           `Invalid filter format: "${raw}"\n` +
-            'Expected: "TYPE:ID:INCLUDED|EXCLUDED" or "TYPE:ID:TEXT:INCLUDED|EXCLUDED"\n',
+            'Expected: "TYPE|ID|INCLUDED" or "TYPE|ID|TEXT|INCLUDED"\n' +
+            "Example: CURRENT_COMPANY|urn:li:organization:1441|Google|INCLUDED\n",
         );
         process.exitCode = 1;
         return;
       }
 
-      // Last segment is selectionType, first is type, everything in
-      // between is ID (+ optional text). This supports IDs with colons
-      // (e.g. URNs like urn:li:organization:1441).
-      const rawSelection = parts[parts.length - 1] ?? "";
+      const type = segments[0] ?? "";
+      let id: string;
+      let text: string | undefined;
+      let rawSelection: string;
+
+      if (segments.length === 4) {
+        id = segments[1] ?? "";
+        const rawText = segments[2] ?? "";
+        text = rawText.length > 0 ? rawText : undefined;
+        rawSelection = segments[3] ?? "";
+      } else {
+        id = segments[1] ?? "";
+        rawSelection = segments[2] ?? "";
+      }
+
       if (rawSelection !== "INCLUDED" && rawSelection !== "EXCLUDED") {
         process.stderr.write(
           `Invalid selectionType "${rawSelection}" in filter "${raw}"\n` +
-            "Last segment must be INCLUDED or EXCLUDED\n",
+            "Must be INCLUDED or EXCLUDED\n",
         );
         process.exitCode = 1;
         return;
       }
 
       const selectionType: "INCLUDED" | "EXCLUDED" = rawSelection;
-      const type = parts[0] ?? "";
-      const middle = parts.slice(1, parts.length - 1);
-
-      // middle contains ID and optional TEXT. The last middle segment
-      // is TEXT if it looks like display text (non-empty and not a URN
-      // component). For simplicity: if middle has 1 element, it's the ID.
-      // If >1, the last element is TEXT and the rest form the ID (joined
-      // with colons to reconstruct URN-style IDs).
-      let id: string;
-      let text: string | undefined;
-
-      if (middle.length <= 1) {
-        id = middle[0] ?? "";
-      } else {
-        id = middle.slice(0, -1).join(":");
-        const rawText = middle[middle.length - 1] ?? "";
-        text = rawText.length > 0 ? rawText : undefined;
-      }
-
       const existing = filterMap.get(type);
       const entry = { id, ...(text !== undefined && { text }), selectionType };
       if (existing !== undefined) {
