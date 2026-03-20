@@ -8,10 +8,12 @@ import { CollectionService } from "./collection.js";
 
 // Mock InstanceService
 const mockEvaluateUI = vi.fn();
+const mockNavigateLinkedIn = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("./instance.js", () => ({
   InstanceService: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.evaluateUI = mockEvaluateUI;
+    this.navigateLinkedIn = mockNavigateLinkedIn;
   }),
 }));
 
@@ -40,7 +42,7 @@ describe("CollectionService", () => {
   });
 
   describe("collect", () => {
-    it("calls canCollect, prepareCollecting, and collect via CDP", async () => {
+    it("navigates, then calls canCollect, prepareCollecting, and collect via CDP", async () => {
       mockEvaluateUI
         .mockResolvedValueOnce("idle")  // getRunnerState
         .mockResolvedValueOnce(true)    // canCollect
@@ -48,6 +50,9 @@ describe("CollectionService", () => {
         .mockResolvedValueOnce(true);   // collect
 
       await service.collect(SEARCH_URL, 1);
+
+      // Navigation via LinkedIn webview
+      expect(mockNavigateLinkedIn).toHaveBeenCalledWith(SEARCH_URL);
 
       expect(mockEvaluateUI).toHaveBeenCalledTimes(4);
 
@@ -164,6 +169,22 @@ describe("CollectionService", () => {
       const error = await service.collect(SEARCH_URL, 1).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CollectionError);
       expect((error as CollectionError).message).toContain("not on a matching page");
+
+      // Navigation should have been attempted before canCollect
+      expect(mockNavigateLinkedIn).toHaveBeenCalledWith(SEARCH_URL);
+    });
+
+    it("throws CollectionError when navigation fails", async () => {
+      mockEvaluateUI.mockResolvedValueOnce("idle"); // getRunnerState
+      mockNavigateLinkedIn.mockRejectedValueOnce(new Error("Page.navigate timeout"));
+
+      const error = await service.collect(SEARCH_URL, 1).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CollectionError);
+      expect((error as CollectionError).message).toContain("Failed to navigate to source URL");
+      expect((error as CollectionError).cause).toBeInstanceOf(Error);
+
+      // canCollect should not be called after navigation failure
+      expect(mockEvaluateUI).toHaveBeenCalledTimes(1);
     });
 
     it("throws CollectionError when prepareCollecting returns false", async () => {

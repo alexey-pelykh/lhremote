@@ -68,6 +68,18 @@ export class CollectionService {
     }
 
     await this.ensureIdle();
+
+    try {
+      await this.instance.navigateLinkedIn(sourceUrl);
+    } catch (error) {
+      if (error instanceof CollectionError) throw error;
+      const message = errorMessage(error);
+      throw new CollectionError(
+        `Failed to navigate to source URL: ${message}`,
+        { cause: error },
+      );
+    }
+
     await this.assertCanCollect(sourceType);
 
     try {
