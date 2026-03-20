@@ -17,6 +17,7 @@ import {
   NodeIntegrationUnavailableError,
   ServiceError,
   StartInstanceError,
+  WrongPortError,
 } from "./errors.js";
 
 /**
@@ -163,12 +164,13 @@ export class LauncherService {
   async listAccounts(): Promise<Account[]> {
     const client = this.ensureConnected();
 
-    const accounts = await this.launcherEvaluate<Account[]>(
+    const accounts = await this.launcherEvaluate<Account[] | null>(
       client,
       `(() => {
         const remote = require('@electron/remote');
         const mainWindow = remote.getGlobal('mainWindow');
-        const store = mainWindow.electronStore;
+        const store = mainWindow?.electronStore;
+        if (!store) return null;
         const passwords = store.get('linkedInPasswords') ?? {};
         return Object.keys(passwords)
           .map(k => {
@@ -187,7 +189,11 @@ export class LauncherService {
       })()`,
     );
 
-    return accounts ?? [];
+    if (accounts === null) {
+      throw new WrongPortError(this.port);
+    }
+
+    return accounts;
   }
 
   /**

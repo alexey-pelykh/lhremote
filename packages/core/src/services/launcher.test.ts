@@ -8,6 +8,7 @@ import {
   NodeIntegrationUnavailableError,
   ServiceError,
   StartInstanceError,
+  WrongPortError,
 } from "./errors.js";
 import { LauncherService } from "./launcher.js";
 
@@ -297,7 +298,7 @@ describe("LauncherService", () => {
 
     it("returns empty array when no accounts", async () => {
       await service.connect();
-      nextEvaluateResult = null;
+      nextEvaluateResult = [];
 
       const accounts = await service.listAccounts();
 
@@ -311,11 +312,18 @@ describe("LauncherService", () => {
           return Promise.resolve(true);
         }
         return Promise.reject(
-          new CDPEvaluationError("TypeError: Cannot read property 'get' of undefined"),
+          new CDPEvaluationError("ReferenceError: remote is not defined"),
         );
       });
 
       await expect(service.listAccounts()).rejects.toThrow(CDPEvaluationError);
+    });
+
+    it("throws WrongPortError when electronStore is not available", async () => {
+      await service.connect();
+      nextEvaluateResult = null;
+
+      await expect(service.listAccounts()).rejects.toThrow(WrongPortError);
     });
   });
 });
