@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   LinkedHelperNotRunningError,
+  NodeIntegrationUnavailableError,
   ServiceError,
   StartInstanceError,
-  WrongPortError,
 } from "./errors.js";
 import { LauncherService } from "./launcher.js";
 
@@ -18,6 +18,9 @@ import { LauncherService } from "./launcher.js";
 const mockConnect = vi.fn();
 const mockDisconnect = vi.fn();
 const mockEvaluate = vi.fn();
+const mockSend = vi.fn();
+const mockOn = vi.fn();
+const mockOff = vi.fn();
 const mockIsConnected = vi.fn().mockReturnValue(true);
 
 vi.mock("../cdp/index.js", async (importOriginal) => {
@@ -27,6 +30,9 @@ vi.mock("../cdp/index.js", async (importOriginal) => {
       this.connect = mockConnect;
       this.disconnect = mockDisconnect;
       this.evaluate = mockEvaluate;
+      this.send = mockSend;
+      this.on = mockOn;
+      this.off = mockOff;
       Object.defineProperty(this, "isConnected", {
         get: mockIsConnected,
       });
@@ -48,10 +54,22 @@ afterEach(() => {
 describe("LauncherService", () => {
   let service: LauncherService;
 
+  /** Value returned by the next non-probe evaluate call. */
+  let nextEvaluateResult: unknown = undefined;
+
   beforeEach(() => {
     service = new LauncherService(9222);
     mockConnect.mockResolvedValue(undefined);
-    mockEvaluate.mockResolvedValue(undefined);
+    nextEvaluateResult = undefined;
+
+    // Default: require is available in the default context.
+    // The probe call returns true; all other calls return nextEvaluateResult.
+    mockEvaluate.mockImplementation((expression: string) => {
+      if (expression === "typeof require === 'function'") {
+        return Promise.resolve(true);
+      }
+      return Promise.resolve(nextEvaluateResult);
+    });
   });
 
   describe("connect", () => {
@@ -59,6 +77,14 @@ describe("LauncherService", () => {
       await service.connect();
 
       expect(service.isConnected).toBe(true);
+    });
+
+    it("probes for require availability during connect", async () => {
+      await service.connect();
+
+      expect(mockEvaluate).toHaveBeenCalledWith(
+        "typeof require === 'function'",
+      );
     });
 
     it("wraps CDPConnectionError into LinkedHelperNotRunningError", async () => {
@@ -79,6 +105,87 @@ describe("LauncherService", () => {
     });
   });
 
+  describe("connect with context fallback", () => {
+    it("falls back to preload context when default lacks require", async () => {
+      let probeCount = 0;
+      mockEvaluate.mockImplementation((expression: string, _await?: boolean, contextId?: number) => {
+        if (expression === "typeof require === 'function'") {
+          probeCount++;
+          // First probe (default context): no require
+          // Second probe (preload context id=2): has require
+          return Promise.resolve(probeCount >= 2 && contextId === 2);
+        }
+        return Promise.resolve(undefined);
+      });
+
+      mockOn.mockImplementation((event: string, handler: (params: unknown) => void) => {
+        if (event === "Runtime.executionContextCreated") {
+          handler({ context: { id: 1, auxData: { isDefault: true } } });
+          handler({ context: { id: 2, auxData: { isDefault: false } } });
+        }
+      });
+      mockSend.mockResolvedValue(undefined);
+
+      await service.connect();
+
+      expect(service.isConnected).toBe(true);
+      expect(mockSend).toHaveBeenCalledWith("Runtime.enable");
+      expect(mockSend).toHaveBeenCalledWith("Runtime.disable");
+    });
+
+    it("throws NodeIntegrationUnavailableError when no context has require", async () => {
+      mockEvaluate.mockImplementation((expression: string) => {
+        if (expression === "typeof require === 'function'") {
+          return Promise.resolve(false);
+        }
+        return Promise.resolve(undefined);
+      });
+
+      mockOn.mockImplementation((event: string, handler: (params: unknown) => void) => {
+        if (event === "Runtime.executionContextCreated") {
+          handler({ context: { id: 1, auxData: { isDefault: true } } });
+          handler({ context: { id: 2, auxData: { isDefault: false } } });
+        }
+      });
+      mockSend.mockResolvedValue(undefined);
+
+      await expect(service.connect()).rejects.toThrow(
+        NodeIntegrationUnavailableError,
+      );
+    });
+
+    it("uses preload context for subsequent evaluations", async () => {
+      const PRELOAD_CONTEXT_ID = 42;
+      let probeCount = 0;
+
+      mockEvaluate.mockImplementation((expression: string, _await?: boolean, contextId?: number) => {
+        if (expression === "typeof require === 'function'") {
+          probeCount++;
+          return Promise.resolve(probeCount >= 2 && contextId === PRELOAD_CONTEXT_ID);
+        }
+        return Promise.resolve(nextEvaluateResult);
+      });
+
+      mockOn.mockImplementation((event: string, handler: (params: unknown) => void) => {
+        if (event === "Runtime.executionContextCreated") {
+          handler({ context: { id: 1, auxData: { isDefault: true } } });
+          handler({ context: { id: PRELOAD_CONTEXT_ID, auxData: { isDefault: false } } });
+        }
+      });
+      mockSend.mockResolvedValue(undefined);
+
+      await service.connect();
+
+      nextEvaluateResult = [];
+      await service.listAccounts();
+
+      const calls = mockEvaluate.mock.calls;
+      const lastCall = calls[calls.length - 1];
+      expect(lastCall).toBeDefined();
+      expect(lastCall?.[2]).toBe(PRELOAD_CONTEXT_ID);
+    });
+  });
+
   describe("disconnect", () => {
     it("disconnects the CDPClient", async () => {
       await service.connect();
@@ -95,26 +202,28 @@ describe("LauncherService", () => {
   describe("startInstance", () => {
     it("evaluates the startInstance expression", async () => {
       await service.connect();
-      mockEvaluate.mockResolvedValue({ success: true });
+      nextEvaluateResult = { success: true };
 
       await service.startInstance(42);
 
       expect(mockEvaluate).toHaveBeenCalledWith(
         expect.stringContaining("startInstance"),
         true,
+        undefined,
       );
       expect(mockEvaluate).toHaveBeenCalledWith(
         expect.stringContaining("42"),
         true,
+        undefined,
       );
     });
 
     it("throws StartInstanceError on failure", async () => {
       await service.connect();
-      mockEvaluate.mockResolvedValue({
+      nextEvaluateResult = {
         success: false,
         error: "account is already running",
-      });
+      };
 
       await expect(service.startInstance(42)).rejects.toThrow(
         StartInstanceError,
@@ -138,6 +247,7 @@ describe("LauncherService", () => {
       expect(mockEvaluate).toHaveBeenCalledWith(
         expect.stringContaining("stopInstance"),
         true,
+        undefined,
       );
     });
 
@@ -149,7 +259,7 @@ describe("LauncherService", () => {
   describe("getInstanceStatus", () => {
     it("returns the instance status", async () => {
       await service.connect();
-      mockEvaluate.mockResolvedValue("running");
+      nextEvaluateResult = "running";
 
       const status = await service.getInstanceStatus(42);
 
@@ -158,7 +268,7 @@ describe("LauncherService", () => {
 
     it("returns stopped when status is null", async () => {
       await service.connect();
-      mockEvaluate.mockResolvedValue("stopped");
+      nextEvaluateResult = "stopped";
 
       const status = await service.getInstanceStatus(42);
 
@@ -169,10 +279,10 @@ describe("LauncherService", () => {
   describe("listAccounts", () => {
     it("returns parsed accounts", async () => {
       await service.connect();
-      mockEvaluate.mockResolvedValue([
+      nextEvaluateResult = [
         { id: 1, liId: 100, name: "Alice", email: "alice@test.com" },
         { id: 2, liId: 200, name: "Bob" },
-      ]);
+      ];
 
       const accounts = await service.listAccounts();
 
@@ -187,73 +297,25 @@ describe("LauncherService", () => {
 
     it("returns empty array when no accounts", async () => {
       await service.connect();
-      mockEvaluate.mockResolvedValue(null);
+      nextEvaluateResult = null;
 
       const accounts = await service.listAccounts();
 
       expect(accounts).toEqual([]);
     });
 
-    it("throws WrongPortError when require is not defined", async () => {
+    it("propagates CDPEvaluationErrors directly", async () => {
       await service.connect();
-      mockEvaluate.mockRejectedValue(
-        new CDPEvaluationError("ReferenceError: require is not defined"),
-      );
-
-      await expect(service.listAccounts()).rejects.toThrow(WrongPortError);
-      await expect(service.listAccounts()).rejects.toThrow(
-        /appears to be a LinkedHelper instance/,
-      );
-    });
-  });
-
-  describe("wrong port detection", () => {
-    it("throws WrongPortError from startInstance", async () => {
-      await service.connect();
-      mockEvaluate.mockRejectedValue(
-        new CDPEvaluationError("ReferenceError: require is not defined"),
-      );
-
-      await expect(service.startInstance(42)).rejects.toThrow(WrongPortError);
-    });
-
-    it("throws WrongPortError from stopInstance", async () => {
-      await service.connect();
-      mockEvaluate.mockRejectedValue(
-        new CDPEvaluationError("ReferenceError: require is not defined"),
-      );
-
-      await expect(service.stopInstance(42)).rejects.toThrow(WrongPortError);
-    });
-
-    it("throws WrongPortError from getInstanceStatus", async () => {
-      await service.connect();
-      mockEvaluate.mockRejectedValue(
-        new CDPEvaluationError("ReferenceError: require is not defined"),
-      );
-
-      await expect(service.getInstanceStatus(42)).rejects.toThrow(
-        WrongPortError,
-      );
-    });
-
-    it("does not catch unrelated CDPEvaluationErrors", async () => {
-      await service.connect();
-      mockEvaluate.mockRejectedValue(
-        new CDPEvaluationError("TypeError: Cannot read property 'get' of undefined"),
-      );
+      mockEvaluate.mockImplementation((expression: string) => {
+        if (expression === "typeof require === 'function'") {
+          return Promise.resolve(true);
+        }
+        return Promise.reject(
+          new CDPEvaluationError("TypeError: Cannot read property 'get' of undefined"),
+        );
+      });
 
       await expect(service.listAccounts()).rejects.toThrow(CDPEvaluationError);
-      await expect(service.listAccounts()).rejects.not.toThrow(WrongPortError);
-    });
-
-    it("includes the port number in the error message", async () => {
-      await service.connect();
-      mockEvaluate.mockRejectedValue(
-        new CDPEvaluationError("ReferenceError: require is not defined"),
-      );
-
-      await expect(service.listAccounts()).rejects.toThrow(/9222/);
     });
   });
 });

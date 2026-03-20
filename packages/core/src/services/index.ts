@@ -44,6 +44,7 @@ export {
   InvalidProfileUrlError,
   LinkedHelperNotRunningError,
   LinkedHelperUnreachableError,
+  NodeIntegrationUnavailableError,
   ServiceError,
   StartInstanceError,
   UIBlockedError,

@@ -105,6 +105,7 @@ export {
   waitForInstanceShutdown,
   withDatabase,
   withInstanceDatabase,
+  NodeIntegrationUnavailableError,
   WrongPortError,
 } from "./services/index.js";
 

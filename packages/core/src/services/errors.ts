@@ -109,6 +109,24 @@ export class WrongPortError extends ServiceError {
 }
 
 /**
+ * Thrown when the LinkedHelper launcher renderer does not provide
+ * a Node.js execution context (`require` is unavailable in all
+ * CDP execution contexts).
+ *
+ * This typically means LinkedHelper has changed its Electron
+ * configuration beyond what lhremote currently supports.
+ */
+export class NodeIntegrationUnavailableError extends ServiceError {
+  constructor() {
+    super(
+      "LinkedHelper launcher does not expose Node.js APIs (require is unavailable). " +
+        "This may indicate an unsupported LinkedHelper version.",
+    );
+    this.name = "NodeIntegrationUnavailableError";
+  }
+}
+
+/**
  * Thrown when a LinkedHelper action execution fails.
  */
 export class ActionExecutionError extends ServiceError {
