@@ -133,6 +133,14 @@ async function tryVoyagerTypeahead(
   cdpHost: string,
   allowRemote: boolean,
 ): Promise<EntityMatch[]> {
+  // Enforce loopback guard before making any network requests
+  if (!allowRemote && cdpHost !== "127.0.0.1" && cdpHost !== "localhost") {
+    throw new Error(
+      `Non-loopback CDP host "${cdpHost}" requires --allow-remote. ` +
+        "This is a security measure to prevent remote code execution.",
+    );
+  }
+
   // Find the LinkedIn page target
   const targets = await discoverTargets(cdpPort, cdpHost);
   const linkedInTarget = targets.find(
