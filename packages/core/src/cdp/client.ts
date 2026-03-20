@@ -135,17 +135,27 @@ export class CDPClient {
    *
    * @param expression  - JavaScript source to evaluate.
    * @param awaitPromise - Whether to await a Promise result (default `false`).
+   * @param contextId - Optional execution context ID. When provided the
+   *   expression runs in that context instead of the default (main world).
+   *   Use this to evaluate in the Electron preload context when
+   *   `nodeIntegration` is disabled in the renderer.
    * @returns The deserialized value from the remote context.
    */
   async evaluate<T = unknown>(
     expression: string,
     awaitPromise = false,
+    contextId?: number,
   ): Promise<T> {
-    const result = (await this.send("Runtime.evaluate", {
+    const params: Record<string, unknown> = {
       expression,
       awaitPromise,
       returnByValue: true,
-    })) as {
+    };
+    if (contextId !== undefined) {
+      params.contextId = contextId;
+    }
+
+    const result = (await this.send("Runtime.evaluate", params)) as {
       result?: { value?: unknown };
       exceptionDetails?: { exception?: { description?: string }; text?: string };
     };

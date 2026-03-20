@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { CDPClient, CDPConnectionError, CDPEvaluationError, findApp } from "../cdp/index.js";
+import { CDPClient, CDPConnectionError, findApp } from "../cdp/index.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type {
   Account,
@@ -14,9 +14,9 @@ import type {
 import {
   LinkedHelperNotRunningError,
   LinkedHelperUnreachableError,
+  NodeIntegrationUnavailableError,
   ServiceError,
   StartInstanceError,
-  WrongPortError,
 } from "./errors.js";
 
 /**
@@ -31,6 +31,7 @@ export class LauncherService {
   private readonly host: string;
   private readonly allowRemote: boolean;
   private client: CDPClient | null = null;
+  private nodeContextId: number | undefined;
 
   constructor(
     port: number = DEFAULT_CDP_PORT,
@@ -61,6 +62,7 @@ export class LauncherService {
       throw error;
     }
     this.client = client;
+    this.nodeContextId = await this.resolveNodeContextId(client);
   }
 
   /**
@@ -69,6 +71,7 @@ export class LauncherService {
   disconnect(): void {
     this.client?.disconnect();
     this.client = null;
+    this.nodeContextId = undefined;
   }
 
   /**
@@ -279,16 +282,75 @@ export class LauncherService {
     expression: string,
     awaitPromise = false,
   ): Promise<T> {
+    return client.evaluate<T>(expression, awaitPromise, this.nodeContextId);
+  }
+
+  /**
+   * Discover which CDP execution context provides `require()`.
+   *
+   * With `nodeIntegration` enabled, the default (main world) context
+   * has `require()`.  When `nodeIntegration` is disabled (newer Electron
+   * configurations), the Electron preload script still runs with Node.js
+   * access in a separate isolated context.  This method probes all
+   * available contexts to find one where `require()` is available.
+   *
+   * @returns The `contextId` for the Node.js-capable context, or
+   *   `undefined` when the default context already has `require()`.
+   * @throws {NodeIntegrationUnavailableError} if no context provides
+   *   `require()`.
+   */
+  private async resolveNodeContextId(
+    client: CDPClient,
+  ): Promise<number | undefined> {
+    // Try the default context first (backward-compatible path).
     try {
-      return await client.evaluate<T>(expression, awaitPromise);
-    } catch (error) {
-      if (
-        error instanceof CDPEvaluationError &&
-        error.message.includes("require is not defined")
-      ) {
-        throw new WrongPortError(this.port);
-      }
-      throw error;
+      const hasRequire = await client.evaluate<boolean>(
+        "typeof require === 'function'",
+      );
+      if (hasRequire) return undefined;
+    } catch {
+      // Default context doesn't have require — probe other contexts.
     }
+
+    // Collect all execution contexts via Runtime.enable.
+    // CDP sends executionContextCreated events for existing contexts
+    // before resolving the enable response, so by the time `send`
+    // resolves all contexts have been collected.
+    interface ExecutionContext {
+      id: number;
+      auxData?: { isDefault?: boolean };
+    }
+    const contexts: ExecutionContext[] = [];
+    const handler = (params: unknown) => {
+      const { context } = params as { context: ExecutionContext };
+      contexts.push(context);
+    };
+
+    client.on("Runtime.executionContextCreated", handler);
+    try {
+      await client.send("Runtime.enable");
+    } finally {
+      client.off("Runtime.executionContextCreated", handler);
+    }
+
+    try {
+      for (const ctx of contexts) {
+        if (ctx.auxData?.isDefault) continue;
+        try {
+          const hasRequire = await client.evaluate<boolean>(
+            "typeof require === 'function'",
+            false,
+            ctx.id,
+          );
+          if (hasRequire) return ctx.id;
+        } catch {
+          // This context doesn't support require — try next.
+        }
+      }
+    } finally {
+      await client.send("Runtime.disable").catch(() => {});
+    }
+
+    throw new NodeIntegrationUnavailableError();
   }
 }
