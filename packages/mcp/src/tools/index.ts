@@ -4,6 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { registerAddPeopleToCollection } from "./add-people-to-collection.js";
+import { registerBuildLinkedInUrl } from "./build-linkedin-url.js";
 import { registerCollectPeople } from "./collect-people.js";
 import { registerCampaignAddAction } from "./campaign-add-action.js";
 import { registerCampaignCreate } from "./campaign-create.js";
@@ -35,6 +36,7 @@ import { registerDescribeActions } from "./describe-actions.js";
 import { registerFindApp } from "./find-app.js";
 import { registerGetErrors } from "./get-errors.js";
 import { registerImportPeopleFromCollection } from "./import-people-from-collection.js";
+import { registerListLinkedInReferenceData } from "./list-linkedin-reference-data.js";
 import { registerLaunchApp } from "./launch-app.js";
 import { registerListCollections } from "./list-collections.js";
 import { registerListAccounts } from "./list-accounts.js";
@@ -43,6 +45,7 @@ import { registerStartInstance } from "./start-instance.js";
 import { registerStopInstance } from "./stop-instance.js";
 import { registerQueryMessages } from "./query-messages.js";
 import { registerRemovePeopleFromCollection } from "./remove-people-from-collection.js";
+import { registerResolveLinkedInEntity } from "./resolve-linkedin-entity.js";
 import { registerQueryProfile } from "./query-profile.js";
 import { registerQueryProfiles } from "./query-profiles.js";
 import { registerQueryProfilesBulk } from "./query-profiles-bulk.js";
@@ -50,6 +53,7 @@ import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
 
 export {
   registerAddPeopleToCollection,
+  registerBuildLinkedInUrl,
   registerCollectPeople,
   registerCampaignAddAction,
   registerCampaignCreate,
@@ -84,12 +88,14 @@ export {
   registerLaunchApp,
   registerListCollections,
   registerListAccounts,
+  registerListLinkedInReferenceData,
   registerQueryMessages,
   registerRemovePeopleFromCollection,
   registerQueryProfile,
   registerQueryProfiles,
   registerQueryProfilesBulk,
   registerQuitApp,
+  registerResolveLinkedInEntity,
   registerScrapeMessagingHistory,
   registerStartInstance,
   registerStopInstance,
@@ -139,5 +145,8 @@ export function registerAllTools(server: McpServer): void {
   registerImportPeopleFromCollection(server);
   registerImportPeopleFromUrls(server);
   registerListCollections(server);
+  registerListLinkedInReferenceData(server);
   registerRemovePeopleFromCollection(server);
+  registerBuildLinkedInUrl(server);
+  registerResolveLinkedInEntity(server);
 }

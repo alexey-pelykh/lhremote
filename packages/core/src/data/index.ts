@@ -10,3 +10,11 @@ export type {
 } from "./action-types.js";
 
 export { getActionTypeCatalog, getActionTypeInfo } from "./action-types.js";
+
+export {
+  getFunctionById,
+  getIndustryById,
+  getLinkedInReferenceData,
+  getSeniorityById,
+  isReferenceDataType,
+} from "./linkedin-reference.js";

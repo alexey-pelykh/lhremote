@@ -46,6 +46,26 @@ export type {
 export type { SourceTier, SourceType } from "./collection.js";
 
 export type {
+  BasicSearchParams,
+  BooleanExpressionInput,
+  BooleanExpressionRaw,
+  BooleanExpressionStructured,
+  CompanySizeEntry,
+  ConnectionDegreeEntry,
+  EntityMatch,
+  EntityType,
+  FunctionEntry,
+  IndustryEntry,
+  ProfileLanguageEntry,
+  ReferenceDataType,
+  SNFilter,
+  SNFilterValue,
+  SNSearchParams,
+  SeniorityEntry,
+  UrlBuilderResult,
+} from "./linkedin-url.js";
+
+export type {
   ActionConfig,
   ActionErrorSummary,
   ActionPeopleCounts,

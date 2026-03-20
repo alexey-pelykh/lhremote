@@ -7,6 +7,7 @@ import { Command, InvalidArgumentError, Option } from "commander";
 
 import {
   handleAddPeopleToCollection,
+  handleBuildUrl,
   handleCampaignAddAction,
   handleCampaignCreate,
   handleCampaignDelete,
@@ -41,11 +42,13 @@ import {
   handleGetErrors,
   handleLaunchApp,
   handleListAccounts,
+  handleListReferenceData,
   handleQueryMessages,
   handleQueryProfile,
   handleQueryProfiles,
   handleQueryProfilesBulk,
   handleRemovePeopleFromCollection,
+  handleResolveEntity,
   handleScrapeMessagingHistory,
   handleQuitApp,
   handleStartInstance,
@@ -613,6 +616,44 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleGetErrors);
+
+  program
+    .command("build-url")
+    .description("Build a LinkedIn URL for a given source type and parameters")
+    .argument("<sourceType>", "Source type (e.g., PeopleSearchPage, CompanyPage)")
+    .option("--keywords <keywords>", "Search keywords")
+    .option("--current-company <name>", "Current company filter (repeatable)", collectString, [])
+    .option("--past-company <name>", "Past company filter (repeatable)", collectString, [])
+    .option("--geo <urn>", "Geo URN filter (repeatable)", collectString, [])
+    .option("--industry <id>", "Industry filter (repeatable)", collectString, [])
+    .option("--school <id>", "School filter (repeatable)", collectString, [])
+    .option("--network <degree>", "Network degree filter (repeatable)", collectString, [])
+    .option("--profile-language <lang>", "Profile language filter (repeatable)", collectString, [])
+    .option("--service-category <cat>", "Service category filter (repeatable)", collectString, [])
+    .option("--filter <spec>", "SN search filter TYPE:ID:TEXT:INCLUDED|EXCLUDED (repeatable)", collectString, [])
+    .option("--slug <slug>", "URL slug parameter")
+    .option("--id <id>", "Entity ID parameter")
+    .option("--json", "Output as JSON")
+    .action(handleBuildUrl);
+
+  program
+    .command("resolve-entity")
+    .description("Resolve a LinkedIn entity (company, geo, school) by name")
+    .argument("<entityType>", "Entity type: COMPANY, GEO, or SCHOOL")
+    .argument("<query>", "Search query")
+    .option("--limit <n>", "Max results to show", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleResolveEntity);
+
+  program
+    .command("list-reference-data")
+    .description("List LinkedIn reference data (industries, seniorities, functions, etc.)")
+    .argument("<dataType>", "Data type: INDUSTRY, SENIORITY, FUNCTION, COMPANY_SIZE, CONNECTION_DEGREE, PROFILE_LANGUAGE")
+    .option("--json", "Output as JSON")
+    .action(handleListReferenceData);
 
   return program;
 }

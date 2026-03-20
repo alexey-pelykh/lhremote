@@ -30,6 +30,18 @@ export {
   type InstanceDatabaseContext,
 } from "./instance-context.js";
 export { detectSourceType, validateSourceType } from "./source-type-registry.js";
+export { buildBooleanExpression } from "./boolean-expression.js";
+export { buildBasicSearchUrl } from "./url-builder.js";
+export { buildSNSearchUrl } from "./sn-url-builder.js";
+export {
+  buildParameterisedUrl,
+  getFixedUrl,
+  getParameterType,
+  isFixedUrlType,
+  isParameterisedType,
+  isSNSearchBuilderType,
+  isSearchBuilderType,
+} from "./url-templates.js";
 export { CollectionService } from "./collection.js";
 export {
   ActionExecutionError,
