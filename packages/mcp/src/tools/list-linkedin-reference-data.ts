@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getLinkedInReferenceData, isReferenceDataType } from "@lhremote/core";
+import { getLinkedInReferenceData } from "@lhremote/core";
 import { z } from "zod";
-import { mcpError, mcpSuccess } from "../helpers.js";
+import { mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#list-linkedin-reference-data | list-linkedin-reference-data} MCP tool. */
 export function registerListLinkedInReferenceData(server: McpServer): void {
@@ -24,10 +24,6 @@ export function registerListLinkedInReferenceData(server: McpServer): void {
         .describe("Type of reference data to list"),
     },
     async ({ dataType }) => {
-      if (!isReferenceDataType(dataType)) {
-        return mcpError(`Unknown reference data type: ${dataType}`);
-      }
-
       const items = getLinkedInReferenceData(dataType);
       return mcpSuccess(
         JSON.stringify({ dataType, items }, null, 2),

@@ -114,7 +114,12 @@ export function buildLinkedInUrl(
 
   // Fixed URL types
   if (isFixedUrlType(sourceType)) {
-    const url = getFixedUrl(sourceType) ?? "";
+    const url = getFixedUrl(sourceType);
+    if (url === undefined) {
+      throw new Error(
+        `Missing fixed URL for source type "${sourceType}" (internal error)`,
+      );
+    }
     return { url, sourceType, warnings: [] };
   }
 

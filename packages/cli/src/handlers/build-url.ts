@@ -23,7 +23,7 @@ export function handleBuildUrl(
   },
 ): void {
   // Parse --filter options for SNSearchPage
-  // Format: "TYPE:ID:TEXT:INCLUDED|EXCLUDED"
+  // Format: "TYPE|ID|INCLUDED" or "TYPE|ID|TEXT|INCLUDED"
   let filters: Array<{
     type: string;
     values: Array<{
@@ -50,7 +50,7 @@ export function handleBuildUrl(
       if (segments.length < 3 || segments.length > 4) {
         process.stderr.write(
           `Invalid filter format: "${raw}"\n` +
-            'Expected: "TYPE|ID|INCLUDED" or "TYPE|ID|TEXT|INCLUDED"\n' +
+            'Expected: "TYPE|ID|INCLUDED" or "TYPE|ID|TEXT|INCLUDED|EXCLUDED"\n' +
             "Example: CURRENT_COMPANY|urn:li:organization:1441|Google|INCLUDED\n",
         );
         process.exitCode = 1;
