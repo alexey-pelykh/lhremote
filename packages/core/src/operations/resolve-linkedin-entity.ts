@@ -196,6 +196,7 @@ async function tryVoyagerTypeahead(
         const data = await response.json();
         return { data };
       })()`,
+      true, // awaitPromise: the expression is an async IIFE
     );
 
     if (result.error) {

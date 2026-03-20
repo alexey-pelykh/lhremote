@@ -25,6 +25,9 @@ const snFilterSchema = z.object({
 
 const booleanExpressionSchema = z.union([
   z.object({
+    raw: z.string().describe("Raw boolean expression string"),
+  }).strict(),
+  z.object({
     and: z.array(z.string()).optional().describe("Terms joined with AND"),
     or: z.array(z.string()).optional().describe("Terms grouped with OR"),
     not: z.array(z.string()).optional().describe("Terms negated with NOT"),
@@ -32,9 +35,6 @@ const booleanExpressionSchema = z.union([
       .array(z.string())
       .optional()
       .describe("Exact phrases (quoted)"),
-  }),
-  z.object({
-    raw: z.string().describe("Raw boolean expression string"),
   }),
 ]);
 
