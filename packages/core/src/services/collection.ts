@@ -3,10 +3,17 @@
 
 import type { SourceType } from "../types/index.js";
 import type { RunnerState } from "../types/index.js";
+import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
 import { detectSourceType } from "./source-type-registry.js";
 import type { InstanceService } from "./instance.js";
 import { CollectionBusyError, CollectionError } from "./errors.js";
+
+/** Timeout for polling `canCollect` after navigation (ms). */
+const CAN_COLLECT_TIMEOUT = 10_000;
+
+/** Interval between `canCollect` polls (ms). */
+const CAN_COLLECT_POLL_INTERVAL = 500;
 
 /**
  * Options for initiating a collection operation.
@@ -143,17 +150,29 @@ export class CollectionService {
   }
 
   /**
-   * Assert that `canCollect` returns `true` for the source type.
+   * Poll `canCollect` until it returns `true` or the timeout is reached.
    *
-   * @throws {CollectionError} if `canCollect` returns `false`.
+   * LinkedHelper's page detection is asynchronous — it needs time after the
+   * browser `load` event to recognize the page type through its state machine.
+   *
+   * @throws {CollectionError} if `canCollect` does not return `true` within the timeout.
    */
   private async assertCanCollect(sourceType: SourceType): Promise<void> {
-    const result = await this.canCollect(sourceType);
-    if (!result) {
-      throw new CollectionError(
-        `Cannot collect from ${sourceType} — the LinkedIn browser is not on a matching page`,
-      );
+    const start = Date.now();
+    const deadline = start + CAN_COLLECT_TIMEOUT;
+
+    while (Date.now() < deadline) {
+      const result = await this.canCollect(sourceType);
+      if (result) {
+        return;
+      }
+      await delay(CAN_COLLECT_POLL_INTERVAL);
     }
+
+    const elapsed = Date.now() - start;
+    throw new CollectionError(
+      `Cannot collect from ${sourceType} — the LinkedIn browser is not on a matching page (polled for ${String(elapsed)}ms)`,
+    );
   }
 
   /**
