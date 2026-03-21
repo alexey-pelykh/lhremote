@@ -334,6 +334,28 @@ export {
   type ResolveLinkedInEntityOutput,
 } from "./operations/index.js";
 
+// LinkedIn DOM selectors
+export {
+  COMMENT_INPUT,
+  COMMENT_SUBMIT_BUTTON,
+  FEED_POST_CONTAINER,
+  PAGINATION_TRIGGER,
+  POST_AUTHOR_INFO,
+  POST_AUTHOR_NAME,
+  POST_TEXT_CONTENT,
+  REACTION_CELEBRATE,
+  REACTION_FUNNY,
+  REACTION_INSIGHTFUL,
+  REACTION_LIKE,
+  REACTION_LOVE,
+  REACTION_SUPPORT,
+  REACTION_TRIGGER,
+  REACTIONS_MENU,
+  SCROLL_CONTAINER,
+  SELECTORS,
+  type SelectorName,
+} from "./linkedin/index.js";
+
 // Constants
 export { DEFAULT_CDP_PORT } from "./constants.js";
 
