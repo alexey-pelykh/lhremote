@@ -5,7 +5,7 @@ import type { CDPClient } from "../cdp/client.js";
 import { CDPEvaluationError, CDPTimeoutError } from "../cdp/errors.js";
 
 /** URL pattern matching LinkedIn Voyager API endpoints. */
-const VOYAGER_URL_PATTERN = /\/voyager\/api\//;
+export const VOYAGER_URL_PATTERN = /\/voyager\/api\//;
 
 /** Default timeout for response wait operations (ms). */
 const DEFAULT_TIMEOUT = 30_000;
