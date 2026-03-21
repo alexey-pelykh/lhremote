@@ -81,6 +81,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("remove-people-from-collection");
     expect(commandNames).toContain("import-people-from-collection");
     expect(commandNames).toContain("collect-people");
+    expect(commandNames).toContain("get-post-stats");
     expect(commandNames).toContain("build-url");
     expect(commandNames).toContain("resolve-entity");
     expect(commandNames).toContain("visit-profile");

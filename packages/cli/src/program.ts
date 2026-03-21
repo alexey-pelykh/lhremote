@@ -41,6 +41,7 @@ import {
   handleFindApp,
   handleGetActionBudget,
   handleGetErrors,
+  handleGetPostStats,
   handleGetThrottleStatus,
   handleLaunchApp,
   handleListAccounts,
@@ -652,6 +653,16 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleGetThrottleStatus);
+
+  program
+    .command("get-post-stats")
+    .description("Get engagement statistics for a LinkedIn post")
+    .argument("<postUrl>", "LinkedIn post URL or URN")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleGetPostStats);
 
   program
     .command("build-url")

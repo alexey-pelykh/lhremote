@@ -51,6 +51,12 @@ export type {
   UIHealthStatus,
 } from "./ui-health.js";
 
+export type {
+  PostEngager,
+  PostStats,
+  ReactionCount,
+} from "./post-analytics.js";
+
 export type { SourceTier, SourceType } from "./collection.js";
 
 export type {

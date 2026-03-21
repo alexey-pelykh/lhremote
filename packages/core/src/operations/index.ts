@@ -187,6 +187,19 @@ export {
   type ImportPeopleFromCollectionOutput,
 } from "./import-people-from-collection.js";
 
+// Post analytics
+export {
+  getPostStats,
+  extractPostUrn,
+  type GetPostStatsInput,
+  type GetPostStatsOutput,
+} from "./get-post-stats.js";
+export {
+  getPostEngagers,
+  type GetPostEngagersInput,
+  type GetPostEngagersOutput,
+} from "./get-post-engagers.js";
+
 // Action budget & throttle status
 export {
   getActionBudget,
