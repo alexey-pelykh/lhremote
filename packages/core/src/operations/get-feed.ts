@@ -275,6 +275,7 @@ function parseFeedResponse(raw: VoyagerFeedResponse): {
       authorName,
       authorHeadline,
       authorProfileUrl,
+      authorPublicId: null,
       text,
       mediaType,
       reactionCount,

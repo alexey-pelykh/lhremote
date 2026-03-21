@@ -138,6 +138,7 @@ describe("createServer", () => {
     expect(names).toContain("remove-connection");
     expect(names).toContain("send-inmail");
     expect(names).toContain("send-invite");
-    expect(names).toHaveLength(64);
+    expect(names).toContain("get-profile-activity");
+    expect(names).toHaveLength(65);
   });
 });
