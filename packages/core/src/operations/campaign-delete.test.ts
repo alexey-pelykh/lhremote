@@ -21,7 +21,7 @@ import { withInstanceDatabase } from "../services/instance-context.js";
 import { CampaignService } from "../services/campaign.js";
 import { campaignDelete } from "./campaign-delete.js";
 
-function setupMocks() {
+function setupMocks(overrides?: { hardDelete?: ReturnType<typeof vi.fn> }) {
   vi.mocked(resolveAccount).mockResolvedValue(1);
 
   vi.mocked(withInstanceDatabase).mockImplementation(
@@ -36,6 +36,7 @@ function setupMocks() {
   vi.mocked(CampaignService).mockImplementation(function () {
     return {
       delete: vi.fn().mockResolvedValue(undefined),
+      hardDelete: overrides?.hardDelete ?? vi.fn(),
     } as unknown as CampaignService;
   });
 }
@@ -127,5 +128,67 @@ describe("campaignDelete", () => {
     await expect(
       campaignDelete({ campaignId: 42, cdpPort: 9222 }),
     ).rejects.toThrow("campaign not found");
+  });
+
+  describe("hard delete", () => {
+    it("calls hardDelete and returns hard-deleted action", async () => {
+      const hardDeleteMock = vi.fn();
+      setupMocks({ hardDelete: hardDeleteMock });
+
+      const result = await campaignDelete({
+        campaignId: 42,
+        cdpPort: 9222,
+        hard: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.campaignId).toBe(42);
+      expect(result.action).toBe("hard-deleted");
+      expect(hardDeleteMock).toHaveBeenCalledWith(42);
+    });
+
+    it("passes db readOnly: false to withInstanceDatabase", async () => {
+      setupMocks();
+
+      await campaignDelete({
+        campaignId: 42,
+        cdpPort: 9222,
+        hard: true,
+      });
+
+      expect(withInstanceDatabase).toHaveBeenCalledWith(
+        9222,
+        1,
+        expect.any(Function),
+        { db: { readOnly: false } },
+      );
+    });
+
+    it("does not pass db options for soft delete", async () => {
+      setupMocks();
+
+      await campaignDelete({
+        campaignId: 42,
+        cdpPort: 9222,
+      });
+
+      expect(withInstanceDatabase).toHaveBeenCalledWith(
+        9222,
+        1,
+        expect.any(Function),
+        undefined,
+      );
+    });
+
+    it("propagates hardDelete errors", async () => {
+      const hardDeleteMock = vi.fn().mockImplementation(() => {
+        throw new Error("Cannot hard-delete active campaign");
+      });
+      setupMocks({ hardDelete: hardDeleteMock });
+
+      await expect(
+        campaignDelete({ campaignId: 42, cdpPort: 9222, hard: true }),
+      ).rejects.toThrow("Cannot hard-delete active campaign");
+    });
   });
 });

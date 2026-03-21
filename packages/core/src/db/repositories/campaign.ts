@@ -136,6 +136,18 @@ export class CampaignRepository {
     queueTarget: PreparedStatement;
     insertTarget: PreparedStatement;
     countTarget: PreparedStatement;
+    deleteResultFlagsByCampaign: PreparedStatement;
+    deleteResultMessagesByCampaign: PreparedStatement;
+    deleteResultsByCampaign: PreparedStatement;
+    deleteTargetPeopleByCampaign: PreparedStatement;
+    deleteCampaignHistory: PreparedStatement;
+    deleteCollectionPeopleByCampaign: PreparedStatement;
+    deleteCampaignVersions: PreparedStatement;
+    selectExcludeListInfo: PreparedStatement;
+    deleteActionVersionsByCampaign: PreparedStatement;
+    selectConfigIds: PreparedStatement;
+    deleteActionsByCampaign: PreparedStatement;
+    deleteCampaign: PreparedStatement;
   } | null = null;
 
   constructor(private readonly client: DatabaseClient) {
@@ -438,6 +450,87 @@ export class CampaignRepository {
   }
 
   /**
+   * Hard-delete a campaign and all related rows from the database.
+   *
+   * Removes all data across: action_result_flags, action_result_messages,
+   * action_results, action_target_people, person_in_campaigns_history,
+   * campaign_versions, action_versions, actions, action_configs,
+   * and the exclude list chain (collection_people, collection_people_versions,
+   * collections).
+   *
+   * Callers must verify the campaign is not active before calling this method.
+   *
+   * @throws {CampaignNotFoundError} if no campaign exists with the given ID.
+   */
+  deleteCampaign(campaignId: number): void {
+    // Verify campaign exists
+    this.getCampaign(campaignId);
+
+    const stmts = this.getWriteStatements();
+    const { db } = this.client;
+
+    // Collect IDs needed after FK-referencing rows are deleted
+    const configRows = stmts.selectConfigIds.all(campaignId) as unknown as { config_id: number }[];
+    const configIds = configRows.map((r) => r.config_id);
+
+    const excludeRows = stmts.selectExcludeListInfo.all(
+      campaignId,
+      campaignId,
+    ) as unknown as { version_id: number; collection_id: number }[];
+    const excludeVersionIds = excludeRows.map((r) => r.version_id);
+    const excludeCollectionIds = [...new Set(excludeRows.map((r) => r.collection_id))];
+
+    db.exec("BEGIN");
+    try {
+      // 1. Delete result children (FK: action_result_flags/messages → action_results)
+      stmts.deleteResultFlagsByCampaign.run(campaignId);
+      stmts.deleteResultMessagesByCampaign.run(campaignId);
+
+      // 2. Delete results (FK: action_results → action_versions)
+      stmts.deleteResultsByCampaign.run(campaignId);
+
+      // 3. Delete target people (FK: action_target_people → actions)
+      stmts.deleteTargetPeopleByCampaign.run(campaignId);
+
+      // 4. Delete campaign history
+      stmts.deleteCampaignHistory.run(campaignId);
+
+      // 5. Delete collection_people for exclude lists
+      stmts.deleteCollectionPeopleByCampaign.run(campaignId, campaignId);
+
+      // 6. Delete campaign_versions (FK → campaigns)
+      stmts.deleteCampaignVersions.run(campaignId);
+
+      // 7. Delete action_versions (FK → actions)
+      stmts.deleteActionVersionsByCampaign.run(campaignId);
+
+      // 8. Delete actions (FK → campaigns)
+      stmts.deleteActionsByCampaign.run(campaignId);
+
+      // 9. Delete action_configs (collected before transaction)
+      for (const configId of configIds) {
+        db.prepare("DELETE FROM action_configs WHERE id = ?").run(configId);
+      }
+
+      // 10. Delete exclude list versions and collections
+      for (const versionId of excludeVersionIds) {
+        db.prepare("DELETE FROM collection_people_versions WHERE id = ?").run(versionId);
+      }
+      for (const collectionId of excludeCollectionIds) {
+        db.prepare("DELETE FROM collections WHERE id = ?").run(collectionId);
+      }
+
+      // 11. Delete the campaign itself
+      stmts.deleteCampaign.run(campaignId);
+
+      db.exec("COMMIT");
+    } catch (e) {
+      db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
+  /**
    * Prepare write statements lazily (only when needed).
    * This avoids issues when the client is opened in read-only mode.
    */
@@ -490,6 +583,89 @@ export class CampaignRepository {
       countTarget: db.prepare(
         `SELECT COUNT(*) AS cnt FROM action_target_people
          WHERE action_id = ? AND person_id = ?`,
+      ),
+      deleteResultFlagsByCampaign: db.prepare(
+        `DELETE FROM action_result_flags
+         WHERE action_result_id IN (
+           SELECT ar.id FROM action_results ar
+           JOIN action_versions av ON ar.action_version_id = av.id
+           JOIN actions a ON av.action_id = a.id
+           WHERE a.campaign_id = ?
+         )`,
+      ),
+      deleteResultMessagesByCampaign: db.prepare(
+        `DELETE FROM action_result_messages
+         WHERE action_result_id IN (
+           SELECT ar.id FROM action_results ar
+           JOIN action_versions av ON ar.action_version_id = av.id
+           JOIN actions a ON av.action_id = a.id
+           WHERE a.campaign_id = ?
+         )`,
+      ),
+      deleteResultsByCampaign: db.prepare(
+        `DELETE FROM action_results
+         WHERE action_version_id IN (
+           SELECT av.id FROM action_versions av
+           JOIN actions a ON av.action_id = a.id
+           WHERE a.campaign_id = ?
+         )`,
+      ),
+      deleteTargetPeopleByCampaign: db.prepare(
+        `DELETE FROM action_target_people
+         WHERE action_id IN (
+           SELECT id FROM actions WHERE campaign_id = ?
+         )`,
+      ),
+      deleteCampaignHistory: db.prepare(
+        `DELETE FROM person_in_campaigns_history
+         WHERE campaign_id = ?`,
+      ),
+      deleteCollectionPeopleByCampaign: db.prepare(
+        `DELETE FROM collection_people
+         WHERE collection_id IN (
+           SELECT cpv.collection_id FROM collection_people_versions cpv
+           WHERE cpv.id IN (
+             SELECT av.exclude_list_id FROM action_versions av
+             JOIN actions a ON av.action_id = a.id
+             WHERE a.campaign_id = ? AND av.exclude_list_id IS NOT NULL
+             UNION
+             SELECT cv.exclude_list_id FROM campaign_versions cv
+             WHERE cv.campaign_id = ? AND cv.exclude_list_id IS NOT NULL
+           )
+         )`,
+      ),
+      deleteCampaignVersions: db.prepare(
+        `DELETE FROM campaign_versions WHERE campaign_id = ?`,
+      ),
+      selectExcludeListInfo: db.prepare(
+        `SELECT cpv.id AS version_id, cpv.collection_id
+         FROM collection_people_versions cpv
+         WHERE cpv.id IN (
+           SELECT av.exclude_list_id FROM action_versions av
+           JOIN actions a ON av.action_id = a.id
+           WHERE a.campaign_id = ? AND av.exclude_list_id IS NOT NULL
+           UNION
+           SELECT cv.exclude_list_id FROM campaign_versions cv
+           WHERE cv.campaign_id = ? AND cv.exclude_list_id IS NOT NULL
+         )`,
+      ),
+      deleteActionVersionsByCampaign: db.prepare(
+        `DELETE FROM action_versions
+         WHERE action_id IN (
+           SELECT id FROM actions WHERE campaign_id = ?
+         )`,
+      ),
+      selectConfigIds: db.prepare(
+        `SELECT DISTINCT av.config_id
+         FROM action_versions av
+         JOIN actions a ON av.action_id = a.id
+         WHERE a.campaign_id = ?`,
+      ),
+      deleteActionsByCampaign: db.prepare(
+        `DELETE FROM actions WHERE campaign_id = ?`,
+      ),
+      deleteCampaign: db.prepare(
+        `DELETE FROM campaigns WHERE id = ?`,
       ),
     };
 

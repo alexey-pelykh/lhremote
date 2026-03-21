@@ -196,8 +196,9 @@ export function createProgram(): Command {
 
   program
     .command("campaign-delete")
-    .description("Delete (archive) a campaign")
+    .description("Delete a campaign (archives by default, use --hard to permanently remove)")
     .argument("<campaignId>", "Campaign ID to delete", parsePositiveInt)
+    .option("--hard", "Permanently delete the campaign and all related data")
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")

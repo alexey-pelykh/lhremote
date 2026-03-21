@@ -13,18 +13,22 @@ import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpe
 export function registerCampaignDelete(server: McpServer): void {
   server.tool(
     "campaign-delete",
-    "Delete (archive) a campaign. The campaign is hidden but retained in database.",
+    "Delete a campaign. By default archives (soft delete). Use hard: true to permanently remove all data.",
     {
       campaignId: z
         .number()
         .int()
         .positive()
         .describe("Campaign ID"),
+      hard: z
+        .boolean()
+        .optional()
+        .describe("Permanently delete the campaign and all related data instead of archiving"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, hard, cdpPort, cdpHost, allowRemote }) => {
       try {
-        const result = await campaignDelete({ campaignId, cdpPort, cdpHost, allowRemote });
+        const result = await campaignDelete({ campaignId, hard, cdpPort, cdpHost, allowRemote });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CampaignExecutionError) {

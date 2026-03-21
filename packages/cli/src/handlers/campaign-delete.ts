@@ -18,6 +18,7 @@ export async function handleCampaignDelete(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    hard?: boolean;
     json?: boolean;
   },
 ): Promise<void> {
@@ -28,6 +29,7 @@ export async function handleCampaignDelete(
       cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      hard: options.hard,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {
@@ -47,8 +49,9 @@ export async function handleCampaignDelete(
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
   } else {
+    const verb = result.action === "hard-deleted" ? "deleted" : "archived";
     process.stdout.write(
-      `Campaign ${String(campaignId)} archived.\n`,
+      `Campaign ${String(campaignId)} ${verb}.\n`,
     );
   }
 }
