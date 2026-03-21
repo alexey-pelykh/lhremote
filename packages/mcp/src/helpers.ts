@@ -3,6 +3,7 @@
 
 import {
   AccountResolutionError,
+  BudgetExceededError,
   CampaignNotFoundError,
   DEFAULT_CDP_PORT,
   errorMessage,
@@ -102,6 +103,9 @@ export function mapErrorToMcpResponse(error: unknown): McpResult | undefined {
     return mcpError(
       `Campaign ${String(error.campaignId)} not found.`,
     );
+  }
+  if (error instanceof BudgetExceededError) {
+    return mcpError(error.message);
   }
   if (error instanceof UIBlockedError) {
     return mcpError(

@@ -54,6 +54,7 @@ export {
   ActionExecutionError,
   AppLaunchError,
   AppNotFoundError,
+  BudgetExceededError,
   CampaignExecutionError,
   CampaignTimeoutError,
   CollectionBusyError,

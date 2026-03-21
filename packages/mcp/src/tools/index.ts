@@ -6,6 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAddPeopleToCollection } from "./add-people-to-collection.js";
 import { registerBuildLinkedInUrl } from "./build-linkedin-url.js";
 import { registerCollectPeople } from "./collect-people.js";
+import { registerCommentOnPost } from "./comment-on-post.js";
 import { registerCampaignAddAction } from "./campaign-add-action.js";
 import { registerCampaignCreate } from "./campaign-create.js";
 import { registerCampaignDelete } from "./campaign-delete.js";
@@ -61,6 +62,7 @@ export {
   registerAddPeopleToCollection,
   registerBuildLinkedInUrl,
   registerCollectPeople,
+  registerCommentOnPost,
   registerCampaignAddAction,
   registerCampaignCreate,
   registerCampaignDelete,
@@ -115,6 +117,7 @@ export {
 
 export function registerAllTools(server: McpServer): void {
   registerAddPeopleToCollection(server);
+  registerCommentOnPost(server);
   registerCampaignAddAction(server);
   registerCampaignCreate(server);
   registerCampaignDelete(server);

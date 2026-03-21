@@ -187,6 +187,13 @@ export {
   type ImportPeopleFromCollectionOutput,
 } from "./import-people-from-collection.js";
 
+// Post interaction
+export {
+  commentOnPost,
+  type CommentOnPostInput,
+  type CommentOnPostOutput,
+} from "./comment-on-post.js";
+
 // Post analytics
 export {
   getPostStats,
