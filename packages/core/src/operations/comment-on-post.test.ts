@@ -41,6 +41,7 @@ import { ActionBudgetRepository } from "../db/index.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
 import { waitForElement, scrollTo, click, typeText } from "../linkedin/dom-automation.js";
+import type { ActionBudgetEntry } from "../types/action-budget.js";
 import { BudgetExceededError } from "../services/errors.js";
 import { commentOnPost } from "./comment-on-post.js";
 
@@ -57,7 +58,7 @@ function createMockClient() {
   };
 }
 
-function setupMocks(budgetEntries = [
+function setupMocks(budgetEntries: ActionBudgetEntry[] = [
   {
     limitTypeId: 19,
     limitType: "PostComment",
@@ -83,7 +84,7 @@ function setupMocks(budgetEntries = [
   });
 
   vi.mocked(discoverTargets).mockResolvedValue([
-    { id: "T1", type: "page", title: "LinkedIn", url: "https://www.linkedin.com/feed/" },
+    { id: "T1", type: "page", title: "LinkedIn", url: "https://www.linkedin.com/feed/", description: "", devtoolsFrontendUrl: "" },
   ]);
 
   const mockClient = createMockClient();
