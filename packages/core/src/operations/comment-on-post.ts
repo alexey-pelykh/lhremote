@@ -40,7 +40,7 @@ export interface CommentOnPostInput extends ConnectionOptions {
  * Output from the comment-on-post operation.
  */
 export interface CommentOnPostOutput {
-  readonly success: boolean;
+  readonly success: true;
   readonly postUrl: string;
   readonly commentText: string;
 }
@@ -152,7 +152,7 @@ export async function commentOnPost(
     await delay(POST_SUBMIT_DELAY);
 
     return {
-      success: true,
+      success: true as const,
       postUrl: input.postUrl,
       commentText: input.text,
     };
