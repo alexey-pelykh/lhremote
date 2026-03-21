@@ -293,7 +293,9 @@ export class InstanceService {
       })()`,
       false,
     );
+  }
 
+  /**
    * Create a {@link VoyagerInterceptor} attached to the LinkedIn WebView.
    *
    * Returns a cached instance — only one interceptor exists per
