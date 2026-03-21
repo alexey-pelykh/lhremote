@@ -27,4 +27,6 @@ export interface FeedPost {
   readonly shareCount: number;
   /** Post creation timestamp in milliseconds since epoch, if available. */
   readonly timestamp: number | null;
+  /** Hashtags extracted from the post text. */
+  readonly hashtags: readonly string[];
 }
