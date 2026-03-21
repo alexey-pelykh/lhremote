@@ -121,8 +121,9 @@ describe("parseProfileUpdatesResponse", () => {
     });
 
     expect(result.posts).toHaveLength(1);
-    expect(result.posts[0]!.urn).toBe("urn:li:activity:456");
-    expect(result.posts[0]!.text).toBe("Top-level element");
+    const post = result.posts[0];
+    expect(post?.urn).toBe("urn:li:activity:456");
+    expect(post?.text).toBe("Top-level element");
     expect(result.paging).toEqual({ start: 5, count: 10, total: 50 });
   });
 
@@ -135,7 +136,7 @@ describe("parseProfileUpdatesResponse", () => {
     });
 
     expect(result.posts).toHaveLength(1);
-    expect(result.posts[0]!.urn).toBe("urn:li:activity:789");
+    expect(result.posts[0]?.urn).toBe("urn:li:activity:789");
   });
 
   it("resolves author from included entities via actor URN", () => {
@@ -157,9 +158,9 @@ describe("parseProfileUpdatesResponse", () => {
       ],
     });
 
-    expect(result.posts[0]!.authorName).toBe("Alice Smith");
-    expect(result.posts[0]!.authorPublicId).toBe("alicesmith");
-    expect(result.posts[0]!.authorHeadline).toBe("PM at Corp");
+    expect(result.posts[0]?.authorName).toBe("Alice Smith");
+    expect(result.posts[0]?.authorPublicId).toBe("alicesmith");
+    expect(result.posts[0]?.authorHeadline).toBe("PM at Corp");
   });
 
   it("resolves author from included entities via *miniProfile ref", () => {
@@ -181,9 +182,9 @@ describe("parseProfileUpdatesResponse", () => {
       ],
     });
 
-    expect(result.posts[0]!.authorName).toBe("Charlie Brown");
-    expect(result.posts[0]!.authorPublicId).toBe("charlieb");
-    expect(result.posts[0]!.authorHeadline).toBe("Designer");
+    expect(result.posts[0]?.authorName).toBe("Charlie Brown");
+    expect(result.posts[0]?.authorPublicId).toBe("charlieb");
+    expect(result.posts[0]?.authorHeadline).toBe("Designer");
   });
 
   it("falls back to resharedUpdate text", () => {
@@ -199,7 +200,7 @@ describe("parseProfileUpdatesResponse", () => {
       ],
     });
 
-    expect(result.posts[0]!.text).toBe("Reshared post text");
+    expect(result.posts[0]?.text).toBe("Reshared post text");
   });
 
   it("handles empty elements array", () => {
@@ -223,9 +224,9 @@ describe("parseProfileUpdatesResponse", () => {
       ],
     });
 
-    expect(result.posts[0]!.reactionCount).toBe(0);
-    expect(result.posts[0]!.commentCount).toBe(0);
-    expect(result.posts[0]!.shareCount).toBe(0);
+    expect(result.posts[0]?.reactionCount).toBe(0);
+    expect(result.posts[0]?.commentCount).toBe(0);
+    expect(result.posts[0]?.shareCount).toBe(0);
   });
 
   it("handles null text fields gracefully", () => {
@@ -238,11 +239,11 @@ describe("parseProfileUpdatesResponse", () => {
       ],
     });
 
-    expect(result.posts[0]!.text).toBeNull();
-    expect(result.posts[0]!.authorName).toBeNull();
-    expect(result.posts[0]!.authorPublicId).toBeNull();
-    expect(result.posts[0]!.authorHeadline).toBeNull();
-    expect(result.posts[0]!.url).toBeNull();
-    expect(result.posts[0]!.publishedAt).toBeNull();
+    expect(result.posts[0]?.text).toBeNull();
+    expect(result.posts[0]?.authorName).toBeNull();
+    expect(result.posts[0]?.authorPublicId).toBeNull();
+    expect(result.posts[0]?.authorHeadline).toBeNull();
+    expect(result.posts[0]?.url).toBeNull();
+    expect(result.posts[0]?.publishedAt).toBeNull();
   });
 });
