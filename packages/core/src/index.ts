@@ -66,6 +66,7 @@ export type {
   ProfileSummary,
   ReactionCount,
   RunnerState,
+  SearchPostResult,
   Skill,
   BasicSearchParams,
   BooleanExpressionInput,
@@ -297,6 +298,10 @@ export {
   getPostEngagers,
   type GetPostEngagersInput,
   type GetPostEngagersOutput,
+  // Post search
+  searchPosts,
+  type SearchPostsInput,
+  type SearchPostsOutput,
   // Action budget & throttle status
   getActionBudget,
   type GetActionBudgetInput,

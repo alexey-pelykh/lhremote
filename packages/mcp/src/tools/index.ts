@@ -54,6 +54,7 @@ import { registerQueryProfile } from "./query-profile.js";
 import { registerQueryProfiles } from "./query-profiles.js";
 import { registerQueryProfilesBulk } from "./query-profiles-bulk.js";
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
+import { registerSearchPosts } from "./search-posts.js";
 import { registerVisitProfile } from "./visit-profile.js";
 
 export {
@@ -106,6 +107,7 @@ export {
   registerQuitApp,
   registerResolveLinkedInEntity,
   registerScrapeMessagingHistory,
+  registerSearchPosts,
   registerStartInstance,
   registerStopInstance,
   registerVisitProfile,
@@ -150,6 +152,7 @@ export function registerAllTools(server: McpServer): void {
   registerQueryProfiles(server);
   registerQueryProfilesBulk(server);
   registerScrapeMessagingHistory(server);
+  registerSearchPosts(server);
   registerCreateCollection(server);
   registerDeleteCollection(server);
   registerCheckReplies(server);
