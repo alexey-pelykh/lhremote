@@ -47,6 +47,7 @@ export { handleRemovePeopleFromCollection } from "./remove-people-from-collectio
 export { handleQuitApp } from "./quit-app.js";
 export { handleStartInstance } from "./start-instance.js";
 export { handleStopInstance } from "./stop-instance.js";
+export { handleVisitProfile } from "./visit-profile.js";
 export { handleBuildUrl } from "./build-url.js";
 export { handleResolveEntity } from "./resolve-entity.js";
 export { handleListReferenceData } from "./list-reference-data.js";

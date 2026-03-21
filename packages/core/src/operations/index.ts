@@ -199,6 +199,13 @@ export {
   type GetThrottleStatusOutput,
 } from "./get-throttle-status.js";
 
+// Standalone actions
+export {
+  visitProfile,
+  type VisitProfileInput,
+  type VisitProfileOutput,
+} from "./visit-profile.js";
+
 // URL building & entity resolution
 export {
   buildLinkedInUrl,

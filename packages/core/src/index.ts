@@ -329,6 +329,10 @@ export {
   importPeopleFromCollection,
   type ImportPeopleFromCollectionInput,
   type ImportPeopleFromCollectionOutput,
+  // Standalone actions
+  visitProfile,
+  type VisitProfileInput,
+  type VisitProfileOutput,
   // URL building & entity resolution
   buildLinkedInUrl,
   type BuildLinkedInUrlInput,
