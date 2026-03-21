@@ -249,6 +249,52 @@ export {
   type ReactionType,
 } from "./react-to-post.js";
 
+// Individual actions (ephemeral campaign)
+export {
+  type EphemeralActionInput,
+} from "./ephemeral-action.js";
+export {
+  messagePerson,
+  type MessagePersonInput,
+  type MessagePersonOutput,
+} from "./message-person.js";
+export {
+  sendInvite,
+  type SendInviteInput,
+  type SendInviteOutput,
+} from "./send-invite.js";
+export {
+  sendInmail,
+  type SendInmailInput,
+  type SendInmailOutput,
+} from "./send-inmail.js";
+export {
+  followPerson,
+  type FollowPersonInput,
+  type FollowPersonOutput,
+} from "./follow-person.js";
+export {
+  endorseSkills,
+  type EndorseSkillsInput,
+  type EndorseSkillsOutput,
+} from "./endorse-skills.js";
+export {
+  likePersonPosts,
+  type LikePersonPostsInput,
+  type LikePersonPostsOutput,
+} from "./like-person-posts.js";
+export {
+  removeConnection,
+  type RemoveConnectionInput,
+  type RemoveConnectionOutput,
+} from "./remove-connection.js";
+export {
+  enrichProfile,
+  type EnrichProfileInput,
+  type EnrichProfileOutput,
+  type EnrichmentCategory,
+} from "./enrich-profile.js";
+
 // URL building & entity resolution
 export {
   buildLinkedInUrl,

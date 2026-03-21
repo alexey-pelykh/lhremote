@@ -7,6 +7,14 @@ import { registerAddPeopleToCollection } from "./add-people-to-collection.js";
 import { registerBuildLinkedInUrl } from "./build-linkedin-url.js";
 import { registerCollectPeople } from "./collect-people.js";
 import { registerCommentOnPost } from "./comment-on-post.js";
+import { registerEndorseSkills } from "./endorse-skills.js";
+import { registerEnrichProfile } from "./enrich-profile.js";
+import { registerFollowPerson } from "./follow-person.js";
+import { registerLikePersonPosts } from "./like-person-posts.js";
+import { registerMessagePerson } from "./message-person.js";
+import { registerRemoveConnection } from "./remove-connection.js";
+import { registerSendInmail } from "./send-inmail.js";
+import { registerSendInvite } from "./send-invite.js";
 import { registerCampaignAddAction } from "./campaign-add-action.js";
 import { registerCampaignCreate } from "./campaign-create.js";
 import { registerCampaignDelete } from "./campaign-delete.js";
@@ -65,6 +73,14 @@ export {
   registerBuildLinkedInUrl,
   registerCollectPeople,
   registerCommentOnPost,
+  registerEndorseSkills,
+  registerEnrichProfile,
+  registerFollowPerson,
+  registerLikePersonPosts,
+  registerMessagePerson,
+  registerRemoveConnection,
+  registerSendInmail,
+  registerSendInvite,
   registerCampaignAddAction,
   registerCampaignCreate,
   registerCampaignDelete,
@@ -176,4 +192,12 @@ export function registerAllTools(server: McpServer): void {
   registerBuildLinkedInUrl(server);
   registerResolveLinkedInEntity(server);
   registerVisitProfile(server);
+  registerEndorseSkills(server);
+  registerEnrichProfile(server);
+  registerFollowPerson(server);
+  registerLikePersonPosts(server);
+  registerMessagePerson(server);
+  registerRemoveConnection(server);
+  registerSendInmail(server);
+  registerSendInvite(server);
 }

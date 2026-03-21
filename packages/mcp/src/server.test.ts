@@ -130,6 +130,14 @@ describe("createServer", () => {
     expect(names).toContain("visit-profile");
     expect(names).toContain("search-posts");
     expect(names).toContain("comment-on-post");
-    expect(names).toHaveLength(56);
+    expect(names).toContain("endorse-skills");
+    expect(names).toContain("enrich-profile");
+    expect(names).toContain("follow-person");
+    expect(names).toContain("like-person-posts");
+    expect(names).toContain("message-person");
+    expect(names).toContain("remove-connection");
+    expect(names).toContain("send-inmail");
+    expect(names).toContain("send-invite");
+    expect(names).toHaveLength(64);
   });
 });
