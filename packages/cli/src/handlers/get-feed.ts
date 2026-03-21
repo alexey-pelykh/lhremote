@@ -62,6 +62,11 @@ export async function handleGetFeed(
             `  Comments: ${String(post.commentCount)}` +
             `  Shares: ${String(post.shareCount)}\n`,
         );
+        if (post.hashtags.length > 0) {
+          process.stdout.write(
+            `  Tags: ${post.hashtags.map((t) => "#" + t).join(", ")}\n`,
+          );
+        }
         if (post.timestamp) {
           process.stdout.write(
             `  Posted: ${new Date(post.timestamp).toISOString()}\n`,

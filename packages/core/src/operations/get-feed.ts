@@ -140,6 +140,15 @@ function resolveText(
 }
 
 /**
+ * Extract hashtags from post text.
+ */
+function extractHashtags(text: string | null): string[] {
+  if (!text) return [];
+  const matches = text.match(/#[\w\u00C0-\u024F]+/g);
+  return matches ? [...new Set(matches.map((t) => t.slice(1)))] : [];
+}
+
+/**
  * Infer media type from Voyager content metadata.
  */
 function inferMediaType(content: VoyagerContent | undefined): string | null {
@@ -257,6 +266,9 @@ function parseFeedResponse(raw: VoyagerFeedResponse): {
     // Timestamp
     const timestamp = el.createdAt ?? el.publishedAt ?? null;
 
+    // Hashtags
+    const hashtags = extractHashtags(text);
+
     posts.push({
       urn,
       url: buildPostUrl(urn),
@@ -269,6 +281,7 @@ function parseFeedResponse(raw: VoyagerFeedResponse): {
       commentCount,
       shareCount,
       timestamp,
+      hashtags,
     });
   }
 
