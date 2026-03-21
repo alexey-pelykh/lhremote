@@ -3,7 +3,7 @@
 
 import { CDPClient, CDPTimeoutError, discoverTargets } from "../cdp/index.js";
 import type { CdpTarget } from "../types/cdp.js";
-import type { InstancePopup } from "../types/ui-health.js";
+import type { InstancePopup } from "../types/index.js";
 import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
 import { ActionExecutionError, InstanceNotRunningError, ServiceError, UIBlockedError } from "./errors.js";
