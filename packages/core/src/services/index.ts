@@ -25,6 +25,7 @@ export {
 } from "./status.js";
 
 export { CampaignService } from "./campaign.js";
+export { EphemeralCampaignService } from "./ephemeral-campaign.js";
 export {
   AccountResolutionError,
   resolveAccount,
