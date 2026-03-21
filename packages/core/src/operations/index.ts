@@ -214,6 +214,13 @@ export {
   type SearchPostsOutput,
 } from "./search-posts.js";
 
+// Feed
+export {
+  getFeed,
+  type GetFeedInput,
+  type GetFeedOutput,
+} from "./get-feed.js";
+
 // Action budget & throttle status
 export {
   getActionBudget,
