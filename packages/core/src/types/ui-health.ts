@@ -58,7 +58,7 @@ export interface InstancePopup {
   readonly title: string;
   /** The popup body/description text, if available. */
   readonly description?: string;
-  /** Whether the popup has a close button. */
+  /** Whether the popup is dismissable (has actionable controls to close or dismiss it). */
   readonly closable: boolean;
 }
 
