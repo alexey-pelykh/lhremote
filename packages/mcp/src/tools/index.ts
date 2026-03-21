@@ -44,6 +44,7 @@ import { registerCheckStatus } from "./check-status.js";
 import { registerDescribeActions } from "./describe-actions.js";
 import { registerFindApp } from "./find-app.js";
 import { registerGetActionBudget } from "./get-action-budget.js";
+import { registerGetPost } from "./get-post.js";
 import { registerGetPostEngagers } from "./get-post-engagers.js";
 import { registerGetPostStats } from "./get-post-stats.js";
 import { registerGetFeed } from "./get-feed.js";
@@ -111,6 +112,7 @@ export {
   registerFindApp,
   registerGetActionBudget,
   registerGetFeed,
+  registerGetPost,
   registerGetPostEngagers,
   registerGetPostStats,
   registerGetProfileActivity,
@@ -164,6 +166,7 @@ export function registerAllTools(server: McpServer): void {
   registerFindApp(server);
   registerGetActionBudget(server);
   registerGetFeed(server);
+  registerGetPost(server);
   registerGetPostEngagers(server);
   registerGetPostStats(server);
   registerGetProfileActivity(server);

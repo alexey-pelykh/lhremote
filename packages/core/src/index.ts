@@ -57,6 +57,8 @@ export type {
   MessageSummary,
   MiniProfile,
   PopupState,
+  PostComment,
+  PostDetail,
   PostEngager,
   PostStats,
   Position,
@@ -300,6 +302,10 @@ export {
   getFeed,
   type GetFeedInput,
   type GetFeedOutput,
+  // Post detail
+  getPost,
+  type GetPostInput,
+  type GetPostOutput,
   // Post analytics
   getPostStats,
   extractPostUrn,
