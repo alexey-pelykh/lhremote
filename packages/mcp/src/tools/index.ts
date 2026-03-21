@@ -35,6 +35,8 @@ import { registerCheckStatus } from "./check-status.js";
 import { registerDescribeActions } from "./describe-actions.js";
 import { registerFindApp } from "./find-app.js";
 import { registerGetActionBudget } from "./get-action-budget.js";
+import { registerGetPostEngagers } from "./get-post-engagers.js";
+import { registerGetPostStats } from "./get-post-stats.js";
 import { registerGetErrors } from "./get-errors.js";
 import { registerGetThrottleStatus } from "./get-throttle-status.js";
 import { registerImportPeopleFromCollection } from "./import-people-from-collection.js";
@@ -86,6 +88,8 @@ export {
   registerDescribeActions,
   registerFindApp,
   registerGetActionBudget,
+  registerGetPostEngagers,
+  registerGetPostStats,
   registerGetErrors,
   registerGetThrottleStatus,
   registerImportPeopleFromCollection,
@@ -132,6 +136,8 @@ export function registerAllTools(server: McpServer): void {
   registerCampaignUpdateAction(server);
   registerFindApp(server);
   registerGetActionBudget(server);
+  registerGetPostEngagers(server);
+  registerGetPostStats(server);
   registerGetErrors(server);
   registerGetThrottleStatus(server);
   registerLaunchApp(server);

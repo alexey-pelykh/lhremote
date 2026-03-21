@@ -33,6 +33,7 @@ export { handleCheckStatus } from "./check-status.js";
 export { handleFindApp } from "./find-app.js";
 export { handleGetActionBudget } from "./get-action-budget.js";
 export { handleGetErrors } from "./get-errors.js";
+export { handleGetPostStats } from "./get-post-stats.js";
 export { handleGetThrottleStatus } from "./get-throttle-status.js";
 export { handleImportPeopleFromCollection } from "./import-people-from-collection.js";
 export { handleQueryMessages } from "./query-messages.js";
