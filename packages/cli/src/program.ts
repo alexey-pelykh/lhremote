@@ -598,7 +598,8 @@ export function createProgram(): Command {
     .description(
       "Visit a LinkedIn profile and extract data (name, positions, education, skills)",
     )
-    .requiredOption("--person-id <id>", "Person ID to visit", parsePositiveInt)
+    .option("--person-id <id>", "Person ID to visit (provide this or --url)", parsePositiveInt)
+    .option("--url <url>", "LinkedIn profile URL to visit (provide this or --person-id)")
     .option("--extract-current-organizations", "Extract current company info during profile visit")
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")

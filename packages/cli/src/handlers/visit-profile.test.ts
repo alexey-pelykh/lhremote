@@ -76,11 +76,19 @@ describe("handleVisitProfile", () => {
     vi.restoreAllMocks();
   });
 
-  it("exits with error when no person ID provided", async () => {
+  it("exits with error when neither personId nor url provided", async () => {
     await handleVisitProfile({});
 
     expect(process.exitCode).toBe(1);
-    expect(getStderr(stderrSpy)).toContain("--person-id is required");
+    expect(getStderr(stderrSpy)).toContain("Exactly one of --person-id or --url must be provided");
+    expect(visitProfile).not.toHaveBeenCalled();
+  });
+
+  it("exits with error when both personId and url provided", async () => {
+    await handleVisitProfile({ personId: 100, url: "https://www.linkedin.com/in/jane" });
+
+    expect(process.exitCode).toBe(1);
+    expect(getStderr(stderrSpy)).toContain("Exactly one of --person-id or --url must be provided");
     expect(visitProfile).not.toHaveBeenCalled();
   });
 
@@ -130,6 +138,37 @@ describe("handleVisitProfile", () => {
     expect(output).toContain("Education:");
     expect(output).toContain("BS in Computer Science");
     expect(output).toContain("MIT");
+  });
+
+  it("handles null school in education", async () => {
+    vi.mocked(visitProfile).mockResolvedValue({
+      ...MOCK_RESULT,
+      profile: {
+        ...MOCK_PROFILE,
+        education: [
+          { school: null, degree: "MBA", field: null, startDate: "2020", endDate: "2022" },
+        ],
+      },
+    });
+
+    await handleVisitProfile({ personId: 100 });
+
+    const output = getStdout(stdoutSpy);
+    expect(output).toContain("Education:");
+    expect(output).toContain("MBA");
+    expect(output).not.toContain("null");
+  });
+
+  it("passes url to operation when provided", async () => {
+    vi.mocked(visitProfile).mockResolvedValue(MOCK_RESULT);
+
+    await handleVisitProfile({ url: "https://www.linkedin.com/in/jane-doe-123" });
+
+    expect(visitProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "https://www.linkedin.com/in/jane-doe-123",
+      }),
+    );
   });
 
   it("prints progress to stderr", async () => {
