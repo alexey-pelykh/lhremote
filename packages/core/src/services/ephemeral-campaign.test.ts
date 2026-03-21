@@ -243,10 +243,13 @@ describe("EphemeralCampaignService", () => {
       expect(mockFindByPublicId).toHaveBeenCalledWith("ada-lovelace");
     });
 
-    it("throws CampaignExecutionError for invalid LinkedIn URL", async () => {
+    it("throws CampaignExecutionError for invalid LinkedIn URL before campaign creation", async () => {
       await expect(
         service.execute("InvitePerson", "https://example.com/not-linkedin"),
       ).rejects.toThrow(CampaignExecutionError);
+
+      // No CDP calls should have been made (validation fails before create)
+      expect(mockEvaluateUI).not.toHaveBeenCalled();
     });
   });
 
@@ -293,9 +296,16 @@ describe("EphemeralCampaignService", () => {
         .mockResolvedValueOnce(undefined)
         .mockResolvedValueOnce(true);
 
-      // poll: always shows queued (never completes)
-      mockEvaluateUI
-        .mockResolvedValue("campaigns"); // runnerState stays "campaigns" for subsequent calls
+      // poll: return type-correct shapes that keep the poll going (never completes)
+      // getStatus calls 3 CDP methods: runnerState, isPaused, actionCounts
+      let pollCall = 0;
+      mockEvaluateUI.mockImplementation(() => {
+        const phase = pollCall % 3;
+        pollCall++;
+        if (phase === 0) return Promise.resolve("campaigns");
+        if (phase === 1) return Promise.resolve(false);
+        return Promise.resolve({ queued: 1, processed: 0, successful: 0, failed: 0 });
+      });
 
       const promise = service.execute("MessageToPerson", 42, undefined, { timeout: 5_000 });
       const caughtPromise = promise.catch((e: unknown) => e);
