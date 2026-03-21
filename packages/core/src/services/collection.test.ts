@@ -161,17 +161,74 @@ describe("CollectionService", () => {
       }
     });
 
-    it("throws CollectionError when canCollect returns false", async () => {
-      mockEvaluateUI
-        .mockResolvedValueOnce("idle")
-        .mockResolvedValueOnce(false); // canCollect returns false
+    describe("canCollect polling", () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
 
-      const error = await service.collect(SEARCH_URL, 1).catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(CollectionError);
-      expect((error as CollectionError).message).toContain("not on a matching page");
+      afterEach(() => {
+        vi.useRealTimers();
+      });
 
-      // Navigation should have been attempted before canCollect
-      expect(mockNavigateLinkedIn).toHaveBeenCalledWith(SEARCH_URL);
+      it("polls canCollect until it returns true after initial failures", async () => {
+        mockEvaluateUI
+          .mockResolvedValueOnce("idle")   // getRunnerState
+          .mockResolvedValueOnce(false)     // canCollect attempt 1
+          .mockResolvedValueOnce(false)     // canCollect attempt 2
+          .mockResolvedValueOnce(true)      // canCollect attempt 3 — success
+          .mockResolvedValueOnce(true)      // prepareCollecting
+          .mockResolvedValueOnce(true);     // collect
+
+        const promise = service.collect(SEARCH_URL, 1);
+        await vi.advanceTimersByTimeAsync(2000);
+        await promise;
+
+        // canCollect was called 3 times before success
+        const canCollectCalls = mockEvaluateUI.mock.calls.filter(
+          (call) =>
+            (call[0] as string).includes("canCollect") &&
+            !(call[0] as string).includes("prepareCollecting"),
+        );
+        expect(canCollectCalls).toHaveLength(3);
+      });
+
+      it("succeeds on first canCollect check without polling delay", async () => {
+        mockEvaluateUI
+          .mockResolvedValueOnce("idle")   // getRunnerState
+          .mockResolvedValueOnce(true)      // canCollect — immediate success
+          .mockResolvedValueOnce(true)      // prepareCollecting
+          .mockResolvedValueOnce(true);     // collect
+
+        const promise = service.collect(SEARCH_URL, 1);
+        await vi.advanceTimersByTimeAsync(0);
+        await promise;
+
+        // Only 1 canCollect call — no polling needed
+        const canCollectCalls = mockEvaluateUI.mock.calls.filter(
+          (call) =>
+            (call[0] as string).includes("canCollect") &&
+            !(call[0] as string).includes("prepareCollecting"),
+        );
+        expect(canCollectCalls).toHaveLength(1);
+      });
+
+      it("throws CollectionError after polling timeout with elapsed time", async () => {
+        mockEvaluateUI
+          .mockResolvedValueOnce("idle")   // getRunnerState
+          .mockResolvedValue(false);        // canCollect always returns false
+
+        // Attach catch before advancing timers to avoid unhandled rejection
+        const errorPromise = service.collect(SEARCH_URL, 1).catch((e: unknown) => e);
+        await vi.advanceTimersByTimeAsync(11_000);
+
+        const error = await errorPromise;
+        expect(error).toBeInstanceOf(CollectionError);
+        expect((error as CollectionError).message).toContain("not on a matching page");
+        expect((error as CollectionError).message).toMatch(/polled for \d+ms/);
+
+        // Navigation should have been attempted before polling
+        expect(mockNavigateLinkedIn).toHaveBeenCalledWith(SEARCH_URL);
+      });
     });
 
     it("throws CollectionError when navigation fails", async () => {
