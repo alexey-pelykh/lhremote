@@ -3,6 +3,7 @@
 
 export {
   VoyagerInterceptor,
+  VOYAGER_URL_PATTERN,
   type VoyagerFetchOptions,
   type VoyagerResponse,
   type VoyagerResponseHandler,
