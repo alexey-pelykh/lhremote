@@ -2,6 +2,15 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 export {
+  click,
+  scrollTo,
+  typeText,
+  type TypeMethod,
+  waitForElement,
+  type WaitForElementOptions,
+} from "./dom-automation.js";
+
+export {
   COMMENT_INPUT,
   COMMENT_SUBMIT_BUTTON,
   FEED_POST_CONTAINER,
