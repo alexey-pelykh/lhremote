@@ -147,6 +147,9 @@ export class CampaignRepository {
     deleteActionVersionsByCampaign: PreparedStatement;
     selectConfigIds: PreparedStatement;
     deleteActionsByCampaign: PreparedStatement;
+    deleteActionConfig: PreparedStatement;
+    deleteCollectionPeopleVersion: PreparedStatement;
+    deleteCollection: PreparedStatement;
     deleteCampaign: PreparedStatement;
   } | null = null;
 
@@ -509,15 +512,15 @@ export class CampaignRepository {
 
       // 9. Delete action_configs (collected before transaction)
       for (const configId of configIds) {
-        db.prepare("DELETE FROM action_configs WHERE id = ?").run(configId);
+        stmts.deleteActionConfig.run(configId);
       }
 
       // 10. Delete exclude list versions and collections
       for (const versionId of excludeVersionIds) {
-        db.prepare("DELETE FROM collection_people_versions WHERE id = ?").run(versionId);
+        stmts.deleteCollectionPeopleVersion.run(versionId);
       }
       for (const collectionId of excludeCollectionIds) {
-        db.prepare("DELETE FROM collections WHERE id = ?").run(collectionId);
+        stmts.deleteCollection.run(collectionId);
       }
 
       // 11. Delete the campaign itself
@@ -663,6 +666,15 @@ export class CampaignRepository {
       ),
       deleteActionsByCampaign: db.prepare(
         `DELETE FROM actions WHERE campaign_id = ?`,
+      ),
+      deleteActionConfig: db.prepare(
+        `DELETE FROM action_configs WHERE id = ?`,
+      ),
+      deleteCollectionPeopleVersion: db.prepare(
+        `DELETE FROM collection_people_versions WHERE id = ?`,
+      ),
+      deleteCollection: db.prepare(
+        `DELETE FROM collections WHERE id = ?`,
       ),
       deleteCampaign: db.prepare(
         `DELETE FROM campaigns WHERE id = ?`,

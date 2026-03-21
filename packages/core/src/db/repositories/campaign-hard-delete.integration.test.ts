@@ -18,6 +18,13 @@ describe("CampaignRepository.deleteCampaign (integration)", () => {
     // Use openFixture() for an isolated writable copy
     rawDb = openFixture();
 
+    // Ensure SQLite enforces foreign key constraints so delete order is validated
+    rawDb.exec("PRAGMA foreign_keys = ON");
+    const fkPragma = rawDb
+      .prepare("PRAGMA foreign_keys")
+      .get() as { foreign_keys: number };
+    expect(fkPragma.foreign_keys).toBe(1);
+
     // Pause campaign 1 so it can be hard-deleted
     // (fixture has it as active: is_paused=0, is_archived=0, is_valid=1)
     rawDb.exec("UPDATE campaigns SET is_paused = 1 WHERE id = 1");
@@ -43,12 +50,21 @@ describe("CampaignRepository.deleteCampaign (integration)", () => {
     expect(countRows("campaigns", "id = ?", [1])).toBe(1);
     expect(countRows("actions", "campaign_id = ?", [1])).toBeGreaterThan(0);
     expect(countRows("action_versions", "action_id IN (SELECT id FROM actions WHERE campaign_id = ?)", [1])).toBeGreaterThan(0);
+    expect(countRows("action_configs", "id IN (SELECT DISTINCT av.config_id FROM action_versions av JOIN actions a ON av.action_id = a.id WHERE a.campaign_id = ?)", [1])).toBeGreaterThan(0);
     expect(countRows("action_target_people", "action_id IN (SELECT id FROM actions WHERE campaign_id = ?)", [1])).toBeGreaterThan(0);
     expect(countRows("action_results", "action_version_id IN (SELECT av.id FROM action_versions av JOIN actions a ON av.action_id = a.id WHERE a.campaign_id = ?)", [1])).toBeGreaterThan(0);
     expect(countRows("person_in_campaigns_history", "campaign_id = ?", [1])).toBeGreaterThan(0);
     expect(countRows("campaign_versions", "campaign_id = ?", [1])).toBeGreaterThan(0);
 
-    // Perform the hard delete
+    // Exclude list chain pre-conditions
+    const excludeListCount = countRows(
+      "collection_people_versions",
+      "id IN (SELECT av.exclude_list_id FROM action_versions av JOIN actions a ON av.action_id = a.id WHERE a.campaign_id = ? AND av.exclude_list_id IS NOT NULL UNION SELECT cv.exclude_list_id FROM campaign_versions cv WHERE cv.campaign_id = ? AND cv.exclude_list_id IS NOT NULL)",
+      [1, 1],
+    );
+    expect(excludeListCount).toBeGreaterThan(0);
+
+    // Perform the hard delete (with FK constraints enforced)
     repo.deleteCampaign(1);
 
     // Post-conditions: all related rows are gone
@@ -61,6 +77,22 @@ describe("CampaignRepository.deleteCampaign (integration)", () => {
     expect(countRows("action_result_messages", "action_result_id IN (SELECT ar.id FROM action_results ar JOIN action_versions av ON ar.action_version_id = av.id JOIN actions a ON av.action_id = a.id WHERE a.campaign_id = ?)", [1])).toBe(0);
     expect(countRows("person_in_campaigns_history", "campaign_id = ?", [1])).toBe(0);
     expect(countRows("campaign_versions", "campaign_id = ?", [1])).toBe(0);
+
+    // Verify action_configs for campaign 1 are deleted
+    // (config ID 1 belonged to campaign 1's action)
+    expect(countRows("action_configs", "id = ?", [1])).toBe(0);
+
+    // Verify exclude list chain is cleaned up
+    expect(countRows(
+      "collection_people_versions",
+      "id IN (1, 2)",
+      [],
+    )).toBe(0);
+    expect(countRows(
+      "collections",
+      "id IN (1, 2)",
+      [],
+    )).toBe(0);
   });
 
   it("throws CampaignNotFoundError for non-existent campaign", () => {
@@ -71,5 +103,7 @@ describe("CampaignRepository.deleteCampaign (integration)", () => {
     // Campaign 2 should still exist after deleting campaign 1
     expect(countRows("campaigns", "id = ?", [2])).toBe(1);
     expect(countRows("actions", "campaign_id = ?", [2])).toBeGreaterThan(0);
+    expect(countRows("action_versions", "action_id IN (SELECT id FROM actions WHERE campaign_id = ?)", [2])).toBeGreaterThan(0);
+    expect(countRows("action_configs", "id = ?", [2])).toBe(1);
   });
 });
