@@ -51,6 +51,7 @@ import {
   handleGetActionBudget,
   handleGetErrors,
   handleGetFeed,
+  handleGetPost,
   handleGetPostStats,
   handleGetProfileActivity,
   handleGetThrottleStatus,
@@ -677,6 +678,18 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleCommentOnPost);
+
+  program
+    .command("get-post")
+    .description("Get detailed data for a single LinkedIn post with comment thread")
+    .argument("<postUrl>", "LinkedIn post URL or URN")
+    .option("--comment-start <n>", "Comment pagination offset (default: 0)", parseNonNegativeInt)
+    .option("--comment-count <n>", "Number of comments per page (default: 10)", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleGetPost);
 
   program
     .command("get-post-stats")

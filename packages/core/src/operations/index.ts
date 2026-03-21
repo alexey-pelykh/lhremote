@@ -194,6 +194,13 @@ export {
   type CommentOnPostOutput,
 } from "./comment-on-post.js";
 
+// Post detail
+export {
+  getPost,
+  type GetPostInput,
+  type GetPostOutput,
+} from "./get-post.js";
+
 // Post analytics
 export {
   getPostStats,
