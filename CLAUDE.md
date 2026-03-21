@@ -55,7 +55,7 @@ Do **not** add issue numbers (e.g. `(#12)`) to commit messages. GitHub links PRs
 - **Release**: GitHub Actions (`release.yml`) — triggered by GitHub Release publish
   - Validates (build+lint+test), stamps version from tag, publishes to npm (OIDC trusted publishing)
   - Concurrency group `release`, never cancels in-progress
-- **claude-plugin**: `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `server.json` versions must be bumped together on each release to stay consistent
+- **claude-plugin**: `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `server.json` versions must match the npm package version (set by the release tag) and be bumped together on each release
 
 ## Task Tracking
 

@@ -11,7 +11,7 @@
       "name": "lhremote",
       "source": "./",
       "description": "LinkedHelper automation toolkit — MCP server and workflow guidance for Claude Code",
-      "version": "0.2.3",
+      "version": "0.7.0",
       "author": {
         "name": "Alexey Pelykh"
       },
