@@ -234,9 +234,7 @@ export class InstanceService {
    * @returns An array of detected popups, or an empty array if none are visible.
    */
   async getInstancePopups(): Promise<InstancePopup[]> {
-    const client = this.ensureUiClient();
-
-    return client.evaluate<InstancePopup[]>(
+    return this.evaluateUI<InstancePopup[]>(
       `(() => {
         const popups = [];
         const seen = new WeakSet();
@@ -247,6 +245,7 @@ export class InstanceService {
           if (!container || seen.has(container)) continue;
           seen.add(container);
           const title = header.textContent?.trim() || '';
+          if (!title) continue;
           const body = container.querySelector('[class*="Popup_Body_"], [class*="ErrorAndAlert_Description_"]');
           const controls = container.querySelector('[class*="Popup_Controls_"], [class*="Popup_Buttons_"]');
           popups.push({
