@@ -40,6 +40,7 @@ export type {
   Education,
   ExternalId,
   ExternalIdTypeGroup,
+  FeedPost,
   GetResultsOptions,
   GetStatisticsOptions,
   ImportPeopleResult,
@@ -295,6 +296,10 @@ export {
   commentOnPost,
   type CommentOnPostInput,
   type CommentOnPostOutput,
+  // Feed
+  getFeed,
+  type GetFeedInput,
+  type GetFeedOutput,
   // Post analytics
   getPostStats,
   extractPostUrn,

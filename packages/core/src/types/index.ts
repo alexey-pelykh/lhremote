@@ -59,6 +59,8 @@ export type {
 
 export type { SearchPostResult } from "./search-posts.js";
 
+export type { FeedPost } from "./feed.js";
+
 export type { SourceTier, SourceType } from "./collection.js";
 
 export type {

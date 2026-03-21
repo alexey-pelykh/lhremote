@@ -42,6 +42,7 @@ import {
   handleFindApp,
   handleGetActionBudget,
   handleGetErrors,
+  handleGetFeed,
   handleGetPostStats,
   handleGetThrottleStatus,
   handleLaunchApp,
@@ -676,6 +677,17 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleGetPostStats);
+
+  program
+    .command("get-feed")
+    .description("Read the LinkedIn home feed with cursor-based pagination")
+    .option("--count <n>", "Number of posts per page (default: 10)", parsePositiveInt)
+    .option("--cursor <token>", "Cursor token from a previous call for the next page")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleGetFeed);
 
   program
     .command("build-url")
