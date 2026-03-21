@@ -138,6 +138,10 @@ export {
   withDatabase,
   withInstanceDatabase,
   NodeIntegrationUnavailableError,
+  VoyagerInterceptor,
+  type VoyagerFetchOptions,
+  type VoyagerResponse,
+  type VoyagerResponseHandler,
   WrongPortError,
 } from "./services/index.js";
 
