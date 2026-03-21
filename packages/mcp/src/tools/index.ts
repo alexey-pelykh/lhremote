@@ -52,6 +52,7 @@ import { registerStopInstance } from "./stop-instance.js";
 import { registerQueryMessages } from "./query-messages.js";
 import { registerRemovePeopleFromCollection } from "./remove-people-from-collection.js";
 import { registerResolveLinkedInEntity } from "./resolve-linkedin-entity.js";
+import { registerReactToPost } from "./react-to-post.js";
 import { registerQueryProfile } from "./query-profile.js";
 import { registerQueryProfiles } from "./query-profiles.js";
 import { registerQueryProfilesBulk } from "./query-profiles-bulk.js";
@@ -109,6 +110,7 @@ export {
   registerQueryProfiles,
   registerQueryProfilesBulk,
   registerQuitApp,
+  registerReactToPost,
   registerResolveLinkedInEntity,
   registerScrapeMessagingHistory,
   registerSearchPosts,
@@ -157,6 +159,7 @@ export function registerAllTools(server: McpServer): void {
   registerQueryProfile(server);
   registerQueryProfiles(server);
   registerQueryProfilesBulk(server);
+  registerReactToPost(server);
   registerScrapeMessagingHistory(server);
   registerSearchPosts(server);
   registerCreateCollection(server);

@@ -89,6 +89,37 @@ export async function scrollTo(
 }
 
 /**
+ * Trigger a hover on an element by dispatching `mouseenter` + `mouseover`.
+ *
+ * This is used to reveal hover-dependent UI such as the LinkedIn
+ * reactions menu popup.
+ *
+ * @param client   - Connected CDP client targeting the page.
+ * @param selector - CSS selector for the element to hover.
+ * @throws {CDPEvaluationError} If the element is not found.
+ */
+export async function hover(
+  client: CDPClient,
+  selector: string,
+): Promise<void> {
+  const hovered = await client.evaluate<boolean>(
+    `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return false;
+      el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      return true;
+    })()`,
+  );
+
+  if (!hovered) {
+    throw new CDPEvaluationError(
+      `Element "${selector}" not found for hover`,
+    );
+  }
+}
+
+/**
  * Click an element via its JavaScript `.click()` method.
  *
  * Uses JS `.click()` rather than `Input.dispatchMouseEvent` because the

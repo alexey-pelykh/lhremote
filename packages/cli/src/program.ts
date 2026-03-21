@@ -58,6 +58,7 @@ import {
   handleSearchPosts,
   handleVisitProfile,
   handleQuitApp,
+  handleReactToPost,
   handleStartInstance,
   handleStopInstance,
 } from "./handlers/index.js";
@@ -688,6 +689,21 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleGetFeed);
+
+  program
+    .command("react-to-post")
+    .description("React to a LinkedIn post with a specific reaction type")
+    .argument("<postUrl>", "LinkedIn post URL")
+    .addOption(
+      new Option("--type <type>", "Reaction type (default: like)")
+        .choices(["like", "celebrate", "support", "love", "insightful", "funny"])
+        .default("like"),
+    )
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleReactToPost);
 
   program
     .command("build-url")

@@ -362,6 +362,12 @@ export {
   visitProfile,
   type VisitProfileInput,
   type VisitProfileOutput,
+  // Post interaction
+  reactToPost,
+  REACTION_TYPES,
+  type ReactToPostInput,
+  type ReactToPostOutput,
+  type ReactionType,
   // URL building & entity resolution
   buildLinkedInUrl,
   type BuildLinkedInUrlInput,
@@ -374,6 +380,7 @@ export {
 // LinkedIn DOM automation & selectors
 export {
   click,
+  hover,
   scrollTo,
   typeText,
   type TypeMethod,

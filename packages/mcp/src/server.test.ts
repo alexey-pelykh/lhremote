@@ -126,9 +126,10 @@ describe("createServer", () => {
     expect(names).toContain("get-post-engagers");
     expect(names).toContain("get-post-stats");
     expect(names).toContain("get-throttle-status");
+    expect(names).toContain("react-to-post");
     expect(names).toContain("visit-profile");
     expect(names).toContain("search-posts");
     expect(names).toContain("comment-on-post");
-    expect(names).toHaveLength(55);
+    expect(names).toHaveLength(56);
   });
 });
