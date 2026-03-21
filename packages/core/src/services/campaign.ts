@@ -383,6 +383,28 @@ export class CampaignService {
   }
 
   /**
+   * Hard-delete a campaign and all related database rows.
+   *
+   * Unlike {@link delete} (which archives), this permanently removes
+   * the campaign and all associated data from the database.
+   *
+   * @throws {CampaignNotFoundError} if the campaign does not exist.
+   * @throws {CampaignExecutionError} if the campaign is active (must stop first).
+   */
+  hardDelete(campaignId: number): void {
+    const campaign = this.campaignRepo.getCampaign(campaignId);
+
+    if (campaign.state === "active") {
+      throw new CampaignExecutionError(
+        `Cannot hard-delete active campaign ${String(campaignId)}. Stop the campaign first.`,
+        campaignId,
+      );
+    }
+
+    this.campaignRepo.deleteCampaign(campaignId);
+  }
+
+  /**
    * Start campaign execution for the specified persons.
    *
    * Performs the full start sequence:

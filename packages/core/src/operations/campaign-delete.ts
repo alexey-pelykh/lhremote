@@ -12,6 +12,7 @@ import type { ConnectionOptions } from "./types.js";
  */
 export interface CampaignDeleteInput extends ConnectionOptions {
   readonly campaignId: number;
+  readonly hard?: boolean | undefined;
 }
 
 /**
@@ -20,11 +21,14 @@ export interface CampaignDeleteInput extends ConnectionOptions {
 export interface CampaignDeleteOutput {
   readonly success: true;
   readonly campaignId: number;
-  readonly action: "archived";
+  readonly action: "archived" | "hard-deleted";
 }
 
 /**
- * Delete (archive) a campaign.
+ * Delete a campaign.
+ *
+ * By default, archives the campaign (soft delete). When `hard` is true,
+ * permanently removes the campaign and all related rows from the database.
  */
 export async function campaignDelete(
   input: CampaignDeleteInput,
@@ -38,8 +42,13 @@ export async function campaignDelete(
 
   return withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
     const campaignService = new CampaignService(instance, db);
-    await campaignService.delete(input.campaignId);
 
+    if (input.hard) {
+      campaignService.hardDelete(input.campaignId);
+      return { success: true as const, campaignId: input.campaignId, action: "hard-deleted" as const };
+    }
+
+    await campaignService.delete(input.campaignId);
     return { success: true as const, campaignId: input.campaignId, action: "archived" as const };
-  });
+  }, input.hard ? { db: { readOnly: false } } : undefined);
 }

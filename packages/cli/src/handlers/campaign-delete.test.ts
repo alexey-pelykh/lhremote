@@ -28,6 +28,12 @@ const MOCK_RESULT: CampaignDeleteOutput = {
   action: "archived",
 };
 
+const MOCK_HARD_RESULT: CampaignDeleteOutput = {
+  success: true as const,
+  campaignId: 5,
+  action: "hard-deleted",
+};
+
 describe("handleCampaignDelete", () => {
   const originalExitCode = process.exitCode;
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
@@ -108,5 +114,36 @@ describe("handleCampaignDelete", () => {
 
     expect(process.exitCode).toBe(1);
     expect(stderrSpy).toHaveBeenCalledWith("connection error\n");
+  });
+
+  describe("hard delete", () => {
+    it("passes hard flag to campaignDelete", async () => {
+      vi.mocked(campaignDelete).mockResolvedValue(MOCK_HARD_RESULT);
+
+      await handleCampaignDelete(5, { hard: true });
+
+      expect(campaignDelete).toHaveBeenCalledWith(
+        expect.objectContaining({ campaignId: 5, hard: true }),
+      );
+    });
+
+    it("prints 'deleted' for hard delete", async () => {
+      vi.mocked(campaignDelete).mockResolvedValue(MOCK_HARD_RESULT);
+
+      await handleCampaignDelete(5, { hard: true });
+
+      expect(process.exitCode).toBeUndefined();
+      expect(getStdout(stdoutSpy)).toContain("Campaign 5 deleted.");
+    });
+
+    it("prints hard-deleted JSON with --json --hard", async () => {
+      vi.mocked(campaignDelete).mockResolvedValue(MOCK_HARD_RESULT);
+
+      await handleCampaignDelete(5, { hard: true, json: true });
+
+      expect(process.exitCode).toBeUndefined();
+      const parsed = JSON.parse(getStdout(stdoutSpy));
+      expect(parsed.action).toBe("hard-deleted");
+    });
   });
 });
