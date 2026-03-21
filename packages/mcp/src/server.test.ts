@@ -123,6 +123,7 @@ describe("createServer", () => {
     expect(names).toContain("resolve-linkedin-entity");
     expect(names).toContain("get-action-budget");
     expect(names).toContain("get-throttle-status");
-    expect(names).toHaveLength(49);
+    expect(names).toContain("visit-profile");
+    expect(names).toHaveLength(50);
   });
 });

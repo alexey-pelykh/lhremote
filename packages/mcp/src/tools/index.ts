@@ -52,6 +52,7 @@ import { registerQueryProfile } from "./query-profile.js";
 import { registerQueryProfiles } from "./query-profiles.js";
 import { registerQueryProfilesBulk } from "./query-profiles-bulk.js";
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
+import { registerVisitProfile } from "./visit-profile.js";
 
 export {
   registerAddPeopleToCollection,
@@ -103,6 +104,7 @@ export {
   registerScrapeMessagingHistory,
   registerStartInstance,
   registerStopInstance,
+  registerVisitProfile,
 };
 
 export function registerAllTools(server: McpServer): void {
@@ -155,4 +157,5 @@ export function registerAllTools(server: McpServer): void {
   registerRemovePeopleFromCollection(server);
   registerBuildLinkedInUrl(server);
   registerResolveLinkedInEntity(server);
+  registerVisitProfile(server);
 }

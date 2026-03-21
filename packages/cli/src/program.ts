@@ -52,6 +52,7 @@ import {
   handleRemovePeopleFromCollection,
   handleResolveEntity,
   handleScrapeMessagingHistory,
+  handleVisitProfile,
   handleQuitApp,
   handleStartInstance,
   handleStopInstance,
@@ -591,6 +592,19 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleScrapeMessagingHistory);
+
+  program
+    .command("visit-profile")
+    .description(
+      "Visit a LinkedIn profile and extract data (name, positions, education, skills)",
+    )
+    .requiredOption("--person-id <id>", "Person ID to visit", parsePositiveInt)
+    .option("--extract-current-organizations", "Extract current company info during profile visit")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleVisitProfile);
 
   program
     .command("check-replies")
