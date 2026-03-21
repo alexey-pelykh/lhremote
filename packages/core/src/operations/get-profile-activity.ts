@@ -158,8 +158,10 @@ function buildProfileLookup(
 
 /**
  * Parse the Voyager profile-updates response into normalised FeedPost entries.
+ *
+ * @internal Exported for testing only.
  */
-function parseProfileUpdatesResponse(
+export function parseProfileUpdatesResponse(
   raw: VoyagerProfileUpdatesResponse,
 ): {
   posts: FeedPost[];
