@@ -239,10 +239,17 @@ export class InstanceService {
         const popups = [];
         const seen = new WeakSet();
 
+        function isVisible(el) {
+          const style = getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        }
+
         // Strategy 1: class-based selectors for known popup components
         for (const header of document.querySelectorAll('[class*="Popup_Header_"], [class*="ErrorAndAlert_Title_"]')) {
           const container = header.closest('[class*="Popup_Container_"], [class*="Popup_Wrapper_"], [class*="ErrorAndAlert_"]') || header.parentElement;
-          if (!container || seen.has(container)) continue;
+          if (!container || seen.has(container) || !isVisible(container)) continue;
           seen.add(container);
           const title = header.textContent?.trim() || '';
           if (!title) continue;
@@ -257,7 +264,7 @@ export class InstanceService {
 
         // Strategy 2: role-based fallback for dialogs not caught above
         for (const dialog of document.querySelectorAll('[role="dialog"]')) {
-          if (seen.has(dialog)) continue;
+          if (seen.has(dialog) || !isVisible(dialog)) continue;
           seen.add(dialog);
           const heading = dialog.querySelector('h1, h2, h3, [class*="Header"], [class*="Title"]');
           const title = heading?.textContent?.trim() || dialog.firstElementChild?.textContent?.trim() || '';

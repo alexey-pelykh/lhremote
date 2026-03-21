@@ -332,10 +332,12 @@ describe("InstanceService", () => {
       const result = await service.getInstancePopups();
 
       expect(result).toEqual([]);
-      expect(uiClient.evaluate).toHaveBeenCalledWith(
-        expect.stringContaining("Popup_Header_"),
-        false,
-      );
+      expect(uiClient.evaluate).toHaveBeenCalledTimes(1);
+      const call = uiClient.evaluate.mock.calls[0];
+      expect(call).toBeDefined();
+      expect(call?.[0]).toContain("Popup_Header_");
+      expect(call?.[0]).toContain('[role="dialog"]');
+      expect(call?.[1]).toBe(false);
     });
 
     it("returns detected popups with title and description", async () => {
