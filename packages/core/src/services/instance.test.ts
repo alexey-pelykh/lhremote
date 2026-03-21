@@ -321,6 +321,94 @@ describe("InstanceService", () => {
     });
   });
 
+  describe("getInstancePopups", () => {
+    it("returns empty array when no popups found", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce([]);
+
+      const result = await service.getInstancePopups();
+
+      expect(result).toEqual([]);
+      expect(uiClient.evaluate).toHaveBeenCalledWith(
+        expect.stringContaining("Popup_Header_"),
+        false,
+      );
+    });
+
+    it("returns detected popups with title and description", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce([
+        {
+          title: "Failed to initialize UI",
+          description: "AsyncHandlerError: liAccount not initialized",
+          closable: true,
+        },
+      ]);
+
+      const result = await service.getInstancePopups();
+
+      expect(result).toEqual([
+        {
+          title: "Failed to initialize UI",
+          description: "AsyncHandlerError: liAccount not initialized",
+          closable: true,
+        },
+      ]);
+    });
+
+    it("returns multiple popups", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce([
+        { title: "Error 1", description: "Details 1", closable: true },
+        { title: "Error 2", closable: false },
+      ]);
+
+      const result = await service.getInstancePopups();
+
+      expect(result).toHaveLength(2);
+      expect(result[0]?.title).toBe("Error 1");
+      expect(result[1]?.title).toBe("Error 2");
+      expect(result[1]?.description).toBeUndefined();
+      expect(result[1]?.closable).toBe(false);
+    });
+
+    it("throws ServiceError when not connected", async () => {
+      await expect(service.getInstancePopups()).rejects.toThrow(ServiceError);
+    });
+
+    it("propagates errors from CDP client", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockRejectedValueOnce(new Error("CDP evaluation failed"));
+
+      await expect(service.getInstancePopups()).rejects.toThrow("CDP evaluation failed");
+    });
+
+    it("evaluates on the UI client only", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce([]);
+
+      await service.getInstancePopups();
+
+      const liClient = getClientMocks("LI1");
+      expect(liClient.evaluate).not.toHaveBeenCalled();
+    });
+  });
+
   describe("evaluateUI", () => {
     it("evaluates expression on the UI client only", async () => {
       mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
