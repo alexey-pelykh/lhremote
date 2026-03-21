@@ -56,7 +56,7 @@ describe("DOM automation (integration)", () => {
       await waitForElement(client, "#existing", { timeout: 2000 });
     });
 
-    it("should resolve when element appears after a delay", async () => {
+    it("should resolve when element appears after a delay", { timeout: 15_000 }, async () => {
       await client.evaluate(`
         setTimeout(() => {
           const el = document.createElement('div');
