@@ -58,7 +58,7 @@ describe("registerVisitProfile", () => {
     );
   });
 
-  it("returns profile on success", async () => {
+  it("returns profile on success with personId", async () => {
     const { server, getHandler } = createMockServer();
     registerVisitProfile(server);
 
@@ -89,6 +89,60 @@ describe("registerVisitProfile", () => {
     });
   });
 
+  it("returns profile on success with url", async () => {
+    const { server, getHandler } = createMockServer();
+    registerVisitProfile(server);
+
+    vi.mocked(visitProfile).mockResolvedValue({
+      success: true,
+      actionType: "VisitAndExtract",
+      profile: MOCK_PROFILE,
+    });
+
+    const handler = getHandler("visit-profile");
+    const result = await handler({ url: "https://www.linkedin.com/in/jane-doe-123", cdpPort: 9222 });
+
+    expect(visitProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "https://www.linkedin.com/in/jane-doe-123", cdpPort: 9222 }),
+    );
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: expect.any(String),
+        },
+      ],
+    });
+  });
+
+  it("returns error when neither personId nor url provided", async () => {
+    const { server, getHandler } = createMockServer();
+    registerVisitProfile(server);
+
+    const handler = getHandler("visit-profile");
+    const result = await handler({ cdpPort: 9222 });
+
+    expect(result).toEqual({
+      isError: true,
+      content: [{ type: "text", text: "Exactly one of personId or url must be provided." }],
+    });
+    expect(visitProfile).not.toHaveBeenCalled();
+  });
+
+  it("returns error when both personId and url provided", async () => {
+    const { server, getHandler } = createMockServer();
+    registerVisitProfile(server);
+
+    const handler = getHandler("visit-profile");
+    const result = await handler({ personId: 100, url: "https://www.linkedin.com/in/jane-doe", cdpPort: 9222 });
+
+    expect(result).toEqual({
+      isError: true,
+      content: [{ type: "text", text: "Exactly one of personId or url must be provided." }],
+    });
+    expect(visitProfile).not.toHaveBeenCalled();
+  });
+
   it("passes correct arguments to operation", async () => {
     const { server, getHandler } = createMockServer();
     registerVisitProfile(server);
@@ -104,24 +158,6 @@ describe("registerVisitProfile", () => {
 
     expect(visitProfile).toHaveBeenCalledWith(
       expect.objectContaining({ personId: 100, extractCurrentOrganizations: true, cdpPort: 9222 }),
-    );
-  });
-
-  it("passes extractCurrentOrganizations as undefined when omitted", async () => {
-    const { server, getHandler } = createMockServer();
-    registerVisitProfile(server);
-
-    vi.mocked(visitProfile).mockResolvedValue({
-      success: true,
-      actionType: "VisitAndExtract",
-      profile: MOCK_PROFILE,
-    });
-
-    const handler = getHandler("visit-profile");
-    await handler({ personId: 100, cdpPort: 9222 });
-
-    expect(visitProfile).toHaveBeenCalledWith(
-      expect.objectContaining({ personId: 100, cdpPort: 9222 }),
     );
   });
 

@@ -9,7 +9,8 @@ import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 export interface VisitProfileInput extends ConnectionOptions {
-  readonly personId: number;
+  readonly personId?: number | undefined;
+  readonly url?: string | undefined;
   readonly extractCurrentOrganizations?: boolean | undefined;
 }
 
@@ -19,9 +20,25 @@ export interface VisitProfileOutput {
   readonly profile: Profile;
 }
 
+const LINKEDIN_PROFILE_RE = /linkedin\.com\/in\/([^/?#]+)/;
+
+function extractPublicId(url: string): string {
+  const match = LINKEDIN_PROFILE_RE.exec(url);
+  if (!match?.[1]) {
+    throw new Error(
+      `Invalid LinkedIn profile URL: ${url}. Expected format: https://www.linkedin.com/in/<public-id>`,
+    );
+  }
+  return decodeURIComponent(match[1]);
+}
+
 export async function visitProfile(
   input: VisitProfileInput,
 ): Promise<VisitProfileOutput> {
+  if ((input.personId == null) === (input.url == null)) {
+    throw new Error("Exactly one of personId or url must be provided");
+  }
+
   const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
 
   const accountId = await resolveAccount(cdpPort, {
@@ -30,15 +47,25 @@ export async function visitProfile(
   });
 
   return withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
+    const repo = new ProfileRepository(db);
+
+    let personId: number;
+    if (input.personId != null) {
+      personId = input.personId;
+    } else {
+      const publicId = extractPublicId(input.url as string);
+      const existing = repo.findByPublicId(publicId);
+      personId = existing.id;
+    }
+
     await instance.executeAction("VisitAndExtract", {
-      personIds: [input.personId],
+      personIds: [personId],
       ...(input.extractCurrentOrganizations !== undefined && {
         extractCurrentOrganizations: input.extractCurrentOrganizations,
       }),
     });
 
-    const repo = new ProfileRepository(db);
-    const profile = repo.findById(input.personId, { includePositions: true });
+    const profile = repo.findById(personId, { includePositions: true });
 
     return {
       success: true as const,

@@ -62,6 +62,7 @@ function setupMocks() {
   vi.mocked(ProfileRepository).mockImplementation(function () {
     return {
       findById: vi.fn().mockReturnValue(MOCK_PROFILE),
+      findByPublicId: vi.fn().mockReturnValue(MOCK_PROFILE),
     } as unknown as ProfileRepository;
   });
 }
@@ -75,7 +76,19 @@ describe("visitProfile", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns success with profile after visiting", async () => {
+  it("throws when neither personId nor url is provided", async () => {
+    await expect(
+      visitProfile({ cdpPort: 9222 }),
+    ).rejects.toThrow("Exactly one of personId or url must be provided");
+  });
+
+  it("throws when both personId and url are provided", async () => {
+    await expect(
+      visitProfile({ personId: 100, url: "https://www.linkedin.com/in/jane-doe-123", cdpPort: 9222 }),
+    ).rejects.toThrow("Exactly one of personId or url must be provided");
+  });
+
+  it("returns success with profile after visiting by personId", async () => {
     setupMocks();
 
     const result = await visitProfile({
@@ -100,6 +113,44 @@ describe("visitProfile", () => {
       "VisitAndExtract",
       { personIds: [100] },
     );
+  });
+
+  it("resolves person from LinkedIn URL and visits", async () => {
+    setupMocks();
+
+    await visitProfile({
+      url: "https://www.linkedin.com/in/jane-doe-123",
+      cdpPort: 9222,
+    });
+
+    const mockRepo = vi.mocked(ProfileRepository).mock.results[0]
+      ?.value as { findByPublicId: ReturnType<typeof vi.fn>; findById: ReturnType<typeof vi.fn> };
+    expect(mockRepo.findByPublicId).toHaveBeenCalledWith("jane-doe-123");
+    expect(mockInstance.executeAction).toHaveBeenCalledWith(
+      "VisitAndExtract",
+      { personIds: [100] },
+    );
+  });
+
+  it("handles URL with trailing slash and query params", async () => {
+    setupMocks();
+
+    await visitProfile({
+      url: "https://www.linkedin.com/in/jane-doe-123/?locale=en_US",
+      cdpPort: 9222,
+    });
+
+    const mockRepo = vi.mocked(ProfileRepository).mock.results[0]
+      ?.value as { findByPublicId: ReturnType<typeof vi.fn> };
+    expect(mockRepo.findByPublicId).toHaveBeenCalledWith("jane-doe-123");
+  });
+
+  it("throws on invalid LinkedIn URL", async () => {
+    setupMocks();
+
+    await expect(
+      visitProfile({ url: "https://example.com/not-linkedin", cdpPort: 9222 }),
+    ).rejects.toThrow("Invalid LinkedIn profile URL");
   });
 
   it("passes extractCurrentOrganizations when provided", async () => {

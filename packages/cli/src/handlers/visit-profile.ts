@@ -13,14 +13,17 @@ import {
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#visit-profile | visit-profile} CLI command. */
 export async function handleVisitProfile(options: {
   personId?: number;
+  url?: string;
   extractCurrentOrganizations?: boolean;
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
   json?: boolean;
 }): Promise<void> {
-  if (options.personId == null) {
-    process.stderr.write("--person-id is required.\n");
+  if ((options.personId == null) === (options.url == null)) {
+    process.stderr.write(
+      "Exactly one of --person-id or --url must be provided.\n",
+    );
     process.exitCode = 1;
     return;
   }
@@ -31,6 +34,7 @@ export async function handleVisitProfile(options: {
   try {
     result = await visitProfile({
       personId: options.personId,
+      url: options.url,
       extractCurrentOrganizations: options.extractCurrentOrganizations,
       cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
       cdpHost: options.cdpHost,
@@ -93,10 +97,14 @@ function printProfile(profile: Profile): void {
     for (const edu of profile.education) {
       const parts = [edu.degree, edu.field].filter(Boolean).join(" in ");
       const dates = [edu.startDate, edu.endDate].filter(Boolean).join(" – ");
-      const school = dates ? `${edu.school} (${dates})` : edu.school;
-      process.stdout.write(
-        `  ${parts ? `${parts}, ` : ""}${school}\n`,
-      );
+      const school = edu.school ?? "";
+      const schoolWithDates = dates
+        ? [school, `(${dates})`].filter(Boolean).join(" ")
+        : school;
+      const line = [parts, schoolWithDates].filter(Boolean).join(", ");
+      if (line) {
+        process.stdout.write(`  ${line}\n`);
+      }
     }
   }
 
