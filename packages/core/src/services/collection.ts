@@ -166,7 +166,11 @@ export class CollectionService {
       if (result) {
         return;
       }
-      await delay(CAN_COLLECT_POLL_INTERVAL);
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        break;
+      }
+      await delay(Math.min(CAN_COLLECT_POLL_INTERVAL, remaining));
     }
 
     const elapsed = Date.now() - start;
