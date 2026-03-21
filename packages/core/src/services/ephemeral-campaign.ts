@@ -108,15 +108,8 @@ export class EphemeralCampaignService {
       const results = runResult.results;
       const success = results.some((r) => r.result > 0);
 
-      // Step 7: Stop campaign before cleanup
-      await this.safeStop(campaign.id);
-
-      // Step 8: Cleanup (best-effort — action result is already captured)
-      if (keepCampaign) {
-        await this.safeArchive(campaign.id);
-      } else {
-        this.safeHardDelete(campaign.id);
-      }
+      // Step 7: Cleanup
+      await this.cleanup(campaign.id, keepCampaign);
 
       return {
         success,
@@ -125,15 +118,7 @@ export class EphemeralCampaignService {
         ...(keepCampaign && { campaignId: campaign.id }),
       };
     } catch (error) {
-      // Ensure cleanup on failure
-      await this.safeStop(campaign.id);
-
-      if (keepCampaign) {
-        await this.safeArchive(campaign.id);
-      } else {
-        this.safeHardDelete(campaign.id);
-      }
-
+      await this.cleanup(campaign.id, keepCampaign);
       throw error;
     }
   }
@@ -170,8 +155,12 @@ export class EphemeralCampaignService {
       };
     }
 
-    // String target → LinkedIn URL; person ID resolved after import
-    return { linkedInUrl: target, personId: undefined };
+    // String target → validate and normalize LinkedIn URL; person ID resolved after import
+    const slug = this.extractSlug(target);
+    return {
+      linkedInUrl: `https://www.linkedin.com/in/${slug}`,
+      personId: undefined,
+    };
   }
 
   /**
@@ -237,6 +226,19 @@ export class EphemeralCampaignService {
       `Ephemeral action did not complete within ${String(timeout)}ms`,
       campaignId,
     );
+  }
+
+  /**
+   * Stop and remove/archive an ephemeral campaign (best-effort).
+   */
+  private async cleanup(campaignId: number, keepCampaign: boolean): Promise<void> {
+    await this.safeStop(campaignId);
+
+    if (keepCampaign) {
+      await this.safeArchive(campaignId);
+    } else {
+      this.safeHardDelete(campaignId);
+    }
   }
 
   /**
