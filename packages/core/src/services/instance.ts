@@ -260,7 +260,7 @@ export class InstanceService {
           if (seen.has(dialog)) continue;
           seen.add(dialog);
           const heading = dialog.querySelector('h1, h2, h3, [class*="Header"], [class*="Title"]');
-          const title = heading?.textContent?.trim() || dialog.querySelector(':first-child')?.textContent?.trim() || '';
+          const title = heading?.textContent?.trim() || dialog.firstElementChild?.textContent?.trim() || '';
           if (!title) continue;
           const body = dialog.querySelector('[class*="Body"], [class*="Description"], [class*="Content"]');
           popups.push({
