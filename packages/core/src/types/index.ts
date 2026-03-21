@@ -96,6 +96,8 @@ export type {
   CampaignPersonState,
   CampaignRunResult,
   CampaignState,
+  EphemeralActionResult,
+  EphemeralExecuteOptions,
   ResultProfileData,
   CampaignStatistics,
   CampaignUpdateConfig,

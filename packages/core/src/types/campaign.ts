@@ -375,3 +375,29 @@ export interface CampaignStatistics {
     successRate: number;
   };
 }
+
+/**
+ * Options for ephemeral campaign execution.
+ */
+export interface EphemeralExecuteOptions {
+  /** Keep the campaign after execution instead of hard-deleting (default: false). */
+  keepCampaign?: boolean;
+  /** Maximum time to wait for action completion in milliseconds (default: 300000 = 5 min). */
+  timeout?: number;
+  /** Interval between status polls in milliseconds (default: 2000). */
+  pollInterval?: number;
+}
+
+/**
+ * Result of an ephemeral campaign action execution.
+ */
+export interface EphemeralActionResult {
+  /** Whether the action executed successfully (result > 0). */
+  success: boolean;
+  /** Person ID the action was executed on. */
+  personId: number;
+  /** Action results from the database. */
+  results: CampaignActionResult[];
+  /** Campaign ID (present only when keepCampaign was true). */
+  campaignId?: number;
+}
