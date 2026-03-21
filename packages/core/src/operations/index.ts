@@ -187,6 +187,18 @@ export {
   type ImportPeopleFromCollectionOutput,
 } from "./import-people-from-collection.js";
 
+// Action budget & throttle status
+export {
+  getActionBudget,
+  type GetActionBudgetInput,
+  type GetActionBudgetOutput,
+} from "./get-action-budget.js";
+export {
+  getThrottleStatus,
+  type GetThrottleStatusInput,
+  type GetThrottleStatusOutput,
+} from "./get-throttle-status.js";
+
 // URL building & entity resolution
 export {
   buildLinkedInUrl,

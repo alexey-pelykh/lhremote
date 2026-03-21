@@ -34,7 +34,9 @@ import { registerCheckReplies } from "./check-replies.js";
 import { registerCheckStatus } from "./check-status.js";
 import { registerDescribeActions } from "./describe-actions.js";
 import { registerFindApp } from "./find-app.js";
+import { registerGetActionBudget } from "./get-action-budget.js";
 import { registerGetErrors } from "./get-errors.js";
+import { registerGetThrottleStatus } from "./get-throttle-status.js";
 import { registerImportPeopleFromCollection } from "./import-people-from-collection.js";
 import { registerListLinkedInReferenceData } from "./list-linkedin-reference-data.js";
 import { registerLaunchApp } from "./launch-app.js";
@@ -82,7 +84,9 @@ export {
   registerCheckStatus,
   registerDescribeActions,
   registerFindApp,
+  registerGetActionBudget,
   registerGetErrors,
+  registerGetThrottleStatus,
   registerImportPeopleFromCollection,
   registerImportPeopleFromUrls,
   registerLaunchApp,
@@ -125,7 +129,9 @@ export function registerAllTools(server: McpServer): void {
   registerCampaignUpdate(server);
   registerCampaignUpdateAction(server);
   registerFindApp(server);
+  registerGetActionBudget(server);
   registerGetErrors(server);
+  registerGetThrottleStatus(server);
   registerLaunchApp(server);
   registerQuitApp(server);
   registerListAccounts(server);

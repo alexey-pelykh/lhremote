@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+export { ActionBudgetRepository } from "./action-budget.js";
 export { CampaignExcludeListRepository } from "./campaign-exclude-list.js";
 export { CampaignRepository } from "./campaign.js";
 export { CampaignStatisticsRepository } from "./campaign-statistics.js";

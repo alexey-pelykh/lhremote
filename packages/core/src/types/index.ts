@@ -2,6 +2,13 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 export type {
+  ActionBudget,
+  ActionBudgetEntry,
+  LimitType,
+  ThrottleStatus,
+} from "./action-budget.js";
+
+export type {
   CurrentPosition,
   Education,
   ExternalId,

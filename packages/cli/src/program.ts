@@ -39,7 +39,9 @@ import {
   handleCollectPeople,
   handleDescribeActions,
   handleFindApp,
+  handleGetActionBudget,
   handleGetErrors,
+  handleGetThrottleStatus,
   handleLaunchApp,
   handleListAccounts,
   handleListReferenceData,
@@ -617,6 +619,24 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleGetErrors);
+
+  program
+    .command("get-action-budget")
+    .description("Get daily action budget with limit types, thresholds, and usage")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleGetActionBudget);
+
+  program
+    .command("get-throttle-status")
+    .description("Check if LinkedIn is throttling the account")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleGetThrottleStatus);
 
   program
     .command("build-url")
