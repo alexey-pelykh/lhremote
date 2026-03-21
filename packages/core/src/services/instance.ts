@@ -239,9 +239,12 @@ export class InstanceService {
         const popups = [];
         const seen = new WeakSet();
 
+        const seenTitles = new Set();
+
         function isVisible(el) {
           const style = getComputedStyle(el);
-          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+          const opacity = Number.parseFloat(style.opacity);
+          if (style.display === 'none' || style.visibility === 'hidden' || (!Number.isNaN(opacity) && opacity <= 0)) return false;
           const rect = el.getBoundingClientRect();
           return rect.width > 0 && rect.height > 0;
         }
@@ -253,11 +256,14 @@ export class InstanceService {
           seen.add(container);
           const title = header.textContent?.trim() || '';
           if (!title) continue;
-          const body = container.querySelector('[class*="Popup_Body_"], [class*="ErrorAndAlert_Description_"]');
+          const description = container.querySelector('[class*="Popup_Body_"], [class*="ErrorAndAlert_Description_"]')?.textContent?.trim() || undefined;
+          const key = title + '\\0' + (description || '');
+          if (seenTitles.has(key)) continue;
+          seenTitles.add(key);
           const controls = container.querySelector('[class*="Popup_Controls_"], [class*="Popup_Buttons_"]');
           popups.push({
             title,
-            description: body?.textContent?.trim() || undefined,
+            description,
             closable: controls ? controls.querySelectorAll('button').length > 0 : false,
           });
         }
@@ -269,10 +275,13 @@ export class InstanceService {
           const heading = dialog.querySelector('h1, h2, h3, [class*="Header"], [class*="Title"]');
           const title = heading?.textContent?.trim() || dialog.firstElementChild?.textContent?.trim() || '';
           if (!title) continue;
-          const body = dialog.querySelector('[class*="Body"], [class*="Description"], [class*="Content"]');
+          const description = dialog.querySelector('[class*="Body"], [class*="Description"], [class*="Content"]')?.textContent?.trim() || undefined;
+          const key = title + '\\0' + (description || '');
+          if (seenTitles.has(key)) continue;
+          seenTitles.add(key);
           popups.push({
             title,
-            description: body?.textContent?.trim() || undefined,
+            description,
             closable: dialog.querySelectorAll('button').length > 0,
           });
         }
