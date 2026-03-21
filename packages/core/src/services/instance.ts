@@ -5,6 +5,7 @@ import { CDPClient, CDPTimeoutError, discoverTargets } from "../cdp/index.js";
 import type { CdpTarget } from "../types/cdp.js";
 import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
+import { VoyagerInterceptor } from "../voyager/index.js";
 import { ActionExecutionError, InstanceNotRunningError, ServiceError, UIBlockedError } from "./errors.js";
 
 /**
@@ -50,6 +51,7 @@ export class InstanceService {
   private linkedInClient: CDPClient | null = null;
   private uiClient: CDPClient | null = null;
   private healthChecker: HealthChecker | null = null;
+  private voyagerInterceptor: VoyagerInterceptor | null = null;
 
   constructor(port: number, options?: { host?: string; timeout?: number; allowRemote?: boolean }) {
     this.port = port;
@@ -129,6 +131,7 @@ export class InstanceService {
    * Disconnect from both targets.
    */
   disconnect(): void {
+    this.voyagerInterceptor = null;
     this.linkedInClient?.disconnect();
     this.linkedInClient = null;
     this.uiClient?.disconnect();
@@ -220,6 +223,22 @@ export class InstanceService {
     } finally {
       await client.send("Page.disable").catch(() => {});
     }
+  }
+
+  /**
+   * Create a {@link VoyagerInterceptor} attached to the LinkedIn WebView.
+   *
+   * Returns a cached instance — only one interceptor exists per
+   * InstanceService connection.  The interceptor is invalidated on
+   * {@link disconnect}.
+   */
+  createVoyagerInterceptor(): VoyagerInterceptor {
+    if (!this.voyagerInterceptor) {
+      this.voyagerInterceptor = new VoyagerInterceptor(
+        this.ensureLinkedInClient(),
+      );
+    }
+    return this.voyagerInterceptor;
   }
 
   /** Whether both clients are currently connected. */
