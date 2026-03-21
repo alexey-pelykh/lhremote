@@ -90,7 +90,15 @@ describe("createProgram", () => {
     expect(commandNames).toContain("list-reference-data");
     expect(commandNames).toContain("search-posts");
     expect(commandNames).toContain("comment-on-post");
-    expect(commandNames).toHaveLength(55);
+    expect(commandNames).toContain("message-person");
+    expect(commandNames).toContain("send-invite");
+    expect(commandNames).toContain("send-inmail");
+    expect(commandNames).toContain("follow-person");
+    expect(commandNames).toContain("endorse-skills");
+    expect(commandNames).toContain("like-person-posts");
+    expect(commandNames).toContain("remove-connection");
+    expect(commandNames).toContain("enrich-profile");
+    expect(commandNames).toHaveLength(63);
   });
 
   describe("launch-app", () => {

@@ -39,6 +39,14 @@ import {
   handleCommentOnPost,
   handleCollectPeople,
   handleDescribeActions,
+  handleEndorseSkills,
+  handleEnrichProfile,
+  handleFollowPerson,
+  handleLikePersonPosts,
+  handleMessagePerson,
+  handleRemoveConnection,
+  handleSendInmail,
+  handleSendInvite,
   handleFindApp,
   handleGetActionBudget,
   handleGetErrors,
@@ -754,6 +762,139 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleSearchPosts);
+
+  // Individual actions (ephemeral campaign)
+  program
+    .command("message-person")
+    .description("Send a direct message to a 1st-degree LinkedIn connection")
+    .option("--person-id <id>", "Person ID (provide this or --url)", parsePositiveInt)
+    .option("--url <url>", "LinkedIn profile URL (provide this or --person-id)")
+    .requiredOption("--message-template <json>", "Message template as JSON")
+    .option("--subject-template <json>", "Subject line template as JSON")
+    .option("--reject-if-replied", "Skip if person already replied")
+    .option("--reject-if-messaged", "Skip if already messaged")
+    .option("--keep-campaign", "Archive the ephemeral campaign instead of deleting it")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleMessagePerson);
+
+  program
+    .command("send-invite")
+    .description("Send a LinkedIn connection request")
+    .option("--person-id <id>", "Person ID (provide this or --url)", parsePositiveInt)
+    .option("--url <url>", "LinkedIn profile URL (provide this or --person-id)")
+    .option("--message-template <json>", "Invitation message template as JSON (empty for no message)")
+    .option("--save-as-lead-sn", "Save as lead in Sales Navigator")
+    .option("--keep-campaign", "Archive the ephemeral campaign instead of deleting it")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleSendInvite);
+
+  program
+    .command("send-inmail")
+    .description("Send an InMail message to a LinkedIn member (no connection required)")
+    .option("--person-id <id>", "Person ID (provide this or --url)", parsePositiveInt)
+    .option("--url <url>", "LinkedIn profile URL (provide this or --person-id)")
+    .requiredOption("--message-template <json>", "InMail body template as JSON")
+    .option("--subject-template <json>", "InMail subject line template as JSON")
+    .option("--reject-if-replied", "Skip if person already replied")
+    .option("--proceed-on-out-of-credits", "Continue even when InMail credits are exhausted")
+    .option("--keep-campaign", "Archive the ephemeral campaign instead of deleting it")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleSendInmail);
+
+  program
+    .command("follow-person")
+    .description("Follow or unfollow a LinkedIn profile")
+    .option("--person-id <id>", "Person ID (provide this or --url)", parsePositiveInt)
+    .option("--url <url>", "LinkedIn profile URL (provide this or --person-id)")
+    .addOption(
+      new Option("--mode <mode>", "Follow or unfollow")
+        .choices(["follow", "unfollow"])
+        .default("follow"),
+    )
+    .option("--skip-if-unfollowable", "Skip if person cannot be unfollowed")
+    .option("--keep-campaign", "Archive the ephemeral campaign instead of deleting it")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleFollowPerson);
+
+  program
+    .command("endorse-skills")
+    .description("Endorse skills on a LinkedIn profile")
+    .option("--person-id <id>", "Person ID (provide this or --url)", parsePositiveInt)
+    .option("--url <url>", "LinkedIn profile URL (provide this or --person-id)")
+    .option("--skill-name <name>", "Specific skill name to endorse (repeatable)", collectString, [])
+    .option("--limit <n>", "Max number of skills to endorse", parsePositiveInt)
+    .option("--skip-if-not-endorsable", "Skip if person has no endorsable skills")
+    .option("--keep-campaign", "Archive the ephemeral campaign instead of deleting it")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action((opts) => {
+      const skillNames = (opts.skillName as string[] | undefined)?.length
+        ? opts.skillName as string[]
+        : undefined;
+      return handleEndorseSkills({ ...opts, skillNames, skillName: undefined });
+    });
+
+  program
+    .command("like-person-posts")
+    .description("Like and optionally comment on posts and articles by a LinkedIn profile")
+    .option("--person-id <id>", "Person ID (provide this or --url)", parsePositiveInt)
+    .option("--url <url>", "LinkedIn profile URL (provide this or --person-id)")
+    .option("--number-of-articles <n>", "Number of articles to like", parsePositiveInt)
+    .option("--number-of-posts <n>", "Number of posts to like", parsePositiveInt)
+    .option("--max-age-of-articles <days>", "Maximum age of articles in days", parsePositiveInt)
+    .option("--max-age-of-posts <days>", "Maximum age of posts in days", parsePositiveInt)
+    .option("--should-add-comment", "Also add a comment to liked posts/articles")
+    .option("--message-template <json>", "Comment text template as JSON (required with --should-add-comment)")
+    .option("--skip-if-not-liked", "Skip if nothing was liked")
+    .option("--keep-campaign", "Archive the ephemeral campaign instead of deleting it")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleLikePersonPosts);
+
+  program
+    .command("remove-connection")
+    .description("Remove a person from 1st-degree LinkedIn connections (unfriend)")
+    .option("--person-id <id>", "Person ID (provide this or --url)", parsePositiveInt)
+    .option("--url <url>", "LinkedIn profile URL (provide this or --person-id)")
+    .option("--keep-campaign", "Archive the ephemeral campaign instead of deleting it")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleRemoveConnection);
+
+  program
+    .command("enrich-profile")
+    .description("Enrich a LinkedIn profile by extracting additional data")
+    .option("--person-id <id>", "Person ID (provide this or --url)", parsePositiveInt)
+    .option("--url <url>", "LinkedIn profile URL (provide this or --person-id)")
+    .option("--enrich-profile-info", "Enrich profile info")
+    .option("--enrich-phones", "Enrich phone numbers")
+    .option("--enrich-emails", "Enrich email addresses")
+    .option("--enrich-socials", "Enrich social profiles")
+    .option("--enrich-companies", "Enrich company data")
+    .option("--keep-campaign", "Archive the ephemeral campaign instead of deleting it")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleEnrichProfile);
 
   return program;
 }
