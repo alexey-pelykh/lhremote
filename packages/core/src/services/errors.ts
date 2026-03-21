@@ -233,6 +233,27 @@ export class CampaignTimeoutError extends ServiceError {
  * The {@link health} property contains the full UI health status
  * including active issues and popup state.
  */
+/**
+ * Thrown when an action cannot proceed because its daily budget
+ * has been exhausted.
+ */
+export class BudgetExceededError extends ServiceError {
+  readonly limitType: string;
+  readonly dailyLimit: number;
+  readonly totalUsed: number;
+
+  constructor(limitType: string, dailyLimit: number, totalUsed: number) {
+    super(
+      `Action budget exceeded for ${limitType}: ` +
+        `${String(totalUsed)}/${String(dailyLimit)} used today`,
+    );
+    this.name = "BudgetExceededError";
+    this.limitType = limitType;
+    this.dailyLimit = dailyLimit;
+    this.totalUsed = totalUsed;
+  }
+}
+
 export class UIBlockedError extends ServiceError {
   readonly health: UIHealthStatus;
 

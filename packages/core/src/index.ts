@@ -102,6 +102,7 @@ export {
   AppNotFoundError,
   AppService,
   type AppServiceOptions,
+  BudgetExceededError,
   CampaignExecutionError,
   CampaignService,
   CampaignTimeoutError,
@@ -290,6 +291,10 @@ export {
   campaignExcludeList,
   type CampaignExcludeListInput,
   type CampaignExcludeListOutput,
+  // Post interaction
+  commentOnPost,
+  type CommentOnPostInput,
+  type CommentOnPostOutput,
   // Post analytics
   getPostStats,
   extractPostUrn,

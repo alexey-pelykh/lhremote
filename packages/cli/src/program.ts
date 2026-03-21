@@ -36,6 +36,7 @@ import {
   handleListCollections,
   handleCheckReplies,
   handleCheckStatus,
+  handleCommentOnPost,
   handleCollectPeople,
   handleDescribeActions,
   handleFindApp,
@@ -654,6 +655,17 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleGetThrottleStatus);
+
+  program
+    .command("comment-on-post")
+    .description("Post a comment on a LinkedIn post")
+    .requiredOption("--url <url>", "LinkedIn post URL")
+    .requiredOption("--text <text>", "Comment text to post")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleCommentOnPost);
 
   program
     .command("get-post-stats")

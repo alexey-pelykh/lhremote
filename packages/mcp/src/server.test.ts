@@ -127,6 +127,7 @@ describe("createServer", () => {
     expect(names).toContain("get-throttle-status");
     expect(names).toContain("visit-profile");
     expect(names).toContain("search-posts");
-    expect(names).toHaveLength(53);
+    expect(names).toContain("comment-on-post");
+    expect(names).toHaveLength(54);
   });
 });
