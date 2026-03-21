@@ -240,6 +240,15 @@ export {
   type VisitProfileOutput,
 } from "./visit-profile.js";
 
+// Post interaction
+export {
+  reactToPost,
+  REACTION_TYPES,
+  type ReactToPostInput,
+  type ReactToPostOutput,
+  type ReactionType,
+} from "./react-to-post.js";
+
 // URL building & entity resolution
 export {
   buildLinkedInUrl,

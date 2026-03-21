@@ -83,13 +83,14 @@ describe("createProgram", () => {
     expect(commandNames).toContain("collect-people");
     expect(commandNames).toContain("get-post-stats");
     expect(commandNames).toContain("get-feed");
+    expect(commandNames).toContain("react-to-post");
     expect(commandNames).toContain("build-url");
     expect(commandNames).toContain("resolve-entity");
     expect(commandNames).toContain("visit-profile");
     expect(commandNames).toContain("list-reference-data");
     expect(commandNames).toContain("search-posts");
     expect(commandNames).toContain("comment-on-post");
-    expect(commandNames).toHaveLength(54);
+    expect(commandNames).toHaveLength(55);
   });
 
   describe("launch-app", () => {
