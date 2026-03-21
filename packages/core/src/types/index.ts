@@ -39,6 +39,7 @@ export type {
   CriticalErrorIssueData,
   DialogIssueData,
   InstanceIssue,
+  InstancePopup,
   PopupState,
   UIHealthStatus,
 } from "./ui-health.js";

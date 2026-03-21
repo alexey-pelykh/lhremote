@@ -3,6 +3,7 @@
 
 import { CDPClient, CDPTimeoutError, discoverTargets } from "../cdp/index.js";
 import type { CdpTarget } from "../types/cdp.js";
+import type { InstancePopup } from "../types/ui-health.js";
 import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
 import { ActionExecutionError, InstanceNotRunningError, ServiceError, UIBlockedError } from "./errors.js";
@@ -220,6 +221,60 @@ export class InstanceService {
     } finally {
       await client.send("Page.disable").catch(() => {});
     }
+  }
+
+  /**
+   * Detect error/popup elements in the instance UI DOM.
+   *
+   * The instance UI can show error popups (e.g., "Failed to initialize UI",
+   * "AsyncHandlerError: liAccount not initialized") that render behind the
+   * LinkedIn webview and are invisible to the user.  This method queries
+   * the DOM using multiple selector strategies to find them.
+   *
+   * @returns An array of detected popups, or an empty array if none are visible.
+   */
+  async getInstancePopups(): Promise<InstancePopup[]> {
+    const client = this.ensureUiClient();
+
+    return client.evaluate<InstancePopup[]>(
+      `(() => {
+        const popups = [];
+        const seen = new WeakSet();
+
+        // Strategy 1: class-based selectors for known popup components
+        for (const header of document.querySelectorAll('[class*="Popup_Header_"], [class*="ErrorAndAlert_Title_"]')) {
+          const container = header.closest('[class*="Popup_Container_"], [class*="Popup_Wrapper_"], [class*="ErrorAndAlert_"]') || header.parentElement;
+          if (!container || seen.has(container)) continue;
+          seen.add(container);
+          const title = header.textContent?.trim() || '';
+          const body = container.querySelector('[class*="Popup_Body_"], [class*="ErrorAndAlert_Description_"]');
+          const controls = container.querySelector('[class*="Popup_Controls_"], [class*="Popup_Buttons_"]');
+          popups.push({
+            title,
+            description: body?.textContent?.trim() || undefined,
+            closable: controls ? controls.querySelectorAll('button').length > 0 : false,
+          });
+        }
+
+        // Strategy 2: role-based fallback for dialogs not caught above
+        for (const dialog of document.querySelectorAll('[role="dialog"]')) {
+          if (seen.has(dialog)) continue;
+          seen.add(dialog);
+          const heading = dialog.querySelector('h1, h2, h3, [class*="Header"], [class*="Title"]');
+          const title = heading?.textContent?.trim() || dialog.querySelector(':first-child')?.textContent?.trim() || '';
+          if (!title) continue;
+          const body = dialog.querySelector('[class*="Body"], [class*="Description"], [class*="Content"]');
+          popups.push({
+            title,
+            description: body?.textContent?.trim() || undefined,
+            closable: dialog.querySelectorAll('button').length > 0,
+          });
+        }
+
+        return popups;
+      })()`,
+      false,
+    );
   }
 
   /** Whether both clients are currently connected. */

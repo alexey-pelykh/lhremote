@@ -42,6 +42,7 @@ export type {
   RemovePeopleResult,
   InstanceInfo,
   InstanceIssue,
+  InstancePopup,
   InstanceStatus,
   ListCampaignPeopleOptions,
   ListCampaignsOptions,

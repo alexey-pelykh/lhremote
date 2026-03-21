@@ -48,6 +48,21 @@ export interface PopupState {
 }
 
 /**
+ * A popup detected in the LinkedHelper instance UI DOM.
+ *
+ * Instance popups render behind the LinkedIn webview and are invisible
+ * to the user. They can block operations without any visible indication.
+ */
+export interface InstancePopup {
+  /** The popup title text (e.g., "Failed to initialize UI"). */
+  readonly title: string;
+  /** The popup body/description text, if available. */
+  readonly description?: string;
+  /** Whether the popup has a close button. */
+  readonly closable: boolean;
+}
+
+/**
  * Aggregated UI health status for a LinkedHelper instance.
  */
 export interface UIHealthStatus {
