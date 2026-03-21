@@ -99,11 +99,14 @@ describe("parseProfileUpdatesResponse", () => {
       authorName: "Jane Doe",
       authorPublicId: "janedoe",
       authorHeadline: "Engineer at Acme",
+      authorProfileUrl: null,
       url: "https://www.linkedin.com/feed/update/urn:li:activity:123",
-      publishedAt: 1679000000000,
+      timestamp: 1679000000000,
+      mediaType: null,
       reactionCount: 10,
       commentCount: 5,
       shareCount: 2,
+      hashtags: [],
     });
     expect(result.paging).toEqual({ start: 0, count: 20, total: 1 });
   });
@@ -244,6 +247,6 @@ describe("parseProfileUpdatesResponse", () => {
     expect(result.posts[0]?.authorPublicId).toBeNull();
     expect(result.posts[0]?.authorHeadline).toBeNull();
     expect(result.posts[0]?.url).toBeNull();
-    expect(result.posts[0]?.publishedAt).toBeNull();
+    expect(result.posts[0]?.timestamp).toBeNull();
   });
 });
