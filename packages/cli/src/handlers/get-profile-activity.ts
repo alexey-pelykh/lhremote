@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Oleksii PELYKH
+
+import {
+  DEFAULT_CDP_PORT,
+  errorMessage,
+  getProfileActivity,
+  type GetProfileActivityOutput,
+} from "@lhremote/core";
+
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#get-profile-activity | get-profile-activity} CLI command. */
+export async function handleGetProfileActivity(
+  profile: string,
+  options: {
+    cdpPort?: number;
+    cdpHost?: string;
+    allowRemote?: boolean;
+    start?: number;
+    count?: number;
+    json?: boolean;
+  },
+): Promise<void> {
+  let result: GetProfileActivityOutput;
+  try {
+    result = await getProfileActivity({
+      profile,
+      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
+      start: options.start,
+      count: options.count,
+    });
+  } catch (error) {
+    const message = errorMessage(error);
+    process.stderr.write(`${message}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(
+      `Profile: ${result.profilePublicId}  ` +
+        `(${String(result.paging.total)} total posts)\n\n`,
+    );
+
+    for (const post of result.posts) {
+      process.stdout.write(`  ${post.urn}\n`);
+      if (post.authorName) {
+        process.stdout.write(`    Author:    ${post.authorName}\n`);
+      }
+      if (post.timestamp) {
+        process.stdout.write(
+          `    Published: ${new Date(post.timestamp).toISOString()}\n`,
+        );
+      }
+      if (post.text) {
+        const preview =
+          post.text.length > 120
+            ? post.text.slice(0, 120) + "..."
+            : post.text;
+        process.stdout.write(`    Text:      ${preview}\n`);
+      }
+      process.stdout.write(
+        `    Reactions: ${String(post.reactionCount)}  ` +
+          `Comments: ${String(post.commentCount)}  ` +
+          `Shares: ${String(post.shareCount)}\n`,
+      );
+      if (post.url) {
+        process.stdout.write(`    URL:       ${post.url}\n`);
+      }
+      process.stdout.write("\n");
+    }
+
+    if (result.posts.length === 0) {
+      process.stdout.write("  (no posts found)\n");
+    }
+  }
+}

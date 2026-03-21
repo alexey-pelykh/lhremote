@@ -52,6 +52,7 @@ import {
   handleGetErrors,
   handleGetFeed,
   handleGetPostStats,
+  handleGetProfileActivity,
   handleGetThrottleStatus,
   handleLaunchApp,
   handleListAccounts,
@@ -712,6 +713,18 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleReactToPost);
+
+  program
+    .command("get-profile-activity")
+    .description("Get recent posts/activity from a LinkedIn profile")
+    .argument("<profile>", "LinkedIn profile public ID or URL")
+    .option("--start <n>", "Pagination offset (default: 0)", parseNonNegativeInt)
+    .option("--count <n>", "Number of posts per page (default: 20)", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleGetProfileActivity);
 
   program
     .command("build-url")

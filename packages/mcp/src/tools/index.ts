@@ -47,6 +47,7 @@ import { registerGetActionBudget } from "./get-action-budget.js";
 import { registerGetPostEngagers } from "./get-post-engagers.js";
 import { registerGetPostStats } from "./get-post-stats.js";
 import { registerGetFeed } from "./get-feed.js";
+import { registerGetProfileActivity } from "./get-profile-activity.js";
 import { registerGetErrors } from "./get-errors.js";
 import { registerGetThrottleStatus } from "./get-throttle-status.js";
 import { registerImportPeopleFromCollection } from "./import-people-from-collection.js";
@@ -112,6 +113,7 @@ export {
   registerGetFeed,
   registerGetPostEngagers,
   registerGetPostStats,
+  registerGetProfileActivity,
   registerGetErrors,
   registerGetThrottleStatus,
   registerImportPeopleFromCollection,
@@ -164,6 +166,7 @@ export function registerAllTools(server: McpServer): void {
   registerGetFeed(server);
   registerGetPostEngagers(server);
   registerGetPostStats(server);
+  registerGetProfileActivity(server);
   registerGetErrors(server);
   registerGetThrottleStatus(server);
   registerLaunchApp(server);

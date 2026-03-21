@@ -51,6 +51,8 @@ export type {
   UIHealthStatus,
 } from "./ui-health.js";
 
+export type { FeedPost } from "./feed.js";
+
 export type {
   PostEngager,
   PostStats,

@@ -312,6 +312,11 @@ export {
   searchPosts,
   type SearchPostsInput,
   type SearchPostsOutput,
+  // Profile activity
+  getProfileActivity,
+  extractProfileId,
+  type GetProfileActivityInput,
+  type GetProfileActivityOutput,
   // Action budget & throttle status
   getActionBudget,
   type GetActionBudgetInput,

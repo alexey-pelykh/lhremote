@@ -221,6 +221,14 @@ export {
   type GetFeedOutput,
 } from "./get-feed.js";
 
+// Profile activity
+export {
+  getProfileActivity,
+  extractProfileId,
+  type GetProfileActivityInput,
+  type GetProfileActivityOutput,
+} from "./get-profile-activity.js";
+
 // Action budget & throttle status
 export {
   getActionBudget,

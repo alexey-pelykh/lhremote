@@ -44,6 +44,7 @@ export { handleGetActionBudget } from "./get-action-budget.js";
 export { handleGetErrors } from "./get-errors.js";
 export { handleGetFeed } from "./get-feed.js";
 export { handleGetPostStats } from "./get-post-stats.js";
+export { handleGetProfileActivity } from "./get-profile-activity.js";
 export { handleGetThrottleStatus } from "./get-throttle-status.js";
 export { handleImportPeopleFromCollection } from "./import-people-from-collection.js";
 export { handleQueryMessages } from "./query-messages.js";

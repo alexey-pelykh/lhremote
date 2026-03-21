@@ -2,19 +2,21 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 /**
- * A post from the LinkedIn home feed.
+ * A post from the LinkedIn home feed or profile activity stream.
  */
 export interface FeedPost {
   /** Feed update URN (e.g. `urn:li:activity:1234567890`). */
   readonly urn: string;
   /** Direct URL to the post on LinkedIn. */
-  readonly url: string;
+  readonly url: string | null;
   /** Display name of the post author. */
-  readonly authorName: string;
+  readonly authorName: string | null;
   /** Professional headline of the author, if available. */
   readonly authorHeadline: string | null;
   /** URL to the author's LinkedIn profile, if available. */
   readonly authorProfileUrl: string | null;
+  /** Author LinkedIn public ID (vanity URL slug), if available. */
+  readonly authorPublicId: string | null;
   /** Text content of the post, if any. */
   readonly text: string | null;
   /** Type of media attached to the post (e.g. `image`, `video`, `article`, `document`), if any. */

@@ -84,6 +84,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("get-post-stats");
     expect(commandNames).toContain("get-feed");
     expect(commandNames).toContain("react-to-post");
+    expect(commandNames).toContain("get-profile-activity");
     expect(commandNames).toContain("build-url");
     expect(commandNames).toContain("resolve-entity");
     expect(commandNames).toContain("visit-profile");
@@ -98,7 +99,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("like-person-posts");
     expect(commandNames).toContain("remove-connection");
     expect(commandNames).toContain("enrich-profile");
-    expect(commandNames).toHaveLength(63);
+    expect(commandNames).toHaveLength(64);
   });
 
   describe("launch-app", () => {
