@@ -7,7 +7,7 @@ import {
   launchChromium,
   type ChromiumInstance,
 } from "../cdp/testing/launch-chromium.js";
-import { VoyagerInterceptor, type VoyagerResponse } from "./interceptor.js";
+import { VoyagerInterceptor } from "./interceptor.js";
 
 describe("VoyagerInterceptor (integration)", () => {
   let chromium: ChromiumInstance;
@@ -58,8 +58,8 @@ describe("VoyagerInterceptor (integration)", () => {
 
       await interceptor.enable();
 
-      const captured: VoyagerResponse[] = [];
-      interceptor.onResponse((r) => captured.push(r));
+      // Use waitForResponse for deterministic waiting instead of setTimeout
+      const responsePromise = interceptor.waitForResponse(undefined, 5000);
 
       // Trigger a fetch from within the page to a URL containing /voyager/api/
       // The request will likely 404, but the Network domain will still capture it
@@ -68,13 +68,8 @@ describe("VoyagerInterceptor (integration)", () => {
         true,
       );
 
-      // Allow time for Network events to propagate
-      await new Promise<void>((r) => setTimeout(r, 500));
-
-      // The fetch to /voyager/api/test-endpoint should have been captured
-      // (the response URL is http://example.com/voyager/api/test-endpoint)
-      expect(captured.length).toBeGreaterThanOrEqual(1);
-      expect(captured[0]?.url).toContain("/voyager/api/");
+      const captured = await responsePromise;
+      expect(captured.url).toContain("/voyager/api/");
     });
   });
 

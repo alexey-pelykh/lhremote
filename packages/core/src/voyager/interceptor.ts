@@ -86,10 +86,10 @@ export class VoyagerInterceptor {
    */
   async enable(): Promise<void> {
     if (this.interceptEnabled) return;
+    await this.client.send("Network.enable");
     this.client.on("Network.responseReceived", this.handleResponseReceived);
     this.client.on("Network.loadingFinished", this.handleLoadingFinished);
     this.client.on("Network.loadingFailed", this.handleLoadingFailed);
-    await this.client.send("Network.enable");
     this.interceptEnabled = true;
   }
 
@@ -134,6 +134,12 @@ export class VoyagerInterceptor {
     filter?: (url: string) => boolean,
     timeout?: number,
   ): Promise<VoyagerResponse> {
+    if (!this.interceptEnabled) {
+      throw new Error(
+        "VoyagerInterceptor is not enabled — call enable() before waitForResponse()",
+      );
+    }
+
     const ms = timeout ?? DEFAULT_TIMEOUT;
 
     return new Promise<VoyagerResponse>((resolve, reject) => {
@@ -174,6 +180,18 @@ export class VoyagerInterceptor {
     const fullUrl = path.startsWith("https://")
       ? path
       : `https://www.linkedin.com${path.startsWith("/") ? "" : "/"}${path}`;
+
+    // Guard: only send credentials to LinkedIn origins
+    const parsed = new URL(fullUrl);
+    if (
+      parsed.hostname !== "www.linkedin.com" &&
+      parsed.hostname !== "linkedin.com" &&
+      !parsed.hostname.endsWith(".linkedin.com")
+    ) {
+      throw new Error(
+        `Voyager fetch restricted to linkedin.com origins, got: ${parsed.hostname}`,
+      );
+    }
 
     const extraHeaders = JSON.stringify(options?.headers ?? {});
 
@@ -263,30 +281,37 @@ export class VoyagerInterceptor {
     requestId: string,
     meta: { url: string; status: number },
   ): Promise<void> {
+    let body: unknown;
     try {
       const result = (await this.client.send("Network.getResponseBody", {
         requestId,
       })) as { body: string; base64Encoded: boolean };
 
-      const raw = result.base64Encoded ? atob(result.body) : result.body;
-      let body: unknown;
+      const raw = result.base64Encoded
+        ? Buffer.from(result.body, "base64").toString("utf8")
+        : result.body;
       try {
         body = JSON.parse(raw);
       } catch {
         body = raw;
       }
-
-      const response: VoyagerResponse = {
-        url: meta.url,
-        status: meta.status,
-        body,
-      };
-
-      for (const handler of this.handlers) {
-        handler(response);
-      }
     } catch {
       // Body retrieval can fail for cached or evicted responses — skip silently
+      return;
+    }
+
+    const response: VoyagerResponse = {
+      url: meta.url,
+      status: meta.status,
+      body,
+    };
+
+    for (const handler of this.handlers) {
+      try {
+        handler(response);
+      } catch {
+        // Isolate handler errors so one failing handler doesn't block others
+      }
     }
   }
 }

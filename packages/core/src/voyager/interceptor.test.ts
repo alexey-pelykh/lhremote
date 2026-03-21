@@ -300,7 +300,7 @@ describe("VoyagerInterceptor", () => {
         "R1",
         "https://www.linkedin.com/voyager/api/test",
         200,
-        btoa(jsonBody),
+        Buffer.from(jsonBody).toString("base64"),
         true, // base64Encoded
       );
       await flushMicrotasks();
@@ -472,6 +472,14 @@ describe("VoyagerInterceptor", () => {
         interceptor.waitForResponse(undefined, 50),
       ).rejects.toThrow(CDPTimeoutError);
     });
+
+    it("should throw when interceptor is not enabled", async () => {
+      expect(interceptor.isEnabled).toBe(false);
+
+      await expect(
+        interceptor.waitForResponse(undefined, 100),
+      ).rejects.toThrow(/not enabled/);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -612,6 +620,12 @@ describe("VoyagerInterceptor", () => {
         ),
         true,
       );
+    });
+
+    it("should reject non-LinkedIn origins", async () => {
+      await expect(
+        interceptor.fetch("https://evil.example.com/voyager/api/steal"),
+      ).rejects.toThrow(/restricted to linkedin.com/);
     });
   });
 });
