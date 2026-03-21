@@ -86,7 +86,8 @@ describe("createProgram", () => {
     expect(commandNames).toContain("resolve-entity");
     expect(commandNames).toContain("visit-profile");
     expect(commandNames).toContain("list-reference-data");
-    expect(commandNames).toHaveLength(51);
+    expect(commandNames).toContain("search-posts");
+    expect(commandNames).toHaveLength(52);
   });
 
   describe("launch-app", () => {
