@@ -342,8 +342,14 @@ export {
   type ResolveLinkedInEntityOutput,
 } from "./operations/index.js";
 
-// LinkedIn DOM selectors
+// LinkedIn DOM automation & selectors
 export {
+  click,
+  scrollTo,
+  typeText,
+  type TypeMethod,
+  waitForElement,
+  type WaitForElementOptions,
   COMMENT_INPUT,
   COMMENT_SUBMIT_BUTTON,
   FEED_POST_CONTAINER,
