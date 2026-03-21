@@ -4,6 +4,8 @@
 // Types (profile, messaging, instance, account, campaign — CDP types are internal)
 export type {
   Account,
+  ActionBudget,
+  ActionBudgetEntry,
   ActionConfig,
   ActionErrorSummary,
   ActionPeopleCounts,
@@ -39,6 +41,7 @@ export type {
   GetResultsOptions,
   GetStatisticsOptions,
   ImportPeopleResult,
+  LimitType,
   RemovePeopleResult,
   InstanceInfo,
   InstanceIssue,
@@ -79,6 +82,7 @@ export type {
   SourceType,
   StartInstanceParams,
   StartInstanceResult,
+  ThrottleStatus,
   UIHealthStatus,
   UrlBuilderResult,
 } from "./types/index.js";
@@ -139,6 +143,7 @@ export {
 
 // Data access
 export {
+  ActionBudgetRepository,
   CampaignExcludeListRepository,
   CampaignRepository,
   CampaignStatisticsRepository,
@@ -274,6 +279,13 @@ export {
   campaignExcludeList,
   type CampaignExcludeListInput,
   type CampaignExcludeListOutput,
+  // Action budget & throttle status
+  getActionBudget,
+  type GetActionBudgetInput,
+  type GetActionBudgetOutput,
+  getThrottleStatus,
+  type GetThrottleStatusInput,
+  type GetThrottleStatusOutput,
   // Error detection
   getErrors,
   type GetErrorsInput,
