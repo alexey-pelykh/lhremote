@@ -227,13 +227,6 @@ export class CampaignTimeoutError extends ServiceError {
 }
 
 /**
- * Thrown when the LinkedHelper UI is in a blocked state due to
- * a dialog, critical error, or blocking popup.
- *
- * The {@link health} property contains the full UI health status
- * including active issues and popup state.
- */
-/**
  * Thrown when an action cannot proceed because its daily budget
  * has been exhausted.
  */
@@ -254,6 +247,13 @@ export class BudgetExceededError extends ServiceError {
   }
 }
 
+/**
+ * Thrown when the LinkedHelper UI is in a blocked state due to
+ * a dialog, critical error, or blocking popup.
+ *
+ * The {@link health} property contains the full UI health status
+ * including active issues and popup state.
+ */
 export class UIBlockedError extends ServiceError {
   readonly health: UIHealthStatus;
 
