@@ -13,6 +13,10 @@ import { withDatabase } from "../services/instance-context.js";
 import { delay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 
+/** Pattern matching supported LinkedIn post URL formats. */
+const LINKEDIN_POST_URL_RE =
+  /linkedin\.com\/(?:feed\/update\/urn:li:\w+:\d+|posts\/[^/]+)/;
+
 /** Limit type ID for PostComment in the LinkedHelper budget system. */
 const POST_COMMENT_LIMIT_TYPE_ID = 19;
 
@@ -64,6 +68,15 @@ export async function commentOnPost(
 
   if (!input.text.trim()) {
     throw new Error("Comment text cannot be empty");
+  }
+
+  // Validate post URL format
+  if (!LINKEDIN_POST_URL_RE.test(input.postUrl)) {
+    throw new Error(
+      `Invalid LinkedIn post URL: ${input.postUrl}. ` +
+        "Expected a URL like https://www.linkedin.com/feed/update/urn:li:activity:... " +
+        "or https://www.linkedin.com/posts/...",
+    );
   }
 
   // Enforce loopback guard

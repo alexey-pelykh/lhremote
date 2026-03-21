@@ -122,6 +122,32 @@ describe("commentOnPost", () => {
     ).rejects.toThrow("Comment text cannot be empty");
   });
 
+  it("rejects invalid LinkedIn post URL", async () => {
+    await expect(
+      commentOnPost({ postUrl: "https://example.com/foo", text: "hello", cdpPort: MOCK_CDP_PORT }),
+    ).rejects.toThrow("Invalid LinkedIn post URL");
+  });
+
+  it("accepts /feed/update/ URL format", async () => {
+    setupMocks();
+    const result = await commentOnPost({
+      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123456/",
+      text: "hello",
+      cdpPort: MOCK_CDP_PORT,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts /posts/ URL format", async () => {
+    setupMocks();
+    const result = await commentOnPost({
+      postUrl: "https://www.linkedin.com/posts/johndoe_activity-123456-abcd/",
+      text: "hello",
+      cdpPort: MOCK_CDP_PORT,
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects non-loopback host without allowRemote", async () => {
     await expect(
       commentOnPost({
