@@ -53,6 +53,7 @@ import {
   handleRemovePeopleFromCollection,
   handleResolveEntity,
   handleScrapeMessagingHistory,
+  handleSearchPosts,
   handleVisitProfile,
   handleQuitApp,
   handleStartInstance,
@@ -701,6 +702,18 @@ export function createProgram(): Command {
     .argument("<dataType>", "Data type: INDUSTRY, SENIORITY, FUNCTION, COMPANY_SIZE, CONNECTION_DEGREE, PROFILE_LANGUAGE")
     .option("--json", "Output as JSON")
     .action(handleListReferenceData);
+
+  program
+    .command("search-posts")
+    .description("Search LinkedIn for posts by keyword or hashtag")
+    .argument("<query>", "Search query (keywords or hashtag)")
+    .option("--start <n>", "Pagination offset (default: 0)", parseNonNegativeInt)
+    .option("--count <n>", "Results per page (default: 10)", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleSearchPosts);
 
   return program;
 }

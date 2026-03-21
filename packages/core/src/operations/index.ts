@@ -200,6 +200,13 @@ export {
   type GetPostEngagersOutput,
 } from "./get-post-engagers.js";
 
+// Post search
+export {
+  searchPosts,
+  type SearchPostsInput,
+  type SearchPostsOutput,
+} from "./search-posts.js";
+
 // Action budget & throttle status
 export {
   getActionBudget,
