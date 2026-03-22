@@ -37,111 +37,57 @@ export interface SearchPostsOutput {
 }
 
 // ---------------------------------------------------------------------------
-// Voyager response shapes
+// GraphQL search response shapes
 // ---------------------------------------------------------------------------
 
-/** Top-level search clusters response. */
-interface VoyagerSearchResponse {
+/** Top-level GraphQL response wrapper. */
+interface GraphQLSearchResponse {
   data?: {
-    elements?: VoyagerSearchCluster[];
-    paging?: VoyagerPaging;
+    searchDashClustersByAll?: GraphQLSearchCollection;
   };
-  elements?: VoyagerSearchCluster[];
-  paging?: VoyagerPaging;
-  included?: VoyagerIncludedEntity[];
 }
 
-interface VoyagerSearchCluster {
-  items?: VoyagerSearchItem[];
+/** The collection returned by the searchDashClustersByAll query. */
+interface GraphQLSearchCollection {
+  elements?: GraphQLSearchCluster[];
+  paging?: GraphQLSearchPaging;
 }
 
-interface VoyagerSearchItem {
+interface GraphQLSearchCluster {
+  items?: GraphQLSearchItem[];
+}
+
+interface GraphQLSearchItem {
   item?: {
-    entityResult?: VoyagerEntityResult;
+    entityResult?: GraphQLEntityResult;
   };
 }
 
-interface VoyagerEntityResult {
+interface GraphQLEntityResult {
   /** URN of the search result entity (e.g. `urn:li:activity:...`). */
   entityUrn?: string;
-  /** Reference to the underlying update entity in `included`. */
-  "*entity"?: string;
-  title?: VoyagerTextWrapper;
-  primarySubtitle?: VoyagerTextWrapper;
-  summary?: VoyagerTextWrapper;
-  insightsResolutionResults?: VoyagerInsight[];
+  title?: GraphQLSearchTextWrapper;
+  primarySubtitle?: GraphQLSearchTextWrapper;
+  summary?: GraphQLSearchTextWrapper;
+  insightsResolutionResults?: GraphQLInsight[];
   socialProofText?: string;
-  secondarySubtitle?: VoyagerTextWrapper;
+  secondarySubtitle?: GraphQLSearchTextWrapper;
 }
 
-interface VoyagerTextWrapper {
+interface GraphQLSearchTextWrapper {
   text?: string;
 }
 
-interface VoyagerInsight {
+interface GraphQLInsight {
   simpleInsight?: {
-    title?: VoyagerTextWrapper;
+    title?: GraphQLSearchTextWrapper;
   };
 }
 
-interface VoyagerIncludedEntity {
-  $type?: string;
-  entityUrn?: string;
-  /** Reference to the actor profile. */
-  "*actor"?: string;
-  actor?: VoyagerActor;
-  commentary?: VoyagerTextWrapper;
-  socialDetail?: VoyagerSocialDetail | string;
-  numLikes?: number;
-  numComments?: number;
-  firstName?: string;
-  lastName?: string;
-  publicIdentifier?: string;
-  headline?: VoyagerTextWrapper | string;
-  occupation?: string;
-}
-
-interface VoyagerActor {
-  name?: VoyagerTextWrapper;
-  description?: VoyagerTextWrapper;
-  navigationUrl?: string;
-}
-
-interface VoyagerSocialDetail {
-  totalSocialActivityCounts?: {
-    numLikes?: number;
-    numComments?: number;
-  };
-}
-
-interface VoyagerPaging {
+interface GraphQLSearchPaging {
   start?: number;
   count?: number;
   total?: number;
-}
-
-/**
- * Extract a LinkedIn public identifier from a navigation URL.
- *
- * Handles patterns like:
- * - `https://www.linkedin.com/in/johndoe`
- * - `https://www.linkedin.com/in/johndoe?miniProfileUrn=...`
- */
-export function extractPublicId(url: string | undefined): string | null {
-  if (!url) return null;
-  const match = /linkedin\.com\/in\/([^/?]+)/.exec(url);
-  return match?.[1] ?? null;
-}
-
-/**
- * Resolve a headline value that may be a string or an object with a `text` field.
- */
-function resolveTextOrWrapper(
-  value: VoyagerTextWrapper | string | undefined,
-): string | null {
-  if (value === undefined || value === null) return null;
-  if (typeof value === "string") return value;
-  return value.text ?? null;
 }
 
 /**
@@ -167,27 +113,19 @@ export function extractActivityUrn(urn: string | undefined): string | null {
 }
 
 /**
- * Parse the Voyager content search response into normalised search results.
+ * Parse the GraphQL content search response into normalised search results.
  *
- * LinkedIn's search API returns results in a "clusters" structure with
- * entities referenced via URN in the `included` array. This parser
- * handles both inline and reference-based entity resolution.
+ * LinkedIn's GraphQL search API returns results in a "clusters" structure
+ * within the `searchDashClustersByAll` query. Each cluster contains items
+ * with entity results carrying author info, post text, and engagement data.
  */
-export function parseSearchResponse(raw: VoyagerSearchResponse): {
+export function parseSearchResponse(raw: GraphQLSearchResponse): {
   posts: SearchPostResult[];
   paging: { start: number; count: number; total: number };
 } {
-  const clusters = raw.data?.elements ?? raw.elements ?? [];
-  const paging = raw.data?.paging ?? raw.paging;
-  const included = raw.included ?? [];
-
-  // Build lookup maps for included entities by URN
-  const entitiesByUrn = new Map<string, VoyagerIncludedEntity>();
-  for (const entity of included) {
-    if (entity.entityUrn) {
-      entitiesByUrn.set(entity.entityUrn, entity);
-    }
-  }
+  const collection = raw.data?.searchDashClustersByAll;
+  const clusters = collection?.elements ?? [];
+  const paging = collection?.paging;
 
   const posts: SearchPostResult[] = [];
 
@@ -199,25 +137,16 @@ export function parseSearchResponse(raw: VoyagerSearchResponse): {
       const postUrn = extractActivityUrn(entityResult.entityUrn);
       if (!postUrn) continue;
 
-      // Try to find the update entity in included
-      const entityRef = entityResult["*entity"] ?? entityResult.entityUrn;
-      const updateEntity = entityRef
-        ? entitiesByUrn.get(entityRef)
-        : undefined;
+      // Extract post text from entity result summary
+      const text = entityResult.summary?.text ?? null;
 
-      // Extract post text from entity result summary or update commentary
-      const text =
-        entityResult.summary?.text ??
-        updateEntity?.commentary?.text ??
-        null;
-
-      // Extract author info from entity result or included actor
+      // Extract author info from entity result
       let authorFirstName: string | null = null;
       let authorLastName: string | null = null;
-      let authorPublicId: string | null = null;
-      let authorHeadline: string | null = null;
+      const authorHeadline =
+        entityResult.primarySubtitle?.text ?? null;
 
-      // Try entity result title (author name in search results)
+      // Parse author name from title
       const authorName = entityResult.title?.text ?? null;
       if (authorName) {
         const nameParts = authorName.split(" ");
@@ -225,59 +154,15 @@ export function parseSearchResponse(raw: VoyagerSearchResponse): {
         authorLastName = nameParts.slice(1).join(" ") || null;
       }
 
-      authorHeadline =
-        entityResult.primarySubtitle?.text ?? null;
-
-      // Try to resolve from included actor profile
-      if (updateEntity?.["*actor"]) {
-        const actorProfile = entitiesByUrn.get(updateEntity["*actor"]);
-        if (actorProfile) {
-          if (!authorFirstName) {
-            authorFirstName = actorProfile.firstName ?? null;
-          }
-          if (!authorLastName) {
-            authorLastName = actorProfile.lastName ?? null;
-          }
-          if (!authorPublicId) {
-            authorPublicId = actorProfile.publicIdentifier ?? null;
-          }
-          if (!authorHeadline) {
-            authorHeadline = resolveTextOrWrapper(actorProfile.headline) ??
-              actorProfile.occupation ?? null;
-          }
-        }
-      }
-
-      // Try to extract publicId from actor navigation URL
-      if (!authorPublicId && updateEntity?.actor?.navigationUrl) {
-        authorPublicId = extractPublicId(
-          updateEntity.actor.navigationUrl,
-        );
-      }
-
-      // Extract engagement counts
-      let reactionCount = 0;
-      let commentCount = 0;
-
-      if (updateEntity?.socialDetail && typeof updateEntity.socialDetail === "object") {
-        reactionCount =
-          updateEntity.socialDetail.totalSocialActivityCounts?.numLikes ?? 0;
-        commentCount =
-          updateEntity.socialDetail.totalSocialActivityCounts?.numComments ?? 0;
-      } else {
-        reactionCount = updateEntity?.numLikes ?? 0;
-        commentCount = updateEntity?.numComments ?? 0;
-      }
-
       posts.push({
         postUrn,
         text,
         authorFirstName,
         authorLastName,
-        authorPublicId,
+        authorPublicId: null,
         authorHeadline,
-        reactionCount,
-        commentCount,
+        reactionCount: 0,
+        commentCount: 0,
       });
     }
   }
@@ -341,16 +226,20 @@ export async function searchPosts(
   try {
     const voyager = new VoyagerInterceptor(client);
 
-    const encodedQuery = encodeURIComponent(input.query);
-    const encodedFilters = encodeURIComponent("List(resultType->CONTENT)");
+    // Build LinkedIn-style variables for the GraphQL query.
+    // LinkedIn uses a custom tuple format: (key:value,key:value,...)
+    const vars =
+      `(start:${String(start)},count:${String(count)},origin:GLOBAL_SEARCH_HEADER,` +
+      `query:(keywords:${input.query},flagshipSearchIntent:SEARCH_SRP,` +
+      `queryParameters:List((key:resultType,value:List(CONTENT)))))`;
+
+    const queryId =
+      "voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0";
+
     const path =
-      `/voyager/api/search/dash/clusters` +
-      `?q=all` +
-      `&keywords=${encodedQuery}` +
-      `&filters=${encodedFilters}` +
-      `&origin=GLOBAL_SEARCH_HEADER` +
-      `&start=${String(start)}` +
-      `&count=${String(count)}`;
+      `/voyager/api/graphql?queryId=${queryId}` +
+      `&variables=${encodeURIComponent(vars)}` +
+      `&includeWebMetadata=true`;
 
     const response = await voyager.fetch(path);
     if (response.status !== 200) {
@@ -366,7 +255,7 @@ export async function searchPosts(
       );
     }
 
-    const parsed = parseSearchResponse(body as VoyagerSearchResponse);
+    const parsed = parseSearchResponse(body as GraphQLSearchResponse);
 
     return {
       query: input.query,
