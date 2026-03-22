@@ -56,6 +56,8 @@ Do **not** add issue numbers (e.g. `(#12)`) to commit messages. GitHub links PRs
   - Validates (build+lint+test), stamps version from tag, publishes to npm (OIDC trusted publishing)
   - Concurrency group `release`, never cancels in-progress
 - **claude-plugin**: `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `server.json` versions must match the npm package version (set by the release tag) and be bumped together on each release
+  - The release workflow does **not** auto-bump these files — after each release, open a PR to update their `"version"` fields to match the new tag
+  - All three files must always show the same version string
 
 ## Task Tracking
 
