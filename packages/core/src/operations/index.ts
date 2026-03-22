@@ -29,6 +29,11 @@ export {
   type CampaignDeleteInput,
   type CampaignDeleteOutput,
 } from "./campaign-delete.js";
+export {
+  campaignErase,
+  type CampaignEraseInput,
+  type CampaignEraseOutput,
+} from "./campaign-erase.js";
 
 // Campaign people
 export {

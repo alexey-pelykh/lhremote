@@ -101,7 +101,8 @@ describe("createProgram", () => {
     expect(commandNames).toContain("like-person-posts");
     expect(commandNames).toContain("remove-connection");
     expect(commandNames).toContain("enrich-profile");
-    expect(commandNames).toHaveLength(66);
+    expect(commandNames).toContain("campaign-erase");
+    expect(commandNames).toHaveLength(67);
   });
 
   describe("launch-app", () => {
