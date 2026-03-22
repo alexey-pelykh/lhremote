@@ -18,6 +18,7 @@ const MOCK_RESULT = {
       urn: "urn:li:activity:123",
       url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
       authorName: "Alice Smith",
+      authorPublicId: null,
       authorHeadline: "Engineer",
       authorProfileUrl: "https://www.linkedin.com/in/alice/",
       text: "Hello #world",
