@@ -1,16 +1,35 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+import { copyFileSync, unlinkSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURE_PATH = join(
+const FIXTURE_ORIGIN = join(
   __dirname,
   "../../../core/src/db/testing/fixture.db",
 );
+
+/**
+ * Per-suite copy of the fixture database.
+ * Avoids SQLite file-locking contention when multiple vitest
+ * workers open the same DB file in parallel.
+ */
+let fixturePath: string;
 
 vi.mock("@lhremote/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@lhremote/core")>();
@@ -36,7 +55,7 @@ import { createMockServer } from "./testing/mock-server.js";
  * This replaces the mock so the MCP tool handler exercises real DB queries.
  */
 function fixtureQueryMessages(input: QueryMessagesInput) {
-  const client = new DatabaseClient(FIXTURE_PATH);
+  const client = new DatabaseClient(fixturePath);
   try {
     const repo = new MessageRepository(client);
     const limit = input.limit ?? 20;
@@ -64,6 +83,19 @@ function fixtureQueryMessages(input: QueryMessagesInput) {
 }
 
 describe("registerQueryMessages (integration)", () => {
+  beforeAll(() => {
+    fixturePath = join(tmpdir(), `lhremote-fixture-${randomUUID()}.db`);
+    copyFileSync(FIXTURE_ORIGIN, fixturePath);
+  });
+
+  afterAll(() => {
+    try {
+      unlinkSync(fixturePath);
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
   beforeEach(() => {
     vi.mocked(queryMessages).mockImplementation(async (input) =>
       fixtureQueryMessages(input),
