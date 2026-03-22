@@ -1,9 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../cdp/discovery.js", () => ({
+  discoverTargets: vi.fn(),
+}));
+
+vi.mock("../cdp/client.js", () => ({
+  CDPClient: vi.fn(),
+}));
+
+vi.mock("../voyager/interceptor.js", () => ({
+  VoyagerInterceptor: vi.fn(),
+}));
+
+import { discoverTargets } from "../cdp/discovery.js";
+import { CDPClient } from "../cdp/client.js";
+import { VoyagerInterceptor } from "../voyager/interceptor.js";
 import {
+  getPost,
   parseCommentsResponse,
   parseFeedUpdateResponse,
   resolveTextValue,
@@ -411,5 +427,128 @@ describe("parseCommentsResponse", () => {
 
     const result = parseCommentsResponse(raw);
     expect(result.paging).toEqual({ start: 0, count: 3, total: 3 });
+  });
+});
+
+describe("getPost", () => {
+  const POST_URL =
+    "https://www.linkedin.com/feed/update/urn:li:activity:1234567890/";
+
+  function setupMocks(opts?: {
+    postStatus?: number;
+    postBody?: unknown;
+    commentsStatus?: number;
+    commentsBody?: unknown;
+  }) {
+    const {
+      postStatus = 200,
+      postBody = {},
+      commentsStatus = 200,
+      commentsBody = { elements: [] },
+    } = opts ?? {};
+
+    vi.mocked(discoverTargets).mockResolvedValue([
+      {
+        id: "target-1",
+        type: "page",
+        title: "LinkedIn",
+        url: "https://www.linkedin.com/feed/",
+        description: "",
+        devtoolsFrontendUrl: "",
+      },
+    ]);
+
+    const disconnect = vi.fn();
+    vi.mocked(CDPClient).mockImplementation(function () {
+      return {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect,
+      } as unknown as CDPClient;
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ url: "", status: postStatus, body: postBody })
+      .mockResolvedValueOnce({
+        url: "",
+        status: commentsStatus,
+        body: commentsBody,
+      });
+
+    vi.mocked(VoyagerInterceptor).mockImplementation(function () {
+      return { fetch: fetchMock } as unknown as VoyagerInterceptor;
+    });
+
+    return { fetchMock, disconnect };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("throws on non-loopback host without allowRemote", async () => {
+    await expect(
+      getPost({ postUrl: POST_URL, cdpHost: "192.168.1.1" }),
+    ).rejects.toThrow("requires --allow-remote");
+  });
+
+  it("throws when no LinkedIn page found", async () => {
+    vi.mocked(discoverTargets).mockResolvedValue([]);
+
+    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow(
+      "No LinkedIn page found in LinkedHelper",
+    );
+  });
+
+  it("throws on non-200 response for post detail", async () => {
+    setupMocks({ postStatus: 403 });
+
+    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow(
+      "Voyager API returned HTTP 403 for post detail",
+    );
+  });
+
+  it("throws on non-object response body for post detail", async () => {
+    setupMocks({ postBody: null });
+
+    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow(
+      "Voyager API returned an unexpected response format for post detail",
+    );
+  });
+
+  it("throws on non-200 response for post comments", async () => {
+    setupMocks({ commentsStatus: 500 });
+
+    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow(
+      "Voyager API returned HTTP 500 for post comments",
+    );
+  });
+
+  it("throws on non-object response body for post comments", async () => {
+    setupMocks({ commentsBody: null });
+
+    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow(
+      "Voyager API returned an unexpected response format for post comments",
+    );
+  });
+
+  it("disconnects CDP client after successful operation", async () => {
+    const { disconnect } = setupMocks();
+
+    await getPost({ postUrl: POST_URL });
+
+    expect(disconnect).toHaveBeenCalled();
+  });
+
+  it("disconnects CDP client even on error", async () => {
+    const { disconnect } = setupMocks({ postStatus: 500 });
+
+    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow();
+
+    expect(disconnect).toHaveBeenCalled();
   });
 });
