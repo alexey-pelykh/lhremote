@@ -26,6 +26,7 @@ export { handleCampaignUpdate } from "./campaign-update.js";
 export { handleCampaignUpdateAction } from "./campaign-update-action.js";
 export { handleCreateCollection } from "./create-collection.js";
 export { handleDeleteCollection } from "./delete-collection.js";
+export { handleDismissErrors } from "./dismiss-errors.js";
 export { handleCheckReplies } from "./check-replies.js";
 export { handleCommentOnPost } from "./comment-on-post.js";
 export { handleEndorseSkills } from "./endorse-skills.js";

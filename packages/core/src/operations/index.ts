@@ -119,6 +119,11 @@ export {
   type GetErrorsInput,
   type GetErrorsOutput,
 } from "./get-errors.js";
+export {
+  dismissErrors,
+  type DismissErrorsInput,
+  type DismissErrorsOutput,
+} from "./dismiss-errors.js";
 
 // Messaging
 export {

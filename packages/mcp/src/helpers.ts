@@ -109,7 +109,7 @@ export function mapErrorToMcpResponse(error: unknown): McpResult | undefined {
   }
   if (error instanceof UIBlockedError) {
     return mcpError(
-      `${error.message}\n\nUI Health:\n${JSON.stringify(error.health, null, 2)}`,
+      `${error.message}\n\nUse the dismiss-errors tool to clear closable popups, then retry.\n\nUI Health:\n${JSON.stringify(error.health, null, 2)}`,
     );
   }
   return undefined;

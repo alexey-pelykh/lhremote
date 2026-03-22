@@ -72,6 +72,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("campaign-update-action");
     expect(commandNames).toContain("campaign-remove-people");
     expect(commandNames).toContain("get-errors");
+    expect(commandNames).toContain("dismiss-errors");
     expect(commandNames).toContain("get-action-budget");
     expect(commandNames).toContain("get-throttle-status");
     expect(commandNames).toContain("list-collections");
@@ -100,7 +101,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("like-person-posts");
     expect(commandNames).toContain("remove-connection");
     expect(commandNames).toContain("enrich-profile");
-    expect(commandNames).toHaveLength(65);
+    expect(commandNames).toHaveLength(66);
   });
 
   describe("launch-app", () => {

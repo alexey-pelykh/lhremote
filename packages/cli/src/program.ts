@@ -31,6 +31,7 @@ import {
   handleCampaignUpdateAction,
   handleCreateCollection,
   handleDeleteCollection,
+  handleDismissErrors,
   handleImportPeopleFromCollection,
   handleImportPeopleFromUrls,
   handleListCollections,
@@ -649,6 +650,15 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleGetErrors);
+
+  program
+    .command("dismiss-errors")
+    .description("Dismiss closable error popups in the instance UI")
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleDismissErrors);
 
   program
     .command("get-action-budget")

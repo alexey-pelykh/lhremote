@@ -255,6 +255,28 @@ export class LauncherService {
   }
 
   /**
+   * Dismiss the blocking launcher popup by clicking its first button.
+   *
+   * Returns `true` if a popup was found and dismissed, `false` if no
+   * dismissable popup was present.
+   */
+  async dismissPopup(): Promise<boolean> {
+    const client = this.ensureConnected();
+
+    return this.launcherEvaluate<boolean>(
+      client,
+      `(() => {
+        const controls = document.querySelector('.Dialog_Controls_oL8HA');
+        if (!controls) return false;
+        const button = controls.querySelector('button');
+        if (!button) return false;
+        button.click();
+        return true;
+      })()`,
+    );
+  }
+
+  /**
    * Check the overall UI health of a LinkedHelper instance.
    *
    * Combines instance issue queries with popup overlay detection

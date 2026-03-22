@@ -334,6 +334,9 @@ export {
   getErrors,
   type GetErrorsInput,
   type GetErrorsOutput,
+  dismissErrors,
+  type DismissErrorsInput,
+  type DismissErrorsOutput,
   // Messaging
   queryMessages,
   type QueryMessagesInput,
