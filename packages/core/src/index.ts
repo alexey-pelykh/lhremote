@@ -241,6 +241,9 @@ export {
   campaignDelete,
   type CampaignDeleteInput,
   type CampaignDeleteOutput,
+  campaignErase,
+  type CampaignEraseInput,
+  type CampaignEraseOutput,
   // People collection
   collectPeople,
   type CollectPeopleInput,

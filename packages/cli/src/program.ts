@@ -11,6 +11,7 @@ import {
   handleCampaignAddAction,
   handleCampaignCreate,
   handleCampaignDelete,
+  handleCampaignErase,
   handleCampaignExcludeAdd,
   handleCampaignExcludeList,
   handleCampaignExcludeRemove,
@@ -223,6 +224,16 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleCampaignDelete);
+
+  program
+    .command("campaign-erase")
+    .description("Permanently erase a campaign and all related data (irreversible)")
+    .argument("<campaignId>", "Campaign ID to erase", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleCampaignErase);
 
   program
     .command("campaign-exclude-list")

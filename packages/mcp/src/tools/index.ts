@@ -18,6 +18,7 @@ import { registerSendInvite } from "./send-invite.js";
 import { registerCampaignAddAction } from "./campaign-add-action.js";
 import { registerCampaignCreate } from "./campaign-create.js";
 import { registerCampaignDelete } from "./campaign-delete.js";
+import { registerCampaignErase } from "./campaign-erase.js";
 import { registerCampaignExcludeAdd } from "./campaign-exclude-add.js";
 import { registerCampaignExcludeList } from "./campaign-exclude-list.js";
 import { registerCampaignExcludeRemove } from "./campaign-exclude-remove.js";
@@ -87,6 +88,7 @@ export {
   registerCampaignAddAction,
   registerCampaignCreate,
   registerCampaignDelete,
+  registerCampaignErase,
   registerCampaignExcludeAdd,
   registerCampaignExcludeList,
   registerCampaignExcludeRemove,
@@ -147,6 +149,7 @@ export function registerAllTools(server: McpServer): void {
   registerCampaignAddAction(server);
   registerCampaignCreate(server);
   registerCampaignDelete(server);
+  registerCampaignErase(server);
   registerCampaignExcludeAdd(server);
   registerCampaignExcludeList(server);
   registerCampaignExcludeRemove(server);

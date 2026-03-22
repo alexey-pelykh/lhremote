@@ -5,6 +5,7 @@ export { handleAddPeopleToCollection } from "./add-people-to-collection.js";
 export { handleCampaignAddAction } from "./campaign-add-action.js";
 export { handleCampaignCreate } from "./campaign-create.js";
 export { handleCampaignDelete } from "./campaign-delete.js";
+export { handleCampaignErase } from "./campaign-erase.js";
 export { handleCampaignExcludeAdd } from "./campaign-exclude-add.js";
 export { handleCampaignExcludeList } from "./campaign-exclude-list.js";
 export { handleCampaignExcludeRemove } from "./campaign-exclude-remove.js";
