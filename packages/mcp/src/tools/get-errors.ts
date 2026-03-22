@@ -9,7 +9,7 @@ import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 export function registerGetErrors(server: McpServer): void {
   server.tool(
     "get-errors",
-    "Query current LinkedHelper UI errors, dialogs, and blocking popups. Returns instance issues (dialog and critical-error), popup overlay state, and overall health status.",
+    "Query current LinkedHelper UI errors, dialogs, and blocking popups. Returns instance issues (dialog and critical-error), popup overlay state, instance UI popups (hidden behind the LinkedIn webview), and overall health status.",
     {
       ...cdpConnectionSchema,
     },
