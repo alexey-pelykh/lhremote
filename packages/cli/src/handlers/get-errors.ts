@@ -61,12 +61,17 @@ export async function handleGetErrors(options: {
       );
     }
 
-    // Instance popups
-    if (result.instancePopups.length > 0) {
-      process.stdout.write(`Instance popups: ${String(result.instancePopups.length)}\n`);
-      for (const popup of result.instancePopups) {
-        const desc = popup.description ? ` — ${popup.description}` : "";
-        process.stdout.write(`  ${popup.title}${desc}\n`);
+    // Instance UI popups
+    if (result.instancePopups.length === 0) {
+      process.stdout.write("Instance popups: none\n");
+    } else {
+      process.stdout.write(
+        `Instance popups: ${String(result.instancePopups.length)}\n`,
+      );
+      for (const p of result.instancePopups) {
+        const closable = p.closable ? "closable" : "unclosable";
+        const desc = p.description ? ` — ${p.description}` : "";
+        process.stdout.write(`  ${p.title}${desc} (${closable})\n`);
       }
     }
   } catch (error) {

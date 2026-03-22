@@ -74,6 +74,7 @@ describe("handleGetErrors", () => {
     expect(stdoutSpy).toHaveBeenCalledWith("Account: 1\n");
     expect(stdoutSpy).toHaveBeenCalledWith("Issues: none\n");
     expect(stdoutSpy).toHaveBeenCalledWith("Popup: none\n");
+    expect(stdoutSpy).toHaveBeenCalledWith("Instance popups: none\n");
   });
 
   it("prints dialog issues", async () => {
@@ -156,6 +157,33 @@ describe("handleGetErrors", () => {
 
     expect(stdoutSpy).toHaveBeenCalledWith(
       "Popup: Network issue (unclosable)\n",
+    );
+  });
+
+  it("prints instance popups", async () => {
+    const stdoutSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockReturnValue(true);
+
+    mockedGetErrors.mockResolvedValue({
+      accountId: 1,
+      healthy: false,
+      issues: [],
+      popup: null,
+      instancePopups: [
+        { title: "Failed to initialize UI", description: "AsyncHandlerError: liAccount not initialized", closable: true },
+        { title: "Connection lost", closable: false },
+      ],
+    });
+
+    await handleGetErrors({});
+
+    expect(stdoutSpy).toHaveBeenCalledWith("Instance popups: 2\n");
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      "  Failed to initialize UI — AsyncHandlerError: liAccount not initialized (closable)\n",
+    );
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      "  Connection lost (unclosable)\n",
     );
   });
 
