@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { InstancePopup, UIHealthStatus } from "../types/index.js";
-import { discoverTargets } from "../cdp/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
 import { LauncherService } from "../services/launcher.js";
@@ -55,12 +54,8 @@ export async function getErrors(
     launcher.disconnect();
   }
 
-  // Best-effort: detect instance UI popups if the instance is running.
-  const instancePopups = await detectInstancePopups(
-    cdpPort,
-    input.cdpHost,
-    cdpOptions,
-  );
+  // Best-effort: detect instance UI popups if the UI target is available.
+  const instancePopups = await detectInstancePopups(cdpPort, cdpOptions);
 
   const healthy =
     health.healthy && instancePopups.length === 0;
@@ -69,36 +64,22 @@ export async function getErrors(
 }
 
 /**
- * Attempt to detect instance UI popups via a one-shot target discovery.
+ * Attempt to detect instance UI popups via {@link InstanceService.connectUiOnly}.
  *
- * Returns an empty array when the instance is not running or the
- * targets disappear between discovery and connection.
+ * Returns an empty array when the UI target is unavailable or the
+ * connection fails for any reason.
  */
 async function detectInstancePopups(
   cdpPort: number,
-  cdpHost: string | undefined,
   cdpOptions: { host?: string; allowRemote?: boolean },
 ): Promise<InstancePopup[]> {
+  const instance = new InstanceService(cdpPort, cdpOptions);
   try {
-    const targets = await discoverTargets(cdpPort, cdpHost ?? "127.0.0.1");
-    const hasLinkedIn = targets.some(
-      (t) => t.type === "page" && t.url.includes("linkedin.com"),
-    );
-    const hasUI = targets.some(
-      (t) => t.type === "page" && t.url.includes("index.html"),
-    );
-    if (!hasLinkedIn || !hasUI) {
-      return [];
-    }
-
-    const instance = new InstanceService(cdpPort, cdpOptions);
-    try {
-      await instance.connect();
-      return await instance.getInstancePopups();
-    } finally {
-      instance.disconnect();
-    }
+    await instance.connectUiOnly();
+    return await instance.getInstancePopups();
   } catch {
     return [];
+  } finally {
+    instance.disconnect();
   }
 }
