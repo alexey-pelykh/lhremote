@@ -431,6 +431,7 @@ describe("parseCommentsResponse", () => {
 });
 
 describe("getPost", () => {
+  const CDP_PORT = 9222;
   const POST_URL =
     "https://www.linkedin.com/feed/update/urn:li:activity:1234567890/";
 
@@ -492,14 +493,14 @@ describe("getPost", () => {
 
   it("throws on non-loopback host without allowRemote", async () => {
     await expect(
-      getPost({ postUrl: POST_URL, cdpHost: "192.168.1.1" }),
+      getPost({ postUrl: POST_URL, cdpPort: CDP_PORT, cdpHost: "192.168.1.1" }),
     ).rejects.toThrow("requires --allow-remote");
   });
 
   it("throws when no LinkedIn page found", async () => {
     vi.mocked(discoverTargets).mockResolvedValue([]);
 
-    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow(
+    await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow(
       "No LinkedIn page found in LinkedHelper",
     );
   });
@@ -507,7 +508,7 @@ describe("getPost", () => {
   it("throws on non-200 response for post detail", async () => {
     setupMocks({ postStatus: 403 });
 
-    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow(
+    await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow(
       "Voyager API returned HTTP 403 for post detail",
     );
   });
@@ -515,7 +516,7 @@ describe("getPost", () => {
   it("throws on non-object response body for post detail", async () => {
     setupMocks({ postBody: null });
 
-    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow(
+    await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow(
       "Voyager API returned an unexpected response format for post detail",
     );
   });
@@ -523,7 +524,7 @@ describe("getPost", () => {
   it("throws on non-200 response for post comments", async () => {
     setupMocks({ commentsStatus: 500 });
 
-    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow(
+    await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow(
       "Voyager API returned HTTP 500 for post comments",
     );
   });
@@ -531,7 +532,7 @@ describe("getPost", () => {
   it("throws on non-object response body for post comments", async () => {
     setupMocks({ commentsBody: null });
 
-    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow(
+    await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow(
       "Voyager API returned an unexpected response format for post comments",
     );
   });
@@ -539,7 +540,7 @@ describe("getPost", () => {
   it("disconnects CDP client after successful operation", async () => {
     const { disconnect } = setupMocks();
 
-    await getPost({ postUrl: POST_URL });
+    await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
 
     expect(disconnect).toHaveBeenCalled();
   });
@@ -547,7 +548,7 @@ describe("getPost", () => {
   it("disconnects CDP client even on error", async () => {
     const { disconnect } = setupMocks({ postStatus: 500 });
 
-    await expect(getPost({ postUrl: POST_URL })).rejects.toThrow();
+    await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow();
 
     expect(disconnect).toHaveBeenCalled();
   });
