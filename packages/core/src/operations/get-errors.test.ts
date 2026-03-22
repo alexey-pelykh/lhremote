@@ -32,6 +32,7 @@ describe("getErrors", () => {
       healthy: true,
       issues: [],
       popup: null,
+      instancePopups: [],
     };
 
     const mockLauncher = {
@@ -49,6 +50,7 @@ describe("getErrors", () => {
     expect(result.accountId).toBe(1);
     expect(result.issues).toEqual([]);
     expect(result.popup).toBeNull();
+    expect(result.instancePopups).toEqual([]);
   });
 
   it("returns blocked status with dialog issues", async () => {
@@ -70,6 +72,7 @@ describe("getErrors", () => {
         },
       ],
       popup: null,
+      instancePopups: [],
     };
 
     const mockLauncher = {
@@ -95,6 +98,7 @@ describe("getErrors", () => {
       healthy: false,
       issues: [],
       popup: { blocked: true, message: "Network issue", closable: false },
+      instancePopups: [],
     };
 
     const mockLauncher = {
@@ -123,6 +127,7 @@ describe("getErrors", () => {
         healthy: true,
         issues: [],
         popup: null,
+        instancePopups: [],
       }),
     };
     vi.mocked(LauncherService).mockImplementation(function () {

@@ -3,6 +3,7 @@
 
 import { DatabaseClient, type DatabaseClientOptions, discoverDatabase } from "../db/index.js";
 import { discoverInstancePort } from "../cdp/index.js";
+import type { UIHealthStatus } from "../types/index.js";
 import { InstanceService } from "./instance.js";
 import { LauncherService } from "./launcher.js";
 import { InstanceNotRunningError, UIBlockedError } from "./errors.js";
@@ -90,7 +91,15 @@ export async function withInstanceDatabase<T>(
       await launcher.connect();
       const connectedLauncher = launcher;
       instance.setHealthChecker(async () => {
-        const health = await connectedLauncher.checkUIHealth(accountId);
+        const [launcherHealth, instancePopups] = await Promise.all([
+          connectedLauncher.checkUIHealth(accountId),
+          instance.getInstancePopups(),
+        ]);
+        const health: UIHealthStatus = {
+          ...launcherHealth,
+          instancePopups: [...launcherHealth.instancePopups, ...instancePopups],
+          healthy: launcherHealth.healthy && instancePopups.length === 0,
+        };
         if (!health.healthy) {
           throw new UIBlockedError(health);
         }

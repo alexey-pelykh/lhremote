@@ -72,4 +72,6 @@ export interface UIHealthStatus {
   readonly issues: readonly InstanceIssue[];
   /** Current popup overlay state, or `null` if no popup is present. */
   readonly popup: PopupState | null;
+  /** Popups detected in the instance UI DOM. */
+  readonly instancePopups: readonly InstancePopup[];
 }

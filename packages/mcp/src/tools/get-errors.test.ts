@@ -49,6 +49,7 @@ describe("registerGetErrors", () => {
       healthy: true,
       issues: [],
       popup: null,
+      instancePopups: [],
     };
 
     mockedGetErrors.mockResolvedValue(output);
@@ -76,6 +77,7 @@ describe("registerGetErrors", () => {
         },
       ],
       popup: null,
+      instancePopups: [],
     };
 
     mockedGetErrors.mockResolvedValue(output);
@@ -119,6 +121,7 @@ describe("registerGetErrors", () => {
       healthy: true,
       issues: [],
       popup: null,
+      instancePopups: [],
     });
 
     const handler = getHandler("get-errors");

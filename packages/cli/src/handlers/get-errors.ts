@@ -60,6 +60,15 @@ export async function handleGetErrors(options: {
         `Popup: ${result.popup.message ?? "blocking overlay"} (${closable})\n`,
       );
     }
+
+    // Instance popups
+    if (result.instancePopups.length > 0) {
+      process.stdout.write(`Instance popups: ${String(result.instancePopups.length)}\n`);
+      for (const popup of result.instancePopups) {
+        const desc = popup.description ? ` — ${popup.description}` : "";
+        process.stdout.write(`  ${popup.title}${desc}\n`);
+      }
+    }
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);
