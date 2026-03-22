@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+import { createServer, type Server } from "node:http";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CDPClient } from "../cdp/client.js";
 import {
@@ -11,15 +12,27 @@ import { VoyagerInterceptor } from "./interceptor.js";
 
 describe("VoyagerInterceptor (integration)", () => {
   let chromium: ChromiumInstance;
+  let server: Server;
+  let serverPort: number;
   let client: CDPClient;
   let interceptor: VoyagerInterceptor;
 
   beforeAll(async () => {
     chromium = await launchChromium();
+
+    // Start a minimal local HTTP server to avoid external network dependency
+    // (http://example.com caused Windows CI timeouts)
+    server = createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end("<html></html>");
+    });
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    serverPort = (server.address() as { port: number }).port;
   }, 30_000);
 
   afterAll(async () => {
     await chromium.close();
+    server.close();
   });
 
   afterEach(async () => {
@@ -49,10 +62,10 @@ describe("VoyagerInterceptor (integration)", () => {
       await client.connect();
       interceptor = new VoyagerInterceptor(client);
 
-      // Navigate to a page first so we have an origin for fetch
+      // Navigate to the local HTTP server so we have an origin for fetch
       await client.send("Page.enable");
       const loadPromise = client.waitForEvent("Page.loadEventFired");
-      await client.navigate("http://example.com");
+      await client.navigate(`http://localhost:${serverPort.toString()}`);
       await loadPromise;
       await client.send("Page.disable").catch(() => {});
 
@@ -62,7 +75,7 @@ describe("VoyagerInterceptor (integration)", () => {
       const responsePromise = interceptor.waitForResponse(undefined, 5000);
 
       // Trigger a fetch from within the page to a URL containing /voyager/api/
-      // The request will likely 404, but the Network domain will still capture it
+      // The local server responds with 200 to any path
       await client.evaluate(
         `fetch("/voyager/api/test-endpoint").catch(() => {})`,
         true,
@@ -79,10 +92,10 @@ describe("VoyagerInterceptor (integration)", () => {
       await client.connect();
       interceptor = new VoyagerInterceptor(client);
 
-      // Navigate first
+      // Navigate to the local HTTP server so we have an origin for fetch
       await client.send("Page.enable");
       const loadPromise = client.waitForEvent("Page.loadEventFired");
-      await client.navigate("http://example.com");
+      await client.navigate(`http://localhost:${serverPort.toString()}`);
       await loadPromise;
       await client.send("Page.disable").catch(() => {});
 
