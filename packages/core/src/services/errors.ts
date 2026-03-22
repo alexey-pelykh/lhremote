@@ -272,6 +272,10 @@ export class UIBlockedError extends ServiceError {
       reasons.push(`Popup: ${health.popup.message ?? "blocking overlay active"}`);
     }
 
+    for (const instancePopup of health.instancePopups) {
+      reasons.push(`Instance popup: ${instancePopup.title}${instancePopup.description ? ` — ${instancePopup.description}` : ""}`);
+    }
+
     super(
       `LinkedHelper UI is blocked — ${reasons.join("; ")}`,
       options,

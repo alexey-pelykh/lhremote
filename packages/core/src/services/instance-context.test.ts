@@ -24,7 +24,7 @@ import { discoverInstancePort } from "../cdp/index.js";
 import { DatabaseClient, discoverDatabase } from "../db/index.js";
 import { InstanceService } from "./instance.js";
 import { LauncherService } from "./launcher.js";
-import { InstanceNotRunningError } from "./errors.js";
+import { InstanceNotRunningError, UIBlockedError } from "./errors.js";
 import { withDatabase, withInstanceDatabase } from "./instance-context.js";
 
 const mockedDiscoverInstancePort = vi.mocked(discoverInstancePort);
@@ -49,6 +49,7 @@ function createMockInstance(overrides: Partial<InstanceService> = {}) {
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn(),
     setHealthChecker: vi.fn(),
+    getInstancePopups: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as unknown as InstanceService;
   mockedInstanceService.mockImplementation(function () {
@@ -65,12 +66,20 @@ function createMockLauncher() {
       healthy: true,
       issues: [],
       popup: null,
+      instancePopups: [],
     }),
   } as unknown as LauncherService;
   mockedLauncherService.mockImplementation(function () {
     return launcher;
   });
   return launcher;
+}
+
+function extractHealthChecker(mockInstance: InstanceService): () => Promise<void> {
+  const calls = vi.mocked(mockInstance.setHealthChecker).mock.calls;
+  const firstCall = calls[0];
+  if (!firstCall) throw new Error("setHealthChecker was not called");
+  return firstCall[0] as () => Promise<void>;
 }
 
 describe("withDatabase", () => {
@@ -289,5 +298,89 @@ describe("withInstanceDatabase", () => {
     await withInstanceDatabase(9222, 42, () => undefined);
 
     expect(mockedInstanceService).toHaveBeenCalledWith(55123, undefined);
+  });
+
+  it("health checker calls getInstancePopups alongside launcher health", async () => {
+    const mockInstance = createMockInstance();
+    const mockLauncher = createMockLauncher();
+    createMockDb();
+    mockedDiscoverInstancePort.mockResolvedValue(55123);
+    mockedDiscoverDatabase.mockReturnValue("/path/to/db.db");
+
+    await withInstanceDatabase(9222, 42, () => undefined);
+
+    // Extract and invoke the registered health checker
+    const healthChecker = extractHealthChecker(mockInstance);
+
+    await healthChecker();
+
+    expect(vi.mocked(mockLauncher.checkUIHealth)).toHaveBeenCalledWith(42);
+    expect(vi.mocked(mockInstance.getInstancePopups)).toHaveBeenCalledOnce();
+  });
+
+  it("health checker throws UIBlockedError when instance popups detected", async () => {
+    const mockInstance = createMockInstance({
+      getInstancePopups: vi.fn().mockResolvedValue([
+        { title: "Failed to initialize UI", description: "Error details", closable: false },
+      ]),
+    });
+    createMockLauncher();
+    createMockDb();
+    mockedDiscoverInstancePort.mockResolvedValue(55123);
+    mockedDiscoverDatabase.mockReturnValue("/path/to/db.db");
+
+    await withInstanceDatabase(9222, 42, () => undefined);
+
+    const healthChecker = extractHealthChecker(mockInstance);
+
+    await expect(healthChecker()).rejects.toThrow(UIBlockedError);
+    await expect(healthChecker()).rejects.toThrow("Instance popup: Failed to initialize UI");
+  });
+
+  it("health checker throws UIBlockedError with both launcher issues and instance popups", async () => {
+    const mockInstance = createMockInstance({
+      getInstancePopups: vi.fn().mockResolvedValue([
+        { title: "Error popup", closable: true },
+      ]),
+    });
+    const mockLauncher = createMockLauncher();
+    vi.mocked(mockLauncher.checkUIHealth).mockResolvedValue({
+      healthy: false,
+      issues: [
+        {
+          type: "dialog",
+          id: "d1",
+          data: { id: "d1", options: { message: "Dialog message", controls: [] } },
+        },
+      ],
+      popup: null,
+      instancePopups: [],
+    });
+    createMockDb();
+    mockedDiscoverInstancePort.mockResolvedValue(55123);
+    mockedDiscoverDatabase.mockReturnValue("/path/to/db.db");
+
+    await withInstanceDatabase(9222, 42, () => undefined);
+
+    const healthChecker = extractHealthChecker(mockInstance);
+
+    const error = await healthChecker().catch((e: unknown) => e) as UIBlockedError;
+    expect(error).toBeInstanceOf(UIBlockedError);
+    expect(error.message).toContain("Dialog: Dialog message");
+    expect(error.message).toContain("Instance popup: Error popup");
+  });
+
+  it("health checker passes when no launcher issues and no instance popups", async () => {
+    const mockInstance = createMockInstance();
+    createMockLauncher();
+    createMockDb();
+    mockedDiscoverInstancePort.mockResolvedValue(55123);
+    mockedDiscoverDatabase.mockReturnValue("/path/to/db.db");
+
+    await withInstanceDatabase(9222, 42, () => undefined);
+
+    const healthChecker = extractHealthChecker(mockInstance);
+
+    await expect(healthChecker()).resolves.toBeUndefined();
   });
 });

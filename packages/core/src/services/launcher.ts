@@ -268,7 +268,7 @@ export class LauncherService {
 
     const healthy = issues.length === 0 && (popup === null || !popup.blocked);
 
-    return { healthy, issues, popup };
+    return { healthy, issues, popup, instancePopups: [] };
   }
 
   /** Whether the service is currently connected to the launcher. */

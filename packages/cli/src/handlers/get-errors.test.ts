@@ -40,6 +40,7 @@ describe("handleGetErrors", () => {
       healthy: true,
       issues: [],
       popup: null,
+      instancePopups: [],
     };
 
     mockedGetErrors.mockResolvedValue(output);
@@ -63,6 +64,7 @@ describe("handleGetErrors", () => {
       healthy: true,
       issues: [],
       popup: null,
+      instancePopups: [],
     });
 
     await handleGetErrors({});
@@ -99,6 +101,7 @@ describe("handleGetErrors", () => {
         },
       ],
       popup: null,
+      instancePopups: [],
     });
 
     await handleGetErrors({});
@@ -126,6 +129,7 @@ describe("handleGetErrors", () => {
         },
       ],
       popup: null,
+      instancePopups: [],
     });
 
     await handleGetErrors({});
@@ -145,6 +149,7 @@ describe("handleGetErrors", () => {
       healthy: false,
       issues: [],
       popup: { blocked: true, message: "Network issue", closable: false },
+      instancePopups: [],
     });
 
     await handleGetErrors({});
