@@ -10,6 +10,31 @@ import {
 } from "../../cdp/testing/launch-chromium.js";
 import { click, scrollTo, typeText, waitForElement } from "../dom-automation.js";
 
+/** Timeout for beforeEach operations (connect + reset) on slow CI runners. */
+const BEFORE_EACH_TIMEOUT = 15_000;
+
+/**
+ * Race a promise against a timeout, throwing a descriptive error on expiry.
+ */
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
+  const ac = new AbortController();
+  const timeout = new Promise<never>((_resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+    ac.signal.addEventListener("abort", () => clearTimeout(timer));
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    ac.abort();
+  }
+}
+
 /**
  * Helper to clear document body and create elements without innerHTML
  * (which is blocked by Chromium's Trusted Types policy).
@@ -34,8 +59,8 @@ describe("DOM automation (integration)", () => {
 
   beforeEach(async () => {
     client = new CDPClient(chromium.port);
-    await client.connect();
-    await resetBody(client);
+    await withTimeout(client.connect(), BEFORE_EACH_TIMEOUT, "client.connect()");
+    await withTimeout(resetBody(client), BEFORE_EACH_TIMEOUT, "resetBody()");
   });
 
   afterEach(() => {
