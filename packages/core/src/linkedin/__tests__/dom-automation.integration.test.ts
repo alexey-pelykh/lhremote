@@ -58,7 +58,7 @@ describe("DOM automation (integration)", () => {
   });
 
   beforeEach(async () => {
-    client = new CDPClient(chromium.port);
+    client = new CDPClient(chromium.port, { timeout: BEFORE_EACH_TIMEOUT });
     await withTimeout(client.connect(), BEFORE_EACH_TIMEOUT, "client.connect()");
     await withTimeout(resetBody(client), BEFORE_EACH_TIMEOUT, "resetBody()");
   });
