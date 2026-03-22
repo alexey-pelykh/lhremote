@@ -188,6 +188,104 @@ describe("InstanceService", () => {
     });
   });
 
+  describe("connectUiOnly", () => {
+    it("connects to UI target only when both targets exist", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+
+      await service.connectUiOnly();
+
+      expect(clientInstances).toHaveLength(1);
+      expect(clientsByTargetId.has("UI1")).toBe(true);
+      expect(clientsByTargetId.has("LI1")).toBe(false);
+    });
+
+    it("connects when only UI target exists", async () => {
+      mockedDiscoverTargets.mockResolvedValue([UI_TARGET]);
+
+      await service.connectUiOnly();
+
+      expect(clientInstances).toHaveLength(1);
+      expect(clientsByTargetId.has("UI1")).toBe(true);
+    });
+
+    it("evaluateUI works after connectUiOnly", async () => {
+      mockedDiscoverTargets.mockResolvedValue([UI_TARGET]);
+      await service.connectUiOnly();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce("ok");
+
+      const result = await service.evaluateUI("expr");
+
+      expect(result).toBe("ok");
+      expect(uiClient.evaluate).toHaveBeenCalledWith("expr", true);
+    });
+
+    it("ensureLinkedInClient throws ServiceError after connectUiOnly", async () => {
+      mockedDiscoverTargets.mockResolvedValue([UI_TARGET]);
+      await service.connectUiOnly();
+
+      await expect(
+        service.navigateLinkedIn("https://www.linkedin.com/feed/"),
+      ).rejects.toThrow(ServiceError);
+    });
+
+    it("polls until UI target appears", async () => {
+      vi.useFakeTimers();
+
+      mockedDiscoverTargets
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValue([UI_TARGET]);
+
+      const connectPromise = service.connectUiOnly();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await connectPromise;
+
+      expect(clientsByTargetId.has("UI1")).toBe(true);
+      expect(mockedDiscoverTargets.mock.calls.length).toBeGreaterThanOrEqual(3);
+
+      vi.useRealTimers();
+    });
+
+    it("throws InstanceNotRunningError when no UI target after timeout", async () => {
+      vi.useFakeTimers();
+
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET]);
+
+      const promise = service.connectUiOnly();
+      const assertion = expect(promise).rejects.toThrow(
+        /Instance UI target not found/,
+      );
+      await vi.advanceTimersByTimeAsync(31_000);
+      await assertion;
+
+      vi.useRealTimers();
+    });
+
+    it("throws InstanceNotRunningError when no targets at all", async () => {
+      vi.useFakeTimers();
+
+      mockedDiscoverTargets.mockResolvedValue([]);
+
+      const promise = service.connectUiOnly();
+      const assertion = expect(promise).rejects.toThrow(
+        /Instance UI target not found.*0 CDP target/,
+      );
+      await vi.advanceTimersByTimeAsync(31_000);
+      await assertion;
+
+      vi.useRealTimers();
+    });
+
+    it("isConnected returns false after connectUiOnly", async () => {
+      mockedDiscoverTargets.mockResolvedValue([UI_TARGET]);
+      await service.connectUiOnly();
+
+      expect(service.isConnected).toBe(false);
+    });
+  });
+
   describe("disconnect", () => {
     it("disconnects both clients", async () => {
       mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);

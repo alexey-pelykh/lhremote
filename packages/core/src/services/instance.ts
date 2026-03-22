@@ -129,6 +129,52 @@ export class InstanceService {
   }
 
   /**
+   * Connect to only the instance UI target, without requiring the LinkedIn webview.
+   *
+   * Use this for partial-start scenarios where LinkedHelper failed to initialize
+   * and the LinkedIn webview was never created. After this call, {@link evaluateUI}
+   * and UI-dependent methods work, but LinkedIn-dependent methods like
+   * {@link navigateLinkedIn} and {@link createVoyagerInterceptor} will throw.
+   *
+   * @throws {InstanceNotRunningError} if the UI target is not found within the timeout.
+   */
+  async connectUiOnly(): Promise<void> {
+    const deadline = Date.now() + CONNECT_TIMEOUT;
+
+    let targets: CdpTarget[] = [];
+    let uiTarget: CdpTarget | undefined;
+
+    while (Date.now() < deadline) {
+      targets = await discoverTargets(this.port, this.host);
+
+      uiTarget = targets.find(isUiTarget);
+
+      if (uiTarget) {
+        break;
+      }
+
+      await delay(CONNECT_POLL_INTERVAL);
+    }
+
+    if (!uiTarget) {
+      throw new InstanceNotRunningError(
+        `Instance UI target not found among ${String(targets.length)} CDP target(s) on port ${String(this.port)}`,
+      );
+    }
+
+    const clientOptions = {
+      host: this.host,
+      ...(this.timeout !== undefined && { timeout: this.timeout }),
+      allowRemote: this.allowRemote,
+    };
+
+    const ui = new CDPClient(this.port, clientOptions);
+    await ui.connect(uiTarget.id);
+
+    this.uiClient = ui;
+  }
+
+  /**
    * Disconnect from both targets.
    */
   disconnect(): void {
