@@ -24,9 +24,9 @@ export interface DismissErrorsOutput {
 /**
  * Dismiss closable error popups in the LinkedHelper instance UI.
  *
- * Connects to both the launcher and instance, finds popup close/OK
- * buttons, and clicks them via CDP.  Returns the number of dismissed
- * vs non-dismissable popups.
+ * Connects to the launcher and instance UI (LinkedIn webview is not
+ * required), finds popup close/OK buttons, and clicks them via CDP.
+ * Returns the number of dismissed vs non-dismissable popups.
  */
 export async function dismissErrors(
   input: DismissErrorsInput,
@@ -64,7 +64,7 @@ export async function dismissErrors(
   // Dismiss instance UI popups
   const instance = new InstanceService(cdpPort, cdpOptions);
   try {
-    await instance.connect();
+    await instance.connectUiOnly();
     const result = await instance.dismissInstancePopups();
     dismissed += result.dismissed;
     nonDismissable += result.nonDismissable;

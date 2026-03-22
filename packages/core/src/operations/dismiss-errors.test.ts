@@ -43,7 +43,7 @@ describe("dismissErrors", () => {
     });
 
     const mockInstance = {
-      connect: vi.fn().mockResolvedValue(undefined),
+      connectUiOnly: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn(),
       dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 0, nonDismissable: 0 }),
     };
@@ -71,7 +71,7 @@ describe("dismissErrors", () => {
     });
 
     const mockInstance = {
-      connect: vi.fn().mockResolvedValue(undefined),
+      connectUiOnly: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn(),
       dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 2, nonDismissable: 0 }),
     };
@@ -99,7 +99,7 @@ describe("dismissErrors", () => {
     });
 
     const mockInstance = {
-      connect: vi.fn().mockResolvedValue(undefined),
+      connectUiOnly: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn(),
       dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 0, nonDismissable: 1 }),
     };
@@ -127,7 +127,7 @@ describe("dismissErrors", () => {
     });
 
     const mockInstance = {
-      connect: vi.fn().mockResolvedValue(undefined),
+      connectUiOnly: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn(),
       dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 0, nonDismissable: 0 }),
     };
@@ -145,6 +145,35 @@ describe("dismissErrors", () => {
       host: "192.168.1.1",
       allowRemote: true,
     });
+  });
+
+  it("works when LinkedIn webview is absent (partial start)", async () => {
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+
+    const mockLauncher = {
+      connect: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn(),
+      dismissPopup: vi.fn().mockResolvedValue(false),
+      getPopupState: vi.fn().mockResolvedValue(null),
+    };
+    vi.mocked(LauncherService).mockImplementation(function () {
+      return mockLauncher as unknown as LauncherService;
+    });
+
+    const mockInstance = {
+      connectUiOnly: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn(),
+      dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 1, nonDismissable: 0 }),
+    };
+    vi.mocked(InstanceService).mockImplementation(function () {
+      return mockInstance as unknown as InstanceService;
+    });
+
+    const result = await dismissErrors({ cdpPort: 9222 });
+
+    expect(mockInstance.connectUiOnly).toHaveBeenCalledOnce();
+    expect(result.dismissed).toBe(1);
+    expect(result.nonDismissable).toBe(0);
   });
 
   it("disconnects services even on error", async () => {
