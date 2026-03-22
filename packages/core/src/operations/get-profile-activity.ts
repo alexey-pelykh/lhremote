@@ -66,165 +66,182 @@ export function extractProfileId(input: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Voyager API response shapes
+// GraphQL profile-updates response shapes
 // ---------------------------------------------------------------------------
 
-interface VoyagerProfileUpdatesResponse {
+/** Top-level GraphQL response wrapper. @internal Exported for testing only. */
+export interface GraphQLProfileUpdatesResponse {
   data?: {
-    elements?: VoyagerFeedElement[];
-    paging?: VoyagerPaging;
-  };
-  elements?: VoyagerFeedElement[];
-  paging?: VoyagerPaging;
-  included?: VoyagerIncludedEntity[];
-}
-
-interface VoyagerFeedElement {
-  actor?: {
-    name?: { text?: string };
-    publicIdentifier?: string;
-    description?: { text?: string };
-    urn?: string;
-    "*miniProfile"?: string;
-  };
-  commentary?: {
-    text?: { text?: string };
-  };
-  socialDetail?: {
-    totalSocialActivityCounts?: {
-      numLikes?: number;
-      numComments?: number;
-      numShares?: number;
-    };
-  };
-  updateMetadata?: {
-    urn?: string;
-    shareUrl?: string;
-  };
-  publishedAt?: number;
-  /** Alternative: some API versions use a top-level urn. */
-  urn?: string;
-  /** Alternative: resharedUpdate text in some versions. */
-  resharedUpdate?: {
-    commentary?: { text?: { text?: string } };
+    feedDashProfileUpdatesByProfileUpdates?: GraphQLProfileUpdatesCollection;
   };
 }
 
-interface VoyagerIncludedEntity {
-  $type?: string;
-  entityUrn?: string;
-  firstName?: string;
-  lastName?: string;
-  publicIdentifier?: string;
-  headline?: { text?: string } | string;
-  occupation?: string;
+/** The collection returned by the feedDashProfileUpdates query. */
+interface GraphQLProfileUpdatesCollection {
+  elements?: GraphQLProfileUpdateElement[];
+  paging?: GraphQLPaging;
 }
 
-interface VoyagerPaging {
+/** A single profile update element from the GraphQL endpoint. */
+interface GraphQLProfileUpdateElement {
+  metadata?: GraphQLElementMetadata;
+  socialContent?: GraphQLSocialContent;
+  header?: GraphQLHeader;
+  commentary?: GraphQLCommentary;
+  content?: GraphQLContent;
+}
+
+/** Per-element metadata carrying the activity URN. */
+interface GraphQLElementMetadata {
+  backendUrn?: string;
+  shareUrn?: string;
+}
+
+/** Social content block on each element. */
+interface GraphQLSocialContent {
+  shareUrl?: string;
+}
+
+/** Actor header block containing the author identity. */
+interface GraphQLHeader {
+  text?: GraphQLTextAccessibility;
+  image?: GraphQLImageAccessibility;
+  navigationUrl?: string;
+}
+
+/** Accessibility-wrapped text (used by header, commentary, etc.). */
+interface GraphQLTextAccessibility {
+  text?: string;
+  accessibilityText?: string;
+}
+
+interface GraphQLImageAccessibility {
+  accessibilityText?: string;
+}
+
+/** Commentary block carrying the post text body. */
+interface GraphQLCommentary {
+  text?: GraphQLTextAccessibility;
+  numLines?: number;
+}
+
+/** Content block -- component-based; only non-null key matters. */
+interface GraphQLContent {
+  articleComponent?: GraphQLContentComponent;
+  imageComponent?: GraphQLContentComponent;
+  linkedInVideoComponent?: GraphQLContentComponent;
+  documentComponent?: GraphQLContentComponent;
+  externalVideoComponent?: GraphQLContentComponent;
+  [key: string]: GraphQLContentComponent | null | undefined;
+}
+
+interface GraphQLContentComponent {
+  navigationUrl?: string;
+  [key: string]: unknown;
+}
+
+/** Pagination info. */
+interface GraphQLPaging {
   start?: number;
   count?: number;
   total?: number;
 }
 
 // ---------------------------------------------------------------------------
-// Response parsing
+// Parsing helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve a headline value that may be a string or an object with a `text` field.
+ * Extract hashtags from post text.
  */
-function resolveText(
-  value: { text?: string } | string | undefined,
-): string | null {
-  if (value === undefined || value === null) return null;
-  if (typeof value === "string") return value;
-  return value.text ?? null;
+function extractHashtags(text: string | null): string[] {
+  if (!text) return [];
+  const matches = text.match(/#[\w\u00C0-\u024F]+/g);
+  return matches ? [...new Set(matches.map((t) => t.slice(1)))] : [];
 }
 
 /**
- * Build a lookup map of included mini-profile entities by URN.
+ * Infer media type from the GraphQL content block.
+ *
+ * The content object has a component-based layout where only one key is
+ * non-null (e.g. `imageComponent`, `linkedInVideoComponent`).
  */
-function buildProfileLookup(
-  included: VoyagerIncludedEntity[],
-): Map<string, VoyagerIncludedEntity> {
-  const map = new Map<string, VoyagerIncludedEntity>();
-  for (const entity of included) {
-    if (entity.entityUrn) {
-      map.set(entity.entityUrn, entity);
-    }
+function inferMediaType(content: GraphQLContent | undefined): string | null {
+  if (!content) return null;
+
+  for (const key of Object.keys(content)) {
+    if (content[key] == null) continue;
+
+    const lower = key.toLowerCase();
+    if (lower.includes("image")) return "image";
+    if (lower.includes("video")) return "video";
+    if (lower.includes("article")) return "article";
+    if (lower.includes("document")) return "document";
   }
-  return map;
+
+  return null;
 }
 
 /**
- * Parse the Voyager profile-updates response into normalised FeedPost entries.
+ * Build a LinkedIn post URL from an activity URN.
+ */
+function buildPostUrl(urn: string): string {
+  return `https://www.linkedin.com/feed/update/${urn}/`;
+}
+
+/**
+ * Parse the GraphQL profile-updates response into normalised FeedPost entries.
  *
  * @internal Exported for testing only.
  */
 export function parseProfileUpdatesResponse(
-  raw: VoyagerProfileUpdatesResponse,
+  raw: GraphQLProfileUpdatesResponse,
 ): {
   posts: FeedPost[];
   paging: { start: number; count: number; total: number };
 } {
-  const elements = raw.data?.elements ?? raw.elements ?? [];
-  const paging = raw.data?.paging ?? raw.paging;
-  const included = raw.included ?? [];
-  const profilesByUrn = buildProfileLookup(included);
+  const collection = raw.data?.feedDashProfileUpdatesByProfileUpdates;
+  const elements = collection?.elements ?? [];
+  const paging = collection?.paging;
 
   const posts: FeedPost[] = [];
 
   for (const el of elements) {
-    const urn = el.updateMetadata?.urn ?? el.urn;
+    const urn = el.metadata?.backendUrn;
     if (!urn) continue;
 
-    // Resolve text — primary commentary, fall back to reshared
-    const text =
-      resolveText(el.commentary?.text) ??
-      resolveText(el.resharedUpdate?.commentary?.text) ??
-      null;
+    // Post URL -- prefer shareUrl when available, fall back to constructed URL
+    const url = el.socialContent?.shareUrl ?? buildPostUrl(urn);
 
-    // Resolve author info — inline actor or included entity lookup
-    let authorName: string | null = resolveText(el.actor?.name) ?? null;
-    let authorPublicId: string | null = el.actor?.publicIdentifier ?? null;
-    let authorHeadline: string | null =
-      resolveText(el.actor?.description) ?? null;
+    // Author info from the header block
+    const authorName = el.header?.text?.text ?? null;
+    const authorHeadline =
+      el.header?.image?.accessibilityText ?? null;
+    const authorProfileUrl = el.header?.navigationUrl ?? null;
 
-    if (authorName === null) {
-      const actorUrn = el.actor?.urn ?? el.actor?.["*miniProfile"];
-      if (actorUrn) {
-        const profile = profilesByUrn.get(actorUrn);
-        if (profile) {
-          authorName = [profile.firstName, profile.lastName]
-            .filter(Boolean)
-            .join(" ") || null;
-          authorPublicId = profile.publicIdentifier ?? null;
-          authorHeadline =
-            resolveText(profile.headline) ?? profile.occupation ?? null;
-        }
-      }
-    }
+    // Post text from the commentary block
+    const text = el.commentary?.text?.text ?? null;
 
-    // Build post URL from share URL or URN
-    const url = el.updateMetadata?.shareUrl ?? null;
+    // Media type from the content component block
+    const mediaType = inferMediaType(el.content);
 
-    // Social counts
-    const counts = el.socialDetail?.totalSocialActivityCounts;
+    // Hashtags
+    const hashtags = extractHashtags(text);
 
     posts.push({
       urn,
       url,
       authorName,
       authorHeadline,
-      authorProfileUrl: null,
-      authorPublicId,
+      authorProfileUrl,
+      authorPublicId: null,
       text,
-      mediaType: null,
-      reactionCount: counts?.numLikes ?? 0,
-      commentCount: counts?.numComments ?? 0,
-      shareCount: counts?.numShares ?? 0,
-      timestamp: el.publishedAt ?? null,
-      hashtags: [],
+      mediaType,
+      reactionCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      timestamp: null,
+      hashtags,
     });
   }
 
@@ -246,7 +263,7 @@ export function parseProfileUpdatesResponse(
  * Retrieve recent posts/activity from a LinkedIn profile.
  *
  * Connects to the LinkedIn webview in LinkedHelper and calls the
- * Voyager identity/profileUpdates API to get the profile's recent
+ * Voyager GraphQL profileUpdates API to get the profile's recent
  * posts with engagement counts.
  *
  * @param input - Profile identifier, pagination, and CDP connection options.
@@ -289,13 +306,21 @@ export async function getProfileActivity(
   try {
     const voyager = new VoyagerInterceptor(client);
 
+    // Build the profile URN with URL-encoded colons for the GraphQL variables
     const encodedId = encodeURIComponent(profilePublicId);
     const profileUrn = `urn:li:fsd_profile:${encodedId}`;
     const encodedUrn = encodeURIComponent(profileUrn);
+
+    // Build LinkedIn-style variables for the GraphQL query.
+    // LinkedIn uses a custom tuple format: (key:value,key:value,...)
+    const vars = `(count:${String(count)},start:${String(start)},profileUrn:${encodedUrn})`;
+
+    const queryId =
+      "voyagerFeedDashProfileUpdates.4af00b28d60ed0f1488018948daad822";
+
     const path =
-      `/voyager/api/identity/dash/profileUpdates` +
-      `?q=memberShareFeed&profileUrn=${encodedUrn}` +
-      `&start=${String(start)}&count=${String(count)}`;
+      `/voyager/api/graphql?queryId=${queryId}` +
+      `&variables=${encodeURIComponent(vars)}`;
 
     const response = await voyager.fetch(path);
     if (response.status !== 200) {
@@ -312,7 +337,7 @@ export async function getProfileActivity(
     }
 
     const parsed = parseProfileUpdatesResponse(
-      body as VoyagerProfileUpdatesResponse,
+      body as GraphQLProfileUpdatesResponse,
     );
 
     return {
