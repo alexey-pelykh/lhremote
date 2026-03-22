@@ -11,15 +11,10 @@ vi.mock("../services/launcher.js", () => ({
   LauncherService: vi.fn(),
 }));
 
-vi.mock("../cdp/index.js", () => ({
-  discoverTargets: vi.fn(),
-}));
-
 vi.mock("../services/instance.js", () => ({
   InstanceService: vi.fn(),
 }));
 
-import { discoverTargets } from "../cdp/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
 import { LauncherService } from "../services/launcher.js";
@@ -29,13 +24,33 @@ import { getErrors } from "./get-errors.js";
 describe("getErrors", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: no instance targets
-    vi.mocked(discoverTargets).mockResolvedValue([]);
+    // Default: connectUiOnly rejects (instance not running)
+    mockInstance({ connectFails: true });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
+  function mockInstance(opts: {
+    connectFails?: boolean;
+    popups?: { title: string; description?: string; closable?: boolean }[];
+    getPopupsFails?: boolean;
+  }) {
+    const mock = {
+      connectUiOnly: opts.connectFails
+        ? vi.fn().mockRejectedValue(new Error("UI target not found"))
+        : vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn(),
+      getInstancePopups: opts.getPopupsFails
+        ? vi.fn().mockRejectedValue(new Error("DOM error"))
+        : vi.fn().mockResolvedValue(opts.popups ?? []),
+    };
+    vi.mocked(InstanceService).mockImplementation(function () {
+      return mock as unknown as InstanceService;
+    });
+    return mock;
+  }
 
   function mockLauncher(health: UIHealthStatus) {
     const mock = {
@@ -151,21 +166,10 @@ describe("getErrors", () => {
   it("includes instance popups when instance is running", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
     mockLauncher({ healthy: true, issues: [], popup: null, instancePopups: [] });
-
-    vi.mocked(discoverTargets).mockResolvedValue([
-      { id: "t1", type: "page", title: "LinkedIn", url: "https://www.linkedin.com/feed/", description: "", devtoolsFrontendUrl: "", webSocketDebuggerUrl: "" },
-      { id: "t2", type: "page", title: "LH", url: "file:///index.html", description: "", devtoolsFrontendUrl: "", webSocketDebuggerUrl: "" },
-    ]);
-
-    const mockInstance = {
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect: vi.fn(),
-      getInstancePopups: vi.fn().mockResolvedValue([
+    mockInstance({
+      popups: [
         { title: "Failed to initialize UI", description: "AsyncHandlerError", closable: true },
-      ]),
-    };
-    vi.mocked(InstanceService).mockImplementation(function () {
-      return mockInstance as unknown as InstanceService;
+      ],
     });
 
     const result = await getErrors({ cdpPort: 9222 });
@@ -178,21 +182,8 @@ describe("getErrors", () => {
   it("marks unhealthy when instance popups are present even if launcher is healthy", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
     mockLauncher({ healthy: true, issues: [], popup: null, instancePopups: [] });
-
-    vi.mocked(discoverTargets).mockResolvedValue([
-      { id: "t1", type: "page", title: "LinkedIn", url: "https://www.linkedin.com/feed/", description: "", devtoolsFrontendUrl: "", webSocketDebuggerUrl: "" },
-      { id: "t2", type: "page", title: "LH", url: "file:///index.html", description: "", devtoolsFrontendUrl: "", webSocketDebuggerUrl: "" },
-    ]);
-
-    const mockInstance = {
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect: vi.fn(),
-      getInstancePopups: vi.fn().mockResolvedValue([
-        { title: "Error popup", closable: false },
-      ]),
-    };
-    vi.mocked(InstanceService).mockImplementation(function () {
-      return mockInstance as unknown as InstanceService;
+    mockInstance({
+      popups: [{ title: "Error popup", closable: false }],
     });
 
     const result = await getErrors({ cdpPort: 9222 });
@@ -201,26 +192,10 @@ describe("getErrors", () => {
     expect(result.instancePopups).toHaveLength(1);
   });
 
-  it("returns empty instancePopups when instance is not running", async () => {
+  it("returns empty instancePopups when UI target is absent", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
     mockLauncher({ healthy: true, issues: [], popup: null, instancePopups: [] });
-
-    // Only launcher target, no instance targets
-    vi.mocked(discoverTargets).mockResolvedValue([
-      { id: "t1", type: "page", title: "Launcher", url: "file:///launcher.html", description: "", devtoolsFrontendUrl: "", webSocketDebuggerUrl: "" },
-    ]);
-
-    const result = await getErrors({ cdpPort: 9222 });
-
-    expect(result.instancePopups).toEqual([]);
-    expect(result.healthy).toBe(true);
-  });
-
-  it("returns empty instancePopups when target discovery fails", async () => {
-    vi.mocked(resolveAccount).mockResolvedValue(1);
-    mockLauncher({ healthy: true, issues: [], popup: null, instancePopups: [] });
-
-    vi.mocked(discoverTargets).mockRejectedValue(new Error("connection reset"));
+    // Default beforeEach already sets connectFails: true
 
     const result = await getErrors({ cdpPort: 9222 });
 
@@ -231,24 +206,27 @@ describe("getErrors", () => {
   it("disconnects instance service even when getInstancePopups fails", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
     mockLauncher({ healthy: true, issues: [], popup: null, instancePopups: [] });
-
-    vi.mocked(discoverTargets).mockResolvedValue([
-      { id: "t1", type: "page", title: "LinkedIn", url: "https://www.linkedin.com/feed/", description: "", devtoolsFrontendUrl: "", webSocketDebuggerUrl: "" },
-      { id: "t2", type: "page", title: "LH", url: "file:///index.html", description: "", devtoolsFrontendUrl: "", webSocketDebuggerUrl: "" },
-    ]);
-
-    const mockInstance = {
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect: vi.fn(),
-      getInstancePopups: vi.fn().mockRejectedValue(new Error("DOM error")),
-    };
-    vi.mocked(InstanceService).mockImplementation(function () {
-      return mockInstance as unknown as InstanceService;
-    });
+    const inst = mockInstance({ getPopupsFails: true });
 
     const result = await getErrors({ cdpPort: 9222 });
 
     expect(result.instancePopups).toEqual([]);
-    expect(mockInstance.disconnect).toHaveBeenCalledOnce();
+    expect(inst.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it("detects popups when LinkedIn webview is absent (UI-only start)", async () => {
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    mockLauncher({ healthy: true, issues: [], popup: null, instancePopups: [] });
+    mockInstance({
+      popups: [
+        { title: "Session expired", closable: true },
+      ],
+    });
+
+    const result = await getErrors({ cdpPort: 9222 });
+
+    expect(result.instancePopups).toHaveLength(1);
+    expect(result.instancePopups[0]?.title).toBe("Session expired");
+    expect(result.healthy).toBe(false);
   });
 });
