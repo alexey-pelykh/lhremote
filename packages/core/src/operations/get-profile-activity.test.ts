@@ -1,12 +1,77 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   extractProfileId,
   parseProfileUpdatesResponse,
+  type GraphQLProfileUpdatesResponse,
 } from "./get-profile-activity.js";
+
+vi.mock("../cdp/discovery.js", () => ({
+  discoverTargets: vi.fn(),
+}));
+
+vi.mock("../cdp/client.js", () => ({
+  CDPClient: vi.fn(),
+}));
+
+vi.mock("../voyager/interceptor.js", () => ({
+  VoyagerInterceptor: vi.fn(),
+}));
+
+import { discoverTargets } from "../cdp/discovery.js";
+import { CDPClient } from "../cdp/client.js";
+import { VoyagerInterceptor } from "../voyager/interceptor.js";
+import { getProfileActivity } from "./get-profile-activity.js";
+
+const CDP_PORT = 9222;
+
+/**
+ * Build a minimal GraphQL profile-updates response wrapper.
+ */
+function graphqlBody(
+  elements: Record<string, unknown>[],
+  paging?: Record<string, unknown>,
+): GraphQLProfileUpdatesResponse {
+  return {
+    data: {
+      feedDashProfileUpdatesByProfileUpdates: {
+        elements,
+        ...(paging ? { paging } : {}),
+      },
+    },
+  } as GraphQLProfileUpdatesResponse;
+}
+
+function setupMocks(body: unknown, status = 200) {
+  vi.mocked(discoverTargets).mockResolvedValue([
+    {
+      id: "target-1",
+      type: "page",
+      title: "LinkedIn",
+      url: "https://www.linkedin.com/feed/",
+      description: "",
+      devtoolsFrontendUrl: "",
+    },
+  ]);
+
+  const disconnect = vi.fn();
+  vi.mocked(CDPClient).mockImplementation(function () {
+    return {
+      connect: vi.fn().mockResolvedValue(undefined),
+      disconnect,
+    } as unknown as CDPClient;
+  });
+
+  const fetchMock = vi.fn().mockResolvedValue({ url: "", status, body });
+  vi.mocked(VoyagerInterceptor).mockImplementation(function () {
+    return { fetch: fetchMock } as unknown as VoyagerInterceptor;
+  });
+
+  return { fetchMock, disconnect };
+}
 
 describe("extractProfileId", () => {
   it("extracts public ID from full profile URL", () => {
@@ -63,151 +128,173 @@ describe("extractProfileId", () => {
 });
 
 describe("parseProfileUpdatesResponse", () => {
-  it("parses elements from data wrapper", () => {
-    const result = parseProfileUpdatesResponse({
-      data: {
-        elements: [
+  it("parses elements from the GraphQL response", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody(
+        [
           {
-            updateMetadata: {
-              urn: "urn:li:activity:123",
+            metadata: {
+              backendUrn: "urn:li:activity:123",
+              shareUrn: "urn:li:share:111",
+            },
+            header: {
+              text: { text: "Jane Doe" },
+              image: { accessibilityText: "Engineer at Acme" },
+              navigationUrl: "https://www.linkedin.com/in/janedoe/",
+            },
+            commentary: {
+              text: { text: "Hello world" },
+            },
+            content: {
+              imageComponent: { images: [] },
+            },
+            socialContent: {
               shareUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123",
-            },
-            commentary: { text: { text: "Hello world" } },
-            actor: {
-              name: { text: "Jane Doe" },
-              publicIdentifier: "janedoe",
-              description: { text: "Engineer at Acme" },
-            },
-            publishedAt: 1679000000000,
-            socialDetail: {
-              totalSocialActivityCounts: {
-                numLikes: 10,
-                numComments: 5,
-                numShares: 2,
-              },
             },
           },
         ],
-        paging: { start: 0, count: 20, total: 1 },
-      },
-    });
+        { start: 0, count: 20, total: 1 },
+      ),
+    );
 
     expect(result.posts).toHaveLength(1);
     expect(result.posts[0]).toEqual({
       urn: "urn:li:activity:123",
       text: "Hello world",
       authorName: "Jane Doe",
-      authorPublicId: "janedoe",
+      authorPublicId: null,
       authorHeadline: "Engineer at Acme",
-      authorProfileUrl: null,
+      authorProfileUrl: "https://www.linkedin.com/in/janedoe/",
       url: "https://www.linkedin.com/feed/update/urn:li:activity:123",
-      timestamp: 1679000000000,
-      mediaType: null,
-      reactionCount: 10,
-      commentCount: 5,
-      shareCount: 2,
+      timestamp: null,
+      mediaType: "image",
+      reactionCount: 0,
+      commentCount: 0,
+      shareCount: 0,
       hashtags: [],
     });
     expect(result.paging).toEqual({ start: 0, count: 20, total: 1 });
   });
 
-  it("parses elements from top-level (no data wrapper)", () => {
-    const result = parseProfileUpdatesResponse({
-      elements: [
+  it("falls back to constructed URL when shareUrl is absent", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
         {
-          urn: "urn:li:activity:456",
-          commentary: { text: { text: "Top-level element" } },
-          actor: { name: { text: "Bob" }, publicIdentifier: "bob" },
+          metadata: { backendUrn: "urn:li:activity:456" },
         },
-      ],
-      paging: { start: 5, count: 10, total: 50 },
-    });
+      ]),
+    );
 
-    expect(result.posts).toHaveLength(1);
-    const post = result.posts[0];
-    expect(post?.urn).toBe("urn:li:activity:456");
-    expect(post?.text).toBe("Top-level element");
-    expect(result.paging).toEqual({ start: 5, count: 10, total: 50 });
+    expect(result.posts[0]?.url).toBe(
+      "https://www.linkedin.com/feed/update/urn:li:activity:456/",
+    );
   });
 
-  it("skips elements without URN", () => {
-    const result = parseProfileUpdatesResponse({
-      elements: [
-        { commentary: { text: { text: "No URN" } } },
-        { urn: "urn:li:activity:789", commentary: { text: { text: "Has URN" } } },
-      ],
-    });
+  it("skips elements without backendUrn", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
+        { metadata: {} },
+        { metadata: { backendUrn: "urn:li:activity:789" } },
+      ]),
+    );
 
     expect(result.posts).toHaveLength(1);
     expect(result.posts[0]?.urn).toBe("urn:li:activity:789");
   });
 
-  it("resolves author from included entities via actor URN", () => {
-    const result = parseProfileUpdatesResponse({
-      elements: [
+  it("extracts and deduplicates hashtags from post text", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
         {
-          urn: "urn:li:activity:100",
-          actor: { urn: "urn:li:fsd_profile:alice" },
-        },
-      ],
-      included: [
-        {
-          entityUrn: "urn:li:fsd_profile:alice",
-          firstName: "Alice",
-          lastName: "Smith",
-          publicIdentifier: "alicesmith",
-          headline: { text: "PM at Corp" },
-        },
-      ],
-    });
-
-    expect(result.posts[0]?.authorName).toBe("Alice Smith");
-    expect(result.posts[0]?.authorPublicId).toBe("alicesmith");
-    expect(result.posts[0]?.authorHeadline).toBe("PM at Corp");
-  });
-
-  it("resolves author from included entities via *miniProfile ref", () => {
-    const result = parseProfileUpdatesResponse({
-      elements: [
-        {
-          urn: "urn:li:activity:200",
-          actor: { "*miniProfile": "urn:li:fsd_profile:charlie" },
-        },
-      ],
-      included: [
-        {
-          entityUrn: "urn:li:fsd_profile:charlie",
-          firstName: "Charlie",
-          lastName: "Brown",
-          publicIdentifier: "charlieb",
-          occupation: "Designer",
-        },
-      ],
-    });
-
-    expect(result.posts[0]?.authorName).toBe("Charlie Brown");
-    expect(result.posts[0]?.authorPublicId).toBe("charlieb");
-    expect(result.posts[0]?.authorHeadline).toBe("Designer");
-  });
-
-  it("falls back to resharedUpdate text", () => {
-    const result = parseProfileUpdatesResponse({
-      elements: [
-        {
-          urn: "urn:li:activity:300",
-          resharedUpdate: {
-            commentary: { text: { text: "Reshared post text" } },
+          metadata: { backendUrn: "urn:li:activity:100" },
+          commentary: {
+            text: { text: "#AI and #MachineLearning are #AI transforming" },
           },
-          actor: { name: { text: "Resharer" } },
         },
-      ],
-    });
+      ]),
+    );
 
-    expect(result.posts[0]?.text).toBe("Reshared post text");
+    expect(result.posts[0]?.hashtags).toEqual(["AI", "MachineLearning"]);
+  });
+
+  it("returns empty hashtags when no text", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
+        { metadata: { backendUrn: "urn:li:activity:101" } },
+      ]),
+    );
+
+    expect(result.posts[0]?.hashtags).toEqual([]);
+  });
+
+  it("infers video media type from content component key", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
+        {
+          metadata: { backendUrn: "urn:li:activity:200" },
+          content: { linkedInVideoComponent: {} },
+        },
+      ]),
+    );
+
+    expect(result.posts[0]?.mediaType).toBe("video");
+  });
+
+  it("infers article media type from content component key", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
+        {
+          metadata: { backendUrn: "urn:li:activity:201" },
+          content: { articleComponent: { navigationUrl: "https://example.com/article" } },
+        },
+      ]),
+    );
+
+    expect(result.posts[0]?.mediaType).toBe("article");
+  });
+
+  it("infers document media type from content component key", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
+        {
+          metadata: { backendUrn: "urn:li:activity:202" },
+          content: { documentComponent: {} },
+        },
+      ]),
+    );
+
+    expect(result.posts[0]?.mediaType).toBe("document");
+  });
+
+  it("returns null media type when content is absent", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
+        { metadata: { backendUrn: "urn:li:activity:203" } },
+      ]),
+    );
+
+    expect(result.posts[0]?.mediaType).toBeNull();
+  });
+
+  it("ignores content keys with null values for media type", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
+        {
+          metadata: { backendUrn: "urn:li:activity:600" },
+          content: {
+            imageComponent: null,
+            articleComponent: null,
+            linkedInVideoComponent: { url: "video-url" },
+          },
+        },
+      ]),
+    );
+
+    expect(result.posts[0]?.mediaType).toBe("video");
   });
 
   it("handles empty elements array", () => {
-    const result = parseProfileUpdatesResponse({ elements: [] });
+    const result = parseProfileUpdatesResponse(graphqlBody([]));
     expect(result.posts).toHaveLength(0);
     expect(result.paging).toEqual({ start: 0, count: 0, total: 0 });
   });
@@ -217,15 +304,45 @@ describe("parseProfileUpdatesResponse", () => {
     expect(result.posts).toHaveLength(0);
   });
 
-  it("defaults social counts to zero when missing", () => {
-    const result = parseProfileUpdatesResponse({
-      elements: [
+  it("handles elements with header but no author headline", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
         {
-          urn: "urn:li:activity:400",
-          actor: { name: { text: "Test" } },
+          metadata: { backendUrn: "urn:li:activity:400" },
+          header: {
+            text: { text: "Acme Corp" },
+            navigationUrl: "https://www.linkedin.com/company/acme/",
+          },
         },
-      ],
-    });
+      ]),
+    );
+
+    expect(result.posts[0]?.authorName).toBe("Acme Corp");
+    expect(result.posts[0]?.authorHeadline).toBeNull();
+    expect(result.posts[0]?.authorProfileUrl).toBe("https://www.linkedin.com/company/acme/");
+  });
+
+  it("handles elements with no header at all", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
+        { metadata: { backendUrn: "urn:li:activity:500" } },
+      ]),
+    );
+
+    expect(result.posts[0]?.authorName).toBeNull();
+    expect(result.posts[0]?.authorHeadline).toBeNull();
+    expect(result.posts[0]?.authorProfileUrl).toBeNull();
+  });
+
+  it("defaults social counts to zero", () => {
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
+        {
+          metadata: { backendUrn: "urn:li:activity:700" },
+          header: { text: { text: "Test" } },
+        },
+      ]),
+    );
 
     expect(result.posts[0]?.reactionCount).toBe(0);
     expect(result.posts[0]?.commentCount).toBe(0);
@@ -233,20 +350,172 @@ describe("parseProfileUpdatesResponse", () => {
   });
 
   it("handles null text fields gracefully", () => {
-    const result = parseProfileUpdatesResponse({
-      elements: [
+    const result = parseProfileUpdatesResponse(
+      graphqlBody([
         {
-          urn: "urn:li:activity:500",
-          actor: {},
+          metadata: { backendUrn: "urn:li:activity:800" },
         },
-      ],
-    });
+      ]),
+    );
 
     expect(result.posts[0]?.text).toBeNull();
     expect(result.posts[0]?.authorName).toBeNull();
     expect(result.posts[0]?.authorPublicId).toBeNull();
     expect(result.posts[0]?.authorHeadline).toBeNull();
-    expect(result.posts[0]?.url).toBeNull();
     expect(result.posts[0]?.timestamp).toBeNull();
+  });
+});
+
+describe("getProfileActivity", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("uses GraphQL query path with queryId and profileUrn", async () => {
+    const { fetchMock } = setupMocks(graphqlBody([]));
+
+    await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("queryId=voyagerFeedDashProfileUpdates"),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/voyager/api/graphql"),
+    );
+  });
+
+  it("encodes profileUrn with URL-encoded colons in variables", async () => {
+    const { fetchMock } = setupMocks(graphqlBody([]));
+
+    await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
+
+    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
+    const decoded = decodeURIComponent(calledPath);
+    // The profileUrn inside variables should contain the encoded URN
+    expect(decoded).toContain("profileUrn:urn%3Ali%3Afsd_profile%3Ajohndoe");
+  });
+
+  it("passes count and start in variables", async () => {
+    const { fetchMock } = setupMocks(graphqlBody([]));
+
+    await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "johndoe",
+      count: 5,
+      start: 10,
+    });
+
+    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
+    const decoded = decodeURIComponent(calledPath);
+    expect(decoded).toContain("count:5");
+    expect(decoded).toContain("start:10");
+  });
+
+  it("defaults to count=20 and start=0", async () => {
+    const { fetchMock } = setupMocks(graphqlBody([]));
+
+    await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
+
+    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
+    const decoded = decodeURIComponent(calledPath);
+    expect(decoded).toContain("count:20");
+    expect(decoded).toContain("start:0");
+  });
+
+  it("extracts profile ID from URL input", async () => {
+    const { fetchMock } = setupMocks(graphqlBody([]));
+
+    await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "https://www.linkedin.com/in/janedoe",
+    });
+
+    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
+    const decoded = decodeURIComponent(calledPath);
+    expect(decoded).toContain("profileUrn:urn%3Ali%3Afsd_profile%3Ajanedoe");
+  });
+
+  it("returns parsed posts with profilePublicId", async () => {
+    setupMocks(
+      graphqlBody(
+        [
+          {
+            metadata: { backendUrn: "urn:li:activity:123" },
+            header: { text: { text: "Jane Doe" } },
+            commentary: { text: { text: "Hello world" } },
+          },
+        ],
+        { start: 0, count: 20, total: 1 },
+      ),
+    );
+
+    const result = await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "janedoe",
+    });
+
+    expect(result.profilePublicId).toBe("janedoe");
+    expect(result.posts).toHaveLength(1);
+    expect(result.posts[0]?.urn).toBe("urn:li:activity:123");
+    expect(result.posts[0]?.text).toBe("Hello world");
+    expect(result.paging).toEqual({ start: 0, count: 20, total: 1 });
+  });
+
+  it("throws on non-200 response", async () => {
+    setupMocks(null, 400);
+
+    await expect(
+      getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" }),
+    ).rejects.toThrow("Voyager API returned HTTP 400 for profile activity");
+  });
+
+  it("throws on non-object response body", async () => {
+    setupMocks(null, 200);
+
+    await expect(
+      getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" }),
+    ).rejects.toThrow(
+      "Voyager API returned an unexpected response format for profile activity",
+    );
+  });
+
+  it("throws when no LinkedIn page found", async () => {
+    vi.mocked(discoverTargets).mockResolvedValue([]);
+
+    await expect(
+      getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" }),
+    ).rejects.toThrow("No LinkedIn page found in LinkedHelper");
+  });
+
+  it("throws on non-loopback host without allowRemote", async () => {
+    await expect(
+      getProfileActivity({
+        cdpPort: CDP_PORT,
+        profile: "johndoe",
+        cdpHost: "192.168.1.1",
+      }),
+    ).rejects.toThrow("requires --allow-remote");
+  });
+
+  it("disconnects CDP client after operation", async () => {
+    const { disconnect } = setupMocks(graphqlBody([]));
+
+    await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
+
+    expect(disconnect).toHaveBeenCalled();
+  });
+
+  it("disconnects CDP client even on error", async () => {
+    const { disconnect } = setupMocks(null, 500);
+
+    await expect(
+      getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" }),
+    ).rejects.toThrow();
+
+    expect(disconnect).toHaveBeenCalled();
   });
 });
