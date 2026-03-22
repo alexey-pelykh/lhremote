@@ -296,6 +296,52 @@ export class InstanceService {
   }
 
   /**
+   * Dismiss closable popups in the instance UI by clicking their buttons.
+   *
+   * @returns The number of popups that were dismissed.
+   */
+  async dismissInstancePopups(): Promise<{ dismissed: number; nonDismissable: number }> {
+    return this.evaluateUI<{ dismissed: number; nonDismissable: number }>(
+      `(() => {
+        let dismissed = 0;
+        let nonDismissable = 0;
+        const seen = new WeakSet();
+
+        // Strategy 1: class-based selectors for known popup components
+        for (const header of document.querySelectorAll('[class*="Popup_Header_"], [class*="ErrorAndAlert_Title_"]')) {
+          const container = header.closest('[class*="Popup_Container_"], [class*="Popup_Wrapper_"], [class*="ErrorAndAlert_"]') || header.parentElement;
+          if (!container || seen.has(container)) continue;
+          seen.add(container);
+          const controls = container.querySelector('[class*="Popup_Controls_"], [class*="Popup_Buttons_"]');
+          const button = controls?.querySelector('button');
+          if (button) {
+            button.click();
+            dismissed++;
+          } else {
+            nonDismissable++;
+          }
+        }
+
+        // Strategy 2: role-based fallback for dialogs not caught above
+        for (const dialog of document.querySelectorAll('[role="dialog"]')) {
+          if (seen.has(dialog)) continue;
+          seen.add(dialog);
+          const button = dialog.querySelector('button');
+          if (button) {
+            button.click();
+            dismissed++;
+          } else {
+            nonDismissable++;
+          }
+        }
+
+        return { dismissed, nonDismissable };
+      })()`,
+      false,
+    );
+  }
+
+  /**
    * Create a {@link VoyagerInterceptor} attached to the LinkedIn WebView.
    *
    * Returns a cached instance — only one interceptor exists per

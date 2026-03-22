@@ -111,6 +111,7 @@ describe("createServer", () => {
     expect(names).toContain("campaign-update-action");
     expect(names).toContain("campaign-remove-people");
     expect(names).toContain("get-errors");
+    expect(names).toContain("dismiss-errors");
     expect(names).toContain("list-collections");
     expect(names).toContain("create-collection");
     expect(names).toContain("delete-collection");
@@ -140,6 +141,6 @@ describe("createServer", () => {
     expect(names).toContain("send-inmail");
     expect(names).toContain("send-invite");
     expect(names).toContain("get-profile-activity");
-    expect(names).toHaveLength(66);
+    expect(names).toHaveLength(67);
   });
 });
