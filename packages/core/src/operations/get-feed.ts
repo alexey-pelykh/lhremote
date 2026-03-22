@@ -29,115 +29,97 @@ export interface GetFeedOutput {
 }
 
 // ---------------------------------------------------------------------------
-// Voyager response shapes
+// GraphQL feed response shapes
 // ---------------------------------------------------------------------------
 
-interface VoyagerFeedResponse {
+/** Top-level GraphQL response wrapper. */
+interface GraphQLFeedResponse {
   data?: {
-    elements?: VoyagerFeedElement[];
-    paging?: VoyagerFeedPaging;
-    metadata?: VoyagerFeedMetadata;
-  };
-  elements?: VoyagerFeedElement[];
-  paging?: VoyagerFeedPaging;
-  metadata?: VoyagerFeedMetadata;
-  included?: VoyagerIncludedEntity[];
-}
-
-interface VoyagerFeedElement {
-  /** Feed update URN. */
-  updateUrn?: string;
-  /** Alternative URN field. */
-  urn?: string;
-  /** Actor URN reference. */
-  "*actor"?: string;
-  actor?: VoyagerActor;
-  /** Commentary / post text. */
-  commentary?: VoyagerCommentary;
-  /** Content attachment. */
-  content?: VoyagerContent;
-  /** Social engagement counts. */
-  socialDetail?: VoyagerSocialDetail;
-  /** Alternative social detail URN reference. */
-  "*socialDetail"?: string;
-  /** Creation timestamp in milliseconds. */
-  createdAt?: number;
-  /** Alternative timestamp field. */
-  publishedAt?: number;
-}
-
-interface VoyagerActor {
-  name?: { text?: string } | string;
-  description?: { text?: string } | string;
-  navigationUrl?: string;
-  urn?: string;
-}
-
-interface VoyagerCommentary {
-  text?: { text?: string } | string;
-}
-
-interface VoyagerContent {
-  "$type"?: string;
-  /** Article content. */
-  navigationUrl?: string;
-  /** Media category hint from the API. */
-  mediaCategory?: string;
-}
-
-interface VoyagerSocialDetail {
-  totalSocialActivityCounts?: {
-    numLikes?: number;
-    numComments?: number;
-    numShares?: number;
+    feedDashMainFeedByMainFeed?: GraphQLFeedCollection;
   };
 }
 
-interface VoyagerFeedPaging {
+/** The collection returned by the feedDashMainFeedByMainFeed query. */
+interface GraphQLFeedCollection {
+  elements?: GraphQLFeedElement[];
+  metadata?: GraphQLCollectionMetadata;
+  paging?: GraphQLPaging;
+}
+
+/** Per-element metadata carrying the activity URN and share URL. */
+interface GraphQLElementMetadata {
+  backendUrn?: string;
+  shareUrn?: string;
+}
+
+/** Social content block on each feed element. */
+interface GraphQLSocialContent {
+  shareUrl?: string;
+}
+
+/** A single feed element from the GraphQL endpoint. */
+interface GraphQLFeedElement {
+  metadata?: GraphQLElementMetadata;
+  socialContent?: GraphQLSocialContent;
+  header?: GraphQLHeader;
+  commentary?: GraphQLCommentary;
+  content?: GraphQLContent;
+}
+
+/** Actor header block containing the author identity. */
+interface GraphQLHeader {
+  text?: GraphQLTextAccessibility;
+  image?: GraphQLImageAccessibility;
+  navigationUrl?: string;
+}
+
+/** Accessibility-wrapped text (used by header, commentary, etc.). */
+interface GraphQLTextAccessibility {
+  text?: string;
+  accessibilityText?: string;
+}
+
+interface GraphQLImageAccessibility {
+  accessibilityText?: string;
+}
+
+/** Commentary block carrying the post text body. */
+interface GraphQLCommentary {
+  text?: GraphQLTextAccessibility;
+  numLines?: number;
+}
+
+/** Content block – component-based; only non-null key matters. */
+interface GraphQLContent {
+  "com.linkedin.voyager.dash.feed.ArticleComponent"?: GraphQLContentComponent;
+  articleComponent?: GraphQLContentComponent;
+  imageComponent?: GraphQLContentComponent;
+  linkedInVideoComponent?: GraphQLContentComponent;
+  documentComponent?: GraphQLContentComponent;
+  externalVideoComponent?: GraphQLContentComponent;
+  [key: string]: GraphQLContentComponent | null | undefined;
+}
+
+interface GraphQLContentComponent {
+  navigationUrl?: string;
+  [key: string]: unknown;
+}
+
+/** Pagination metadata from the collection. */
+interface GraphQLCollectionMetadata {
+  paginationToken?: string;
+}
+
+/** Paging info. */
+interface GraphQLPaging {
   start?: number;
   count?: number;
   total?: number;
 }
 
-interface VoyagerFeedMetadata {
-  paginationToken?: string;
-  /** Alternative cursor field name. */
-  nextPageToken?: string;
-}
-
-interface VoyagerIncludedEntity {
-  $type?: string;
-  entityUrn?: string;
-  firstName?: string;
-  lastName?: string;
-  publicIdentifier?: string;
-  headline?: { text?: string } | string;
-  occupation?: string;
-  name?: { text?: string } | string;
-  description?: { text?: string } | string;
-  navigationUrl?: string;
-  /** Nested social activity counts on included entities. */
-  totalSocialActivityCounts?: {
-    numLikes?: number;
-    numComments?: number;
-    numShares?: number;
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Parsing helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Resolve a text value that may be a string or `{ text: string }`.
- */
-function resolveText(
-  value: { text?: string } | string | undefined,
-): string | null {
-  if (value === undefined || value === null) return null;
-  if (typeof value === "string") return value;
-  return value.text ?? null;
-}
 
 /**
  * Extract hashtags from post text.
@@ -149,145 +131,87 @@ function extractHashtags(text: string | null): string[] {
 }
 
 /**
- * Infer media type from Voyager content metadata.
+ * Infer media type from the GraphQL content block.
+ *
+ * The content object has a component-based layout where only one key is
+ * non-null (e.g. `imageComponent`, `linkedInVideoComponent`).
  */
-function inferMediaType(content: VoyagerContent | undefined): string | null {
+function inferMediaType(content: GraphQLContent | undefined): string | null {
   if (!content) return null;
 
-  if (content.mediaCategory) {
-    const cat = content.mediaCategory.toLowerCase();
-    if (cat.includes("image")) return "image";
-    if (cat.includes("video")) return "video";
-    if (cat.includes("article")) return "article";
-    if (cat.includes("document")) return "document";
-    return cat;
-  }
+  for (const key of Object.keys(content)) {
+    if (content[key] == null) continue;
 
-  const type = content.$type ?? "";
-  if (type.includes("Image")) return "image";
-  if (type.includes("Video")) return "video";
-  if (type.includes("Article") || content.navigationUrl) return "article";
-  if (type.includes("Document")) return "document";
-  if (type) return type.split(".").pop()?.toLowerCase() ?? null;
+    const lower = key.toLowerCase();
+    if (lower.includes("image")) return "image";
+    if (lower.includes("video")) return "video";
+    if (lower.includes("article")) return "article";
+    if (lower.includes("document")) return "document";
+  }
 
   return null;
 }
 
 /**
- * Build a LinkedIn post URL from an update URN.
+ * Build a LinkedIn post URL from an activity URN.
  */
 function buildPostUrl(urn: string): string {
   return `https://www.linkedin.com/feed/update/${urn}/`;
 }
 
 /**
- * Parse the Voyager feed response into normalised FeedPost entries.
+ * Parse the GraphQL feed response into normalised FeedPost entries.
  */
-function parseFeedResponse(raw: VoyagerFeedResponse): {
+function parseFeedResponse(raw: GraphQLFeedResponse): {
   posts: FeedPost[];
   nextCursor: string | null;
 } {
-  const elements = raw.data?.elements ?? raw.elements ?? [];
-  const metadata = raw.data?.metadata ?? raw.metadata;
-  const included = raw.included ?? [];
-
-  // Build lookup for included entities (actors, social details)
-  const entitiesByUrn = new Map<string, VoyagerIncludedEntity>();
-  for (const entity of included) {
-    if (entity.entityUrn) {
-      entitiesByUrn.set(entity.entityUrn, entity);
-    }
-  }
+  const collection = raw.data?.feedDashMainFeedByMainFeed;
+  const elements = collection?.elements ?? [];
+  const metadata = collection?.metadata;
 
   const posts: FeedPost[] = [];
 
   for (const el of elements) {
-    const urn = el.updateUrn ?? el.urn;
+    const urn = el.metadata?.backendUrn;
     if (!urn) continue;
 
-    // Resolve actor — inline or via included entities
-    let authorName: string = "";
-    let authorHeadline: string | null = null;
-    let authorProfileUrl: string | null = null;
+    // Post URL – prefer shareUrl when available, fall back to constructed URL
+    const url = el.socialContent?.shareUrl ?? buildPostUrl(urn);
 
-    if (el.actor) {
-      authorName = resolveText(el.actor.name) ?? "";
-      authorHeadline = resolveText(el.actor.description);
-      authorProfileUrl = el.actor.navigationUrl ?? null;
-    } else if (el["*actor"]) {
-      const actorEntity = entitiesByUrn.get(el["*actor"]);
-      if (actorEntity) {
-        // Person actor
-        if (actorEntity.firstName || actorEntity.lastName) {
-          authorName = [actorEntity.firstName, actorEntity.lastName]
-            .filter(Boolean)
-            .join(" ");
-          authorHeadline =
-            resolveText(actorEntity.headline) ??
-            actorEntity.occupation ??
-            null;
-          if (actorEntity.publicIdentifier) {
-            authorProfileUrl = `https://www.linkedin.com/in/${actorEntity.publicIdentifier}/`;
-          }
-        } else {
-          // Company / page actor
-          authorName = resolveText(actorEntity.name) ?? "";
-          authorHeadline = resolveText(actorEntity.description);
-          authorProfileUrl = actorEntity.navigationUrl ?? null;
-        }
-      }
-    }
+    // Author info from the header block
+    const authorName = el.header?.text?.text ?? null;
+    const authorHeadline =
+      el.header?.image?.accessibilityText ?? null;
+    const authorProfileUrl = el.header?.navigationUrl ?? null;
 
-    // Post text
-    const text = resolveText(el.commentary?.text) ?? null;
+    // Post text from the commentary block
+    const text = el.commentary?.text?.text ?? null;
 
-    // Media type
+    // Media type from the content component block
     const mediaType = inferMediaType(el.content);
-
-    // Engagement counts — inline or via included social detail
-    let reactionCount = 0;
-    let commentCount = 0;
-    let shareCount = 0;
-
-    const socialCounts = el.socialDetail?.totalSocialActivityCounts;
-    if (socialCounts) {
-      reactionCount = socialCounts.numLikes ?? 0;
-      commentCount = socialCounts.numComments ?? 0;
-      shareCount = socialCounts.numShares ?? 0;
-    } else if (el["*socialDetail"]) {
-      const socialEntity = entitiesByUrn.get(el["*socialDetail"]);
-      if (socialEntity?.totalSocialActivityCounts) {
-        reactionCount = socialEntity.totalSocialActivityCounts.numLikes ?? 0;
-        commentCount = socialEntity.totalSocialActivityCounts.numComments ?? 0;
-        shareCount = socialEntity.totalSocialActivityCounts.numShares ?? 0;
-      }
-    }
-
-    // Timestamp
-    const timestamp = el.createdAt ?? el.publishedAt ?? null;
 
     // Hashtags
     const hashtags = extractHashtags(text);
 
     posts.push({
       urn,
-      url: buildPostUrl(urn),
+      url,
       authorName,
       authorHeadline,
       authorProfileUrl,
       authorPublicId: null,
       text,
       mediaType,
-      reactionCount,
-      commentCount,
-      shareCount,
-      timestamp,
+      reactionCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      timestamp: null,
       hashtags,
     });
   }
 
-  const nextCursor =
-    metadata?.paginationToken ?? metadata?.nextPageToken ?? null;
+  const nextCursor = metadata?.paginationToken ?? null;
 
   return { posts, nextCursor };
 }
@@ -341,13 +265,18 @@ export async function getFeed(
   try {
     const voyager = new VoyagerInterceptor(client);
 
-    let path =
-      `/voyager/api/feed/dash/feedUpdates` +
-      `?count=${String(count)}&q=feedByType&moduleKey=feed`;
+    // Build LinkedIn-style variables for the GraphQL query.
+    // LinkedIn uses a custom tuple format: (key:value,key:value,...)
+    const vars = input.cursor
+      ? `(start:${String(count)},count:${String(count)},paginationToken:${input.cursor},sortOrder:MEMBER_SETTING)`
+      : `(start:0,count:${String(count)},sortOrder:MEMBER_SETTING)`;
 
-    if (input.cursor) {
-      path += `&paginationToken=${encodeURIComponent(input.cursor)}`;
-    }
+    const queryId =
+      "voyagerFeedDashMainFeed.923020905727c01516495a0ac90bb475";
+
+    const path =
+      `/voyager/api/graphql?queryId=${queryId}` +
+      `&variables=${encodeURIComponent(vars)}`;
 
     const response = await voyager.fetch(path);
     if (response.status !== 200) {
@@ -363,7 +292,7 @@ export async function getFeed(
       );
     }
 
-    const parsed = parseFeedResponse(body as VoyagerFeedResponse);
+    const parsed = parseFeedResponse(body as GraphQLFeedResponse);
 
     return {
       posts: parsed.posts,

@@ -22,6 +22,23 @@ import { getFeed } from "./get-feed.js";
 
 const CDP_PORT = 9222;
 
+/**
+ * Build a minimal GraphQL feed response wrapper.
+ */
+function graphqlBody(
+  elements: unknown[],
+  metadata?: Record<string, unknown>,
+) {
+  return {
+    data: {
+      feedDashMainFeedByMainFeed: {
+        elements,
+        ...(metadata ? { metadata } : {}),
+      },
+    },
+  };
+}
+
 function setupMocks(body: unknown, status = 200) {
   vi.mocked(discoverTargets).mockResolvedValue([
     {
@@ -59,150 +76,112 @@ describe("getFeed", () => {
     vi.restoreAllMocks();
   });
 
-  it("parses feed elements with inline actor and social detail", async () => {
-    const { fetchMock } = setupMocks({
-      data: {
-        elements: [
+  it("parses feed elements from the GraphQL response", async () => {
+    const { fetchMock } = setupMocks(
+      graphqlBody(
+        [
           {
-            updateUrn: "urn:li:activity:123",
-            actor: {
-              name: { text: "Alice Smith" },
-              description: { text: "Engineer at Acme" },
+            metadata: {
+              backendUrn: "urn:li:activity:123",
+              shareUrn: "urn:li:share:111",
+            },
+            header: {
+              text: { text: "Alice Smith" },
+              image: { accessibilityText: "Engineer at Acme" },
               navigationUrl: "https://www.linkedin.com/in/alice/",
             },
-            commentary: { text: { text: "Hello #linkedin #tech world!" } },
-            content: { mediaCategory: "IMAGE" },
-            socialDetail: {
-              totalSocialActivityCounts: {
-                numLikes: 10,
-                numComments: 3,
-                numShares: 1,
-              },
+            commentary: {
+              text: { text: "Hello #linkedin #tech world!" },
             },
-            createdAt: 1700000000000,
+            content: {
+              imageComponent: { images: [] },
+            },
+            socialContent: {
+              shareUrl: "https://www.linkedin.com/posts/alice_hello-activity-123",
+            },
           },
         ],
-        metadata: { paginationToken: "cursor-abc" },
-      },
-    });
+        { paginationToken: "cursor-abc" },
+      ),
+    );
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
     expect(result.posts).toHaveLength(1);
     const [post] = result.posts;
     expect(post?.urn).toBe("urn:li:activity:123");
-    expect(post?.url).toBe("https://www.linkedin.com/feed/update/urn:li:activity:123/");
+    expect(post?.url).toBe("https://www.linkedin.com/posts/alice_hello-activity-123");
     expect(post?.authorName).toBe("Alice Smith");
     expect(post?.authorHeadline).toBe("Engineer at Acme");
     expect(post?.authorProfileUrl).toBe("https://www.linkedin.com/in/alice/");
     expect(post?.text).toBe("Hello #linkedin #tech world!");
     expect(post?.mediaType).toBe("image");
-    expect(post?.reactionCount).toBe(10);
-    expect(post?.commentCount).toBe(3);
-    expect(post?.shareCount).toBe(1);
-    expect(post?.timestamp).toBe(1700000000000);
     expect(post?.hashtags).toEqual(["linkedin", "tech"]);
     expect(result.nextCursor).toBe("cursor-abc");
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/voyager/api/feed/dash/feedUpdates"),
+      expect.stringContaining("/voyager/api/graphql"),
     );
   });
 
-  it("resolves actor from included entities via *actor reference", async () => {
-    setupMocks({
-      elements: [
+  it("falls back to constructed URL when shareUrl is absent", async () => {
+    setupMocks(
+      graphqlBody([
         {
-          updateUrn: "urn:li:activity:456",
-          "*actor": "urn:li:fsd_profile:789",
-          commentary: { text: "Post text" },
+          metadata: { backendUrn: "urn:li:activity:456" },
         },
-      ],
-      included: [
-        {
-          entityUrn: "urn:li:fsd_profile:789",
-          firstName: "Bob",
-          lastName: "Jones",
-          publicIdentifier: "bobjones",
-          headline: { text: "CEO at Corp" },
-        },
-      ],
-    });
+      ]),
+    );
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
-    expect(result.posts).toHaveLength(1);
-    const [post] = result.posts;
-    expect(post?.authorName).toBe("Bob Jones");
-    expect(post?.authorHeadline).toBe("CEO at Corp");
-    expect(post?.authorProfileUrl).toBe("https://www.linkedin.com/in/bobjones/");
-    expect(result.nextCursor).toBeNull();
+    expect(result.posts[0]?.url).toBe(
+      "https://www.linkedin.com/feed/update/urn:li:activity:456/",
+    );
   });
 
-  it("resolves social detail from included entities via *socialDetail", async () => {
-    setupMocks({
-      elements: [
-        {
-          updateUrn: "urn:li:activity:789",
-          "*socialDetail": "urn:li:fsd_socialDetail:789",
-        },
-      ],
-      included: [
-        {
-          entityUrn: "urn:li:fsd_socialDetail:789",
-          totalSocialActivityCounts: {
-            numLikes: 50,
-            numComments: 20,
-            numShares: 5,
-          },
-        },
-      ],
-    });
-
-    const result = await getFeed({ cdpPort: CDP_PORT });
-
-    const [post] = result.posts;
-    expect(post?.reactionCount).toBe(50);
-    expect(post?.commentCount).toBe(20);
-    expect(post?.shareCount).toBe(5);
-  });
-
-  it("passes cursor as paginationToken query parameter", async () => {
-    const { fetchMock } = setupMocks({ elements: [] });
+  it("passes cursor as paginationToken in variables", async () => {
+    const { fetchMock } = setupMocks(
+      graphqlBody([]),
+    );
 
     await getFeed({ cdpPort: CDP_PORT, cursor: "my-cursor-token" });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("paginationToken=my-cursor-token"),
+      expect.stringContaining("paginationToken%3Amy-cursor-token"),
     );
   });
 
-  it("passes count query parameter", async () => {
-    const { fetchMock } = setupMocks({ elements: [] });
+  it("passes count in variables", async () => {
+    const { fetchMock } = setupMocks(
+      graphqlBody([]),
+    );
 
     await getFeed({ cdpPort: CDP_PORT, count: 5 });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("count=5"),
+      expect.stringContaining("count%3A5"),
     );
   });
 
   it("defaults to count=10", async () => {
-    const { fetchMock } = setupMocks({ elements: [] });
+    const { fetchMock } = setupMocks(
+      graphqlBody([]),
+    );
 
     await getFeed({ cdpPort: CDP_PORT });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("count=10"),
+      expect.stringContaining("count%3A10"),
     );
   });
 
-  it("skips elements without URN", async () => {
-    setupMocks({
-      elements: [
-        { commentary: { text: "no urn" } },
-        { updateUrn: "urn:li:activity:999" },
-      ],
-    });
+  it("skips elements without backendUrn", async () => {
+    setupMocks(
+      graphqlBody([
+        { metadata: {} },
+        { metadata: { backendUrn: "urn:li:activity:999" } },
+      ]),
+    );
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
@@ -211,14 +190,16 @@ describe("getFeed", () => {
   });
 
   it("extracts and deduplicates hashtags from post text", async () => {
-    setupMocks({
-      elements: [
+    setupMocks(
+      graphqlBody([
         {
-          updateUrn: "urn:li:activity:100",
-          commentary: { text: { text: "#AI and #MachineLearning are #AI transforming" } },
+          metadata: { backendUrn: "urn:li:activity:100" },
+          commentary: {
+            text: { text: "#AI and #MachineLearning are #AI transforming" },
+          },
         },
-      ],
-    });
+      ]),
+    );
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
@@ -226,43 +207,84 @@ describe("getFeed", () => {
   });
 
   it("returns empty hashtags when no text", async () => {
-    setupMocks({
-      elements: [{ updateUrn: "urn:li:activity:101" }],
-    });
+    setupMocks(
+      graphqlBody([
+        { metadata: { backendUrn: "urn:li:activity:101" } },
+      ]),
+    );
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
     expect(result.posts[0]?.hashtags).toEqual([]);
   });
 
-  it("infers media type from $type when mediaCategory absent", async () => {
-    setupMocks({
-      elements: [
+  it("infers video media type from content component key", async () => {
+    setupMocks(
+      graphqlBody([
         {
-          updateUrn: "urn:li:activity:200",
-          content: { $type: "com.linkedin.voyager.feed.render.VideoComponent" },
+          metadata: { backendUrn: "urn:li:activity:200" },
+          content: { linkedInVideoComponent: {} },
         },
-      ],
-    });
+      ]),
+    );
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
     expect(result.posts[0]?.mediaType).toBe("video");
   });
 
-  it("infers article from navigationUrl", async () => {
-    setupMocks({
-      elements: [
+  it("infers article media type from content component key", async () => {
+    setupMocks(
+      graphqlBody([
         {
-          updateUrn: "urn:li:activity:201",
-          content: { navigationUrl: "https://example.com/article" },
+          metadata: { backendUrn: "urn:li:activity:201" },
+          content: { articleComponent: { navigationUrl: "https://example.com/article" } },
         },
-      ],
-    });
+      ]),
+    );
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
     expect(result.posts[0]?.mediaType).toBe("article");
+  });
+
+  it("infers document media type from content component key", async () => {
+    setupMocks(
+      graphqlBody([
+        {
+          metadata: { backendUrn: "urn:li:activity:202" },
+          content: { documentComponent: {} },
+        },
+      ]),
+    );
+
+    const result = await getFeed({ cdpPort: CDP_PORT });
+
+    expect(result.posts[0]?.mediaType).toBe("document");
+  });
+
+  it("returns null media type when content is absent", async () => {
+    setupMocks(
+      graphqlBody([
+        { metadata: { backendUrn: "urn:li:activity:203" } },
+      ]),
+    );
+
+    const result = await getFeed({ cdpPort: CDP_PORT });
+
+    expect(result.posts[0]?.mediaType).toBeNull();
+  });
+
+  it("returns null nextCursor when paginationToken is absent", async () => {
+    setupMocks(
+      graphqlBody(
+        [{ metadata: { backendUrn: "urn:li:activity:300" } }],
+      ),
+    );
+
+    const result = await getFeed({ cdpPort: CDP_PORT });
+
+    expect(result.nextCursor).toBeNull();
   });
 
   it("throws on non-200 response", async () => {
@@ -296,7 +318,7 @@ describe("getFeed", () => {
   });
 
   it("disconnects CDP client after operation", async () => {
-    const { disconnect } = setupMocks({ elements: [] });
+    const { disconnect } = setupMocks(graphqlBody([]));
 
     await getFeed({ cdpPort: CDP_PORT });
 
@@ -311,48 +333,88 @@ describe("getFeed", () => {
     expect(disconnect).toHaveBeenCalled();
   });
 
-  it("handles company actor from included entities", async () => {
-    setupMocks({
-      elements: [
+  it("handles elements with header but no author headline", async () => {
+    setupMocks(
+      graphqlBody([
         {
-          updateUrn: "urn:li:activity:300",
-          "*actor": "urn:li:fsd_company:100",
+          metadata: { backendUrn: "urn:li:activity:400" },
+          header: {
+            text: { text: "Acme Corp" },
+            navigationUrl: "https://www.linkedin.com/company/acme/",
+          },
         },
-      ],
-      included: [
-        {
-          entityUrn: "urn:li:fsd_company:100",
-          name: { text: "Acme Corp" },
-          description: { text: "Technology company" },
-          navigationUrl: "https://www.linkedin.com/company/acme/",
-        },
-      ],
-    });
+      ]),
+    );
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
     expect(result.posts[0]?.authorName).toBe("Acme Corp");
-    expect(result.posts[0]?.authorHeadline).toBe("Technology company");
+    expect(result.posts[0]?.authorHeadline).toBeNull();
     expect(result.posts[0]?.authorProfileUrl).toBe("https://www.linkedin.com/company/acme/");
   });
 
-  it("uses urn field when updateUrn absent", async () => {
-    setupMocks({
-      elements: [{ urn: "urn:li:activity:400" }],
-    });
+  it("handles elements with no header at all", async () => {
+    setupMocks(
+      graphqlBody([
+        { metadata: { backendUrn: "urn:li:activity:500" } },
+      ]),
+    );
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
-    expect(result.posts[0]?.urn).toBe("urn:li:activity:400");
+    expect(result.posts[0]?.authorName).toBeNull();
+    expect(result.posts[0]?.authorHeadline).toBeNull();
+    expect(result.posts[0]?.authorProfileUrl).toBeNull();
   });
 
-  it("uses publishedAt as fallback timestamp", async () => {
-    setupMocks({
-      elements: [{ updateUrn: "urn:li:activity:500", publishedAt: 1600000000000 }],
-    });
+  it("uses GraphQL query path with queryId", async () => {
+    const { fetchMock } = setupMocks(graphqlBody([]));
+
+    await getFeed({ cdpPort: CDP_PORT });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("queryId=voyagerFeedDashMainFeed"),
+    );
+  });
+
+  it("sets start to count value when cursor is provided", async () => {
+    const { fetchMock } = setupMocks(graphqlBody([]));
+
+    await getFeed({ cdpPort: CDP_PORT, count: 7, cursor: "tok" });
+
+    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
+    const decoded = decodeURIComponent(calledPath);
+    expect(decoded).toContain("start:7");
+    expect(decoded).toContain("count:7");
+    expect(decoded).toContain("paginationToken:tok");
+  });
+
+  it("sets start to 0 when no cursor is provided", async () => {
+    const { fetchMock } = setupMocks(graphqlBody([]));
+
+    await getFeed({ cdpPort: CDP_PORT });
+
+    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
+    const decoded = decodeURIComponent(calledPath);
+    expect(decoded).toContain("start:0");
+  });
+
+  it("ignores content keys with null values for media type", async () => {
+    setupMocks(
+      graphqlBody([
+        {
+          metadata: { backendUrn: "urn:li:activity:600" },
+          content: {
+            imageComponent: null,
+            articleComponent: null,
+            linkedInVideoComponent: { url: "video-url" },
+          },
+        },
+      ]),
+    );
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
-    expect(result.posts[0]?.timestamp).toBe(1600000000000);
+    expect(result.posts[0]?.mediaType).toBe("video");
   });
 });
