@@ -36,6 +36,7 @@ export interface AppServiceOptions {
 export class AppService {
   private assignedPort: number | null;
   private childProcess: ChildProcess | null = null;
+  private detectedExternal = false;
   private readonly launchProbeDelay: number;
   private readonly force: boolean;
 
@@ -85,6 +86,7 @@ export class AppService {
         if (connectable) {
           // Already running with CDP — use that port
           this.assignedPort = connectable.cdpPort;
+          this.detectedExternal = true;
           return;
         }
         throw new LinkedHelperUnreachableError(existingApps);
@@ -137,8 +139,11 @@ export class AppService {
    * for the process to exit.  If it does not exit within
    * {@link QUIT_GRACEFUL_TIMEOUT}, escalates to `SIGKILL`.
    *
-   * When no child process handle is available (app was launched
-   * externally), attempts to close via CDP.
+   * When the instance was detected externally (not spawned by us),
+   * `quit()` is a no-op to avoid destroying the user's running app.
+   *
+   * When no child process handle is available and the port was
+   * explicitly provided, attempts to close via CDP.
    */
   async quit(): Promise<void> {
     if (this.childProcess) {
@@ -153,6 +158,11 @@ export class AppService {
         await waitForExit(child, QUIT_FORCE_TIMEOUT);
       }
 
+      return;
+    }
+
+    // Never close an externally-detected instance we did not spawn
+    if (this.detectedExternal) {
       return;
     }
 

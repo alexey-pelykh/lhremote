@@ -400,6 +400,37 @@ describe("AppService", () => {
       vi.useRealTimers();
     });
 
+    it("does not close an externally-detected instance", async () => {
+      mockedFindApp.mockResolvedValue([
+        { pid: 555, cdpPort: 9222, connectable: true },
+      ]);
+
+      const service = new AppService(undefined, FAST_OPTIONS);
+      await service.launch();
+
+      // Verify port was reused from detected app
+      expect(service.cdpPort).toBe(9222);
+
+      // Set up mocks for the CDP fallback path that quit() must NOT reach
+      mockedDiscoverTargets.mockResolvedValue([
+        {
+          id: "T1",
+          type: "page",
+          title: "",
+          url: "",
+          description: "",
+          devtoolsFrontendUrl: "",
+        },
+      ]);
+      const mockFetch = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal("fetch", mockFetch);
+
+      // quit() must be a no-op — never close an instance we didn't spawn
+      await service.quit();
+
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("falls back to CDP close when no spawned process", async () => {
       const service = new AppService(9222);
       mockedDiscoverTargets.mockResolvedValue([
