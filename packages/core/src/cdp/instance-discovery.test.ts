@@ -75,7 +75,7 @@ describe("discoverInstancePort", () => {
       { pid: 12347, name: "electron", ppid: 12346 },
       { pid: 99999, name: "other", ppid: 1 },
     ]);
-    vi.mocked(pidToPorts).mockImplementation(async (pid) => {
+    vi.mocked(pidToPorts).mockImplementation(async (pid: unknown) => {
       if (pid === 12347) return new Set([55123]) as never;
       return new Set() as never;
     });
