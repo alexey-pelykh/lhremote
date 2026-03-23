@@ -35,6 +35,10 @@ export interface GetFeedOutput {
 /** Top-level GraphQL response wrapper. */
 interface GraphQLFeedResponse {
   data?: {
+    /** LinkedIn sometimes wraps GraphQL responses in a nested `data` object. */
+    data?: {
+      feedDashMainFeedByMainFeed?: GraphQLFeedCollection;
+    };
     feedDashMainFeedByMainFeed?: GraphQLFeedCollection;
   };
 }
@@ -166,7 +170,9 @@ function parseFeedResponse(raw: GraphQLFeedResponse): {
   posts: FeedPost[];
   nextCursor: string | null;
 } {
-  const collection = raw.data?.feedDashMainFeedByMainFeed;
+  const collection =
+    raw.data?.data?.feedDashMainFeedByMainFeed ??
+    raw.data?.feedDashMainFeedByMainFeed;
   const elements = collection?.elements ?? [];
   const metadata = collection?.metadata;
 
