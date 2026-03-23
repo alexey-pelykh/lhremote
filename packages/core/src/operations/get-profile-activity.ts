@@ -75,19 +75,28 @@ export interface GraphQLProfileUpdatesResponse {
     /** LinkedIn sometimes wraps GraphQL responses in a nested `data` object. */
     data?: {
       feedDashProfileUpdatesByProfileUpdates?: GraphQLProfileUpdatesCollection;
+      feedDashProfileUpdatesByMemberShareFeed?: GraphQLProfileUpdatesCollection;
     };
     feedDashProfileUpdatesByProfileUpdates?: GraphQLProfileUpdatesCollection;
+    feedDashProfileUpdatesByMemberShareFeed?: GraphQLProfileUpdatesCollection;
   };
+  /** Rest.li included entities — resolved via `*elements` URN references. */
+  included?: GraphQLProfileUpdateElement[];
 }
 
 /** The collection returned by the feedDashProfileUpdates query. */
 interface GraphQLProfileUpdatesCollection {
+  /** Inline elements (active fetch mode). */
   elements?: GraphQLProfileUpdateElement[];
+  /** URN references to entities in the top-level `included` array (passive interception). */
+  "*elements"?: string[];
   paging?: GraphQLPaging;
 }
 
 /** A single profile update element from the GraphQL endpoint. */
 interface GraphQLProfileUpdateElement {
+  /** Entity URN — present when resolved from the `included` array. */
+  entityUrn?: string;
   metadata?: GraphQLElementMetadata;
   socialContent?: GraphQLSocialContent;
   header?: GraphQLHeader;
@@ -206,9 +215,27 @@ export function parseProfileUpdatesResponse(
 } {
   const collection =
     raw.data?.data?.feedDashProfileUpdatesByProfileUpdates ??
-    raw.data?.feedDashProfileUpdatesByProfileUpdates;
-  const elements = collection?.elements ?? [];
+    raw.data?.data?.feedDashProfileUpdatesByMemberShareFeed ??
+    raw.data?.feedDashProfileUpdatesByProfileUpdates ??
+    raw.data?.feedDashProfileUpdatesByMemberShareFeed;
   const paging = collection?.paging;
+
+  // Resolve elements: prefer inline `elements`, fall back to `*elements` URN
+  // references resolved against the top-level `included` array (Rest.li protocol).
+  let elements = collection?.elements ?? [];
+  if (elements.length === 0) {
+    const refs = collection?.["*elements"] ?? [];
+    const included = raw.included ?? [];
+    if (refs.length > 0 && included.length > 0) {
+      const byUrn = new Map<string, GraphQLProfileUpdateElement>();
+      for (const e of included) {
+        if (e.entityUrn) byUrn.set(e.entityUrn, e);
+      }
+      elements = refs
+        .map((urn) => byUrn.get(urn))
+        .filter((e): e is GraphQLProfileUpdateElement => e !== undefined);
+    }
+  }
 
   const posts: FeedPost[] = [];
 
