@@ -58,19 +58,29 @@ function setupMocks(body: unknown, status = 200) {
   ]);
 
   const disconnect = vi.fn();
+  const navigate = vi.fn().mockResolvedValue({ frameId: "F1" });
   vi.mocked(CDPClient).mockImplementation(function () {
     return {
       connect: vi.fn().mockResolvedValue(undefined),
       disconnect,
+      navigate,
     } as unknown as CDPClient;
   });
 
-  const fetchMock = vi.fn().mockResolvedValue({ url: "", status, body });
+  const enableMock = vi.fn().mockResolvedValue(undefined);
+  const disableMock = vi.fn().mockResolvedValue(undefined);
+  const waitForResponseMock = vi
+    .fn()
+    .mockResolvedValue({ url: "", status, body });
   vi.mocked(VoyagerInterceptor).mockImplementation(function () {
-    return { fetch: fetchMock } as unknown as VoyagerInterceptor;
+    return {
+      enable: enableMock,
+      disable: disableMock,
+      waitForResponse: waitForResponseMock,
+    } as unknown as VoyagerInterceptor;
   });
 
-  return { fetchMock, disconnect };
+  return { navigate, enableMock, disableMock, waitForResponseMock, disconnect };
 }
 
 describe("extractProfileId", () => {
@@ -375,68 +385,76 @@ describe("getProfileActivity", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses GraphQL query path with queryId and profileUrn", async () => {
-    const { fetchMock } = setupMocks(graphqlBody([]));
+  it("navigates to the profile recent-activity page", async () => {
+    const { navigate } = setupMocks(graphqlBody([]));
 
     await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("queryId=voyagerFeedDashProfileUpdates"),
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/voyager/api/graphql"),
+    expect(navigate).toHaveBeenCalledWith(
+      "https://www.linkedin.com/in/johndoe/recent-activity/all/",
     );
   });
 
-  it("encodes profileUrn with URL-encoded colons in variables", async () => {
-    const { fetchMock } = setupMocks(graphqlBody([]));
-
-    await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
-
-    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
-    const decoded = decodeURIComponent(calledPath);
-    // The profileUrn inside variables should contain the encoded URN
-    expect(decoded).toContain("profileUrn:urn%3Ali%3Afsd_profile%3Ajohndoe");
-  });
-
-  it("passes count and start in variables", async () => {
-    const { fetchMock } = setupMocks(graphqlBody([]));
+  it("URL-encodes the profile public ID in the navigation URL", async () => {
+    const { navigate } = setupMocks(graphqlBody([]));
 
     await getProfileActivity({
       cdpPort: CDP_PORT,
-      profile: "johndoe",
-      count: 5,
-      start: 10,
+      profile: "https://www.linkedin.com/in/john%20doe",
     });
 
-    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
-    const decoded = decodeURIComponent(calledPath);
-    expect(decoded).toContain("count:5");
-    expect(decoded).toContain("start:10");
+    expect(navigate).toHaveBeenCalledWith(
+      "https://www.linkedin.com/in/john%20doe/recent-activity/all/",
+    );
   });
 
-  it("defaults to count=20 and start=0", async () => {
-    const { fetchMock } = setupMocks(graphqlBody([]));
-
-    await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
-
-    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
-    const decoded = decodeURIComponent(calledPath);
-    expect(decoded).toContain("count:20");
-    expect(decoded).toContain("start:0");
-  });
-
-  it("extracts profile ID from URL input", async () => {
-    const { fetchMock } = setupMocks(graphqlBody([]));
+  it("extracts profile ID from URL input for navigation", async () => {
+    const { navigate } = setupMocks(graphqlBody([]));
 
     await getProfileActivity({
       cdpPort: CDP_PORT,
       profile: "https://www.linkedin.com/in/janedoe",
     });
 
-    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
-    const decoded = decodeURIComponent(calledPath);
-    expect(decoded).toContain("profileUrn:urn%3Ali%3Afsd_profile%3Ajanedoe");
+    expect(navigate).toHaveBeenCalledWith(
+      "https://www.linkedin.com/in/janedoe/recent-activity/all/",
+    );
+  });
+
+  it("enables interceptor before navigation and disables after", async () => {
+    const { enableMock, disableMock, navigate } = setupMocks(graphqlBody([]));
+
+    await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
+
+    expect(enableMock).toHaveBeenCalled();
+    expect(disableMock).toHaveBeenCalled();
+
+    const enableOrder = enableMock.mock.invocationCallOrder[0] as number;
+    const navigateOrder = navigate.mock.invocationCallOrder[0] as number;
+    const disableOrder = disableMock.mock.invocationCallOrder[0] as number;
+    expect(enableOrder).toBeLessThan(navigateOrder);
+    expect(navigateOrder).toBeLessThan(disableOrder);
+  });
+
+  it("waits for voyagerFeedDashProfileUpdates response", async () => {
+    const { waitForResponseMock } = setupMocks(graphqlBody([]));
+
+    await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
+
+    expect(waitForResponseMock).toHaveBeenCalledWith(expect.any(Function));
+    const filter = waitForResponseMock.mock.calls[0]?.[0] as (
+      url: string,
+    ) => boolean;
+    expect(
+      filter(
+        "/voyager/api/graphql?queryId=voyagerFeedDashProfileUpdates.abc123&variables=...",
+      ),
+    ).toBe(true);
+    expect(
+      filter(
+        "/voyager/api/graphql?queryId=voyagerFeedDashMainFeed.xyz&variables=...",
+      ),
+    ).toBe(false);
   });
 
   it("returns parsed posts with profilePublicId", async () => {
@@ -517,5 +535,15 @@ describe("getProfileActivity", () => {
     ).rejects.toThrow();
 
     expect(disconnect).toHaveBeenCalled();
+  });
+
+  it("disables interceptor even on error", async () => {
+    const { disableMock } = setupMocks(null, 500);
+
+    await expect(
+      getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" }),
+    ).rejects.toThrow();
+
+    expect(disableMock).toHaveBeenCalled();
   });
 });

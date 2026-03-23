@@ -237,7 +237,6 @@ export async function getFeed(
   const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
   const cdpHost = input.cdpHost ?? "127.0.0.1";
   const allowRemote = input.allowRemote ?? false;
-  const count = input.count ?? 10;
 
   // Enforce loopback guard
   if (!allowRemote && cdpHost !== "127.0.0.1" && cdpHost !== "localhost") {
@@ -264,40 +263,40 @@ export async function getFeed(
 
   try {
     const voyager = new VoyagerInterceptor(client);
+    await voyager.enable();
 
-    // Build LinkedIn-style variables for the GraphQL query.
-    // LinkedIn uses a custom tuple format: (key:value,key:value,...)
-    const vars = input.cursor
-      ? `(start:${String(count)},count:${String(count)},paginationToken:${input.cursor},sortOrder:MEMBER_SETTING)`
-      : `(start:0,count:${String(count)},sortOrder:MEMBER_SETTING)`;
-
-    const queryId =
-      "voyagerFeedDashMainFeed.923020905727c01516495a0ac90bb475";
-
-    const path =
-      `/voyager/api/graphql?queryId=${queryId}` +
-      `&variables=${encodeURIComponent(vars)}`;
-
-    const response = await voyager.fetch(path);
-    if (response.status !== 200) {
-      throw new Error(
-        `Voyager API returned HTTP ${String(response.status)} for feed`,
+    try {
+      // Set up the response listener before navigation to avoid race conditions.
+      // The filter matches the query name prefix, ignoring the rotating hash suffix.
+      const responsePromise = voyager.waitForResponse((url) =>
+        url.includes("voyagerFeedDashMainFeed"),
       );
+
+      await client.navigate("https://www.linkedin.com/feed/");
+
+      const response = await responsePromise;
+      if (response.status !== 200) {
+        throw new Error(
+          `Voyager API returned HTTP ${String(response.status)} for feed`,
+        );
+      }
+
+      const body = response.body;
+      if (body === null || typeof body !== "object") {
+        throw new Error(
+          "Voyager API returned an unexpected response format for feed",
+        );
+      }
+
+      const parsed = parseFeedResponse(body as GraphQLFeedResponse);
+
+      return {
+        posts: parsed.posts,
+        nextCursor: parsed.nextCursor,
+      };
+    } finally {
+      await voyager.disable();
     }
-
-    const body = response.body;
-    if (body === null || typeof body !== "object") {
-      throw new Error(
-        "Voyager API returned an unexpected response format for feed",
-      );
-    }
-
-    const parsed = parseFeedResponse(body as GraphQLFeedResponse);
-
-    return {
-      posts: parsed.posts,
-      nextCursor: parsed.nextCursor,
-    };
   } finally {
     client.disconnect();
   }

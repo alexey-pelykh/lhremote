@@ -275,8 +275,6 @@ export async function getProfileActivity(
   const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
   const cdpHost = input.cdpHost ?? "127.0.0.1";
   const allowRemote = input.allowRemote ?? false;
-  const count = input.count ?? 20;
-  const start = input.start ?? 0;
 
   const profilePublicId = extractProfileId(input.profile);
 
@@ -305,46 +303,46 @@ export async function getProfileActivity(
 
   try {
     const voyager = new VoyagerInterceptor(client);
+    await voyager.enable();
 
-    // Build the profile URN with URL-encoded colons for the GraphQL variables
-    const encodedId = encodeURIComponent(profilePublicId);
-    const profileUrn = `urn:li:fsd_profile:${encodedId}`;
-    const encodedUrn = encodeURIComponent(profileUrn);
-
-    // Build LinkedIn-style variables for the GraphQL query.
-    // LinkedIn uses a custom tuple format: (key:value,key:value,...)
-    const vars = `(count:${String(count)},start:${String(start)},profileUrn:${encodedUrn})`;
-
-    const queryId =
-      "voyagerFeedDashProfileUpdates.4af00b28d60ed0f1488018948daad822";
-
-    const path =
-      `/voyager/api/graphql?queryId=${queryId}` +
-      `&variables=${encodeURIComponent(vars)}`;
-
-    const response = await voyager.fetch(path);
-    if (response.status !== 200) {
-      throw new Error(
-        `Voyager API returned HTTP ${String(response.status)} for profile activity`,
+    try {
+      // Set up the response listener before navigation to avoid race conditions.
+      // The filter matches the query name prefix, ignoring the rotating hash suffix.
+      const responsePromise = voyager.waitForResponse((url) =>
+        url.includes("voyagerFeedDashProfileUpdates"),
       );
-    }
 
-    const body = response.body;
-    if (body === null || typeof body !== "object") {
-      throw new Error(
-        "Voyager API returned an unexpected response format for profile activity",
+      // Navigate to the profile's recent-activity page — the page makes the
+      // Voyager API call with its own current queryId hash.
+      const activityUrl = `https://www.linkedin.com/in/${encodeURIComponent(profilePublicId)}/recent-activity/all/`;
+      await client.navigate(activityUrl);
+
+      const response = await responsePromise;
+      if (response.status !== 200) {
+        throw new Error(
+          `Voyager API returned HTTP ${String(response.status)} for profile activity`,
+        );
+      }
+
+      const body = response.body;
+      if (body === null || typeof body !== "object") {
+        throw new Error(
+          "Voyager API returned an unexpected response format for profile activity",
+        );
+      }
+
+      const parsed = parseProfileUpdatesResponse(
+        body as GraphQLProfileUpdatesResponse,
       );
+
+      return {
+        profilePublicId,
+        posts: parsed.posts,
+        paging: parsed.paging,
+      };
+    } finally {
+      await voyager.disable();
     }
-
-    const parsed = parseProfileUpdatesResponse(
-      body as GraphQLProfileUpdatesResponse,
-    );
-
-    return {
-      profilePublicId,
-      posts: parsed.posts,
-      paging: parsed.paging,
-    };
   } finally {
     client.disconnect();
   }

@@ -193,7 +193,6 @@ export async function searchPosts(
   const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
   const cdpHost = input.cdpHost ?? "127.0.0.1";
   const allowRemote = input.allowRemote ?? false;
-  const count = input.count ?? 10;
   const start = input.start ?? 0;
 
   if (!input.query.trim()) {
@@ -225,43 +224,51 @@ export async function searchPosts(
 
   try {
     const voyager = new VoyagerInterceptor(client);
+    await voyager.enable();
 
-    // Build LinkedIn-style variables for the GraphQL query.
-    // LinkedIn uses a custom tuple format: (key:value,key:value,...)
-    const vars =
-      `(start:${String(start)},count:${String(count)},origin:GLOBAL_SEARCH_HEADER,` +
-      `query:(keywords:${input.query},flagshipSearchIntent:SEARCH_SRP,` +
-      `queryParameters:List((key:resultType,value:List(CONTENT)))))`;
-
-    const queryId =
-      "voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0";
-
-    const path =
-      `/voyager/api/graphql?queryId=${queryId}` +
-      `&variables=${encodeURIComponent(vars)}` +
-      `&includeWebMetadata=true`;
-
-    const response = await voyager.fetch(path);
-    if (response.status !== 200) {
-      throw new Error(
-        `Voyager API returned HTTP ${String(response.status)} for post search`,
+    try {
+      // Set up the response listener before navigation to avoid race conditions.
+      // The filter matches the query name prefix, ignoring the rotating hash suffix.
+      const responsePromise = voyager.waitForResponse((url) =>
+        url.includes("voyagerSearchDashClusters"),
       );
-    }
 
-    const body = response.body;
-    if (body === null || typeof body !== "object") {
-      throw new Error(
-        "Voyager API returned an unexpected response format for post search",
+      // Navigate to LinkedIn content search — the page makes the Voyager API
+      // call with its own current queryId hash.
+      const searchUrl = new URL(
+        "https://www.linkedin.com/search/results/content/",
       );
+      searchUrl.searchParams.set("keywords", input.query);
+      searchUrl.searchParams.set("origin", "GLOBAL_SEARCH_HEADER");
+      if (start > 0) {
+        searchUrl.searchParams.set("start", String(start));
+      }
+      await client.navigate(searchUrl.toString());
+
+      const response = await responsePromise;
+      if (response.status !== 200) {
+        throw new Error(
+          `Voyager API returned HTTP ${String(response.status)} for post search`,
+        );
+      }
+
+      const body = response.body;
+      if (body === null || typeof body !== "object") {
+        throw new Error(
+          "Voyager API returned an unexpected response format for post search",
+        );
+      }
+
+      const parsed = parseSearchResponse(body as GraphQLSearchResponse);
+
+      return {
+        query: input.query,
+        posts: parsed.posts,
+        paging: parsed.paging,
+      };
+    } finally {
+      await voyager.disable();
     }
-
-    const parsed = parseSearchResponse(body as GraphQLSearchResponse);
-
-    return {
-      query: input.query,
-      posts: parsed.posts,
-      paging: parsed.paging,
-    };
   } finally {
     client.disconnect();
   }

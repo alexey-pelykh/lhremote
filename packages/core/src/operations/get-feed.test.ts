@@ -52,19 +52,29 @@ function setupMocks(body: unknown, status = 200) {
   ]);
 
   const disconnect = vi.fn();
+  const navigate = vi.fn().mockResolvedValue({ frameId: "F1" });
   vi.mocked(CDPClient).mockImplementation(function () {
     return {
       connect: vi.fn().mockResolvedValue(undefined),
       disconnect,
+      navigate,
     } as unknown as CDPClient;
   });
 
-  const fetchMock = vi.fn().mockResolvedValue({ url: "", status, body });
+  const enableMock = vi.fn().mockResolvedValue(undefined);
+  const disableMock = vi.fn().mockResolvedValue(undefined);
+  const waitForResponseMock = vi
+    .fn()
+    .mockResolvedValue({ url: "", status, body });
   vi.mocked(VoyagerInterceptor).mockImplementation(function () {
-    return { fetch: fetchMock } as unknown as VoyagerInterceptor;
+    return {
+      enable: enableMock,
+      disable: disableMock,
+      waitForResponse: waitForResponseMock,
+    } as unknown as VoyagerInterceptor;
   });
 
-  return { fetchMock, disconnect };
+  return { navigate, enableMock, disableMock, waitForResponseMock, disconnect };
 }
 
 describe("getFeed", () => {
@@ -77,7 +87,7 @@ describe("getFeed", () => {
   });
 
   it("parses feed elements from the GraphQL response", async () => {
-    const { fetchMock } = setupMocks(
+    setupMocks(
       graphqlBody(
         [
           {
@@ -118,9 +128,6 @@ describe("getFeed", () => {
     expect(post?.mediaType).toBe("image");
     expect(post?.hashtags).toEqual(["linkedin", "tech"]);
     expect(result.nextCursor).toBe("cursor-abc");
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/voyager/api/graphql"),
-    );
   });
 
   it("falls back to constructed URL when shareUrl is absent", async () => {
@@ -139,40 +146,50 @@ describe("getFeed", () => {
     );
   });
 
-  it("passes cursor as paginationToken in variables", async () => {
-    const { fetchMock } = setupMocks(
-      graphqlBody([]),
-    );
-
-    await getFeed({ cdpPort: CDP_PORT, cursor: "my-cursor-token" });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("paginationToken%3Amy-cursor-token"),
-    );
-  });
-
-  it("passes count in variables", async () => {
-    const { fetchMock } = setupMocks(
-      graphqlBody([]),
-    );
-
-    await getFeed({ cdpPort: CDP_PORT, count: 5 });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("count%3A5"),
-    );
-  });
-
-  it("defaults to count=10", async () => {
-    const { fetchMock } = setupMocks(
-      graphqlBody([]),
-    );
+  it("navigates to the LinkedIn feed page", async () => {
+    const { navigate } = setupMocks(graphqlBody([]));
 
     await getFeed({ cdpPort: CDP_PORT });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("count%3A10"),
-    );
+    expect(navigate).toHaveBeenCalledWith("https://www.linkedin.com/feed/");
+  });
+
+  it("enables interceptor before navigation and disables after", async () => {
+    const { enableMock, disableMock, navigate } = setupMocks(graphqlBody([]));
+
+    await getFeed({ cdpPort: CDP_PORT });
+
+    expect(enableMock).toHaveBeenCalled();
+    expect(disableMock).toHaveBeenCalled();
+
+    // enable must be called before navigate
+    const enableOrder = enableMock.mock.invocationCallOrder[0] as number;
+    const navigateOrder = navigate.mock.invocationCallOrder[0] as number;
+    const disableOrder = disableMock.mock.invocationCallOrder[0] as number;
+    expect(enableOrder).toBeLessThan(navigateOrder);
+    expect(navigateOrder).toBeLessThan(disableOrder);
+  });
+
+  it("waits for voyagerFeedDashMainFeed response", async () => {
+    const { waitForResponseMock } = setupMocks(graphqlBody([]));
+
+    await getFeed({ cdpPort: CDP_PORT });
+
+    expect(waitForResponseMock).toHaveBeenCalledWith(expect.any(Function));
+    // Verify the filter function matches the expected query name
+    const filter = waitForResponseMock.mock.calls[0]?.[0] as (
+      url: string,
+    ) => boolean;
+    expect(
+      filter(
+        "/voyager/api/graphql?queryId=voyagerFeedDashMainFeed.abc123&variables=...",
+      ),
+    ).toBe(true);
+    expect(
+      filter(
+        "/voyager/api/graphql?queryId=voyagerSearchDashClusters.xyz&variables=...",
+      ),
+    ).toBe(false);
   });
 
   it("skips elements without backendUrn", async () => {
@@ -333,6 +350,14 @@ describe("getFeed", () => {
     expect(disconnect).toHaveBeenCalled();
   });
 
+  it("disables interceptor even on error", async () => {
+    const { disableMock } = setupMocks(null, 500);
+
+    await expect(getFeed({ cdpPort: CDP_PORT })).rejects.toThrow();
+
+    expect(disableMock).toHaveBeenCalled();
+  });
+
   it("handles elements with header but no author headline", async () => {
     setupMocks(
       graphqlBody([
@@ -365,38 +390,6 @@ describe("getFeed", () => {
     expect(result.posts[0]?.authorName).toBeNull();
     expect(result.posts[0]?.authorHeadline).toBeNull();
     expect(result.posts[0]?.authorProfileUrl).toBeNull();
-  });
-
-  it("uses GraphQL query path with queryId", async () => {
-    const { fetchMock } = setupMocks(graphqlBody([]));
-
-    await getFeed({ cdpPort: CDP_PORT });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("queryId=voyagerFeedDashMainFeed"),
-    );
-  });
-
-  it("sets start to count value when cursor is provided", async () => {
-    const { fetchMock } = setupMocks(graphqlBody([]));
-
-    await getFeed({ cdpPort: CDP_PORT, count: 7, cursor: "tok" });
-
-    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
-    const decoded = decodeURIComponent(calledPath);
-    expect(decoded).toContain("start:7");
-    expect(decoded).toContain("count:7");
-    expect(decoded).toContain("paginationToken:tok");
-  });
-
-  it("sets start to 0 when no cursor is provided", async () => {
-    const { fetchMock } = setupMocks(graphqlBody([]));
-
-    await getFeed({ cdpPort: CDP_PORT });
-
-    const calledPath = fetchMock.mock.calls[0]?.[0] as string;
-    const decoded = decodeURIComponent(calledPath);
-    expect(decoded).toContain("start:0");
   });
 
   it("ignores content keys with null values for media type", async () => {
