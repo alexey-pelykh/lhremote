@@ -35,13 +35,13 @@ export async function discoverInstancePort(
     return null;
   }
 
-  const childPids = await findChildPids(launcherPid);
-  if (childPids.length === 0) {
+  const descendantPids = await findDescendantPids(launcherPid);
+  if (descendantPids.length === 0) {
     return null;
   }
 
   const results = await Promise.all(
-    childPids.map((pid) => findCdpPort(pid, launcherPort)),
+    descendantPids.map((pid) => findCdpPort(pid, launcherPort)),
   );
   return results.find((port) => port !== null) ?? null;
 }
@@ -59,14 +59,31 @@ async function findPidListeningOn(port: number): Promise<number | null> {
 }
 
 /**
- * Find PIDs of child processes for the given parent PID.
+ * Find PIDs of all descendant processes for the given ancestor PID.
+ *
+ * Walks the full process tree rather than only direct children, because
+ * LinkedHelper may spawn instance processes through intermediate helpers
+ * (e.g. GPU or renderer processes), making them grandchildren or deeper.
  */
-async function findChildPids(parentPid: number): Promise<number[]> {
+async function findDescendantPids(ancestorPid: number): Promise<number[]> {
   try {
     const processes = await psList();
-    return processes
-      .filter((p) => p.ppid === parentPid)
-      .map((p) => p.pid);
+    const descendants: number[] = [];
+    const queue = [ancestorPid];
+    const visited = new Set<number>([ancestorPid]);
+
+    let currentPid: number | undefined;
+    while ((currentPid = queue.shift()) !== undefined) {
+      for (const p of processes) {
+        if (p.ppid === currentPid && !visited.has(p.pid)) {
+          visited.add(p.pid);
+          descendants.push(p.pid);
+          queue.push(p.pid);
+        }
+      }
+    }
+
+    return descendants;
   } catch {
     return [];
   }
@@ -123,8 +140,8 @@ export async function killInstanceProcesses(
     return;
   }
 
-  const childPids = await findChildPids(launcherPid);
-  for (const pid of childPids) {
+  const descendantPids = await findDescendantPids(launcherPid);
+  for (const pid of descendantPids) {
     try {
       process.kill(pid, "SIGKILL");
     } catch {

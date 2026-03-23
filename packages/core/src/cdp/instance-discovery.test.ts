@@ -66,6 +66,24 @@ describe("discoverInstancePort", () => {
     expect(port).toBe(55123);
   });
 
+  it("should discover instance port from grandchild process", async () => {
+    vi.mocked(portToPid).mockResolvedValue(12345 as never);
+    vi.mocked(psList).mockResolvedValue([
+      // Direct child (helper/renderer) — no CDP port
+      { pid: 12346, name: "helper", ppid: 12345 },
+      // Grandchild (instance) — has CDP port
+      { pid: 12347, name: "electron", ppid: 12346 },
+      { pid: 99999, name: "other", ppid: 1 },
+    ]);
+    vi.mocked(pidToPorts).mockImplementation(async (pid) => {
+      if (pid === 12347) return new Set([55123]) as never;
+      return new Set() as never;
+    });
+
+    const port = await discoverInstancePort(9222);
+    expect(port).toBe(55123);
+  });
+
   it("should skip ports matching the launcher port", async () => {
     vi.mocked(portToPid).mockResolvedValue(12345 as never);
     vi.mocked(psList).mockResolvedValue([
