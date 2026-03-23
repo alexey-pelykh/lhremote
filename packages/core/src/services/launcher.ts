@@ -117,13 +117,23 @@ export class LauncherService {
           // 2. Get the account object from the service cache.
           //    Using refetch: false because the LH backend API now
           //    rejects the embed format used by refetchLinkedInAccounts.
-          //    The cache is populated by the launcher on startup.
-          const account = await liAccountsSvc.getLinkedInAccount({
-            id: ${String(accountId)},
-            refetch: false,
-          });
+          //    The cache is populated by the launcher on startup, but
+          //    may not be ready immediately — poll until available.
+          let account = null;
+          const cacheDeadline = Date.now() + 30000;
+          while (Date.now() < cacheDeadline) {
+            try {
+              account = await liAccountsSvc.getLinkedInAccount({
+                id: ${String(accountId)},
+                refetch: false,
+              });
+              break;
+            } catch {
+              await new Promise(r => setTimeout(r, 500));
+            }
+          }
           if (!account) {
-            return { success: false, error: 'Account not found' };
+            return { success: false, error: 'Account not found in cache after 30s' };
           }
 
           // 3. Read userId and user profile
