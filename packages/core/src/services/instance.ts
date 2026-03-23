@@ -300,16 +300,16 @@ export class InstanceService {
 
         // Strategy 1: class-based selectors for known popup components
         for (const header of document.querySelectorAll('[class*="Popup_Header_"], [class*="ErrorAndAlert_Title_"]')) {
-          const container = header.closest('[class*="Popup_Container_"], [class*="Popup_Wrapper_"], [class*="ErrorAndAlert_"]') || header.parentElement;
+          const container = header.closest('[class*="Popup_Container_"], [class*="Popup_Wrapper_"], [class*="Popup_Popup_"], [class*="ErrorAndAlert_"]') || header.parentElement;
           if (!container || seen.has(container) || !isVisible(container)) continue;
           seen.add(container);
           const title = header.textContent?.trim() || '';
           if (!title) continue;
-          const description = container.querySelector('[class*="Popup_Body_"], [class*="ErrorAndAlert_Description_"]')?.textContent?.trim() || undefined;
+          const description = container.querySelector('[class*="Popup_Body_"], [class*="Popup_BodyScroll_"], [class*="ErrorAndAlert_Description_"]')?.textContent?.trim() || undefined;
           const key = title + '\\0' + (description || '');
           if (seenTitles.has(key)) continue;
           seenTitles.add(key);
-          const controls = container.querySelector('[class*="Popup_Controls_"], [class*="Popup_Buttons_"]');
+          const controls = container.querySelector('[class*="Popup_Controls_"], [class*="Popup_Buttons_"], [class*="Popup_Footer_"]');
           popups.push({
             title,
             description,
@@ -355,10 +355,10 @@ export class InstanceService {
 
         // Strategy 1: class-based selectors for known popup components
         for (const header of document.querySelectorAll('[class*="Popup_Header_"], [class*="ErrorAndAlert_Title_"]')) {
-          const container = header.closest('[class*="Popup_Container_"], [class*="Popup_Wrapper_"], [class*="ErrorAndAlert_"]') || header.parentElement;
+          const container = header.closest('[class*="Popup_Container_"], [class*="Popup_Wrapper_"], [class*="Popup_Popup_"], [class*="ErrorAndAlert_"]') || header.parentElement;
           if (!container || seen.has(container)) continue;
           seen.add(container);
-          const controls = container.querySelector('[class*="Popup_Controls_"], [class*="Popup_Buttons_"]');
+          const controls = container.querySelector('[class*="Popup_Controls_"], [class*="Popup_Buttons_"], [class*="Popup_Footer_"]');
           const button = controls?.querySelector('button');
           if (button) {
             button.click();
