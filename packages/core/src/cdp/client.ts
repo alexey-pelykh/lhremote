@@ -250,7 +250,16 @@ export class CDPClient {
   // ---------------------------------------------------------------------------
 
   /**
-   * Resolve a `ws://` URL for the given target ID, or the first page target.
+   * Resolve a `ws://` URL for the given target ID, or the LinkedHelper
+   * launcher page target.
+   *
+   * When no `targetId` is provided the method looks for the LinkedHelper
+   * launcher page — identified by a `file://` URL pointing to the
+   * LinkedHelper application bundle.  This is preferred over simply
+   * picking the first `page` target because LinkedHelper instances open
+   * LinkedIn pages that appear before the launcher in the target list,
+   * and those pages do not have access to `@electron/remote` or Node.js
+   * integration required by the launcher operations.
    */
   private async resolveWebSocketUrl(
     targetId?: string,
@@ -261,7 +270,23 @@ export class CDPClient {
     if (targetId) {
       target = targets.find((t) => t.id === targetId);
     } else {
-      target = targets.find((t) => t.type === "page");
+      // Prefer the LinkedHelper launcher page (file:// URL from the app bundle)
+      target = targets.find(
+        (t) =>
+          t.type === "page" &&
+          t.url?.startsWith("file://") &&
+          t.url.includes("linked-helper"),
+      );
+      // Fall back to any file:// page target (launcher may have a different path)
+      if (!target) {
+        target = targets.find(
+          (t) => t.type === "page" && t.url?.startsWith("file://"),
+        );
+      }
+      // Last resort: first page target (original behavior)
+      if (!target) {
+        target = targets.find((t) => t.type === "page");
+      }
     }
 
     if (!target) {
