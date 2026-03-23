@@ -521,20 +521,22 @@ describe("getPost", () => {
     );
   });
 
-  it("throws on non-200 response for post comments", async () => {
+  it("returns empty comments on non-200 response for comments endpoint", async () => {
     setupMocks({ commentsStatus: 500 });
 
-    await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow(
-      "Voyager API returned HTTP 500 for post comments",
-    );
+    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+    expect(result.comments).toEqual([]);
+    expect(result.commentsPaging.total).toBe(0);
   });
 
-  it("throws on non-object response body for post comments", async () => {
+  it("returns empty comments on non-object response body for comments", async () => {
     setupMocks({ commentsBody: null });
 
-    await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow(
-      "Voyager API returned an unexpected response format for post comments",
-    );
+    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+    expect(result.comments).toEqual([]);
+    expect(result.commentsPaging.total).toBe(0);
   });
 
   it("disconnects CDP client after successful operation", async () => {

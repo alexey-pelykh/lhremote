@@ -444,34 +444,32 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
       rawPost.included ?? [],
     );
 
-    // Fetch comments
+    // Fetch comments — gracefully degrade when the endpoint is unavailable
+    // (LinkedIn deprecated /feed/dash/feedComments, tracked in #523).
+    let comments: PostComment[] = [];
+    let commentsPaging = { start: commentStart, count: 0, total: 0 };
+
     const commentsPath =
       `/voyager/api/feed/dash/feedComments` +
       `?q=commentsUnderFeedUpdate&updateUrn=${encodedUrn}` +
       `&start=${String(commentStart)}&count=${String(commentCount)}`;
 
     const commentsResponse = await voyager.fetch(commentsPath);
-    if (commentsResponse.status !== 200) {
-      throw new Error(
-        `Voyager API returned HTTP ${String(commentsResponse.status)} for post comments`,
-      );
+    if (commentsResponse.status === 200) {
+      const commentsBody = commentsResponse.body;
+      if (commentsBody !== null && typeof commentsBody === "object") {
+        const parsed = parseCommentsResponse(
+          commentsBody as VoyagerCommentsResponse,
+        );
+        comments = parsed.comments;
+        commentsPaging = parsed.paging;
+      }
     }
-
-    const commentsBody = commentsResponse.body;
-    if (commentsBody === null || typeof commentsBody !== "object") {
-      throw new Error(
-        "Voyager API returned an unexpected response format for post comments",
-      );
-    }
-
-    const parsed = parseCommentsResponse(
-      commentsBody as VoyagerCommentsResponse,
-    );
 
     return {
       post,
-      comments: parsed.comments,
-      commentsPaging: parsed.paging,
+      comments,
+      commentsPaging,
     };
   } finally {
     client.disconnect();
