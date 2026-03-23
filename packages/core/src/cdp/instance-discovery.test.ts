@@ -18,9 +18,9 @@ import psList from "ps-list";
 
 describe("discoverInstancePort", () => {
   beforeEach(() => {
-    // Mock fetch to simulate a responding CDP endpoint with at least one target
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
-      new Response('[{"id":"T1"}]', { status: 200 }),
+    // Mock fetch to simulate a responding CDP endpoint
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("[]", { status: 200 }),
     );
   });
 
@@ -143,7 +143,7 @@ describe("discoverInstancePort", () => {
       if (url.includes(":50000/")) {
         throw new Error("ECONNREFUSED");
       }
-      return new Response('[{"id":"T1"}]', { status: 200 });
+      return new Response("[]", { status: 200 });
     });
 
     const port = await discoverInstancePort(9222);

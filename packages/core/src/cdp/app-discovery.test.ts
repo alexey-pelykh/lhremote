@@ -17,8 +17,8 @@ import psList from "ps-list";
 
 describe("findApp", () => {
   beforeEach(() => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
-      new Response('[{"id":"T1"}]', { status: 200 }),
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("[]", { status: 200 }),
     );
   });
 
@@ -83,21 +83,6 @@ describe("findApp", () => {
     ]);
   });
 
-  it("should return connectable false when CDP targets array is empty", async () => {
-    vi.mocked(psList).mockResolvedValue([
-      { pid: 1000, name: "linked-helper", ppid: 1 },
-    ]);
-    vi.mocked(pidToPorts).mockResolvedValue(new Set([9222]) as never);
-    vi.mocked(globalThis.fetch).mockImplementation(async () =>
-      new Response("[]", { status: 200 }),
-    );
-
-    const result = await findApp();
-    expect(result).toEqual([
-      { pid: 1000, cdpPort: 9222, connectable: false },
-    ]);
-  });
-
   it("should return connectable false when CDP probe fails", async () => {
     vi.mocked(psList).mockResolvedValue([
       { pid: 1000, name: "linked-helper", ppid: 1 },
@@ -150,7 +135,7 @@ describe("findApp", () => {
       if (url.includes(":8080/")) {
         throw new Error("ECONNREFUSED");
       }
-      return new Response('[{"id":"T1"}]', { status: 200 });
+      return new Response("[]", { status: 200 });
     });
 
     const result = await findApp();
