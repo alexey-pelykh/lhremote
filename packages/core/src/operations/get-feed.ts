@@ -41,11 +41,16 @@ interface GraphQLFeedResponse {
     };
     feedDashMainFeedByMainFeed?: GraphQLFeedCollection;
   };
+  /** Rest.li included entities — resolved via `*elements` URN references. */
+  included?: GraphQLFeedElement[];
 }
 
 /** The collection returned by the feedDashMainFeedByMainFeed query. */
 interface GraphQLFeedCollection {
+  /** Inline elements (active fetch mode). */
   elements?: GraphQLFeedElement[];
+  /** URN references to entities in the top-level `included` array (passive interception). */
+  "*elements"?: string[];
   metadata?: GraphQLCollectionMetadata;
   paging?: GraphQLPaging;
 }
@@ -63,6 +68,8 @@ interface GraphQLSocialContent {
 
 /** A single feed element from the GraphQL endpoint. */
 interface GraphQLFeedElement {
+  /** Entity URN — present when resolved from the `included` array. */
+  entityUrn?: string;
   metadata?: GraphQLElementMetadata;
   socialContent?: GraphQLSocialContent;
   header?: GraphQLHeader;
@@ -173,8 +180,24 @@ function parseFeedResponse(raw: GraphQLFeedResponse): {
   const collection =
     raw.data?.data?.feedDashMainFeedByMainFeed ??
     raw.data?.feedDashMainFeedByMainFeed;
-  const elements = collection?.elements ?? [];
   const metadata = collection?.metadata;
+
+  // Resolve elements: prefer inline `elements`, fall back to `*elements` URN
+  // references resolved against the top-level `included` array (Rest.li protocol).
+  let elements = collection?.elements ?? [];
+  if (elements.length === 0) {
+    const refs = collection?.["*elements"] ?? [];
+    const included = raw.included ?? [];
+    if (refs.length > 0 && included.length > 0) {
+      const byUrn = new Map<string, GraphQLFeedElement>();
+      for (const e of included) {
+        if (e.entityUrn) byUrn.set(e.entityUrn, e);
+      }
+      elements = refs
+        .map((urn) => byUrn.get(urn))
+        .filter((e): e is GraphQLFeedElement => e !== undefined);
+    }
+  }
 
   const posts: FeedPost[] = [];
 
