@@ -72,6 +72,10 @@ export function extractProfileId(input: string): string {
 /** Top-level GraphQL response wrapper. @internal Exported for testing only. */
 export interface GraphQLProfileUpdatesResponse {
   data?: {
+    /** LinkedIn sometimes wraps GraphQL responses in a nested `data` object. */
+    data?: {
+      feedDashProfileUpdatesByProfileUpdates?: GraphQLProfileUpdatesCollection;
+    };
     feedDashProfileUpdatesByProfileUpdates?: GraphQLProfileUpdatesCollection;
   };
 }
@@ -200,7 +204,9 @@ export function parseProfileUpdatesResponse(
   posts: FeedPost[];
   paging: { start: number; count: number; total: number };
 } {
-  const collection = raw.data?.feedDashProfileUpdatesByProfileUpdates;
+  const collection =
+    raw.data?.data?.feedDashProfileUpdatesByProfileUpdates ??
+    raw.data?.feedDashProfileUpdatesByProfileUpdates;
   const elements = collection?.elements ?? [];
   const paging = collection?.paging;
 

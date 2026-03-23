@@ -43,6 +43,10 @@ export interface SearchPostsOutput {
 /** Top-level GraphQL response wrapper. */
 interface GraphQLSearchResponse {
   data?: {
+    /** LinkedIn sometimes wraps GraphQL responses in a nested `data` object. */
+    data?: {
+      searchDashClustersByAll?: GraphQLSearchCollection;
+    };
     searchDashClustersByAll?: GraphQLSearchCollection;
   };
 }
@@ -123,7 +127,9 @@ export function parseSearchResponse(raw: GraphQLSearchResponse): {
   posts: SearchPostResult[];
   paging: { start: number; count: number; total: number };
 } {
-  const collection = raw.data?.searchDashClustersByAll;
+  const collection =
+    raw.data?.data?.searchDashClustersByAll ??
+    raw.data?.searchDashClustersByAll;
   const clusters = collection?.elements ?? [];
   const paging = collection?.paging;
 
