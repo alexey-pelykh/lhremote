@@ -78,6 +78,16 @@ export class LauncherService {
   /**
    * Start a LinkedHelper instance for the given account.
    *
+   * Replicates the data-fetching sequence that the LinkedHelper UI
+   * performs before calling `mainWindow.startInstance()`:
+   *
+   * 1. Resolve renderer-side services via the webpack module registry.
+   * 2. Refetch the full account object (with license, proxy, instance data).
+   * 3. Read `userId` from the auth service and user profile from the user service.
+   * 4. Fetch `frontendSettings` from the frontend-settings service.
+   * 5. Transform the license into the format expected by the instance.
+   * 6. Call `startInstance` with all populated fields.
+   *
    * @throws {StartInstanceError} if the instance fails to start.
    */
   async startInstance(accountId: number): Promise<void> {
@@ -89,15 +99,70 @@ export class LauncherService {
         try {
           const remote = require('@electron/remote');
           const mainWindow = remote.getGlobal('mainWindow');
+
+          // 1. Resolve renderer-side services via webpack module registry
+          let wpRequire = null;
+          window.webpackChunk_linked_helper_front.push(
+            [[Symbol()], {}, (req) => { wpRequire = req; }]
+          );
+          if (!wpRequire) {
+            return { success: false, error: 'webpack module registry not available' };
+          }
+
+          const authService = wpRequire(2742).authService;
+          const userService = wpRequire(75381).userService;
+          const liAccountsSvc = wpRequire(44354).runningLiAccountsService;
+          const feSettingsSvc = wpRequire(81954).frontendSettingsService;
+
+          // 2. Refetch the full account object
+          const account = await liAccountsSvc.getLinkedInAccount({
+            id: ${String(accountId)},
+            refetch: true,
+          });
+          if (!account) {
+            return { success: false, error: 'Account not found' };
+          }
+
+          // 3. Read userId and user profile
+          const userId = authService.userId;
+          const currentUser = userService.currentUserBS?.value
+            ?? await userService.fetchUser(userId);
+
+          // 4. Fetch frontend settings
+          const frontendSettings = await feSettingsSvc.getFrontendSettings();
+
+          // 5. Transform the license
+          let license = null;
+          if (account.license) {
+            const lic = account.license;
+            const ownerUid = lic.organizationId
+              ? 'lh2:org:' + lic.organizationId
+              : 'lh2:user:' + (lic.userId ?? userId);
+            license = {
+              id: lic.id,
+              ownerUid: ownerUid,
+              days: lic.days,
+              expireAt: lic.expireAt,
+              featureSet: lic.featureSet,
+              subscriptionId: lic.subscriptionId,
+              addedExpiryTimeAsSubscriptionGracePeriodMs:
+                lic.addedExpiryTimeAsSubscriptionGracePeriodMs,
+            };
+          }
+
+          // 6. Call startInstance with all populated fields
           await mainWindow.startInstance({
-            linkedInAccount: { id: ${String(accountId)}, liId: ${String(accountId)} },
-            accountData: { id: ${String(accountId)}, liId: ${String(accountId)} },
-            instanceId: 1,
-            proxy: null,
-            license: null,
-            userId: null,
-            frontendSettings: {},
-            lhAccount: {},
+            linkedInAccount: account,
+            instanceId: account.instance?.[0]?.id,
+            proxy: account.proxy ?? null,
+            license: license,
+            userId: userId,
+            frontendSettings: frontendSettings ?? {},
+            lhAccount: {
+              email: currentUser?.email ?? '',
+              fullName: [currentUser?.firstName, currentUser?.lastName]
+                .filter(Boolean).join(' '),
+            },
             zoomDefault: 0.9,
             shouldBringToFront: true,
             shouldStartRunningCampaigns: false,
