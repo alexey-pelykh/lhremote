@@ -3,8 +3,9 @@
 
 import { discoverInstancePort } from "../cdp/index.js";
 import { delay } from "../utils/delay.js";
-import type { LauncherService } from "./launcher.js";
 import { StartInstanceError } from "./errors.js";
+import { InstanceService } from "./instance.js";
+import type { LauncherService } from "./launcher.js";
 
 /**
  * Maximum time to wait for the instance CDP port to become available (ms).
@@ -53,6 +54,7 @@ export async function startInstanceWithRecovery(
     ) {
       const existingPort = await discoverInstancePort(launcherPort);
       if (existingPort !== null) {
+        await checkForStartupPopups(existingPort, accountId);
         return { status: "already_running", port: existingPort };
       }
 
@@ -70,6 +72,7 @@ export async function startInstanceWithRecovery(
     return { status: "timeout" };
   }
 
+  await checkForStartupPopups(port, accountId);
   return { status: "started", port };
 }
 
@@ -113,5 +116,41 @@ export async function waitForInstanceShutdown(
       return;
     }
     await delay(PORT_DISCOVERY_INTERVAL);
+  }
+}
+
+/**
+ * Connect to the instance UI and check for error popups.
+ *
+ * Throws {@link StartInstanceError} if any popups are detected.
+ * Silently returns if the popup check itself fails (best-effort).
+ */
+async function checkForStartupPopups(
+  port: number,
+  accountId: number,
+): Promise<void> {
+  const instance = new InstanceService(port);
+  try {
+    await instance.connectUiOnly();
+    const popups = await instance.getInstancePopups();
+    if (popups.length > 0) {
+      const details = popups
+        .map(
+          (p) =>
+            `${p.title}${p.description ? ` — ${p.description}` : ""}`,
+        )
+        .join("; ");
+      throw new StartInstanceError(
+        accountId,
+        `instance has error popups: ${details}`,
+      );
+    }
+  } catch (error) {
+    if (error instanceof StartInstanceError) {
+      throw error;
+    }
+    // Popup check is best-effort; silently skip if the check itself fails
+  } finally {
+    instance.disconnect();
   }
 }

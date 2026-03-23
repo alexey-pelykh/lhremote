@@ -11,8 +11,17 @@ vi.mock("../cdp/index.js", async (importOriginal) => {
   };
 });
 
+vi.mock("./instance.js", () => {
+  const InstanceService = vi.fn();
+  InstanceService.prototype.connectUiOnly = vi.fn();
+  InstanceService.prototype.getInstancePopups = vi.fn();
+  InstanceService.prototype.disconnect = vi.fn();
+  return { InstanceService };
+});
+
 import { discoverInstancePort } from "../cdp/index.js";
 import { StartInstanceError } from "./errors.js";
+import { InstanceService } from "./instance.js";
 import type { LauncherService } from "./launcher.js";
 import {
   startInstanceWithRecovery,
@@ -37,6 +46,9 @@ describe("startInstanceWithRecovery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    vi.mocked(InstanceService.prototype.connectUiOnly).mockResolvedValue(undefined);
+    vi.mocked(InstanceService.prototype.getInstancePopups).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -128,6 +140,71 @@ describe("startInstanceWithRecovery", () => {
     await expect(
       startInstanceWithRecovery(launcher, 42, 9222),
     ).rejects.toThrow("network error");
+  });
+
+  it("throws when instance starts with error popups", async () => {
+    const launcher = createMockLauncher();
+    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
+    vi.mocked(InstanceService.prototype.getInstancePopups).mockResolvedValue([
+      { title: "Failed to initialize UI", closable: false },
+    ]);
+
+    await expect(
+      startInstanceWithRecovery(launcher, 42, 9222),
+    ).rejects.toThrow("instance has error popups: Failed to initialize UI");
+
+    expect(InstanceService.prototype.connectUiOnly).toHaveBeenCalled();
+    expect(InstanceService.prototype.disconnect).toHaveBeenCalled();
+  });
+
+  it("throws when already-running instance has error popups", async () => {
+    const launcher = createMockLauncher({
+      startInstance: vi
+        .fn()
+        .mockRejectedValue(
+          new StartInstanceError(42, "account is already running"),
+        ),
+    });
+    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
+    vi.mocked(InstanceService.prototype.getInstancePopups).mockResolvedValue([
+      { title: "DataLayerStorage error", description: "liAccount not initialized", closable: true },
+    ]);
+
+    await expect(
+      startInstanceWithRecovery(launcher, 42, 9222),
+    ).rejects.toThrow(
+      "instance has error popups: DataLayerStorage error — liAccount not initialized",
+    );
+
+    expect(InstanceService.prototype.disconnect).toHaveBeenCalled();
+  });
+
+  it("returns normally when popup check connection fails", async () => {
+    const launcher = createMockLauncher();
+    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
+    vi.mocked(InstanceService.prototype.connectUiOnly).mockRejectedValue(
+      new Error("connection refused"),
+    );
+
+    const result = await startInstanceWithRecovery(launcher, 42, 9222);
+
+    expect(result).toEqual({ status: "started", port: 55123 });
+    expect(InstanceService.prototype.disconnect).toHaveBeenCalled();
+  });
+
+  it("includes multiple popup details in error message", async () => {
+    const launcher = createMockLauncher();
+    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
+    vi.mocked(InstanceService.prototype.getInstancePopups).mockResolvedValue([
+      { title: "Error A", closable: false },
+      { title: "Error B", description: "details", closable: true },
+    ]);
+
+    await expect(
+      startInstanceWithRecovery(launcher, 42, 9222),
+    ).rejects.toThrow(
+      "instance has error popups: Error A; Error B — details",
+    );
   });
 });
 
