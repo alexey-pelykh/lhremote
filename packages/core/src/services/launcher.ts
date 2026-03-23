@@ -114,10 +114,13 @@ export class LauncherService {
           const liAccountsSvc = wpRequire(44354).runningLiAccountsService;
           const feSettingsSvc = wpRequire(81954).frontendSettingsService;
 
-          // 2. Refetch the full account object
+          // 2. Get the account object from the service cache.
+          //    Using refetch: false because the LH backend API now
+          //    rejects the embed format used by refetchLinkedInAccounts.
+          //    The cache is populated by the launcher on startup.
           const account = await liAccountsSvc.getLinkedInAccount({
             id: ${String(accountId)},
-            refetch: true,
+            refetch: false,
           });
           if (!account) {
             return { success: false, error: 'Account not found' };
