@@ -17,6 +17,7 @@ import type {
   FeedPost,
   GetFeedOutput,
   GetPostOutput,
+  GetPostStatsOutput,
   GetProfileActivityOutput,
   SearchPostsOutput,
 } from "@lhremote/core";
@@ -25,6 +26,7 @@ import type {
 import {
   handleGetFeed,
   handleGetPost,
+  handleGetPostStats,
   handleGetProfileActivity,
   handleSearchPosts,
 } from "@lhremote/cli/handlers";
@@ -33,6 +35,7 @@ import {
 import {
   registerGetFeed,
   registerGetPost,
+  registerGetPostStats,
   registerGetProfileActivity,
   registerSearchPosts,
 } from "@lhremote/mcp/tools";
@@ -355,8 +358,96 @@ describeE2E("feed and posts operations", () => {
       });
     });
 
-    // NOTE: get-post-stats (#505) and get-post-engagers (#506) are omitted
-    // because LinkedIn fully deprecated their Voyager endpoints.
+    // NOTE: get-post-engagers (#506) is omitted because LinkedIn fully
+    // deprecated its Voyager endpoint.
+
+    // -----------------------------------------------------------------
+    // get-post-stats (passive interception of /feed/updates/{urn})
+    // -----------------------------------------------------------------
+
+    describe("get-post-stats", () => {
+      describe("CLI handlers", () => {
+        const originalExitCode = process.exitCode;
+
+        beforeEach(() => {
+          process.exitCode = undefined;
+        });
+
+        afterEach(() => {
+          process.exitCode = originalExitCode;
+          vi.restoreAllMocks();
+        });
+
+        it("get-post-stats --json returns valid stats", async () => {
+          assertDefined(capturedPostUrn, "No post URN captured from get-feed");
+
+          const stdoutSpy = vi
+            .spyOn(process.stdout, "write")
+            .mockReturnValue(true);
+
+          await handleGetPostStats(capturedPostUrn, { cdpPort, json: true });
+
+          expect(process.exitCode).toBeUndefined();
+          expect(stdoutSpy).toHaveBeenCalled();
+
+          const output = stdoutSpy.mock.calls
+            .map((call) => String(call[0]))
+            .join("");
+          const parsed = JSON.parse(output) as GetPostStatsOutput;
+
+          expect(parsed.stats).toHaveProperty("postUrn");
+          expect(typeof parsed.stats.reactionCount).toBe("number");
+          expect(Array.isArray(parsed.stats.reactionsByType)).toBe(true);
+          expect(typeof parsed.stats.commentCount).toBe("number");
+          expect(typeof parsed.stats.shareCount).toBe("number");
+        }, 60_000);
+
+        it("get-post-stats prints human-friendly output", async () => {
+          assertDefined(capturedPostUrn, "No post URN captured from get-feed");
+
+          const stdoutSpy = vi
+            .spyOn(process.stdout, "write")
+            .mockReturnValue(true);
+
+          await handleGetPostStats(capturedPostUrn, { cdpPort });
+
+          expect(process.exitCode).toBeUndefined();
+          expect(stdoutSpy).toHaveBeenCalled();
+
+          const output = stdoutSpy.mock.calls
+            .map((call) => String(call[0]))
+            .join("");
+          expect(output).toContain("Post:");
+          expect(output).toContain("Reactions:");
+        }, 60_000);
+      });
+
+      describe("MCP tools", () => {
+        it("get-post-stats tool returns valid JSON", async () => {
+          assertDefined(capturedPostUrn, "No post URN captured from get-feed");
+
+          const { server, getHandler } = createMockServer();
+          registerGetPostStats(server);
+
+          const handler = getHandler("get-post-stats");
+          const result = (await handler({ postUrl: capturedPostUrn, cdpPort })) as {
+            isError?: boolean;
+            content: { type: string; text: string }[];
+          };
+
+          expect(result.isError).toBeUndefined();
+          expect(result.content).toHaveLength(1);
+
+          const parsed = JSON.parse(
+            (result.content[0] as { text: string }).text,
+          ) as GetPostStatsOutput;
+
+          expect(parsed.stats).toHaveProperty("postUrn");
+          expect(typeof parsed.stats.reactionCount).toBe("number");
+          expect(Array.isArray(parsed.stats.reactionsByType)).toBe(true);
+        }, 60_000);
+      });
+    });
 
     // -----------------------------------------------------------------
     // search-posts
