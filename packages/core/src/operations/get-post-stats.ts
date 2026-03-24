@@ -7,6 +7,7 @@ import { discoverTargets } from "../cdp/discovery.js";
 import { VoyagerInterceptor } from "../voyager/interceptor.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
+import { navigateAwayIf } from "./navigate-away.js";
 
 /**
  * Input for the get-post-stats operation.
@@ -172,6 +173,10 @@ export async function getPostStats(
     await voyager.enable();
 
     try {
+      // If the browser is already on the post detail page, LinkedIn's SPA
+      // won't fire a fresh API request on navigate.  Navigate away first.
+      await navigateAwayIf(client, "/feed/update/");
+
       // Register the response listener before navigating to avoid race conditions.
       const responsePromise = voyager.waitForResponse((url) =>
         url.includes("/feed/updates/"),

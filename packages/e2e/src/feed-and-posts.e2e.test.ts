@@ -7,7 +7,7 @@ import {
   type Account,
   type AppService,
   discoverInstancePort,
-  getFeed,
+  discoverTargets,
   killInstanceProcesses,
   LauncherService,
   startInstanceWithRecovery,
@@ -144,16 +144,22 @@ describeE2E("feed and posts operations", () => {
       );
       cdpPort = instancePort;
 
-      // Wait for the LinkedIn WebView AND Voyager API to become available.
-      // The LinkedIn SPA takes time to load after instance start; we retry
-      // a lightweight get-feed call until it succeeds.
+      // Wait for the LinkedIn WebView to become available.  We only need a
+      // CDP target with a linkedin.com URL — the individual operations handle
+      // their own Voyager readiness via passive interception + navigate-away.
       await retryAsync(
         async () => {
-          await getFeed({ count: 1, cdpPort });
+          const targets = await discoverTargets(cdpPort);
+          const hasLinkedIn = targets.some(
+            (t) => t.type === "page" && t.url?.includes("linkedin.com"),
+          );
+          if (!hasLinkedIn) {
+            throw new Error("LinkedIn target not available yet");
+          }
         },
-        { retries: 30, delay: 3_000 },
+        { retries: 30, delay: 2_000 },
       );
-    }, 300_000);
+    }, 120_000);
 
     afterAll(async () => {
       if (accountId === undefined) return;

@@ -7,6 +7,7 @@ import { discoverTargets } from "../cdp/discovery.js";
 import { VoyagerInterceptor } from "../voyager/interceptor.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
+import { navigateAwayIf } from "./navigate-away.js";
 
 /**
  * Input for the get-profile-activity operation.
@@ -339,6 +340,10 @@ export async function getProfileActivity(
     await voyager.enable();
 
     try {
+      // If the browser is already on the activity page, LinkedIn's SPA won't
+      // fire a fresh API request on navigate.  Navigate away first.
+      await navigateAwayIf(client, "/recent-activity/");
+
       // Set up the response listener before navigation to avoid race conditions.
       // The filter matches the query name prefix, ignoring the rotating hash suffix.
       const responsePromise = voyager.waitForResponse((url) =>
