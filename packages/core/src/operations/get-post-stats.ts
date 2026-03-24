@@ -48,43 +48,61 @@ export function extractPostUrn(input: string): string {
   throw new Error(`Cannot extract post URN from: ${input}`);
 }
 
-/** Shape of the Voyager social-detail API response. */
-interface VoyagerSocialDetailResponse {
-  data?: {
-    totalSocialActivityCounts?: {
-      numLikes?: number;
-      numComments?: number;
-      numShares?: number;
-    };
-    reactionTypeCounts?: Array<{
-      reactionType?: string;
-      count?: number;
-    }>;
-  };
-  // Flat-structure variant (some API versions return at top level)
-  totalSocialActivityCounts?: {
-    numLikes?: number;
-    numComments?: number;
-    numShares?: number;
-  };
-  reactionTypeCounts?: Array<{
-    reactionType?: string;
-    count?: number;
-  }>;
+/** Reaction-type count entry in the REST feed update response. */
+interface VoyagerReactionTypeCount {
+  reactionType?: string;
+  count?: number;
+}
+
+/** Social activity counts block from the REST /feed/updates/{urn} response. */
+interface VoyagerSocialActivityCounts {
+  numLikes?: number;
+  numComments?: number;
+  numShares?: number;
+  reactionTypeCounts?: VoyagerReactionTypeCount[];
+}
+
+/** Social detail block wrapping the activity counts. */
+interface VoyagerSocialDetail {
+  totalSocialActivityCounts?: VoyagerSocialActivityCounts;
 }
 
 /**
- * Parse the Voyager social-detail response into a normalised PostStats.
+ * Shape of the REST /feed/updates/{urn} response, from which post stats
+ * are extracted.  Supports both nested (data.socialDetail.) and flat layouts.
  */
-function parseSocialDetailResponse(
-  raw: VoyagerSocialDetailResponse,
+interface VoyagerFeedUpdateStatsResponse {
+  data?: {
+    socialDetail?: VoyagerSocialDetail;
+    totalSocialActivityCounts?: VoyagerSocialActivityCounts;
+  };
+  // Flat-structure variants
+  socialDetail?: VoyagerSocialDetail;
+  totalSocialActivityCounts?: VoyagerSocialActivityCounts;
+}
+
+/**
+ * Parse the REST feed-update response into a normalised PostStats.
+ *
+ * The `totalSocialActivityCounts` block (and its nested
+ * `reactionTypeCounts` array) can appear at several nesting depths
+ * depending on the LinkedIn response variant:
+ *   - `socialDetail.totalSocialActivityCounts`
+ *   - `data.socialDetail.totalSocialActivityCounts`
+ *   - `totalSocialActivityCounts` (flat)
+ *   - `data.totalSocialActivityCounts` (flat under data)
+ */
+export function parseFeedUpdateStatsResponse(
+  raw: VoyagerFeedUpdateStatsResponse,
   postUrn: string,
 ): PostStats {
-  // Support both nested (data.) and flat response shapes
   const counts =
-    raw.data?.totalSocialActivityCounts ?? raw.totalSocialActivityCounts;
-  const rawReactions =
-    raw.data?.reactionTypeCounts ?? raw.reactionTypeCounts ?? [];
+    raw.data?.socialDetail?.totalSocialActivityCounts ??
+    raw.socialDetail?.totalSocialActivityCounts ??
+    raw.data?.totalSocialActivityCounts ??
+    raw.totalSocialActivityCounts;
+
+  const rawReactions = counts?.reactionTypeCounts ?? [];
 
   const reactionsByType: ReactionCount[] = rawReactions
     .filter(
@@ -110,9 +128,9 @@ function parseSocialDetailResponse(
 /**
  * Retrieve engagement statistics for a LinkedIn post.
  *
- * Connects to the LinkedIn webview in LinkedHelper and calls the
- * Voyager feed social-detail API to get reaction breakdown, comment
- * count, and share count.
+ * Connects to the LinkedIn webview in LinkedHelper, navigates to the
+ * post detail page, and passively intercepts the REST `/feed/updates/{urn}`
+ * response to extract reaction breakdown, comment count, and share count.
  *
  * @param input - Post URL or URN and CDP connection parameters.
  * @returns Engagement statistics for the post.
@@ -151,32 +169,42 @@ export async function getPostStats(
 
   try {
     const voyager = new VoyagerInterceptor(client);
+    await voyager.enable();
 
-    const encodedUrn = encodeURIComponent(postUrn);
-    const path =
-      `/voyager/api/feed/dash/feedSocialDetails` +
-      `?q=socialDetailsByFeedUpdate&feedUpdateUrn=${encodedUrn}`;
-
-    const response = await voyager.fetch(path);
-    if (response.status !== 200) {
-      throw new Error(
-        `Voyager API returned HTTP ${String(response.status)} for post stats`,
+    try {
+      // Register the response listener before navigating to avoid race conditions.
+      const responsePromise = voyager.waitForResponse((url) =>
+        url.includes("/feed/updates/"),
       );
-    }
 
-    const body = response.body;
-    if (body === null || typeof body !== "object") {
-      throw new Error(
-        "Voyager API returned an unexpected response format for post stats",
+      // Navigate to the post detail page — LinkedIn's SPA will fetch the
+      // update data naturally via REST /feed/updates/{urn}.
+      const postDetailUrl = `https://www.linkedin.com/feed/update/${postUrn}/`;
+      await client.navigate(postDetailUrl);
+
+      const response = await responsePromise;
+      if (response.status !== 200) {
+        throw new Error(
+          `Voyager API returned HTTP ${String(response.status)} for post stats`,
+        );
+      }
+
+      const body = response.body;
+      if (body === null || typeof body !== "object") {
+        throw new Error(
+          "Voyager API returned an unexpected response format for post stats",
+        );
+      }
+
+      const stats = parseFeedUpdateStatsResponse(
+        body as VoyagerFeedUpdateStatsResponse,
+        postUrn,
       );
+
+      return { stats };
+    } finally {
+      await voyager.disable();
     }
-
-    const stats = parseSocialDetailResponse(
-      body as VoyagerSocialDetailResponse,
-      postUrn,
-    );
-
-    return { stats };
   } finally {
     client.disconnect();
   }
