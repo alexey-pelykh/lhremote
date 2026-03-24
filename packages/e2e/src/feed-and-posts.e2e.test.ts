@@ -51,6 +51,15 @@ function getTestProfilePublicId(): string {
   return raw;
 }
 
+/**
+ * Fallback post URL for get-post / get-post-stats tests when get-feed
+ * cannot supply a captured URN (e.g. endpoint breakage).
+ * Read from `LHREMOTE_E2E_POST_URL` — any LinkedIn post URL or URN.
+ */
+function getTestPostUrl(): string | undefined {
+  return process.env.LHREMOTE_E2E_POST_URL;
+}
+
 /** Type-narrowing assertion — fails the test with `message` when `value` is nullish. */
 function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {
   expect(value, message).toBeDefined();
@@ -119,8 +128,12 @@ describeE2E("feed and posts operations", () => {
   // -----------------------------------------------------------------------
 
   describe("with instance running", () => {
-    /** Captured from get-feed to reuse for post-detail operations. */
-    let capturedPostUrn: string | undefined;
+    /**
+     * Post URL for downstream tests.  Preferably captured from get-feed;
+     * falls back to the `LHREMOTE_E2E_POST_URL` env var when get-feed is
+     * broken (e.g. LinkedIn endpoint rename).
+     */
+    let capturedPostUrn: string | undefined = getTestPostUrl();
 
     /** Instance CDP port — where the LinkedIn WebView lives. */
     let cdpPort: number;
@@ -290,7 +303,7 @@ describeE2E("feed and posts operations", () => {
         });
 
         it("get-post --json returns post content", async () => {
-          assertDefined(capturedPostUrn, "No post URN captured from get-feed");
+          assertDefined(capturedPostUrn, "No post URN — get-feed failed and LHREMOTE_E2E_POST_URL is not set");
 
           const stdoutSpy = vi
             .spyOn(process.stdout, "write")
@@ -317,7 +330,7 @@ describeE2E("feed and posts operations", () => {
         }, 60_000);
 
         it("get-post prints human-friendly output", async () => {
-          assertDefined(capturedPostUrn, "No post URN captured from get-feed");
+          assertDefined(capturedPostUrn, "No post URN — get-feed failed and LHREMOTE_E2E_POST_URL is not set");
 
           const stdoutSpy = vi
             .spyOn(process.stdout, "write")
@@ -338,7 +351,7 @@ describeE2E("feed and posts operations", () => {
 
       describe("MCP tools", () => {
         it("get-post tool returns valid JSON", async () => {
-          assertDefined(capturedPostUrn, "No post URN captured from get-feed");
+          assertDefined(capturedPostUrn, "No post URN — get-feed failed and LHREMOTE_E2E_POST_URL is not set");
 
           const { server, getHandler } = createMockServer();
           registerGetPost(server);
@@ -385,7 +398,7 @@ describeE2E("feed and posts operations", () => {
         });
 
         it("get-post-stats --json returns valid stats", async () => {
-          assertDefined(capturedPostUrn, "No post URN captured from get-feed");
+          assertDefined(capturedPostUrn, "No post URN — get-feed failed and LHREMOTE_E2E_POST_URL is not set");
 
           const stdoutSpy = vi
             .spyOn(process.stdout, "write")
@@ -409,7 +422,7 @@ describeE2E("feed and posts operations", () => {
         }, 60_000);
 
         it("get-post-stats prints human-friendly output", async () => {
-          assertDefined(capturedPostUrn, "No post URN captured from get-feed");
+          assertDefined(capturedPostUrn, "No post URN — get-feed failed and LHREMOTE_E2E_POST_URL is not set");
 
           const stdoutSpy = vi
             .spyOn(process.stdout, "write")
@@ -430,7 +443,7 @@ describeE2E("feed and posts operations", () => {
 
       describe("MCP tools", () => {
         it("get-post-stats tool returns valid JSON", async () => {
-          assertDefined(capturedPostUrn, "No post URN captured from get-feed");
+          assertDefined(capturedPostUrn, "No post URN — get-feed failed and LHREMOTE_E2E_POST_URL is not set");
 
           const { server, getHandler } = createMockServer();
           registerGetPostStats(server);
