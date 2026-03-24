@@ -21,6 +21,10 @@ vi.mock("../voyager/interceptor.js", () => ({
   VoyagerInterceptor: vi.fn(),
 }));
 
+vi.mock("./navigate-away.js", () => ({
+  navigateAwayIf: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
 import { VoyagerInterceptor } from "../voyager/interceptor.js";
