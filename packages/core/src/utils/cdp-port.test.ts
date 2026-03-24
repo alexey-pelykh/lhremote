@@ -16,7 +16,10 @@ describe("isCdpPort", () => {
     );
 
     expect(await isCdpPort(9222)).toBe(true);
-    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:9222/json/list");
+    expect(fetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:9222/json/list",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it("should return false when the port responds with non-ok", async () => {
