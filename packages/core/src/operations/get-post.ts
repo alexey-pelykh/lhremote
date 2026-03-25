@@ -8,6 +8,8 @@ import { VoyagerInterceptor } from "../voyager/interceptor.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn } from "./get-post-stats.js";
+import { navigateAwayIf } from "./navigate-away.js";
+import { delay } from "./get-feed.js";
 
 /**
  * Input for the get-post operation.
@@ -15,10 +17,8 @@ import { extractPostUrn } from "./get-post-stats.js";
 export interface GetPostInput extends ConnectionOptions {
   /** LinkedIn post URL or raw URN (e.g. `urn:li:activity:1234567890`). */
   readonly postUrl: string;
-  /** Number of comments to return per page (default: 10). */
+  /** Maximum number of comments to load (default: 10). */
   readonly commentCount?: number | undefined;
-  /** Offset for comment pagination (default: 0). */
-  readonly commentStart?: number | undefined;
 }
 
 /**
@@ -27,14 +27,8 @@ export interface GetPostInput extends ConnectionOptions {
 export interface GetPostOutput {
   /** Full post detail. */
   readonly post: PostDetail;
-  /** Comments on this post. */
+  /** Comments on this post (scraped from the rendered page). */
   readonly comments: PostComment[];
-  /** Comment pagination metadata. */
-  readonly commentsPaging: {
-    readonly start: number;
-    readonly count: number;
-    readonly total: number;
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -372,24 +366,254 @@ export function parseCommentsResponse(raw: VoyagerCommentsResponse): {
 }
 
 // ---------------------------------------------------------------------------
+// DOM comment scraping
+// ---------------------------------------------------------------------------
+
+/** Shape returned by the in-page comment scraping script. */
+interface RawDomComment {
+  authorName: string;
+  authorHeadline: string | null;
+  authorPublicId: string | null;
+  text: string;
+  createdAt: number | null;
+  reactionCount: number;
+}
+
+/**
+ * JavaScript source evaluated inside the LinkedIn page context to scrape
+ * visible comments from the post detail page.
+ */
+export const SCRAPE_COMMENTS_SCRIPT = `(() => {
+  const comments = [];
+
+  // LinkedIn renders comments as article elements within the comments section.
+  // Each comment item contains author info, text, and engagement data.
+  const items = document.querySelectorAll(
+    'article.comments-comment-item,' +
+    'article.comments-comment-entity,' +
+    'div[class*="comments-comment-item"],' +
+    'div[class*="comments-comment-entity"]'
+  );
+
+  for (const item of items) {
+    // --- Author ---
+    let authorName = '';
+    let authorHeadline = null;
+    let authorPublicId = null;
+
+    const profileLink = item.querySelector('a[href*="/in/"]');
+    if (profileLink) {
+      const match = profileLink.href.match(/\\/in\\/([^/?]+)/);
+      if (match) authorPublicId = match[1];
+      const nameEl = profileLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]')
+        || profileLink;
+      authorName = (nameEl.textContent || '').trim();
+    }
+
+    // Headline — secondary text near author name
+    const headlineEl = item.querySelector(
+      'span.comments-post-meta__headline,' +
+      'span[class*="comment-item__subtitle"],' +
+      'span.t-12.t-normal'
+    );
+    if (headlineEl) {
+      const txt = (headlineEl.textContent || '').trim();
+      if (txt && txt !== authorName) authorHeadline = txt;
+    }
+
+    // --- Comment text ---
+    const textEl = item.querySelector(
+      'span.comments-comment-item__main-content,' +
+      'span[class*="comment-item__main-content"],' +
+      'span[dir="ltr"].break-words'
+    );
+    const text = textEl ? (textEl.textContent || '').trim() : '';
+
+    // --- Timestamp ---
+    let createdAt = null;
+    const timeEl = item.querySelector('time');
+    if (timeEl) {
+      const dt = timeEl.getAttribute('datetime');
+      if (dt) {
+        const ms = Date.parse(dt);
+        if (!isNaN(ms)) createdAt = ms;
+      }
+    }
+
+    // --- Reaction count ---
+    let reactionCount = 0;
+    const itemText = item.textContent || '';
+    const likeMatch = itemText.match(/(\\d[\\d,]*)\\s+reactions?/i)
+      || itemText.match(/(\\d[\\d,]*)\\s+likes?/i);
+    if (likeMatch) {
+      reactionCount = parseInt(likeMatch[1].replace(/,/g, ''), 10) || 0;
+    }
+
+    if (text || authorName) {
+      comments.push({
+        authorName: authorName,
+        authorHeadline: authorHeadline,
+        authorPublicId: authorPublicId,
+        text: text,
+        createdAt: createdAt,
+        reactionCount: reactionCount,
+      });
+    }
+  }
+
+  return comments;
+})()`;
+
+/**
+ * JavaScript source that clicks a "load more comments" button if present.
+ * Returns true if a button was clicked, false otherwise.
+ */
+export const CLICK_LOAD_MORE_COMMENTS_SCRIPT = `(() => {
+  // LinkedIn uses various button patterns for loading more comments
+  const selectors = [
+    'button.comments-comments-list__load-more-comments-button',
+    'button[class*="load-more-comments"]',
+    'button[class*="show-previous-comments"]',
+    'button[class*="comments-load-more"]',
+  ];
+
+  for (const sel of selectors) {
+    const btn = document.querySelector(sel);
+    if (btn && !btn.disabled) {
+      btn.click();
+      return true;
+    }
+  }
+
+  // Fallback: look for any button whose text suggests loading more comments
+  const buttons = document.querySelectorAll('button');
+  for (const btn of buttons) {
+    const text = (btn.textContent || '').trim().toLowerCase();
+    if (
+      (text.includes('load') || text.includes('show') || text.includes('more') || text.includes('previous')) &&
+      text.includes('comment') &&
+      !btn.disabled
+    ) {
+      btn.click();
+      return true;
+    }
+  }
+
+  return false;
+})()`;
+
+/** Convert raw DOM comment to PostComment. */
+function mapDomComment(c: RawDomComment): PostComment {
+  return {
+    commentUrn: null,
+    authorName: c.authorName,
+    authorHeadline: c.authorHeadline,
+    authorPublicId: c.authorPublicId,
+    text: c.text,
+    createdAt: c.createdAt,
+    reactionCount: c.reactionCount,
+  };
+}
+
+/** Timeout for intercepting a comment-loading response after clicking load-more (ms). */
+const COMMENT_RESPONSE_TIMEOUT = 10_000;
+
+/**
+ * Load comments from the post detail page.
+ *
+ * 1. Scrape initial visible comments from the DOM.
+ * 2. If more are needed, click "load more" and intercept the comment-loading
+ *    Voyager response (organic request triggered by the UI click).
+ * 3. Repeat until `maxComments` is reached or no more are available.
+ */
+async function loadComments(
+  client: CDPClient,
+  voyager: VoyagerInterceptor,
+  maxComments: number,
+): Promise<PostComment[]> {
+  // Scrape comments already visible on the page
+  const initial = await client.evaluate<RawDomComment[]>(SCRAPE_COMMENTS_SCRIPT);
+  const comments: PostComment[] = (initial ?? []).map(mapDomComment);
+
+  if (comments.length >= maxComments) {
+    return comments.slice(0, maxComments);
+  }
+
+  // Click "load more" and intercept responses until we have enough
+  const maxLoadAttempts = 10;
+
+  for (let attempt = 0; attempt < maxLoadAttempts; attempt++) {
+    const clicked = await client.evaluate<boolean>(
+      CLICK_LOAD_MORE_COMMENTS_SCRIPT,
+    );
+    if (!clicked) break;
+
+    // Try to intercept the comment-loading Voyager response triggered by the click.
+    // LinkedIn fires a request to a comments endpoint (e.g. /feedComments or
+    // similar) — we intercept it for structured data rather than DOM-scraping.
+    try {
+      const response = await voyager.waitForResponse(
+        (url) => url.includes("/comments") || url.includes("Comments"),
+        COMMENT_RESPONSE_TIMEOUT,
+      );
+
+      if (
+        response.status === 200 &&
+        response.body !== null &&
+        typeof response.body === "object"
+      ) {
+        const parsed = parseCommentsResponse(
+          response.body as VoyagerCommentsResponse,
+        );
+        for (const c of parsed.comments) {
+          comments.push(c);
+        }
+      }
+    } catch {
+      // Timeout or error — fall back to DOM scraping.
+      // The DOM should now contain any comments the UI loaded after the
+      // click.  Only adopt the DOM set if it grew beyond what we already
+      // have (avoids losing previously intercepted structured data).
+      await delay(1500);
+      const scraped = await client.evaluate<RawDomComment[]>(
+        SCRAPE_COMMENTS_SCRIPT,
+      );
+      const fresh = (scraped ?? []).map(mapDomComment);
+      if (fresh.length > comments.length) {
+        comments.length = 0;
+        comments.push(...fresh);
+      }
+    }
+
+    if (comments.length >= maxComments) {
+      return comments.slice(0, maxComments);
+    }
+  }
+
+  return comments.slice(0, maxComments);
+}
+
+// ---------------------------------------------------------------------------
 // Main operation
 // ---------------------------------------------------------------------------
 
 /**
  * Retrieve detailed data for a single LinkedIn post with its comment thread.
  *
- * Connects to the LinkedIn webview in LinkedHelper and calls the
- * Voyager API to fetch the post entity and its comments.
+ * Connects to the LinkedIn webview in LinkedHelper, navigates to the
+ * post detail page, and passively intercepts the REST `/feed/updates/{urn}`
+ * response to extract post content.  Comments are loaded by scraping
+ * initial visible comments and then clicking "load more" — intercepting
+ * each comment-loading response for structured data.
  *
- * @param input - Post URL or URN, comment pagination parameters, and CDP connection options.
- * @returns Post detail with comments and pagination metadata.
+ * @param input - Post URL or URN, comment limit, and CDP connection options.
+ * @returns Post detail with comments.
  */
 export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
   const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
   const cdpHost = input.cdpHost ?? "127.0.0.1";
   const allowRemote = input.allowRemote ?? false;
   const commentCount = input.commentCount ?? 10;
-  const commentStart = input.commentStart ?? 0;
 
   const postUrn = extractPostUrn(input.postUrl);
 
@@ -418,59 +642,50 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
 
   try {
     const voyager = new VoyagerInterceptor(client);
+    await voyager.enable();
 
-    // Fetch post detail
-    const encodedUrn = encodeURIComponent(postUrn);
-    const postPath = `/voyager/api/feed/updates/${encodedUrn}`;
+    try {
+      // If the browser is already on the post detail page, LinkedIn's SPA
+      // won't fire a fresh API request on navigate.  Navigate away first.
+      await navigateAwayIf(client, "/feed/update/");
 
-    const postResponse = await voyager.fetch(postPath);
-    if (postResponse.status !== 200) {
-      throw new Error(
-        `Voyager API returned HTTP ${String(postResponse.status)} for post detail`,
+      // Register the response listener before navigating to avoid race conditions.
+      const responsePromise = voyager.waitForResponse((url) =>
+        url.includes("/feed/updates/"),
       );
-    }
 
-    const postBody = postResponse.body;
-    if (postBody === null || typeof postBody !== "object") {
-      throw new Error(
-        "Voyager API returned an unexpected response format for post detail",
-      );
-    }
+      // Navigate to the post detail page — LinkedIn's SPA will fetch the
+      // update data naturally via REST /feed/updates/{urn}.
+      const postDetailUrl = `https://www.linkedin.com/feed/update/${postUrn}/`;
+      await client.navigate(postDetailUrl);
 
-    const rawPost = postBody as VoyagerFeedUpdateResponse;
-    const post = parseFeedUpdateResponse(
-      rawPost,
-      postUrn,
-      rawPost.included ?? [],
-    );
-
-    // Fetch comments — gracefully degrade when the endpoint is unavailable
-    // (LinkedIn deprecated /feed/dash/feedComments, tracked in #523).
-    let comments: PostComment[] = [];
-    let commentsPaging = { start: commentStart, count: 0, total: 0 };
-
-    const commentsPath =
-      `/voyager/api/feed/dash/feedComments` +
-      `?q=commentsUnderFeedUpdate&updateUrn=${encodedUrn}` +
-      `&start=${String(commentStart)}&count=${String(commentCount)}`;
-
-    const commentsResponse = await voyager.fetch(commentsPath);
-    if (commentsResponse.status === 200) {
-      const commentsBody = commentsResponse.body;
-      if (commentsBody !== null && typeof commentsBody === "object") {
-        const parsed = parseCommentsResponse(
-          commentsBody as VoyagerCommentsResponse,
+      const response = await responsePromise;
+      if (response.status !== 200) {
+        throw new Error(
+          `Voyager API returned HTTP ${String(response.status)} for post detail`,
         );
-        comments = parsed.comments;
-        commentsPaging = parsed.paging;
       }
-    }
 
-    return {
-      post,
-      comments,
-      commentsPaging,
-    };
+      const body = response.body;
+      if (body === null || typeof body !== "object") {
+        throw new Error(
+          "Voyager API returned an unexpected response format for post detail",
+        );
+      }
+
+      const rawPost = body as VoyagerFeedUpdateResponse;
+      const included = rawPost.included ?? [];
+
+      const post = parseFeedUpdateResponse(rawPost, postUrn, included);
+
+      // Load comments: scrape initial visible comments from the DOM, then
+      // click "load more" and intercept each comment-loading response.
+      const comments = await loadComments(client, voyager, commentCount);
+
+      return { post, comments };
+    } finally {
+      await voyager.disable();
+    }
   } finally {
     client.disconnect();
   }

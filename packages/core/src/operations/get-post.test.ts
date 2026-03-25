@@ -15,6 +15,14 @@ vi.mock("../voyager/interceptor.js", () => ({
   VoyagerInterceptor: vi.fn(),
 }));
 
+vi.mock("./navigate-away.js", () => ({
+  navigateAwayIf: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("./get-feed.js", () => ({
+  delay: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
 import { VoyagerInterceptor } from "../voyager/interceptor.js";
@@ -436,16 +444,18 @@ describe("getPost", () => {
     "https://www.linkedin.com/feed/update/urn:li:activity:1234567890/";
 
   function setupMocks(opts?: {
-    postStatus?: number;
-    postBody?: unknown;
-    commentsStatus?: number;
-    commentsBody?: unknown;
+    responseStatus?: number;
+    responseBody?: unknown;
+    scrapedComments?: unknown[];
+    loadMoreResult?: boolean;
+    commentResponses?: Array<{ status: number; body: unknown }>;
   }) {
     const {
-      postStatus = 200,
-      postBody = {},
-      commentsStatus = 200,
-      commentsBody = { elements: [] },
+      responseStatus = 200,
+      responseBody = {},
+      scrapedComments = [],
+      loadMoreResult = false,
+      commentResponses = [],
     } = opts ?? {};
 
     vi.mocked(discoverTargets).mockResolvedValue([
@@ -459,28 +469,59 @@ describe("getPost", () => {
       },
     ]);
 
+    const evaluate = vi.fn();
+    evaluate.mockImplementation((script: string) => {
+      if (script.includes("comments-comment-item")) {
+        return Promise.resolve(scrapedComments);
+      }
+      if (script.includes("load-more-comments")) {
+        return Promise.resolve(loadMoreResult);
+      }
+      return Promise.resolve(null);
+    });
+
+    const navigate = vi.fn().mockResolvedValue(undefined);
     const disconnect = vi.fn();
     vi.mocked(CDPClient).mockImplementation(function () {
       return {
         connect: vi.fn().mockResolvedValue(undefined),
         disconnect,
+        navigate,
+        evaluate,
       } as unknown as CDPClient;
     });
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ url: "", status: postStatus, body: postBody })
-      .mockResolvedValueOnce({
-        url: "",
-        status: commentsStatus,
-        body: commentsBody,
+    const enable = vi.fn().mockResolvedValue(undefined);
+    const disable = vi.fn().mockResolvedValue(undefined);
+
+    // First call returns the post detail response; subsequent calls return
+    // comment-loading responses (or reject to simulate timeout).
+    const waitForResponse = vi.fn();
+    waitForResponse.mockResolvedValueOnce({
+      url: "/voyager/api/feed/updates/urn%3Ali%3Aactivity%3A1234567890",
+      status: responseStatus,
+      body: responseBody,
+    });
+    for (const cr of commentResponses) {
+      waitForResponse.mockResolvedValueOnce({
+        url: "/voyager/api/feed/dash/feedComments",
+        status: cr.status,
+        body: cr.body,
       });
+    }
+    // Any further calls (e.g. when load-more clicks but no response configured)
+    // should reject (simulating timeout)
+    waitForResponse.mockRejectedValue(new Error("Timeout"));
 
     vi.mocked(VoyagerInterceptor).mockImplementation(function () {
-      return { fetch: fetchMock } as unknown as VoyagerInterceptor;
+      return {
+        enable,
+        disable,
+        waitForResponse,
+      } as unknown as VoyagerInterceptor;
     });
 
-    return { fetchMock, disconnect };
+    return { enable, disable, waitForResponse, navigate, disconnect, evaluate };
   }
 
   beforeEach(() => {
@@ -505,8 +546,144 @@ describe("getPost", () => {
     );
   });
 
+  it("uses passive interception pattern", async () => {
+    const { enable, disable, waitForResponse, navigate } = setupMocks({
+      responseBody: {
+        actor: {
+          name: { text: "John Doe" },
+          description: { text: "Software Engineer" },
+        },
+        commentary: { text: { text: "Hello world!" } },
+        publishedAt: 1700000000000,
+        socialDetail: {
+          totalSocialActivityCounts: {
+            numLikes: 42,
+            numComments: 5,
+            numShares: 3,
+          },
+        },
+      },
+    });
+
+    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+    expect(enable).toHaveBeenCalled();
+    expect(waitForResponse).toHaveBeenCalledWith(expect.any(Function));
+    expect(navigate).toHaveBeenCalledWith(
+      "https://www.linkedin.com/feed/update/urn:li:activity:1234567890/",
+    );
+    expect(disable).toHaveBeenCalled();
+
+    expect(result.post.postUrn).toBe("urn:li:activity:1234567890");
+    expect(result.post.authorName).toBe("John Doe");
+    expect(result.post.text).toBe("Hello world!");
+    expect(result.post.reactionCount).toBe(42);
+  });
+
+  it("waitForResponse filter matches /feed/updates/ URLs", async () => {
+    const { waitForResponse } = setupMocks();
+
+    await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+    const call = waitForResponse.mock.calls[0];
+    expect(call).toBeDefined();
+    const filter = (call as unknown[])[0] as (url: string) => boolean;
+    expect(filter("/voyager/api/feed/updates/urn%3Ali%3Aactivity%3A123")).toBe(
+      true,
+    );
+    expect(filter("/voyager/api/feed/dash/feedSocialDetails")).toBe(false);
+    expect(filter("/voyager/api/other-endpoint")).toBe(false);
+  });
+
+  it("scrapes initial comments from the DOM", async () => {
+    setupMocks({
+      scrapedComments: [
+        {
+          authorName: "Alice Smith",
+          authorHeadline: "Engineer",
+          authorPublicId: "alices",
+          text: "Great post!",
+          createdAt: 1700010000000,
+          reactionCount: 3,
+        },
+      ],
+    });
+
+    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+    expect(result.comments).toHaveLength(1);
+    expect(result.comments[0]?.text).toBe("Great post!");
+    expect(result.comments[0]?.authorName).toBe("Alice Smith");
+  });
+
+  it("returns empty comments when none found in DOM", async () => {
+    setupMocks({ scrapedComments: [] });
+
+    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+    expect(result.comments).toEqual([]);
+  });
+
+  it("limits comments to commentCount", async () => {
+    setupMocks({
+      scrapedComments: [
+        { authorName: "A", authorHeadline: null, authorPublicId: null, text: "1", createdAt: null, reactionCount: 0 },
+        { authorName: "B", authorHeadline: null, authorPublicId: null, text: "2", createdAt: null, reactionCount: 0 },
+        { authorName: "C", authorHeadline: null, authorPublicId: null, text: "3", createdAt: null, reactionCount: 0 },
+      ],
+    });
+
+    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT, commentCount: 2 });
+    expect(result.comments).toHaveLength(2);
+  });
+
+  it("intercepts comment responses on load-more click", async () => {
+    setupMocks({
+      scrapedComments: [
+        { authorName: "A", authorHeadline: null, authorPublicId: null, text: "initial", createdAt: null, reactionCount: 0 },
+      ],
+      loadMoreResult: true,
+      commentResponses: [
+        {
+          status: 200,
+          body: {
+            elements: [
+              {
+                urn: "urn:li:comment:200",
+                commenter: { firstName: "Bob", lastName: "Jones" },
+                commentV2: { text: { text: "loaded more!" } },
+                createdTime: 1700020000000,
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT, commentCount: 5 });
+
+    // Initial DOM comment + intercepted load-more comment
+    expect(result.comments.length).toBeGreaterThanOrEqual(2);
+    expect(result.comments.some((c) => c.text === "loaded more!")).toBe(true);
+  });
+
+  it("falls back to DOM scraping when interception times out", async () => {
+    setupMocks({
+      scrapedComments: [
+        { authorName: "A", authorHeadline: null, authorPublicId: null, text: "dom-only", createdAt: null, reactionCount: 0 },
+      ],
+      loadMoreResult: true,
+      // No commentResponses → waitForResponse will reject (timeout)
+    });
+
+    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT, commentCount: 5 });
+
+    // Should still return DOM-scraped comments despite interception timeout
+    expect(result.comments.length).toBeGreaterThanOrEqual(1);
+    expect(result.comments[0]?.text).toBe("dom-only");
+  });
+
   it("throws on non-200 response for post detail", async () => {
-    setupMocks({ postStatus: 403 });
+    setupMocks({ responseStatus: 403 });
 
     await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow(
       "Voyager API returned HTTP 403 for post detail",
@@ -514,29 +691,11 @@ describe("getPost", () => {
   });
 
   it("throws on non-object response body for post detail", async () => {
-    setupMocks({ postBody: null });
+    setupMocks({ responseBody: null });
 
     await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow(
       "Voyager API returned an unexpected response format for post detail",
     );
-  });
-
-  it("returns empty comments on non-200 response for comments endpoint", async () => {
-    setupMocks({ commentsStatus: 500 });
-
-    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
-
-    expect(result.comments).toEqual([]);
-    expect(result.commentsPaging.total).toBe(0);
-  });
-
-  it("returns empty comments on non-object response body for comments", async () => {
-    setupMocks({ commentsBody: null });
-
-    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
-
-    expect(result.comments).toEqual([]);
-    expect(result.commentsPaging.total).toBe(0);
   });
 
   it("disconnects CDP client after successful operation", async () => {
@@ -547,11 +706,12 @@ describe("getPost", () => {
     expect(disconnect).toHaveBeenCalled();
   });
 
-  it("disconnects CDP client even on error", async () => {
-    const { disconnect } = setupMocks({ postStatus: 500 });
+  it("disconnects CDP client and disables interception even on error", async () => {
+    const { disconnect, disable } = setupMocks({ responseStatus: 500 });
 
     await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow();
 
+    expect(disable).toHaveBeenCalled();
     expect(disconnect).toHaveBeenCalled();
   });
 });

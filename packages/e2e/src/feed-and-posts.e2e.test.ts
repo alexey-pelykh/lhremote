@@ -326,7 +326,6 @@ describeE2E("feed and posts operations", () => {
           expect(typeof parsed.post.commentCount).toBe("number");
           expect(typeof parsed.post.shareCount).toBe("number");
           expect(Array.isArray(parsed.comments)).toBe(true);
-          expect(parsed.commentsPaging).toHaveProperty("total");
         }, 60_000);
 
         it("get-post prints human-friendly output", async () => {
@@ -372,7 +371,6 @@ describeE2E("feed and posts operations", () => {
           expect(parsed.post).toHaveProperty("postUrn");
           expect(typeof parsed.post.authorName).toBe("string");
           expect(Array.isArray(parsed.comments)).toBe(true);
-          expect(parsed.commentsPaging).toHaveProperty("total");
         }, 60_000);
       });
     });

@@ -15,7 +15,6 @@ export async function handleGetPost(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
-    commentStart?: number;
     commentCount?: number;
     json?: boolean;
   },
@@ -27,7 +26,6 @@ export async function handleGetPost(
       cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
-      commentStart: options.commentStart,
       commentCount: options.commentCount,
     });
   } catch (error) {
@@ -40,7 +38,7 @@ export async function handleGetPost(
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
   } else {
-    const { post, comments, commentsPaging } = result;
+    const { post, comments } = result;
 
     process.stdout.write(`Post: ${post.postUrn}\n`);
     if (post.authorName) {
@@ -67,7 +65,7 @@ export async function handleGetPost(
 
     if (comments.length > 0) {
       process.stdout.write(
-        `\nComments (${String(commentsPaging.start + 1)}–${String(commentsPaging.start + comments.length)} of ${String(commentsPaging.total)}):\n`,
+        `\nComments (${String(comments.length)}):\n`,
       );
       for (const comment of comments) {
         process.stdout.write("\n");

@@ -702,10 +702,9 @@ export function createProgram(): Command {
 
   program
     .command("get-post")
-    .description("Get detailed data for a single LinkedIn post with comment thread")
+    .description("Get detailed data for a single LinkedIn post with comments")
     .argument("<postUrl>", "LinkedIn post URL or URN")
-    .option("--comment-start <n>", "Comment pagination offset (default: 0)", parseNonNegativeInt)
-    .option("--comment-count <n>", "Number of comments per page (default: 10)", parsePositiveInt)
+    .option("--comment-count <n>", "Maximum number of comments to load (default: 10)", parsePositiveInt)
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
