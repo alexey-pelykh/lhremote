@@ -10,20 +10,13 @@ import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 export function registerSearchPosts(server: McpServer): void {
   server.tool(
     "search-posts",
-    "Search LinkedIn for posts by keyword or hashtag. Returns structured post data with author info and engagement counts. Supports pagination.",
+    "Search LinkedIn for posts by keyword or hashtag. Returns structured post data (URN, URL, author, text, media type, engagement counts, timestamp) with cursor-based pagination.",
     {
       query: z
         .string()
         .describe(
           'Search query — keywords (e.g. "AI agents") or hashtag (e.g. "#AIAgents")',
         ),
-      start: z
-        .number()
-        .int()
-        .nonnegative()
-        .optional()
-        .default(0)
-        .describe("Pagination offset (default: 0)"),
       count: z
         .number()
         .int()
@@ -31,14 +24,20 @@ export function registerSearchPosts(server: McpServer): void {
         .optional()
         .default(10)
         .describe("Number of results per page (default: 10)"),
+      cursor: z
+        .string()
+        .optional()
+        .describe(
+          "Cursor token from a previous search-posts call for the next page",
+        ),
       ...cdpConnectionSchema,
     },
-    async ({ query, start, count, cdpPort, cdpHost, allowRemote }) => {
+    async ({ query, count, cursor, cdpPort, cdpHost, allowRemote }) => {
       try {
         const result = await searchPosts({
           query,
-          start,
           count,
+          cursor,
           cdpPort,
           cdpHost,
           allowRemote,

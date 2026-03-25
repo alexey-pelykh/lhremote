@@ -69,7 +69,6 @@ export type {
   ProfileSummary,
   ReactionCount,
   RunnerState,
-  SearchPostResult,
   Skill,
   BasicSearchParams,
   BooleanExpressionInput,
