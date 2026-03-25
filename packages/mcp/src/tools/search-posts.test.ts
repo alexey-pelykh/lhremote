@@ -9,24 +9,30 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 });
 
 import { searchPosts } from "@lhremote/core";
+import type { SearchPostsOutput } from "@lhremote/core";
 import { registerSearchPosts } from "./search-posts.js";
 import { createMockServer } from "./testing/mock-server.js";
 
-const MOCK_RESULTS = {
+const MOCK_RESULTS: SearchPostsOutput = {
   query: "AI agents",
   posts: [
     {
-      postUrn: "urn:li:activity:7123456789012345678",
-      text: "Excited about AI agents!",
-      authorFirstName: "Jane",
-      authorLastName: "Smith",
-      authorPublicId: "janesmith",
+      urn: "urn:li:activity:7123456789012345678",
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678/",
+      authorName: "Jane Smith",
       authorHeadline: "CEO at Acme Corp",
+      authorProfileUrl: "https://www.linkedin.com/in/janesmith",
+      authorPublicId: null,
+      text: "Excited about AI agents!",
+      mediaType: null,
       reactionCount: 42,
       commentCount: 7,
+      shareCount: 3,
+      timestamp: null,
+      hashtags: [],
     },
   ],
-  paging: { start: 0, count: 10, total: 1 },
+  nextCursor: null,
 };
 
 describe("registerSearchPosts", () => {
@@ -77,13 +83,13 @@ describe("registerSearchPosts", () => {
     const handler = getHandler("search-posts");
     await handler({
       query: "AI agents",
-      start: 10,
+      cursor: "urn:li:activity:100",
       count: 5,
       cdpPort: 9222,
     });
 
     expect(searchPosts).toHaveBeenCalledWith(
-      expect.objectContaining({ query: "AI agents", start: 10, count: 5 }),
+      expect.objectContaining({ query: "AI agents", cursor: "urn:li:activity:100", count: 5 }),
     );
   });
 

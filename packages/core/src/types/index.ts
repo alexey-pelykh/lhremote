@@ -59,8 +59,6 @@ export type {
   ReactionCount,
 } from "./post-analytics.js";
 
-export type { SearchPostResult } from "./search-posts.js";
-
 export type { PostComment, PostDetail } from "./post.js";
 
 export type { SourceTier, SourceType } from "./collection.js";

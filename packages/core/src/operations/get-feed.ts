@@ -32,6 +32,7 @@ export interface GetFeedOutput {
 // Raw post shape returned by the in-page scraping script
 // ---------------------------------------------------------------------------
 
+/** @internal Exported for reuse by search-posts. */
 export interface RawDomPost {
   urn: string;
   url: string | null;
@@ -57,7 +58,8 @@ export interface RawDomPost {
  * The script is intentionally a single IIFE string so it can be sent
  * verbatim to the target without any transpilation.
  */
-const SCRAPE_FEED_SCRIPT = `(() => {
+/** @internal Exported for reuse by search-posts. */
+export const SCRAPE_FEED_SCRIPT = `(() => {
   const posts = [];
   const seen = new Set();
 
@@ -237,14 +239,16 @@ export function parseTimestamp(raw: string | null): number | null {
 /**
  * Build a LinkedIn post URL from an activity URN.
  */
-function buildPostUrl(urn: string): string {
+/** @internal Exported for reuse by search-posts. */
+export function buildPostUrl(urn: string): string {
   return `https://www.linkedin.com/feed/update/${urn}/`;
 }
 
 /**
  * Convert raw DOM-scraped posts into normalised FeedPost entries.
  */
-function mapRawPosts(raw: RawDomPost[]): FeedPost[] {
+/** @internal Exported for reuse by search-posts. */
+export function mapRawPosts(raw: RawDomPost[]): FeedPost[] {
   return raw.map((r) => ({
     urn: r.urn,
     url: r.url ?? buildPostUrl(r.urn),
@@ -266,13 +270,13 @@ function mapRawPosts(raw: RawDomPost[]): FeedPost[] {
 // Scroll helper
 // ---------------------------------------------------------------------------
 
-/** Delay helper. */
-function delay(ms: number): Promise<void> {
+/** @internal Exported for reuse by search-posts. */
+export function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Scroll down in the feed using CDP Input.dispatchMouseEvent mouseWheel. */
-async function scrollFeed(client: CDPClient): Promise<void> {
+/** @internal Exported for reuse by search-posts. */
+export async function scrollFeed(client: CDPClient): Promise<void> {
   await client.send("Input.dispatchMouseEvent", {
     type: "mouseWheel",
     x: 300,
@@ -286,8 +290,8 @@ async function scrollFeed(client: CDPClient): Promise<void> {
 // Wait for feed to load
 // ---------------------------------------------------------------------------
 
-/** Wait until at least one feed update link appears in the DOM. */
-async function waitForFeedLoad(
+/** @internal Exported for reuse by search-posts. */
+export async function waitForFeedLoad(
   client: CDPClient,
   timeoutMs = 15_000,
 ): Promise<void> {

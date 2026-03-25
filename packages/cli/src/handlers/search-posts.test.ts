@@ -19,27 +19,37 @@ const MOCK_RESULTS: SearchPostsOutput = {
   query: "AI agents",
   posts: [
     {
-      postUrn: "urn:li:activity:7123456789012345678",
-      text: "Excited about AI agents!",
-      authorFirstName: "Jane",
-      authorLastName: "Smith",
-      authorPublicId: "janesmith",
+      urn: "urn:li:activity:7123456789012345678",
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678/",
+      authorName: "Jane Smith",
       authorHeadline: "CEO at Acme Corp",
+      authorProfileUrl: "https://www.linkedin.com/in/janesmith",
+      authorPublicId: null,
+      text: "Excited about AI agents!",
+      mediaType: null,
       reactionCount: 42,
       commentCount: 7,
+      shareCount: 3,
+      timestamp: null,
+      hashtags: [],
     },
     {
-      postUrn: "urn:li:activity:7234567890123456789",
-      text: null,
-      authorFirstName: "Bob",
-      authorLastName: null,
-      authorPublicId: null,
+      urn: "urn:li:activity:7234567890123456789",
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:7234567890123456789/",
+      authorName: "Bob",
       authorHeadline: null,
+      authorProfileUrl: null,
+      authorPublicId: null,
+      text: null,
+      mediaType: null,
       reactionCount: 0,
       commentCount: 0,
+      shareCount: 0,
+      timestamp: null,
+      hashtags: [],
     },
   ],
-  paging: { start: 0, count: 10, total: 42 },
+  nextCursor: "urn:li:activity:7234567890123456789",
 };
 
 describe("handleSearchPosts", () => {
@@ -68,7 +78,7 @@ describe("handleSearchPosts", () => {
     const output = JSON.parse(getStdout(stdoutSpy));
     expect(output.query).toBe("AI agents");
     expect(output.posts).toHaveLength(2);
-    expect(output.paging.total).toBe(42);
+    expect(output.nextCursor).toBe("urn:li:activity:7234567890123456789");
   });
 
   it("prints human-readable output by default", async () => {
@@ -79,29 +89,28 @@ describe("handleSearchPosts", () => {
     expect(process.exitCode).toBeUndefined();
     const output = getStdout(stdoutSpy);
     expect(output).toContain('"AI agents"');
-    expect(output).toContain("42 results");
     expect(output).toContain("Jane Smith");
-    expect(output).toContain("janesmith");
     expect(output).toContain("CEO at Acme Corp");
     expect(output).toContain("Excited about AI agents!");
     expect(output).toContain("Reactions: 42");
     expect(output).toContain("Comments: 7");
+    expect(output).toContain("Reposts: 3");
   });
 
-  it("shows pagination hint when more results available", async () => {
+  it("shows pagination hint when nextCursor is present", async () => {
     vi.mocked(searchPosts).mockResolvedValue(MOCK_RESULTS);
 
     await handleSearchPosts("AI agents", {});
 
     const output = getStdout(stdoutSpy);
-    expect(output).toContain("--start 2");
+    expect(output).toContain("--cursor");
   });
 
   it("handles empty results", async () => {
     vi.mocked(searchPosts).mockResolvedValue({
       query: "nonexistent",
       posts: [],
-      paging: { start: 0, count: 10, total: 0 },
+      nextCursor: null,
     });
 
     await handleSearchPosts("nonexistent", {});
@@ -113,10 +122,10 @@ describe("handleSearchPosts", () => {
   it("passes pagination options to operation", async () => {
     vi.mocked(searchPosts).mockResolvedValue(MOCK_RESULTS);
 
-    await handleSearchPosts("AI agents", { start: 10, count: 5 });
+    await handleSearchPosts("AI agents", { cursor: "urn:li:activity:100", count: 5 });
 
     expect(searchPosts).toHaveBeenCalledWith(
-      expect.objectContaining({ query: "AI agents", start: 10, count: 5 }),
+      expect.objectContaining({ query: "AI agents", cursor: "urn:li:activity:100", count: 5 }),
     );
   });
 

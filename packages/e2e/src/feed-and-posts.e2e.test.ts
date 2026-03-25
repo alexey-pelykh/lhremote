@@ -472,8 +472,7 @@ describeE2E("feed and posts operations", () => {
     // search-posts
     // -----------------------------------------------------------------
 
-    // Skipped: search-posts passive interception fails in LH webview (#522)
-    describe.skip("search-posts", () => {
+    describe("search-posts", () => {
       describe("CLI handlers", () => {
         const originalExitCode = process.exitCode;
 
@@ -504,10 +503,9 @@ describeE2E("feed and posts operations", () => {
           expect(parsed.query).toBe("linkedin");
           expect(Array.isArray(parsed.posts)).toBe(true);
           expect(parsed.posts.length).toBeGreaterThan(0);
-          expect(parsed.paging).toHaveProperty("total");
 
           const post = parsed.posts[0] as (typeof parsed.posts)[number];
-          expect(post).toHaveProperty("postUrn");
+          expect(post).toHaveProperty("urn");
           expect(typeof post.reactionCount).toBe("number");
           expect(typeof post.commentCount).toBe("number");
         }, 60_000);
@@ -526,7 +524,6 @@ describeE2E("feed and posts operations", () => {
             .map((call) => String(call[0]))
             .join("");
           expect(output).toContain("Search:");
-          expect(output).toContain("results");
         }, 60_000);
       });
 
@@ -551,7 +548,6 @@ describeE2E("feed and posts operations", () => {
           expect(parsed.query).toBe("linkedin");
           expect(Array.isArray(parsed.posts)).toBe(true);
           expect(parsed.posts.length).toBeGreaterThan(0);
-          expect(parsed.paging).toHaveProperty("total");
         }, 60_000);
       });
     });

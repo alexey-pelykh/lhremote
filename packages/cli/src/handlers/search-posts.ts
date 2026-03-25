@@ -12,7 +12,7 @@ import {
 export async function handleSearchPosts(
   query: string,
   options: {
-    start?: number;
+    cursor?: string;
     count?: number;
     cdpPort?: number;
     cdpHost?: string;
@@ -24,7 +24,7 @@ export async function handleSearchPosts(
   try {
     result = await searchPosts({
       query,
-      start: options.start,
+      cursor: options.cursor,
       count: options.count,
       cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
       cdpHost: options.cdpHost,
@@ -40,10 +40,9 @@ export async function handleSearchPosts(
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
   } else {
-    const { posts, paging } = result;
-    process.stdout.write(
-      `Search: "${result.query}" (${String(paging.total)} results)\n\n`,
-    );
+    process.stdout.write(`Search: "${result.query}"\n\n`);
+
+    const { posts } = result;
 
     if (posts.length === 0) {
       process.stdout.write("No posts found.\n");
@@ -51,15 +50,9 @@ export async function handleSearchPosts(
     }
 
     for (const post of posts) {
-      const author = [post.authorFirstName, post.authorLastName]
-        .filter(Boolean)
-        .join(" ") || "Unknown";
-      process.stdout.write(`  ${post.postUrn}\n`);
-      process.stdout.write(`    Author:    ${author}`);
-      if (post.authorPublicId) {
-        process.stdout.write(` (${post.authorPublicId})`);
-      }
-      process.stdout.write("\n");
+      const author = post.authorName ?? "Unknown";
+      process.stdout.write(`  ${post.urn}\n`);
+      process.stdout.write(`    Author:    ${author}\n`);
       if (post.authorHeadline) {
         process.stdout.write(`    Headline:  ${post.authorHeadline}\n`);
       }
@@ -71,15 +64,14 @@ export async function handleSearchPosts(
         process.stdout.write(`    Text:      ${preview}\n`);
       }
       process.stdout.write(
-        `    Reactions: ${String(post.reactionCount)}  Comments: ${String(post.commentCount)}\n`,
+        `    Reactions: ${String(post.reactionCount)}  Comments: ${String(post.commentCount)}  Reposts: ${String(post.shareCount)}\n`,
       );
       process.stdout.write("\n");
     }
 
-    if (paging.start + posts.length < paging.total) {
+    if (result.nextCursor) {
       process.stdout.write(
-        `Showing ${String(paging.start + 1)}-${String(paging.start + posts.length)} of ${String(paging.total)}. ` +
-          `Use --start ${String(paging.start + posts.length)} for next page.\n`,
+        `More results available. Use --cursor ${result.nextCursor} for next page.\n`,
       );
     }
   }
