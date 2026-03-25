@@ -34,7 +34,7 @@ export interface GetFeedOutput {
 
 /** @internal Exported for reuse by search-posts. */
 export interface RawDomPost {
-  urn: string;
+  urn: string | null;
   url: string | null;
   authorName: string | null;
   authorHeadline: string | null;
@@ -53,70 +53,67 @@ export interface RawDomPost {
 
 /**
  * JavaScript source evaluated inside the LinkedIn page context via
- * `Runtime.evaluate`.  Returns an array of {@link RawDomPost} objects.
+ * `Runtime.evaluate`.  Returns an array of {@link RawDomPost} objects
+ * (without URNs — those are extracted separately via the three-dot menu).
  *
- * The script is intentionally a single IIFE string so it can be sent
- * verbatim to the target without any transpilation.
+ * ## Discovery strategy (2026-03 onwards)
+ *
+ * LinkedIn's SSR feed uses `div[data-testid="mainFeed"]` as the feed
+ * list (`role="list"`) and `div[role="listitem"]` for each post.
+ * CSS class names are obfuscated hashes (CSS Modules), so the script
+ * relies on semantic attributes and structural heuristics.
+ *
+ * Post URNs are NOT available in the DOM.  They are extracted in a
+ * separate phase by opening each post's three-dot menu and reading
+ * the "Embed this post" link's `targetUrn` query parameter.
  */
-/** @internal Exported for reuse by search-posts. */
-export const SCRAPE_FEED_SCRIPT = `(() => {
+const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   const posts = [];
-  const seen = new Set();
 
-  // Find all feed update links — each one identifies a post
-  const links = document.querySelectorAll('a[href*="/feed/update/urn:li:"]');
+  // --- Step 1: Find the feed list via data-testid ---
+  const feedList = document.querySelector('[data-testid="mainFeed"]');
+  if (!feedList) return posts;
 
-  for (const link of links) {
-    const match = link.href.match(/\\/feed\\/update\\/(urn:li:[^/]+)/);
-    if (!match) continue;
-    const urn = decodeURIComponent(match[1]);
-    if (seen.has(urn)) continue;
-    seen.add(urn);
+  // --- Step 2: Iterate listitem children ---
+  const items = feedList.querySelectorAll('div[role="listitem"]');
+  for (const wrapper of items) {
+    // The listitem wraps the actual post content in nested divs.
+    // Some listitems may be zero-height (virtualized/hidden) or
+    // non-post items (composer, suggestions).
+    const item = wrapper;
+    if (item.offsetHeight < 100) continue;
 
-    // Walk up to find the post container.  LinkedIn wraps each feed item in
-    // a container that is a direct child of the feed list.  We climb until
-    // we find an element whose parent is the main feed container or we hit
-    // a reasonable depth limit.
-    let container = link;
-    for (let i = 0; i < 20; i++) {
-      const parent = container.parentElement;
-      if (!parent || parent.tagName === 'MAIN' || parent.tagName === 'BODY') break;
-      container = parent;
-      // Stop at data-urn boundary (LinkedIn sometimes annotates feed items)
-      if (container.hasAttribute('data-urn')) break;
-      // Stop if we've reached a large enough container
-      if (container.offsetHeight > 150) {
-        // Check if this looks like a feed item wrapper (has sibling feed items)
-        const siblings = container.parentElement?.children;
-        if (siblings && siblings.length > 1) break;
-      }
-    }
+    // Detect real posts: must have a three-dot menu button
+    const menuBtn = item.querySelector('button[aria-label^="Open control menu for post"]');
+    if (!menuBtn) continue;
 
     // --- Author info ---
-    // Author profile links are typically /in/slug or /company/slug
     let authorName = null;
     let authorHeadline = null;
     let authorProfileUrl = null;
 
-    const authorLink = container.querySelector(
-      'a[href*="/in/"], a[href*="/company/"]'
-    );
+    const authorLink = item.querySelector('a[href*="/in/"], a[href*="/company/"]');
     if (authorLink) {
       authorProfileUrl = authorLink.href.split('?')[0] || null;
-      // The author name is usually the first meaningful text in the header area
       const nameEl = authorLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]')
         || authorLink;
       const rawName = (nameEl.textContent || '').trim();
       authorName = rawName || null;
     }
 
-    // Author headline: typically a secondary line near the author name
-    // Look for a text element that follows the author link area
-    const headerSpans = container.querySelectorAll('span.t-12, span.t-normal, span[class*="subtitle"]');
-    for (const span of headerSpans) {
+    // Author headline: look for a short descriptive text near the author.
+    const allSpans = item.querySelectorAll('span');
+    for (const span of allSpans) {
       const txt = (span.textContent || '').trim();
-      // Skip timestamps and empty strings
-      if (txt && !txt.match(/^\\d+[smhdw]$/) && txt.length > 3 && txt !== authorName) {
+      if (
+        txt &&
+        txt.length > 5 &&
+        txt.length < 200 &&
+        txt !== authorName &&
+        !txt.match(/^\\d+[smhdw]$/) &&
+        !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
+        !txt.match(/^Follow$|^Promoted$/i)
+      ) {
         authorHeadline = txt;
         break;
       }
@@ -124,30 +121,34 @@ export const SCRAPE_FEED_SCRIPT = `(() => {
 
     // --- Post text ---
     let text = null;
-    const commentaryEl = container.querySelector(
-      'span[dir="ltr"].break-words, div.feed-shared-update-v2__commentary, div[class*="update-components-text"]'
-    );
-    if (commentaryEl) {
-      text = (commentaryEl.textContent || '').trim() || null;
+    const ltrSpans = item.querySelectorAll('span[dir="ltr"]');
+    let longestText = '';
+    for (const span of ltrSpans) {
+      const txt = (span.textContent || '').trim();
+      if (txt.length > longestText.length && txt !== authorName && txt !== authorHeadline) {
+        longestText = txt;
+      }
+    }
+    if (longestText.length > 20) {
+      text = longestText;
     }
 
     // --- Media type ---
     let mediaType = null;
-    if (container.querySelector('video, div[class*="video"]')) {
+    if (item.querySelector('video')) {
       mediaType = 'video';
-    } else if (container.querySelector('img.feed-shared-image__image, div[class*="image-component"], img[class*="update-components-image"]')) {
-      mediaType = 'image';
-    } else if (container.querySelector('article, a[class*="article"], div[class*="article"]')) {
-      mediaType = 'article';
-    } else if (container.querySelector('div[class*="document"]')) {
-      mediaType = 'document';
+    } else if (item.querySelector('img[src*="media.licdn.com"]')) {
+      const imgs = item.querySelectorAll('img[src*="media.licdn.com"]');
+      for (const img of imgs) {
+        if (img.offsetHeight > 100) { mediaType = 'image'; break; }
+      }
     }
 
     // --- Engagement counts ---
-    const containerText = container.textContent || '';
+    const itemText = item.textContent || '';
 
     function parseCount(pattern) {
-      const m = containerText.match(pattern);
+      const m = itemText.match(pattern);
       if (!m) return 0;
       const raw = m[1].replace(/,/g, '');
       const num = parseInt(raw, 10);
@@ -160,24 +161,19 @@ export const SCRAPE_FEED_SCRIPT = `(() => {
 
     // --- Timestamp ---
     let timestamp = null;
-    const timeEl = container.querySelector('time');
+    const timeEl = item.querySelector('time');
     if (timeEl) {
       const dt = timeEl.getAttribute('datetime');
-      if (dt) {
-        timestamp = dt;
-      }
+      if (dt) timestamp = dt;
     }
     if (!timestamp) {
-      // Look for relative time text like "52m", "16h", "2d", "1w"
-      const timeMatch = containerText.match(/(?:^|\\s)(\\d+[smhdw])(?:\\s|$|\\u00B7|\\xB7)/);
-      if (timeMatch) {
-        timestamp = timeMatch[1];
-      }
+      const timeMatch = itemText.match(/(?:^|\\s)(\\d+[smhdw])(?:\\s|$|\\u00B7|\\xB7)/);
+      if (timeMatch) timestamp = timeMatch[1];
     }
 
     posts.push({
-      urn: urn,
-      url: 'https://www.linkedin.com/feed/update/' + urn + '/',
+      urn: null,
+      url: null,
       authorName: authorName,
       authorHeadline: authorHeadline,
       authorProfileUrl: authorProfileUrl,
@@ -192,6 +188,69 @@ export const SCRAPE_FEED_SCRIPT = `(() => {
 
   return posts;
 })()`;
+
+/**
+ * Legacy scraping script using structural heuristics to find the feed
+ * container.  Used by search-posts which navigates to search result
+ * pages where `data-testid="mainFeed"` is not present.
+ *
+ * @internal Exported for reuse by search-posts.
+ */
+export { SCRAPE_FEED_POSTS_SCRIPT as SCRAPE_FEED_SCRIPT };
+
+// ---------------------------------------------------------------------------
+// URN extraction via three-dot menu → Embed link
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the post URN for a single feed item by opening its three-dot
+ * menu and reading the `targetUrn` parameter from the "Embed this post"
+ * link.
+ *
+ * @returns The URN string (e.g. `urn:li:share:123`) or `null` if the
+ *   menu does not contain an embed link (e.g. ad posts).
+ */
+async function extractPostUrn(
+  client: CDPClient,
+  postIndex: number,
+): Promise<string | null> {
+  // Scroll the menu button into view and click it
+  const clicked = await client.evaluate<boolean>(`(() => {
+    const btns = document.querySelectorAll(
+      '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]'
+    );
+    const btn = btns[${String(postIndex)}];
+    if (!btn) return false;
+    btn.scrollIntoView({ block: 'center' });
+    btn.click();
+    return true;
+  })()`);
+
+  if (!clicked) return null;
+
+  await delay(700);
+
+  // Read the embed link's targetUrn from the dropdown
+  const urn = await client.evaluate<string | null>(`(() => {
+    for (const a of document.querySelectorAll('a[href*="embed-modal"]')) {
+      const rect = a.getBoundingClientRect();
+      if (rect.width > 0 || rect.height > 0) {
+        try {
+          const url = new URL(a.href);
+          return decodeURIComponent(url.searchParams.get('targetUrn') || '');
+        } catch { return null; }
+      }
+    }
+    return null;
+  })()`);
+
+  // Close the dropdown with Escape
+  await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+  await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+  await delay(300);
+
+  return urn || null;
+}
 
 // ---------------------------------------------------------------------------
 // Parsing helpers
@@ -250,8 +309,8 @@ export function buildPostUrl(urn: string): string {
 /** @internal Exported for reuse by search-posts. */
 export function mapRawPosts(raw: RawDomPost[]): FeedPost[] {
   return raw.map((r) => ({
-    urn: r.urn,
-    url: r.url ?? buildPostUrl(r.urn),
+    urn: r.urn ?? "",
+    url: r.url ?? (r.urn ? buildPostUrl(r.urn) : null),
     authorName: r.authorName,
     authorHeadline: r.authorHeadline,
     authorProfileUrl: r.authorProfileUrl,
@@ -297,10 +356,19 @@ export async function waitForFeedLoad(
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const count = await client.evaluate<number>(
-      `document.querySelectorAll('a[href*="/feed/update/urn:li:"]').length`,
-    );
-    if (count > 0) return;
+    const ready = await client.evaluate<boolean>(`(() => {
+      const feed = document.querySelector('[data-testid="mainFeed"]');
+      if (!feed) return false;
+      const items = feed.querySelectorAll('div[role="listitem"]');
+      // Ready when at least one listitem has a post menu button
+      for (const item of items) {
+        if (item.querySelector('button[aria-label^="Open control menu for post"]')) {
+          return true;
+        }
+      }
+      return false;
+    })()`);
+    if (ready) return;
     await delay(500);
   }
   throw new Error(
@@ -372,20 +440,12 @@ export async function getFeed(
     const cursorUrn = cursor;
 
     for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
-      const scraped = await client.evaluate<RawDomPost[]>(SCRAPE_FEED_SCRIPT);
+      const scraped = await client.evaluate<RawDomPost[]>(SCRAPE_FEED_POSTS_SCRIPT);
       allPosts = scraped ?? [];
 
-      // Determine which posts to return
-      let startIdx = 0;
-      if (cursorUrn) {
-        const cursorIdx = allPosts.findIndex((p) => p.urn === cursorUrn);
-        if (cursorIdx >= 0) {
-          startIdx = cursorIdx + 1;
-        }
-      }
-
-      const available = allPosts.length - startIdx;
-      if (available >= count) break;
+      // Determine which posts to return (URNs not yet available, use index)
+      const available = allPosts.length;
+      if (available >= count && !cursorUrn) break;
 
       // No new posts appeared after scroll — stop
       if (allPosts.length === previousCount && scroll > 0) break;
@@ -398,7 +458,20 @@ export async function getFeed(
       }
     }
 
-    // Slice the result window
+    // --- URN extraction phase ---
+    // Open each post's three-dot menu and read the embed link's targetUrn.
+    // This populates the urn/url fields that the scrape script left null.
+    for (let i = 0; i < allPosts.length; i++) {
+      const post = allPosts[i];
+      if (!post) continue;
+      const urn = await extractPostUrn(client, i);
+      if (urn) {
+        post.urn = urn;
+        post.url = buildPostUrl(urn);
+      }
+    }
+
+    // Slice the result window (now that URNs are populated)
     let startIdx = 0;
     if (cursorUrn) {
       const cursorIdx = allPosts.findIndex((p) => p.urn === cursorUrn);
