@@ -11,39 +11,38 @@ vi.mock("../cdp/client.js", () => ({
   CDPClient: vi.fn(),
 }));
 
-vi.mock("../voyager/interceptor.js", () => ({
-  VoyagerInterceptor: vi.fn(),
-}));
-
 vi.mock("./navigate-away.js", () => ({
   navigateAwayIf: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
-import { VoyagerInterceptor } from "../voyager/interceptor.js";
-import { getFeed } from "./get-feed.js";
+import { getFeed, extractHashtags, parseTimestamp } from "./get-feed.js";
+import type { RawDomPost } from "./get-feed.js";
 
 const CDP_PORT = 9222;
 
 /**
- * Build a minimal GraphQL feed response wrapper.
+ * Build a minimal raw DOM post object.
  */
-function graphqlBody(
-  elements: unknown[],
-  metadata?: Record<string, unknown>,
-) {
+function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
   return {
-    data: {
-      feedDashMainFeedByMainFeed: {
-        elements,
-        ...(metadata ? { metadata } : {}),
-      },
-    },
+    urn: "urn:li:activity:123",
+    url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+    authorName: null,
+    authorHeadline: null,
+    authorProfileUrl: null,
+    text: null,
+    mediaType: null,
+    reactionCount: 0,
+    commentCount: 0,
+    shareCount: 0,
+    timestamp: null,
+    ...overrides,
   };
 }
 
-function setupMocks(body: unknown, status = 200) {
+function setupMocks(scrapedPosts: RawDomPost[] = []) {
   vi.mocked(discoverTargets).mockResolvedValue([
     {
       id: "target-1",
@@ -57,28 +56,26 @@ function setupMocks(body: unknown, status = 200) {
 
   const disconnect = vi.fn();
   const navigate = vi.fn().mockResolvedValue({ frameId: "F1" });
+  const send = vi.fn().mockResolvedValue(undefined);
+
+  // evaluate: first call is waitForFeedLoad check, subsequent calls return scraped posts
+  const evaluate = vi.fn();
+  // First call from waitForFeedLoad — return count > 0 to skip polling
+  evaluate.mockResolvedValueOnce(scrapedPosts.length || 1);
+  // Subsequent calls from SCRAPE_FEED_SCRIPT
+  evaluate.mockResolvedValue(scrapedPosts);
+
   vi.mocked(CDPClient).mockImplementation(function () {
     return {
       connect: vi.fn().mockResolvedValue(undefined),
       disconnect,
       navigate,
+      evaluate,
+      send,
     } as unknown as CDPClient;
   });
 
-  const enableMock = vi.fn().mockResolvedValue(undefined);
-  const disableMock = vi.fn().mockResolvedValue(undefined);
-  const waitForResponseMock = vi
-    .fn()
-    .mockResolvedValue({ url: "", status, body });
-  vi.mocked(VoyagerInterceptor).mockImplementation(function () {
-    return {
-      enable: enableMock,
-      disable: disableMock,
-      waitForResponse: waitForResponseMock,
-    } as unknown as VoyagerInterceptor;
-  });
-
-  return { navigate, enableMock, disableMock, waitForResponseMock, disconnect };
+  return { navigate, disconnect, evaluate, send };
 }
 
 describe("getFeed", () => {
@@ -90,58 +87,42 @@ describe("getFeed", () => {
     vi.restoreAllMocks();
   });
 
-  it("parses feed elements from the GraphQL response", async () => {
-    setupMocks(
-      graphqlBody(
-        [
-          {
-            metadata: {
-              backendUrn: "urn:li:activity:123",
-              shareUrn: "urn:li:share:111",
-            },
-            header: {
-              text: { text: "Alice Smith" },
-              image: { accessibilityText: "Engineer at Acme" },
-              navigationUrl: "https://www.linkedin.com/in/alice/",
-            },
-            commentary: {
-              text: { text: "Hello #linkedin #tech world!" },
-            },
-            content: {
-              imageComponent: { images: [] },
-            },
-            socialContent: {
-              shareUrl: "https://www.linkedin.com/posts/alice_hello-activity-123",
-            },
-          },
-        ],
-        { paginationToken: "cursor-abc" },
-      ),
-    );
+  it("parses posts from DOM-scraped data", async () => {
+    setupMocks([
+      rawPost({
+        urn: "urn:li:activity:123",
+        url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+        authorName: "Alice Smith",
+        authorHeadline: "Engineer at Acme",
+        authorProfileUrl: "https://www.linkedin.com/in/alice",
+        text: "Hello #linkedin #tech world!",
+        mediaType: "image",
+        reactionCount: 42,
+        commentCount: 7,
+        shareCount: 3,
+        timestamp: "2h",
+      }),
+    ]);
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
     expect(result.posts).toHaveLength(1);
     const [post] = result.posts;
     expect(post?.urn).toBe("urn:li:activity:123");
-    expect(post?.url).toBe("https://www.linkedin.com/posts/alice_hello-activity-123");
+    expect(post?.url).toBe("https://www.linkedin.com/feed/update/urn:li:activity:123/");
     expect(post?.authorName).toBe("Alice Smith");
     expect(post?.authorHeadline).toBe("Engineer at Acme");
-    expect(post?.authorProfileUrl).toBe("https://www.linkedin.com/in/alice/");
+    expect(post?.authorProfileUrl).toBe("https://www.linkedin.com/in/alice");
     expect(post?.text).toBe("Hello #linkedin #tech world!");
     expect(post?.mediaType).toBe("image");
+    expect(post?.reactionCount).toBe(42);
+    expect(post?.commentCount).toBe(7);
+    expect(post?.shareCount).toBe(3);
     expect(post?.hashtags).toEqual(["linkedin", "tech"]);
-    expect(result.nextCursor).toBe("cursor-abc");
   });
 
-  it("falls back to constructed URL when shareUrl is absent", async () => {
-    setupMocks(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:456" },
-        },
-      ]),
-    );
+  it("constructs URL when raw post has null url", async () => {
+    setupMocks([rawPost({ urn: "urn:li:activity:456", url: null })]);
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
@@ -151,177 +132,177 @@ describe("getFeed", () => {
   });
 
   it("navigates to the LinkedIn feed page", async () => {
-    const { navigate } = setupMocks(graphqlBody([]));
+    const { navigate } = setupMocks([]);
 
     await getFeed({ cdpPort: CDP_PORT });
 
     expect(navigate).toHaveBeenCalledWith("https://www.linkedin.com/feed/");
   });
 
-  it("enables interceptor before navigation and disables after", async () => {
-    const { enableMock, disableMock, navigate } = setupMocks(graphqlBody([]));
-
-    await getFeed({ cdpPort: CDP_PORT });
-
-    expect(enableMock).toHaveBeenCalled();
-    expect(disableMock).toHaveBeenCalled();
-
-    // enable must be called before navigate
-    const enableOrder = enableMock.mock.invocationCallOrder[0] as number;
-    const navigateOrder = navigate.mock.invocationCallOrder[0] as number;
-    const disableOrder = disableMock.mock.invocationCallOrder[0] as number;
-    expect(enableOrder).toBeLessThan(navigateOrder);
-    expect(navigateOrder).toBeLessThan(disableOrder);
-  });
-
-  it("waits for voyagerFeedDashMainFeed response", async () => {
-    const { waitForResponseMock } = setupMocks(graphqlBody([]));
-
-    await getFeed({ cdpPort: CDP_PORT });
-
-    expect(waitForResponseMock).toHaveBeenCalledWith(expect.any(Function));
-    // Verify the filter function matches the expected query name
-    const filter = waitForResponseMock.mock.calls[0]?.[0] as (
-      url: string,
-    ) => boolean;
-    expect(
-      filter(
-        "/voyager/api/graphql?queryId=voyagerFeedDashMainFeed.abc123&variables=...",
-      ),
-    ).toBe(true);
-    expect(
-      filter(
-        "/voyager/api/graphql?queryId=voyagerSearchDashClusters.xyz&variables=...",
-      ),
-    ).toBe(false);
-  });
-
-  it("skips elements without backendUrn", async () => {
-    setupMocks(
-      graphqlBody([
-        { metadata: {} },
-        { metadata: { backendUrn: "urn:li:activity:999" } },
-      ]),
-    );
+  it("returns null authorPublicId for all posts", async () => {
+    setupMocks([rawPost()]);
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
-    expect(result.posts).toHaveLength(1);
-    expect(result.posts[0]?.urn).toBe("urn:li:activity:999");
+    expect(result.posts[0]?.authorPublicId).toBeNull();
   });
 
-  it("extracts and deduplicates hashtags from post text", async () => {
-    setupMocks(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:100" },
-          commentary: {
-            text: { text: "#AI and #MachineLearning are #AI transforming" },
-          },
-        },
-      ]),
-    );
+  it("limits results to count parameter", async () => {
+    setupMocks([
+      rawPost({ urn: "urn:li:activity:1" }),
+      rawPost({ urn: "urn:li:activity:2" }),
+      rawPost({ urn: "urn:li:activity:3" }),
+    ]);
 
-    const result = await getFeed({ cdpPort: CDP_PORT });
+    const result = await getFeed({ cdpPort: CDP_PORT, count: 2 });
 
-    expect(result.posts[0]?.hashtags).toEqual(["AI", "MachineLearning"]);
+    expect(result.posts).toHaveLength(2);
+    expect(result.posts[0]?.urn).toBe("urn:li:activity:1");
+    expect(result.posts[1]?.urn).toBe("urn:li:activity:2");
   });
 
-  it("returns empty hashtags when no text", async () => {
-    setupMocks(
-      graphqlBody([
-        { metadata: { backendUrn: "urn:li:activity:101" } },
-      ]),
-    );
+  it("returns nextCursor when more posts are available", async () => {
+    setupMocks([
+      rawPost({ urn: "urn:li:activity:1" }),
+      rawPost({ urn: "urn:li:activity:2" }),
+      rawPost({ urn: "urn:li:activity:3" }),
+    ]);
 
-    const result = await getFeed({ cdpPort: CDP_PORT });
+    const result = await getFeed({ cdpPort: CDP_PORT, count: 2 });
 
-    expect(result.posts[0]?.hashtags).toEqual([]);
+    expect(result.nextCursor).toBe("urn:li:activity:2");
   });
 
-  it("infers video media type from content component key", async () => {
-    setupMocks(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:200" },
-          content: { linkedInVideoComponent: {} },
-        },
-      ]),
-    );
+  it("returns null nextCursor when all posts are returned", async () => {
+    setupMocks([
+      rawPost({ urn: "urn:li:activity:1" }),
+      rawPost({ urn: "urn:li:activity:2" }),
+    ]);
 
-    const result = await getFeed({ cdpPort: CDP_PORT });
-
-    expect(result.posts[0]?.mediaType).toBe("video");
-  });
-
-  it("infers article media type from content component key", async () => {
-    setupMocks(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:201" },
-          content: { articleComponent: { navigationUrl: "https://example.com/article" } },
-        },
-      ]),
-    );
-
-    const result = await getFeed({ cdpPort: CDP_PORT });
-
-    expect(result.posts[0]?.mediaType).toBe("article");
-  });
-
-  it("infers document media type from content component key", async () => {
-    setupMocks(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:202" },
-          content: { documentComponent: {} },
-        },
-      ]),
-    );
-
-    const result = await getFeed({ cdpPort: CDP_PORT });
-
-    expect(result.posts[0]?.mediaType).toBe("document");
-  });
-
-  it("returns null media type when content is absent", async () => {
-    setupMocks(
-      graphqlBody([
-        { metadata: { backendUrn: "urn:li:activity:203" } },
-      ]),
-    );
-
-    const result = await getFeed({ cdpPort: CDP_PORT });
-
-    expect(result.posts[0]?.mediaType).toBeNull();
-  });
-
-  it("returns null nextCursor when paginationToken is absent", async () => {
-    setupMocks(
-      graphqlBody(
-        [{ metadata: { backendUrn: "urn:li:activity:300" } }],
-      ),
-    );
-
-    const result = await getFeed({ cdpPort: CDP_PORT });
+    const result = await getFeed({ cdpPort: CDP_PORT, count: 10 });
 
     expect(result.nextCursor).toBeNull();
   });
 
-  it("throws on non-200 response", async () => {
-    setupMocks(null, 403);
+  it("supports cursor-based pagination", async () => {
+    setupMocks([
+      rawPost({ urn: "urn:li:activity:1" }),
+      rawPost({ urn: "urn:li:activity:2" }),
+      rawPost({ urn: "urn:li:activity:3" }),
+      rawPost({ urn: "urn:li:activity:4" }),
+    ]);
 
-    await expect(getFeed({ cdpPort: CDP_PORT })).rejects.toThrow(
-      "Voyager API returned HTTP 403 for feed",
-    );
+    const result = await getFeed({
+      cdpPort: CDP_PORT,
+      count: 2,
+      cursor: "urn:li:activity:2",
+    });
+
+    expect(result.posts).toHaveLength(2);
+    expect(result.posts[0]?.urn).toBe("urn:li:activity:3");
+    expect(result.posts[1]?.urn).toBe("urn:li:activity:4");
   });
 
-  it("throws on non-object response body", async () => {
-    setupMocks(null, 200);
+  it("returns empty posts when cursor is at the end", async () => {
+    setupMocks([
+      rawPost({ urn: "urn:li:activity:1" }),
+      rawPost({ urn: "urn:li:activity:2" }),
+    ]);
 
-    await expect(getFeed({ cdpPort: CDP_PORT })).rejects.toThrow(
-      "Voyager API returned an unexpected response format for feed",
-    );
+    const result = await getFeed({
+      cdpPort: CDP_PORT,
+      cursor: "urn:li:activity:2",
+    });
+
+    expect(result.posts).toHaveLength(0);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it("treats unknown cursor as start of feed", async () => {
+    setupMocks([
+      rawPost({ urn: "urn:li:activity:1" }),
+      rawPost({ urn: "urn:li:activity:2" }),
+    ]);
+
+    const result = await getFeed({
+      cdpPort: CDP_PORT,
+      cursor: "urn:li:activity:unknown",
+    });
+
+    // When cursor is not found, all posts are returned from the start
+    expect(result.posts).toHaveLength(2);
+  });
+
+  it("handles empty feed", async () => {
+    setupMocks([]);
+
+    const result = await getFeed({ cdpPort: CDP_PORT });
+
+    expect(result.posts).toHaveLength(0);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it("handles posts with null fields", async () => {
+    setupMocks([rawPost()]);
+
+    const result = await getFeed({ cdpPort: CDP_PORT });
+
+    expect(result.posts[0]?.authorName).toBeNull();
+    expect(result.posts[0]?.authorHeadline).toBeNull();
+    expect(result.posts[0]?.authorProfileUrl).toBeNull();
+    expect(result.posts[0]?.text).toBeNull();
+    expect(result.posts[0]?.mediaType).toBeNull();
+    expect(result.posts[0]?.timestamp).toBeNull();
+  });
+
+  it("scrolls to load more posts when count exceeds initial scrape", async () => {
+    const { evaluate, send } = setupMocks([]);
+
+    // waitForFeedLoad returns count > 0
+    evaluate.mockReset();
+    evaluate.mockResolvedValueOnce(1);
+    // First scrape: 2 posts
+    evaluate.mockResolvedValueOnce([
+      rawPost({ urn: "urn:li:activity:1" }),
+      rawPost({ urn: "urn:li:activity:2" }),
+    ]);
+    // Second scrape after scroll: 4 posts
+    evaluate.mockResolvedValueOnce([
+      rawPost({ urn: "urn:li:activity:1" }),
+      rawPost({ urn: "urn:li:activity:2" }),
+      rawPost({ urn: "urn:li:activity:3" }),
+      rawPost({ urn: "urn:li:activity:4" }),
+    ]);
+
+    const result = await getFeed({ cdpPort: CDP_PORT, count: 4 });
+
+    expect(result.posts).toHaveLength(4);
+    expect(send).toHaveBeenCalledWith("Input.dispatchMouseEvent", {
+      type: "mouseWheel",
+      x: 300,
+      y: 400,
+      deltaX: 0,
+      deltaY: 800,
+    });
+  });
+
+  it("stops scrolling when no new posts appear", async () => {
+    const { evaluate, send } = setupMocks([]);
+
+    evaluate.mockReset();
+    evaluate.mockResolvedValueOnce(1);
+    // Every scrape returns same 2 posts
+    const fixedPosts = [
+      rawPost({ urn: "urn:li:activity:1" }),
+      rawPost({ urn: "urn:li:activity:2" }),
+    ];
+    evaluate.mockResolvedValue(fixedPosts);
+
+    const result = await getFeed({ cdpPort: CDP_PORT, count: 10 });
+
+    expect(result.posts).toHaveLength(2);
+    // Should have scrolled once and then stopped (no new posts)
+    expect(send).toHaveBeenCalledTimes(1);
   });
 
   it("throws when no LinkedIn page found", async () => {
@@ -339,7 +320,7 @@ describe("getFeed", () => {
   });
 
   it("disconnects CDP client after operation", async () => {
-    const { disconnect } = setupMocks(graphqlBody([]));
+    const { disconnect } = setupMocks([rawPost()]);
 
     await getFeed({ cdpPort: CDP_PORT });
 
@@ -347,71 +328,131 @@ describe("getFeed", () => {
   });
 
   it("disconnects CDP client even on error", async () => {
-    const { disconnect } = setupMocks(null, 500);
+    vi.mocked(discoverTargets).mockResolvedValue([
+      {
+        id: "target-1",
+        type: "page",
+        title: "LinkedIn",
+        url: "https://www.linkedin.com/feed/",
+        description: "",
+        devtoolsFrontendUrl: "",
+      },
+    ]);
 
-    await expect(getFeed({ cdpPort: CDP_PORT })).rejects.toThrow();
+    const disconnect = vi.fn();
+    vi.mocked(CDPClient).mockImplementation(function () {
+      return {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect,
+        navigate: vi.fn().mockRejectedValue(new Error("nav error")),
+        evaluate: vi.fn(),
+        send: vi.fn(),
+      } as unknown as CDPClient;
+    });
 
+    await expect(getFeed({ cdpPort: CDP_PORT })).rejects.toThrow("nav error");
     expect(disconnect).toHaveBeenCalled();
   });
 
-  it("disables interceptor even on error", async () => {
-    const { disableMock } = setupMocks(null, 500);
-
-    await expect(getFeed({ cdpPort: CDP_PORT })).rejects.toThrow();
-
-    expect(disableMock).toHaveBeenCalled();
-  });
-
-  it("handles elements with header but no author headline", async () => {
-    setupMocks(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:400" },
-          header: {
-            text: { text: "Acme Corp" },
-            navigationUrl: "https://www.linkedin.com/company/acme/",
-          },
-        },
-      ]),
-    );
+  it("parses relative timestamp into epoch milliseconds", async () => {
+    const now = Date.now();
+    setupMocks([rawPost({ timestamp: "2h" })]);
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
-    expect(result.posts[0]?.authorName).toBe("Acme Corp");
-    expect(result.posts[0]?.authorHeadline).toBeNull();
-    expect(result.posts[0]?.authorProfileUrl).toBe("https://www.linkedin.com/company/acme/");
+    const ts = result.posts[0]?.timestamp;
+    expect(ts).toBeTypeOf("number");
+    // Should be approximately 2 hours ago (within 5 seconds tolerance)
+    const twoHoursMs = 2 * 60 * 60 * 1000;
+    expect(Math.abs((now - twoHoursMs) - (ts as number))).toBeLessThan(5000);
   });
 
-  it("handles elements with no header at all", async () => {
-    setupMocks(
-      graphqlBody([
-        { metadata: { backendUrn: "urn:li:activity:500" } },
-      ]),
-    );
+  it("extracts and deduplicates hashtags from post text", async () => {
+    setupMocks([
+      rawPost({
+        text: "#AI and #MachineLearning are #AI transforming",
+      }),
+    ]);
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
-    expect(result.posts[0]?.authorName).toBeNull();
-    expect(result.posts[0]?.authorHeadline).toBeNull();
-    expect(result.posts[0]?.authorProfileUrl).toBeNull();
+    expect(result.posts[0]?.hashtags).toEqual(["AI", "MachineLearning"]);
   });
 
-  it("ignores content keys with null values for media type", async () => {
-    setupMocks(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:600" },
-          content: {
-            imageComponent: null,
-            articleComponent: null,
-            linkedInVideoComponent: { url: "video-url" },
-          },
-        },
-      ]),
-    );
+  it("returns empty hashtags when no text", async () => {
+    setupMocks([rawPost()]);
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
-    expect(result.posts[0]?.mediaType).toBe("video");
+    expect(result.posts[0]?.hashtags).toEqual([]);
+  });
+});
+
+describe("extractHashtags", () => {
+  it("extracts unique hashtags", () => {
+    expect(extractHashtags("#hello #world #hello")).toEqual(["hello", "world"]);
+  });
+
+  it("handles accented characters", () => {
+    expect(extractHashtags("#café #résumé")).toEqual(["café", "résumé"]);
+  });
+
+  it("returns empty array for null text", () => {
+    expect(extractHashtags(null)).toEqual([]);
+  });
+
+  it("returns empty array when no hashtags", () => {
+    expect(extractHashtags("no hashtags here")).toEqual([]);
+  });
+});
+
+describe("parseTimestamp", () => {
+  it("parses seconds", () => {
+    const now = Date.now();
+    const result = parseTimestamp("30s");
+    expect(result).toBeTypeOf("number");
+    expect(Math.abs((now - 30_000) - (result as number))).toBeLessThan(1000);
+  });
+
+  it("parses minutes", () => {
+    const now = Date.now();
+    const result = parseTimestamp("52m");
+    expect(result).toBeTypeOf("number");
+    expect(Math.abs((now - 52 * 60_000) - (result as number))).toBeLessThan(1000);
+  });
+
+  it("parses hours", () => {
+    const now = Date.now();
+    const result = parseTimestamp("16h");
+    expect(result).toBeTypeOf("number");
+    expect(Math.abs((now - 16 * 3_600_000) - (result as number))).toBeLessThan(1000);
+  });
+
+  it("parses days", () => {
+    const now = Date.now();
+    const result = parseTimestamp("3d");
+    expect(result).toBeTypeOf("number");
+    expect(Math.abs((now - 3 * 86_400_000) - (result as number))).toBeLessThan(1000);
+  });
+
+  it("parses weeks", () => {
+    const now = Date.now();
+    const result = parseTimestamp("1w");
+    expect(result).toBeTypeOf("number");
+    expect(Math.abs((now - 604_800_000) - (result as number))).toBeLessThan(1000);
+  });
+
+  it("parses ISO datetime", () => {
+    expect(parseTimestamp("2026-03-25T10:00:00Z")).toBe(
+      Date.parse("2026-03-25T10:00:00Z"),
+    );
+  });
+
+  it("returns null for null input", () => {
+    expect(parseTimestamp(null)).toBeNull();
+  });
+
+  it("returns null for unrecognised format", () => {
+    expect(parseTimestamp("unknown")).toBeNull();
   });
 });
