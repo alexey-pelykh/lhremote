@@ -100,7 +100,16 @@ export class LauncherService {
           const remote = require('@electron/remote');
           const mainWindow = remote.getGlobal('mainWindow');
 
-          // 1. Resolve renderer-side services via webpack module registry
+          // 1. Resolve renderer-side services via webpack module registry.
+          //    The webpack chunk array may not exist yet if the renderer
+          //    bundles are still loading — poll until available.
+          const wpDeadline = Date.now() + 15000;
+          while (!window.webpackChunk_linked_helper_front && Date.now() < wpDeadline) {
+            await new Promise(r => setTimeout(r, 250));
+          }
+          if (!window.webpackChunk_linked_helper_front) {
+            return { success: false, error: 'webpack module registry not available (timed out)' };
+          }
           let wpRequire = null;
           window.webpackChunk_linked_helper_front.push(
             [[Symbol()], {}, (req) => { wpRequire = req; }]
