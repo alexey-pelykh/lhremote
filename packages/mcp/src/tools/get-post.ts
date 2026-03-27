@@ -17,27 +17,19 @@ export function registerGetPost(server: McpServer): void {
         .describe(
           "LinkedIn post URL or URN (e.g. https://www.linkedin.com/feed/update/urn:li:activity:1234567890/ or urn:li:activity:1234567890)",
         ),
-      commentStart: z
+      commentCount: z
         .number()
         .int()
         .nonnegative()
         .optional()
-        .default(0)
-        .describe("Comment pagination offset (default: 0)"),
-      commentCount: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .default(10)
-        .describe("Number of comments per page (default: 10)"),
+        .default(100)
+        .describe("Maximum number of comments to load (default: 100, 0 to skip)"),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, commentStart, commentCount, cdpPort, cdpHost, allowRemote }) => {
+    async ({ postUrl, commentCount, cdpPort, cdpHost, allowRemote }) => {
       try {
         const result = await getPost({
           postUrl,
-          commentStart,
           commentCount,
           cdpPort,
           cdpHost,
