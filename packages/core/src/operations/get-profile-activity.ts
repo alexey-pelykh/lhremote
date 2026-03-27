@@ -4,10 +4,16 @@
 import type { FeedPost } from "../types/feed.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { VoyagerInterceptor } from "../voyager/interceptor.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
+import {
+  type RawDomPost,
+  mapRawPosts,
+  scrollFeed,
+  delay,
+  buildPostUrl,
+} from "./get-feed.js";
 
 /**
  * Input for the get-profile-activity operation.
@@ -15,10 +21,10 @@ import { navigateAwayIf } from "./navigate-away.js";
 export interface GetProfileActivityInput extends ConnectionOptions {
   /** LinkedIn profile public ID or full profile URL. */
   readonly profile: string;
-  /** Number of posts to return per page (default: 20). */
+  /** Number of posts to return per page (default: 10). */
   readonly count?: number | undefined;
-  /** Offset for pagination (default: 0). */
-  readonly start?: number | undefined;
+  /** Cursor token from a previous get-profile-activity call for the next page. */
+  readonly cursor?: string | undefined;
 }
 
 /**
@@ -29,12 +35,8 @@ export interface GetProfileActivityOutput {
   readonly profilePublicId: string;
   /** List of posts from the profile. */
   readonly posts: FeedPost[];
-  /** Pagination metadata. */
-  readonly paging: {
-    readonly start: number;
-    readonly count: number;
-    readonly total: number;
-  };
+  /** Cursor token for retrieving the next page, or null if no more pages. */
+  readonly nextCursor: string | null;
 }
 
 /** Regex to extract the public ID from a LinkedIn profile URL. */
@@ -67,226 +69,204 @@ export function extractProfileId(input: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// GraphQL profile-updates response shapes
-// ---------------------------------------------------------------------------
-
-/** Top-level GraphQL response wrapper. @internal Exported for testing only. */
-export interface GraphQLProfileUpdatesResponse {
-  data?: {
-    /** LinkedIn sometimes wraps GraphQL responses in a nested `data` object. */
-    data?: {
-      feedDashProfileUpdatesByProfileUpdates?: GraphQLProfileUpdatesCollection;
-      feedDashProfileUpdatesByMemberShareFeed?: GraphQLProfileUpdatesCollection;
-    };
-    feedDashProfileUpdatesByProfileUpdates?: GraphQLProfileUpdatesCollection;
-    feedDashProfileUpdatesByMemberShareFeed?: GraphQLProfileUpdatesCollection;
-  };
-  /** Rest.li included entities — resolved via `*elements` URN references. */
-  included?: GraphQLProfileUpdateElement[];
-}
-
-/** The collection returned by the feedDashProfileUpdates query. */
-interface GraphQLProfileUpdatesCollection {
-  /** Inline elements (active fetch mode). */
-  elements?: GraphQLProfileUpdateElement[];
-  /** URN references to entities in the top-level `included` array (passive interception). */
-  "*elements"?: string[];
-  paging?: GraphQLPaging;
-}
-
-/** A single profile update element from the GraphQL endpoint. */
-interface GraphQLProfileUpdateElement {
-  /** Entity URN — present when resolved from the `included` array. */
-  entityUrn?: string;
-  metadata?: GraphQLElementMetadata;
-  socialContent?: GraphQLSocialContent;
-  header?: GraphQLHeader;
-  commentary?: GraphQLCommentary;
-  content?: GraphQLContent;
-}
-
-/** Per-element metadata carrying the activity URN. */
-interface GraphQLElementMetadata {
-  backendUrn?: string;
-  shareUrn?: string;
-}
-
-/** Social content block on each element. */
-interface GraphQLSocialContent {
-  shareUrl?: string;
-}
-
-/** Actor header block containing the author identity. */
-interface GraphQLHeader {
-  text?: GraphQLTextAccessibility;
-  image?: GraphQLImageAccessibility;
-  navigationUrl?: string;
-}
-
-/** Accessibility-wrapped text (used by header, commentary, etc.). */
-interface GraphQLTextAccessibility {
-  text?: string;
-  accessibilityText?: string;
-}
-
-interface GraphQLImageAccessibility {
-  accessibilityText?: string;
-}
-
-/** Commentary block carrying the post text body. */
-interface GraphQLCommentary {
-  text?: GraphQLTextAccessibility;
-  numLines?: number;
-}
-
-/** Content block -- component-based; only non-null key matters. */
-interface GraphQLContent {
-  articleComponent?: GraphQLContentComponent;
-  imageComponent?: GraphQLContentComponent;
-  linkedInVideoComponent?: GraphQLContentComponent;
-  documentComponent?: GraphQLContentComponent;
-  externalVideoComponent?: GraphQLContentComponent;
-  [key: string]: GraphQLContentComponent | null | undefined;
-}
-
-interface GraphQLContentComponent {
-  navigationUrl?: string;
-  [key: string]: unknown;
-}
-
-/** Pagination info. */
-interface GraphQLPaging {
-  start?: number;
-  count?: number;
-  total?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Parsing helpers
+// Activity-page-specific DOM scraping
 // ---------------------------------------------------------------------------
 
 /**
- * Extract hashtags from post text.
- */
-function extractHashtags(text: string | null): string[] {
-  if (!text) return [];
-  const matches = text.match(/#[\w\u00C0-\u024F]+/g);
-  return matches ? [...new Set(matches.map((t) => t.slice(1)))] : [];
-}
-
-/**
- * Infer media type from the GraphQL content block.
+ * JavaScript evaluated inside the LinkedIn profile activity page.
  *
- * The content object has a component-based layout where only one key is
- * non-null (e.g. `imageComponent`, `linkedInVideoComponent`).
+ * The activity page uses Ember.js rendering with `div[role="article"]`
+ * containers and stable class names (unlike the SSR main feed).
+ * Each post has a three-dot menu button matching
+ * `button[aria-label^="Open control menu"]`.
  */
-function inferMediaType(content: GraphQLContent | undefined): string | null {
-  if (!content) return null;
+const SCRAPE_ACTIVITY_POSTS_SCRIPT = `(() => {
+  const posts = [];
 
-  for (const key of Object.keys(content)) {
-    if (content[key] == null) continue;
+  const articles = document.querySelectorAll('div[role="article"]');
+  for (const item of articles) {
+    if (item.offsetHeight < 100) continue;
 
-    const lower = key.toLowerCase();
-    if (lower.includes("image")) return "image";
-    if (lower.includes("video")) return "video";
-    if (lower.includes("article")) return "article";
-    if (lower.includes("document")) return "document";
-  }
+    const menuBtn = item.querySelector('button[aria-label^="Open control menu"]');
+    if (!menuBtn) continue;
 
-  return null;
-}
+    // --- Author info ---
+    let authorName = null;
+    let authorHeadline = null;
+    let authorProfileUrl = null;
 
-/**
- * Build a LinkedIn post URL from an activity URN.
- */
-function buildPostUrl(urn: string): string {
-  return `https://www.linkedin.com/feed/update/${urn}/`;
-}
-
-/**
- * Parse the GraphQL profile-updates response into normalised FeedPost entries.
- *
- * @internal Exported for testing only.
- */
-export function parseProfileUpdatesResponse(
-  raw: GraphQLProfileUpdatesResponse,
-): {
-  posts: FeedPost[];
-  paging: { start: number; count: number; total: number };
-} {
-  const collection =
-    raw.data?.data?.feedDashProfileUpdatesByProfileUpdates ??
-    raw.data?.data?.feedDashProfileUpdatesByMemberShareFeed ??
-    raw.data?.feedDashProfileUpdatesByProfileUpdates ??
-    raw.data?.feedDashProfileUpdatesByMemberShareFeed;
-  const paging = collection?.paging;
-
-  // Resolve elements: prefer inline `elements`, fall back to `*elements` URN
-  // references resolved against the top-level `included` array (Rest.li protocol).
-  let elements = collection?.elements ?? [];
-  if (elements.length === 0) {
-    const refs = collection?.["*elements"] ?? [];
-    const included = raw.included ?? [];
-    if (refs.length > 0 && included.length > 0) {
-      const byUrn = new Map<string, GraphQLProfileUpdateElement>();
-      for (const e of included) {
-        if (e.entityUrn) byUrn.set(e.entityUrn, e);
-      }
-      elements = refs
-        .map((urn) => byUrn.get(urn))
-        .filter((e): e is GraphQLProfileUpdateElement => e !== undefined);
+    const authorLink = item.querySelector('a[href*="/in/"], a[href*="/company/"]');
+    if (authorLink) {
+      authorProfileUrl = authorLink.href.split('?')[0] || null;
+      const nameEl = authorLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]')
+        || authorLink;
+      const rawName = (nameEl.textContent || '').trim();
+      authorName = rawName || null;
     }
-  }
 
-  const posts: FeedPost[] = [];
+    const allSpans = item.querySelectorAll('span');
+    for (const span of allSpans) {
+      const txt = (span.textContent || '').trim();
+      if (
+        txt &&
+        txt.length > 5 &&
+        txt.length < 200 &&
+        txt !== authorName &&
+        !txt.match(/^\\d+[smhdw]$/) &&
+        !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
+        !txt.match(/^Follow$|^Promoted$/i)
+      ) {
+        authorHeadline = txt;
+        break;
+      }
+    }
 
-  for (const el of elements) {
-    const urn = el.metadata?.backendUrn;
-    if (!urn) continue;
+    // --- Post text ---
+    let text = null;
+    const ltrSpans = item.querySelectorAll('span[dir="ltr"]');
+    let longestText = '';
+    for (const span of ltrSpans) {
+      const txt = (span.textContent || '').trim();
+      if (txt.length > longestText.length && txt !== authorName && txt !== authorHeadline) {
+        longestText = txt;
+      }
+    }
+    if (longestText.length > 20) {
+      text = longestText;
+    }
 
-    // Post URL -- prefer shareUrl when available, fall back to constructed URL
-    const url = el.socialContent?.shareUrl ?? buildPostUrl(urn);
+    // --- Media type ---
+    let mediaType = null;
+    if (item.querySelector('video')) {
+      mediaType = 'video';
+    } else if (item.querySelector('img[src*="media.licdn.com"]')) {
+      const imgs = item.querySelectorAll('img[src*="media.licdn.com"]');
+      for (const img of imgs) {
+        if (img.offsetHeight > 100) { mediaType = 'image'; break; }
+      }
+    }
 
-    // Author info from the header block
-    const authorName = el.header?.text?.text ?? null;
-    const authorHeadline =
-      el.header?.image?.accessibilityText ?? null;
-    const authorProfileUrl = el.header?.navigationUrl ?? null;
+    // --- Engagement counts ---
+    const itemText = item.textContent || '';
 
-    // Post text from the commentary block
-    const text = el.commentary?.text?.text ?? null;
+    function parseCount(pattern) {
+      const m = itemText.match(pattern);
+      if (!m) return 0;
+      const raw = m[1].replace(/,/g, '');
+      const num = parseInt(raw, 10);
+      return isNaN(num) ? 0 : num;
+    }
 
-    // Media type from the content component block
-    const mediaType = inferMediaType(el.content);
+    const reactionCount = parseCount(/(\\d[\\d,]*)\\s+reactions?/i);
+    const commentCount = parseCount(/(\\d[\\d,]*)\\s+comments?/i);
+    const shareCount = parseCount(/(\\d[\\d,]*)\\s+reposts?/i);
 
-    // Hashtags
-    const hashtags = extractHashtags(text);
+    // --- Timestamp ---
+    let timestamp = null;
+    const timeEl = item.querySelector('time');
+    if (timeEl) {
+      const dt = timeEl.getAttribute('datetime');
+      if (dt) timestamp = dt;
+    }
+    if (!timestamp) {
+      const timeMatch = itemText.match(/(?:^|\\s)(\\d+[smhdw])(?:\\s|$|\\u00B7|\\xB7)/);
+      if (timeMatch) timestamp = timeMatch[1];
+    }
 
     posts.push({
-      urn,
-      url,
-      authorName,
-      authorHeadline,
-      authorProfileUrl,
-      authorPublicId: null,
-      text,
-      mediaType,
-      reactionCount: 0,
-      commentCount: 0,
-      shareCount: 0,
-      timestamp: null,
-      hashtags,
+      urn: null,
+      url: null,
+      authorName: authorName,
+      authorHeadline: authorHeadline,
+      authorProfileUrl: authorProfileUrl,
+      text: text,
+      mediaType: mediaType,
+      reactionCount: reactionCount,
+      commentCount: commentCount,
+      shareCount: shareCount,
+      timestamp: timestamp,
     });
   }
 
-  return {
-    posts,
-    paging: {
-      start: paging?.start ?? 0,
-      count: paging?.count ?? posts.length,
-      total: paging?.total ?? posts.length,
-    },
-  };
+  return posts;
+})()`;
+
+/**
+ * Wait for the profile activity page to render posts.
+ * Polls for `div[role="article"]` elements with menu buttons.
+ */
+async function waitForActivityLoad(
+  client: CDPClient,
+  timeoutMs = 15_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const ready = await client.evaluate<boolean>(`(() => {
+      const articles = document.querySelectorAll('div[role="article"]');
+      for (const a of articles) {
+        if (a.querySelector('button[aria-label^="Open control menu"]')) {
+          return true;
+        }
+      }
+      return false;
+    })()`);
+    if (ready) return;
+    await delay(500);
+  }
+  throw new Error(
+    "Timed out waiting for activity posts to appear in the DOM",
+  );
+}
+
+/**
+ * Extract the post URN for a single activity post by opening its
+ * three-dot menu and reading the embed link's `targetUrn`.
+ *
+ * Uses `div[role="article"]` as the post selector (activity page).
+ */
+async function extractActivityPostUrn(
+  client: CDPClient,
+  postIndex: number,
+): Promise<string | null> {
+  const clicked = await client.evaluate<boolean>(`(() => {
+    const articles = document.querySelectorAll('div[role="article"]');
+    let idx = 0;
+    for (const a of articles) {
+      const btn = a.querySelector('button[aria-label^="Open control menu"]');
+      if (!btn) continue;
+      if (idx === ${String(postIndex)}) {
+        btn.scrollIntoView({ block: 'center' });
+        btn.click();
+        return true;
+      }
+      idx++;
+    }
+    return false;
+  })()`);
+
+  if (!clicked) return null;
+
+  await delay(700);
+
+  const urn = await client.evaluate<string | null>(`(() => {
+    for (const a of document.querySelectorAll('a[href*="embed-modal"]')) {
+      const rect = a.getBoundingClientRect();
+      if (rect.width > 0 || rect.height > 0) {
+        try {
+          const url = new URL(a.href);
+          return decodeURIComponent(url.searchParams.get('targetUrn') || '');
+        } catch { return null; }
+      }
+    }
+    return null;
+  })()`);
+
+  // Close the dropdown with Escape
+  await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+  await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+  await delay(300);
+
+  return urn || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -296,12 +276,13 @@ export function parseProfileUpdatesResponse(
 /**
  * Retrieve recent posts/activity from a LinkedIn profile.
  *
- * Connects to the LinkedIn webview in LinkedHelper and calls the
- * Voyager GraphQL profileUpdates API to get the profile's recent
- * posts with engagement counts.
+ * Navigates to the profile's activity page and extracts posts from the
+ * rendered DOM.  The activity page uses Ember.js rendering with
+ * `div[role="article"]` containers (different from the SSR main feed).
+ * Supports cursor-based pagination via scrolling.
  *
  * @param input - Profile identifier, pagination, and CDP connection options.
- * @returns List of posts with pagination metadata.
+ * @returns List of posts with a cursor for the next page.
  */
 export async function getProfileActivity(
   input: GetProfileActivityInput,
@@ -309,6 +290,8 @@ export async function getProfileActivity(
   const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
   const cdpHost = input.cdpHost ?? "127.0.0.1";
   const allowRemote = input.allowRemote ?? false;
+  const count = input.count ?? 10;
+  const cursor = input.cursor ?? null;
 
   const profilePublicId = extractProfileId(input.profile);
 
@@ -336,51 +319,78 @@ export async function getProfileActivity(
   await client.connect(linkedInTarget.id);
 
   try {
-    const voyager = new VoyagerInterceptor(client);
-    await voyager.enable();
+    // Navigate away if already on the activity page to force a fresh load
+    await navigateAwayIf(client, "/recent-activity/");
 
-    try {
-      // If the browser is already on the activity page, LinkedIn's SPA won't
-      // fire a fresh API request on navigate.  Navigate away first.
-      await navigateAwayIf(client, "/recent-activity/");
+    const activityUrl = `https://www.linkedin.com/in/${encodeURIComponent(profilePublicId)}/recent-activity/all/`;
+    await client.navigate(activityUrl);
 
-      // Set up the response listener before navigation to avoid race conditions.
-      // The filter matches the query name prefix, ignoring the rotating hash suffix.
-      const responsePromise = voyager.waitForResponse((url) =>
-        url.includes("voyagerFeedDashProfileUpdates"),
-      );
+    // Wait for activity posts to render
+    await waitForActivityLoad(client);
 
-      // Navigate to the profile's recent-activity page — the page makes the
-      // Voyager API call with its own current queryId hash.
-      const activityUrl = `https://www.linkedin.com/in/${encodeURIComponent(profilePublicId)}/recent-activity/all/`;
-      await client.navigate(activityUrl);
+    // Collect posts — scroll to load more if needed
+    const maxScrollAttempts = 10;
+    let allPosts: RawDomPost[] = [];
+    let previousCount = 0;
 
-      const response = await responsePromise;
-      if (response.status !== 200) {
-        throw new Error(
-          `Voyager API returned HTTP ${String(response.status)} for profile activity`,
-        );
+    const cursorUrn = cursor;
+
+    for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
+      const scraped =
+        await client.evaluate<RawDomPost[]>(SCRAPE_ACTIVITY_POSTS_SCRIPT);
+      allPosts = scraped ?? [];
+
+      const available = allPosts.length;
+      if (available >= count && !cursorUrn) break;
+
+      // No new posts appeared after scroll — stop
+      if (allPosts.length === previousCount && scroll > 0) break;
+      previousCount = allPosts.length;
+
+      // Scroll to load more
+      if (scroll < maxScrollAttempts) {
+        await scrollFeed(client);
+        await delay(1500);
       }
-
-      const body = response.body;
-      if (body === null || typeof body !== "object") {
-        throw new Error(
-          "Voyager API returned an unexpected response format for profile activity",
-        );
-      }
-
-      const parsed = parseProfileUpdatesResponse(
-        body as GraphQLProfileUpdatesResponse,
-      );
-
-      return {
-        profilePublicId,
-        posts: parsed.posts,
-        paging: parsed.paging,
-      };
-    } finally {
-      await voyager.disable();
     }
+
+    // --- URN extraction phase ---
+    for (let i = 0; i < allPosts.length; i++) {
+      const post = allPosts[i];
+      if (!post) continue;
+      const urn = await extractActivityPostUrn(client, i);
+      if (urn) {
+        post.urn = urn;
+        post.url = buildPostUrl(urn);
+      }
+    }
+
+    // Slice the result window (now that URNs are populated)
+    let startIdx = 0;
+    if (cursorUrn) {
+      const cursorIdx = allPosts.findIndex((p) => p.urn === cursorUrn);
+      if (cursorIdx >= 0) {
+        startIdx = cursorIdx + 1;
+      }
+    }
+
+    const window = allPosts.slice(startIdx, startIdx + count);
+    const posts = mapRawPosts(window);
+
+    // Determine next cursor — use last post with a non-null URN
+    const hasMore = startIdx + count < allPosts.length;
+    let nextCursor: string | null = null;
+    if (hasMore) {
+      for (let i = window.length - 1; i >= 0; i--) {
+        const urn = window[i]?.urn;
+        if (urn) {
+          nextCursor = urn;
+          break;
+        }
+      }
+    }
+
+    return { profilePublicId, posts, nextCursor };
   } finally {
     client.disconnect();
   }

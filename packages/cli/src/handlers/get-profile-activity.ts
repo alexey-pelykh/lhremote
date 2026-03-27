@@ -15,8 +15,8 @@ export async function handleGetProfileActivity(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
-    start?: number;
     count?: number;
+    cursor?: string;
     json?: boolean;
   },
 ): Promise<void> {
@@ -27,8 +27,8 @@ export async function handleGetProfileActivity(
       cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
-      start: options.start,
       count: options.count,
+      cursor: options.cursor,
     });
   } catch (error) {
     const message = errorMessage(error);
@@ -40,10 +40,7 @@ export async function handleGetProfileActivity(
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
   } else {
-    process.stdout.write(
-      `Profile: ${result.profilePublicId}  ` +
-        `(${String(result.paging.total)} total posts)\n\n`,
-    );
+    process.stdout.write(`Profile: ${result.profilePublicId}\n\n`);
 
     for (const post of result.posts) {
       process.stdout.write(`  ${post.urn}\n`);
@@ -75,6 +72,10 @@ export async function handleGetProfileActivity(
 
     if (result.posts.length === 0) {
       process.stdout.write("  (no posts found)\n");
+    }
+
+    if (result.nextCursor) {
+      process.stdout.write(`Next cursor: ${result.nextCursor}\n`);
     }
   }
 }

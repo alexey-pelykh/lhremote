@@ -3,11 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  extractProfileId,
-  parseProfileUpdatesResponse,
-  type GraphQLProfileUpdatesResponse,
-} from "./get-profile-activity.js";
+import { extractProfileId } from "./get-profile-activity.js";
 
 vi.mock("../cdp/discovery.js", () => ({
   discoverTargets: vi.fn(),
@@ -17,39 +13,43 @@ vi.mock("../cdp/client.js", () => ({
   CDPClient: vi.fn(),
 }));
 
-vi.mock("../voyager/interceptor.js", () => ({
-  VoyagerInterceptor: vi.fn(),
-}));
-
 vi.mock("./navigate-away.js", () => ({
   navigateAwayIf: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("./get-feed.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./get-feed.js")>();
+  return {
+    ...actual,
+    delay: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
-import { VoyagerInterceptor } from "../voyager/interceptor.js";
 import { getProfileActivity } from "./get-profile-activity.js";
+import type { RawDomPost } from "./get-feed.js";
 
 const CDP_PORT = 9222;
 
-/**
- * Build a minimal GraphQL profile-updates response wrapper.
- */
-function graphqlBody(
-  elements: Record<string, unknown>[],
-  paging?: Record<string, unknown>,
-): GraphQLProfileUpdatesResponse {
+function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
   return {
-    data: {
-      feedDashProfileUpdatesByProfileUpdates: {
-        elements,
-        ...(paging ? { paging } : {}),
-      },
-    },
-  } as GraphQLProfileUpdatesResponse;
+    urn: null,
+    url: null,
+    authorName: "Jane Doe",
+    authorHeadline: "Engineer at Acme",
+    authorProfileUrl: "https://www.linkedin.com/in/janedoe",
+    text: "Hello world from my profile",
+    mediaType: null,
+    reactionCount: 5,
+    commentCount: 2,
+    shareCount: 1,
+    timestamp: "2h",
+    ...overrides,
+  };
 }
 
-function setupMocks(body: unknown, status = 200) {
+function setupMocks(scrapedPosts: RawDomPost[] = [], urnResults: (string | null)[] = []) {
   vi.mocked(discoverTargets).mockResolvedValue([
     {
       id: "target-1",
@@ -63,28 +63,37 @@ function setupMocks(body: unknown, status = 200) {
 
   const disconnect = vi.fn();
   const navigate = vi.fn().mockResolvedValue({ frameId: "F1" });
+  let urnCallIdx = 0;
+  const evaluate = vi.fn().mockImplementation((script: string) => {
+    // waitForActivityLoad poll — return true (ready)
+    if (typeof script === "string" && script.includes("div[role=\"article\"]") && script.includes("return true")) {
+      return Promise.resolve(true);
+    }
+    // extractActivityPostUrn — click phase
+    if (typeof script === "string" && script.includes("btn.click()")) {
+      return Promise.resolve(true);
+    }
+    // extractActivityPostUrn — read embed link
+    if (typeof script === "string" && script.includes("embed-modal")) {
+      const urn = urnResults[urnCallIdx++] ?? null;
+      return Promise.resolve(urn);
+    }
+    // SCRAPE_ACTIVITY_POSTS_SCRIPT — return posts
+    return Promise.resolve(scrapedPosts);
+  });
+  const send = vi.fn().mockResolvedValue(undefined);
+
   vi.mocked(CDPClient).mockImplementation(function () {
     return {
       connect: vi.fn().mockResolvedValue(undefined),
       disconnect,
       navigate,
+      evaluate,
+      send,
     } as unknown as CDPClient;
   });
 
-  const enableMock = vi.fn().mockResolvedValue(undefined);
-  const disableMock = vi.fn().mockResolvedValue(undefined);
-  const waitForResponseMock = vi
-    .fn()
-    .mockResolvedValue({ url: "", status, body });
-  vi.mocked(VoyagerInterceptor).mockImplementation(function () {
-    return {
-      enable: enableMock,
-      disable: disableMock,
-      waitForResponse: waitForResponseMock,
-    } as unknown as VoyagerInterceptor;
-  });
-
-  return { navigate, enableMock, disableMock, waitForResponseMock, disconnect };
+  return { navigate, disconnect, evaluate, send };
 }
 
 describe("extractProfileId", () => {
@@ -141,245 +150,6 @@ describe("extractProfileId", () => {
   });
 });
 
-describe("parseProfileUpdatesResponse", () => {
-  it("parses elements from the GraphQL response", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody(
-        [
-          {
-            metadata: {
-              backendUrn: "urn:li:activity:123",
-              shareUrn: "urn:li:share:111",
-            },
-            header: {
-              text: { text: "Jane Doe" },
-              image: { accessibilityText: "Engineer at Acme" },
-              navigationUrl: "https://www.linkedin.com/in/janedoe/",
-            },
-            commentary: {
-              text: { text: "Hello world" },
-            },
-            content: {
-              imageComponent: { images: [] },
-            },
-            socialContent: {
-              shareUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123",
-            },
-          },
-        ],
-        { start: 0, count: 20, total: 1 },
-      ),
-    );
-
-    expect(result.posts).toHaveLength(1);
-    expect(result.posts[0]).toEqual({
-      urn: "urn:li:activity:123",
-      text: "Hello world",
-      authorName: "Jane Doe",
-      authorPublicId: null,
-      authorHeadline: "Engineer at Acme",
-      authorProfileUrl: "https://www.linkedin.com/in/janedoe/",
-      url: "https://www.linkedin.com/feed/update/urn:li:activity:123",
-      timestamp: null,
-      mediaType: "image",
-      reactionCount: 0,
-      commentCount: 0,
-      shareCount: 0,
-      hashtags: [],
-    });
-    expect(result.paging).toEqual({ start: 0, count: 20, total: 1 });
-  });
-
-  it("falls back to constructed URL when shareUrl is absent", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:456" },
-        },
-      ]),
-    );
-
-    expect(result.posts[0]?.url).toBe(
-      "https://www.linkedin.com/feed/update/urn:li:activity:456/",
-    );
-  });
-
-  it("skips elements without backendUrn", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        { metadata: {} },
-        { metadata: { backendUrn: "urn:li:activity:789" } },
-      ]),
-    );
-
-    expect(result.posts).toHaveLength(1);
-    expect(result.posts[0]?.urn).toBe("urn:li:activity:789");
-  });
-
-  it("extracts and deduplicates hashtags from post text", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:100" },
-          commentary: {
-            text: { text: "#AI and #MachineLearning are #AI transforming" },
-          },
-        },
-      ]),
-    );
-
-    expect(result.posts[0]?.hashtags).toEqual(["AI", "MachineLearning"]);
-  });
-
-  it("returns empty hashtags when no text", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        { metadata: { backendUrn: "urn:li:activity:101" } },
-      ]),
-    );
-
-    expect(result.posts[0]?.hashtags).toEqual([]);
-  });
-
-  it("infers video media type from content component key", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:200" },
-          content: { linkedInVideoComponent: {} },
-        },
-      ]),
-    );
-
-    expect(result.posts[0]?.mediaType).toBe("video");
-  });
-
-  it("infers article media type from content component key", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:201" },
-          content: { articleComponent: { navigationUrl: "https://example.com/article" } },
-        },
-      ]),
-    );
-
-    expect(result.posts[0]?.mediaType).toBe("article");
-  });
-
-  it("infers document media type from content component key", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:202" },
-          content: { documentComponent: {} },
-        },
-      ]),
-    );
-
-    expect(result.posts[0]?.mediaType).toBe("document");
-  });
-
-  it("returns null media type when content is absent", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        { metadata: { backendUrn: "urn:li:activity:203" } },
-      ]),
-    );
-
-    expect(result.posts[0]?.mediaType).toBeNull();
-  });
-
-  it("ignores content keys with null values for media type", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:600" },
-          content: {
-            imageComponent: null,
-            articleComponent: null,
-            linkedInVideoComponent: { url: "video-url" },
-          },
-        },
-      ]),
-    );
-
-    expect(result.posts[0]?.mediaType).toBe("video");
-  });
-
-  it("handles empty elements array", () => {
-    const result = parseProfileUpdatesResponse(graphqlBody([]));
-    expect(result.posts).toHaveLength(0);
-    expect(result.paging).toEqual({ start: 0, count: 0, total: 0 });
-  });
-
-  it("handles empty response", () => {
-    const result = parseProfileUpdatesResponse({});
-    expect(result.posts).toHaveLength(0);
-  });
-
-  it("handles elements with header but no author headline", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:400" },
-          header: {
-            text: { text: "Acme Corp" },
-            navigationUrl: "https://www.linkedin.com/company/acme/",
-          },
-        },
-      ]),
-    );
-
-    expect(result.posts[0]?.authorName).toBe("Acme Corp");
-    expect(result.posts[0]?.authorHeadline).toBeNull();
-    expect(result.posts[0]?.authorProfileUrl).toBe("https://www.linkedin.com/company/acme/");
-  });
-
-  it("handles elements with no header at all", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        { metadata: { backendUrn: "urn:li:activity:500" } },
-      ]),
-    );
-
-    expect(result.posts[0]?.authorName).toBeNull();
-    expect(result.posts[0]?.authorHeadline).toBeNull();
-    expect(result.posts[0]?.authorProfileUrl).toBeNull();
-  });
-
-  it("defaults social counts to zero", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:700" },
-          header: { text: { text: "Test" } },
-        },
-      ]),
-    );
-
-    expect(result.posts[0]?.reactionCount).toBe(0);
-    expect(result.posts[0]?.commentCount).toBe(0);
-    expect(result.posts[0]?.shareCount).toBe(0);
-  });
-
-  it("handles null text fields gracefully", () => {
-    const result = parseProfileUpdatesResponse(
-      graphqlBody([
-        {
-          metadata: { backendUrn: "urn:li:activity:800" },
-        },
-      ]),
-    );
-
-    expect(result.posts[0]?.text).toBeNull();
-    expect(result.posts[0]?.authorName).toBeNull();
-    expect(result.posts[0]?.authorPublicId).toBeNull();
-    expect(result.posts[0]?.authorHeadline).toBeNull();
-    expect(result.posts[0]?.timestamp).toBeNull();
-  });
-});
-
 describe("getProfileActivity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -390,7 +160,7 @@ describe("getProfileActivity", () => {
   });
 
   it("navigates to the profile recent-activity page", async () => {
-    const { navigate } = setupMocks(graphqlBody([]));
+    const { navigate } = setupMocks([]);
 
     await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
 
@@ -400,7 +170,7 @@ describe("getProfileActivity", () => {
   });
 
   it("URL-encodes the profile public ID in the navigation URL", async () => {
-    const { navigate } = setupMocks(graphqlBody([]));
+    const { navigate } = setupMocks([]);
 
     await getProfileActivity({
       cdpPort: CDP_PORT,
@@ -413,7 +183,7 @@ describe("getProfileActivity", () => {
   });
 
   it("extracts profile ID from URL input for navigation", async () => {
-    const { navigate } = setupMocks(graphqlBody([]));
+    const { navigate } = setupMocks([]);
 
     await getProfileActivity({
       cdpPort: CDP_PORT,
@@ -425,55 +195,31 @@ describe("getProfileActivity", () => {
     );
   });
 
-  it("enables interceptor before navigation and disables after", async () => {
-    const { enableMock, disableMock, navigate } = setupMocks(graphqlBody([]));
+  it("scrapes posts from the DOM", async () => {
+    const posts = [rawPost()];
+    const { evaluate } = setupMocks(posts);
 
     await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
 
-    expect(enableMock).toHaveBeenCalled();
-    expect(disableMock).toHaveBeenCalled();
-
-    const enableOrder = enableMock.mock.invocationCallOrder[0] as number;
-    const navigateOrder = navigate.mock.invocationCallOrder[0] as number;
-    const disableOrder = disableMock.mock.invocationCallOrder[0] as number;
-    expect(enableOrder).toBeLessThan(navigateOrder);
-    expect(navigateOrder).toBeLessThan(disableOrder);
+    expect(evaluate).toHaveBeenCalled();
   });
 
-  it("waits for voyagerFeedDashProfileUpdates response", async () => {
-    const { waitForResponseMock } = setupMocks(graphqlBody([]));
+  it("extracts URNs via three-dot menu for each post", async () => {
+    const posts = [rawPost(), rawPost({ authorName: "Bob" })];
+    setupMocks(posts, ["urn:li:share:111", "urn:li:share:222"]);
 
-    await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
+    const result = await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "johndoe",
+    });
 
-    expect(waitForResponseMock).toHaveBeenCalledWith(expect.any(Function));
-    const filter = waitForResponseMock.mock.calls[0]?.[0] as (
-      url: string,
-    ) => boolean;
-    expect(
-      filter(
-        "/voyager/api/graphql?queryId=voyagerFeedDashProfileUpdates.abc123&variables=...",
-      ),
-    ).toBe(true);
-    expect(
-      filter(
-        "/voyager/api/graphql?queryId=voyagerFeedDashMainFeed.xyz&variables=...",
-      ),
-    ).toBe(false);
+    expect(result.posts[0]?.urn).toBe("urn:li:share:111");
+    expect(result.posts[1]?.urn).toBe("urn:li:share:222");
   });
 
-  it("returns parsed posts with profilePublicId", async () => {
-    setupMocks(
-      graphqlBody(
-        [
-          {
-            metadata: { backendUrn: "urn:li:activity:123" },
-            header: { text: { text: "Jane Doe" } },
-            commentary: { text: { text: "Hello world" } },
-          },
-        ],
-        { start: 0, count: 20, total: 1 },
-      ),
-    );
+  it("returns posts with profilePublicId and nextCursor", async () => {
+    const posts = [rawPost()];
+    setupMocks(posts, ["urn:li:share:111"]);
 
     const result = await getProfileActivity({
       cdpPort: CDP_PORT,
@@ -482,27 +228,69 @@ describe("getProfileActivity", () => {
 
     expect(result.profilePublicId).toBe("janedoe");
     expect(result.posts).toHaveLength(1);
-    expect(result.posts[0]?.urn).toBe("urn:li:activity:123");
-    expect(result.posts[0]?.text).toBe("Hello world");
-    expect(result.paging).toEqual({ start: 0, count: 20, total: 1 });
+    expect(result.posts[0]?.authorName).toBe("Jane Doe");
+    expect(result.posts[0]?.reactionCount).toBe(5);
+    expect(result.nextCursor).toBeNull();
   });
 
-  it("throws on non-200 response", async () => {
-    setupMocks(null, 400);
-
-    await expect(
-      getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" }),
-    ).rejects.toThrow("Voyager API returned HTTP 400 for profile activity");
-  });
-
-  it("throws on non-object response body", async () => {
-    setupMocks(null, 200);
-
-    await expect(
-      getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" }),
-    ).rejects.toThrow(
-      "Voyager API returned an unexpected response format for profile activity",
+  it("returns nextCursor when more posts available", async () => {
+    const posts = Array.from({ length: 15 }, (_, i) =>
+      rawPost({ authorName: `User ${String(i)}` }),
     );
+    const urns = posts.map((_, i) => `urn:li:share:${String(i)}`);
+    setupMocks(posts, urns);
+
+    const result = await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "johndoe",
+      count: 10,
+    });
+
+    expect(result.posts).toHaveLength(10);
+    expect(result.nextCursor).toBe("urn:li:share:9");
+  });
+
+  it("uses cursor to skip past already-seen posts", async () => {
+    const posts = Array.from({ length: 15 }, (_, i) =>
+      rawPost({ authorName: `User ${String(i)}` }),
+    );
+    const urns = posts.map((_, i) => `urn:li:share:${String(i)}`);
+    setupMocks(posts, urns);
+
+    const result = await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "johndoe",
+      count: 5,
+      cursor: "urn:li:share:4",
+    });
+
+    expect(result.posts).toHaveLength(5);
+    expect(result.posts[0]?.authorName).toBe("User 5");
+  });
+
+  it("builds post URLs from extracted URNs", async () => {
+    setupMocks([rawPost()], ["urn:li:share:999"]);
+
+    const result = await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "johndoe",
+    });
+
+    expect(result.posts[0]?.url).toBe(
+      "https://www.linkedin.com/feed/update/urn:li:share:999/",
+    );
+  });
+
+  it("handles posts where URN extraction fails", async () => {
+    setupMocks([rawPost()], [null]);
+
+    const result = await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "johndoe",
+    });
+
+    expect(result.posts[0]?.urn).toBe("");
+    expect(result.posts[0]?.url).toBeNull();
   });
 
   it("throws when no LinkedIn page found", async () => {
@@ -524,7 +312,7 @@ describe("getProfileActivity", () => {
   });
 
   it("disconnects CDP client after operation", async () => {
-    const { disconnect } = setupMocks(graphqlBody([]));
+    const { disconnect } = setupMocks([]);
 
     await getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" });
 
@@ -532,22 +320,44 @@ describe("getProfileActivity", () => {
   });
 
   it("disconnects CDP client even on error", async () => {
-    const { disconnect } = setupMocks(null, 500);
+    vi.mocked(discoverTargets).mockResolvedValue([
+      {
+        id: "target-1",
+        type: "page",
+        title: "LinkedIn",
+        url: "https://www.linkedin.com/feed/",
+        description: "",
+        devtoolsFrontendUrl: "",
+      },
+    ]);
+
+    const disconnect = vi.fn();
+    vi.mocked(CDPClient).mockImplementation(function () {
+      return {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect,
+        navigate: vi.fn().mockRejectedValue(new Error("Navigation failed")),
+        evaluate: vi.fn().mockResolvedValue(true),
+        send: vi.fn().mockResolvedValue(undefined),
+      } as unknown as CDPClient;
+    });
 
     await expect(
       getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" }),
-    ).rejects.toThrow();
+    ).rejects.toThrow("Navigation failed");
 
     expect(disconnect).toHaveBeenCalled();
   });
 
-  it("disables interceptor even on error", async () => {
-    const { disableMock } = setupMocks(null, 500);
+  it("returns empty posts array when no activity found", async () => {
+    setupMocks([]);
 
-    await expect(
-      getProfileActivity({ cdpPort: CDP_PORT, profile: "johndoe" }),
-    ).rejects.toThrow();
+    const result = await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "johndoe",
+    });
 
-    expect(disableMock).toHaveBeenCalled();
+    expect(result.posts).toHaveLength(0);
+    expect(result.nextCursor).toBeNull();
   });
 });
