@@ -9,10 +9,8 @@ import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
 import {
   type RawDomPost,
-  SCRAPE_FEED_SCRIPT,
   mapRawPosts,
   scrollFeed,
-  waitForFeedLoad,
   delay,
 } from "./get-feed.js";
 
@@ -38,6 +36,267 @@ export interface SearchPostsOutput {
   readonly posts: FeedPost[];
   /** Cursor token for retrieving the next page, or null if no more pages. */
   readonly nextCursor: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Search-specific DOM scraping script
+// ---------------------------------------------------------------------------
+
+/**
+ * JavaScript evaluated inside the LinkedIn search results page.  Returns
+ * an array of {@link RawDomPost} objects.
+ *
+ * Search result items are `div[role="listitem"]` elements (NOT wrapped
+ * in `data-testid="mainFeed"` like the feed page).  URNs/URLs are NOT
+ * exposed inline — they are extracted in a subsequent phase by opening
+ * each post's three-dot menu and clicking "Copy link to post", which
+ * writes the URL to `navigator.clipboard.writeText`.
+ */
+const SCRAPE_SEARCH_RESULTS_SCRIPT = `(() => {
+  const posts = [];
+
+  // --- Strategy 1: div[role="listitem"] search results (no mainFeed wrapper) ---
+  const searchItems = document.querySelectorAll('div[role="listitem"]');
+  const isSearchPage = searchItems.length > 0
+    && !document.querySelector('[data-testid="mainFeed"]');
+  if (isSearchPage) {
+    for (const card of searchItems) {
+      if (card.offsetHeight < 100) continue;
+      const menuBtn = card.querySelector('button[aria-label^="Open control menu for post"]');
+      if (!menuBtn) continue;
+
+      // URN will be extracted in a separate phase via three-dot menu
+      let urnRaw = null;
+
+      let authorName = null;
+      let authorHeadline = null;
+      let authorProfileUrl = null;
+
+      const authorLink = card.querySelector('a[href*="/in/"], a[href*="/company/"]');
+      if (authorLink) {
+        authorProfileUrl = authorLink.href.split('?')[0] || null;
+        const nameEl = authorLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]')
+          || authorLink;
+        const rawName = (nameEl.textContent || '').trim();
+        authorName = rawName || null;
+      }
+
+      const allSpans = card.querySelectorAll('span');
+      for (const span of allSpans) {
+        const txt = (span.textContent || '').trim();
+        if (
+          txt &&
+          txt.length > 5 &&
+          txt.length < 200 &&
+          txt !== authorName &&
+          !txt.match(/^\\d+[smhdw]$/) &&
+          !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
+          !txt.match(/^Follow$|^Promoted$/i)
+        ) {
+          authorHeadline = txt;
+          break;
+        }
+      }
+
+      let text = null;
+      const ltrSpans = card.querySelectorAll('span[dir="ltr"]');
+      let longestText = '';
+      for (const span of ltrSpans) {
+        const txt = (span.textContent || '').trim();
+        if (txt.length > longestText.length && txt !== authorName && txt !== authorHeadline) {
+          longestText = txt;
+        }
+      }
+      if (longestText.length > 20) text = longestText;
+
+      let mediaType = null;
+      if (card.querySelector('video')) {
+        mediaType = 'video';
+      } else if (card.querySelector('img[src*="media.licdn.com"]')) {
+        const imgs = card.querySelectorAll('img[src*="media.licdn.com"]');
+        for (const img of imgs) {
+          if (img.offsetHeight > 100) { mediaType = 'image'; break; }
+        }
+      }
+
+      const cardText = card.textContent || '';
+      function parseCount(pattern) {
+        const m = cardText.match(pattern);
+        if (!m) return 0;
+        const raw = m[1].replace(/,/g, '');
+        const num = parseInt(raw, 10);
+        return isNaN(num) ? 0 : num;
+      }
+
+      const reactionCount = parseCount(/(\\d[\\d,]*)\\s+reactions?/i);
+      const commentCount = parseCount(/(\\d[\\d,]*)\\s+comments?/i);
+      const shareCount = parseCount(/(\\d[\\d,]*)\\s+reposts?/i);
+
+      let timestamp = null;
+      const timeEl = card.querySelector('time');
+      if (timeEl) {
+        const dt = timeEl.getAttribute('datetime');
+        if (dt) timestamp = dt;
+      }
+      if (!timestamp) {
+        const timeMatch = cardText.match(/(?:^|\\s)(\\d+[smhdw])(?:\\s|$|\\u00B7|\\xB7)/);
+        if (timeMatch) timestamp = timeMatch[1];
+      }
+
+      posts.push({
+        urn: urnRaw,
+        url: urnRaw ? 'https://www.linkedin.com/feed/update/' + urnRaw + '/' : null,
+        authorName,
+        authorHeadline,
+        authorProfileUrl,
+        text,
+        mediaType,
+        reactionCount,
+        commentCount,
+        shareCount,
+        timestamp,
+      });
+    }
+    return posts;
+  }
+
+  // --- Strategy 2: mainFeed fallback (older LinkedIn renders) ---
+  const feedList = document.querySelector('[data-testid="mainFeed"]');
+  if (!feedList) return posts;
+
+  const items = feedList.querySelectorAll('div[role="listitem"]');
+  for (const item of items) {
+    if (item.offsetHeight < 100) continue;
+    const menuBtn = item.querySelector('button[aria-label^="Open control menu for post"]');
+    if (!menuBtn) continue;
+
+    let authorName = null;
+    let authorHeadline = null;
+    let authorProfileUrl = null;
+
+    const authorLink = item.querySelector('a[href*="/in/"], a[href*="/company/"]');
+    if (authorLink) {
+      authorProfileUrl = authorLink.href.split('?')[0] || null;
+      const nameEl = authorLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]')
+        || authorLink;
+      authorName = (nameEl.textContent || '').trim() || null;
+    }
+
+    const allSpans = item.querySelectorAll('span');
+    for (const span of allSpans) {
+      const txt = (span.textContent || '').trim();
+      if (
+        txt && txt.length > 5 && txt.length < 200 &&
+        txt !== authorName &&
+        !txt.match(/^\\d+[smhdw]$/) &&
+        !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
+        !txt.match(/^Follow$|^Promoted$/i)
+      ) {
+        authorHeadline = txt;
+        break;
+      }
+    }
+
+    let text = null;
+    const ltrSpans = item.querySelectorAll('span[dir="ltr"]');
+    let longestText = '';
+    for (const span of ltrSpans) {
+      const txt = (span.textContent || '').trim();
+      if (txt.length > longestText.length && txt !== authorName && txt !== authorHeadline) {
+        longestText = txt;
+      }
+    }
+    if (longestText.length > 20) text = longestText;
+
+    let mediaType = null;
+    if (item.querySelector('video')) {
+      mediaType = 'video';
+    } else if (item.querySelector('img[src*="media.licdn.com"]')) {
+      const imgs = item.querySelectorAll('img[src*="media.licdn.com"]');
+      for (const img of imgs) {
+        if (img.offsetHeight > 100) { mediaType = 'image'; break; }
+      }
+    }
+
+    const itemText = item.textContent || '';
+    function parseCount2(pattern) {
+      const m = itemText.match(pattern);
+      if (!m) return 0;
+      const raw = m[1].replace(/,/g, '');
+      const num = parseInt(raw, 10);
+      return isNaN(num) ? 0 : num;
+    }
+
+    const reactionCount = parseCount2(/(\\d[\\d,]*)\\s+reactions?/i);
+    const commentCount = parseCount2(/(\\d[\\d,]*)\\s+comments?/i);
+    const shareCount = parseCount2(/(\\d[\\d,]*)\\s+reposts?/i);
+
+    let timestamp = null;
+    const timeEl = item.querySelector('time');
+    if (timeEl) {
+      const dt = timeEl.getAttribute('datetime');
+      if (dt) timestamp = dt;
+    }
+    if (!timestamp) {
+      const timeMatch = itemText.match(/(?:^|\\s)(\\d+[smhdw])(?:\\s|$|\\u00B7|\\xB7)/);
+      if (timeMatch) timestamp = timeMatch[1];
+    }
+
+    posts.push({
+      urn: null,
+      url: null,
+      authorName,
+      authorHeadline,
+      authorProfileUrl,
+      text,
+      mediaType,
+      reactionCount,
+      commentCount,
+      shareCount,
+      timestamp,
+    });
+  }
+
+  return posts;
+})()`;
+
+// ---------------------------------------------------------------------------
+// Search-specific readiness check
+// ---------------------------------------------------------------------------
+
+/**
+ * Wait until search results are visible in the DOM.
+ *
+ * Checks for two possible page structures:
+ * 1. `[data-chameleon-result-urn]` — modern search results with inline URNs.
+ * 2. `[data-testid="mainFeed"]` with menu buttons — older layout sharing
+ *    the feed container.
+ *
+ * @internal Exported for testing.
+ */
+export async function waitForSearchResults(
+  client: CDPClient,
+  timeoutMs = 15_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const ready = await client.evaluate<boolean>(`(() => {
+      // Search results render as div[role="listitem"] with post menu buttons.
+      // Unlike the feed page they are NOT wrapped in data-testid="mainFeed".
+      const items = document.querySelectorAll('div[role="listitem"]');
+      for (const item of items) {
+        if (item.querySelector('button[aria-label^="Open control menu for post"]')) {
+          return true;
+        }
+      }
+      return false;
+    })()`);
+    if (ready) return;
+    await delay(500);
+  }
+  throw new Error(
+    "Timed out waiting for search results to appear in the DOM",
+  );
 }
 
 /**
@@ -99,7 +358,7 @@ export async function searchPosts(
     await client.navigate(searchUrl.toString());
 
     // Wait for the search results to render
-    await waitForFeedLoad(client);
+    await waitForSearchResults(client);
 
     // Collect posts — scroll to load more if needed
     const maxScrollAttempts = 10;
@@ -109,7 +368,8 @@ export async function searchPosts(
     const cursorUrn = cursor;
 
     for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
-      const scraped = await client.evaluate<RawDomPost[]>(SCRAPE_FEED_SCRIPT);
+      const scraped =
+        await client.evaluate<RawDomPost[]>(SCRAPE_SEARCH_RESULTS_SCRIPT);
       allPosts = scraped ?? [];
 
       // Determine which posts to return
@@ -132,6 +392,76 @@ export async function searchPosts(
       if (scroll < maxScrollAttempts) {
         await scrollFeed(client);
         await delay(1500);
+      }
+    }
+
+    // --- URL extraction via three-dot menu → "Copy link to post" ---
+    // Search result posts don't expose URNs in the DOM.  For each post
+    // with urn === null, open the three-dot menu, click "Copy link to
+    // post" which writes the URL to the clipboard, then parse the
+    // activity ID from the URL to derive the URN.
+    //
+    // Electron's clipboard API is broken (readText returns {}) so we
+    // monkey-patch navigator.clipboard.writeText to capture into a
+    // window global instead.
+    const needsUrlExtraction = allPosts.some((p) => p.urn === null);
+    if (needsUrlExtraction) {
+      // Install clipboard interceptor once
+      await client.evaluate(
+        `navigator.clipboard.writeText = function(text) {
+          window.__capturedClipboard = text;
+          return Promise.resolve();
+        };`,
+      );
+
+      for (let i = 0; i < allPosts.length; i++) {
+        const post = allPosts[i];
+        if (!post || post.urn) continue;
+
+        // Reset capture
+        await client.evaluate(`window.__capturedClipboard = null;`);
+
+        // Click the i-th menu button
+        const clicked = await client.evaluate<boolean>(`(() => {
+          const btns = document.querySelectorAll(
+            'div[role="listitem"] button[aria-label^="Open control menu for post"]'
+          );
+          const btn = btns[${String(i)}];
+          if (!btn) return false;
+          btn.scrollIntoView({ block: 'center' });
+          btn.click();
+          return true;
+        })()`);
+        if (!clicked) continue;
+
+        await delay(700);
+
+        // Click "Copy link to post" menu item
+        await client.evaluate(`(() => {
+          for (const el of document.querySelectorAll('[role="menuitem"]')) {
+            if (el.textContent.trim() === 'Copy link to post') {
+              el.click();
+              return;
+            }
+          }
+        })()`);
+
+        await delay(500);
+
+        // Read captured URL
+        const postUrl =
+          await client.evaluate<string | null>(`window.__capturedClipboard`);
+
+        if (postUrl) {
+          post.url = postUrl.split("?")[0] ?? postUrl;
+          // Extract activity ID from URL patterns like:
+          // /posts/author_text-ugcPost-7443026990028226560-XXXX
+          // /feed/update/urn:li:activity:7443347992583053312/
+          const activityMatch = postUrl.match(/(?:activity|ugcPost)[:-](\d{15,25})/);
+          if (activityMatch) {
+            post.urn = `urn:li:activity:${activityMatch[1]}`;
+          }
+        }
       }
     }
 

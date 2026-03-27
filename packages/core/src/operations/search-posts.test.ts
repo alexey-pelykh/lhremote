@@ -23,7 +23,8 @@ import type { RawDomPost } from "./get-feed.js";
 const CDP_PORT = 9222;
 
 /**
- * Build a minimal raw DOM post object.
+ * Build a minimal raw DOM post object with URN pre-populated (chameleon
+ * strategy returns URNs directly from the DOM).
  */
 function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
   return {
@@ -42,6 +43,30 @@ function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
   };
 }
 
+/**
+ * Create a script-aware evaluate mock that handles the searchPosts call
+ * sequence:
+ * 1. waitForSearchResults → truthy when posts exist
+ * 2. SCRAPE_SEARCH_RESULTS_SCRIPT → posts array (may repeat on scroll)
+ *
+ * The chameleon strategy returns URNs directly in the scrape — no
+ * three-dot menu interaction needed.
+ */
+function createEvaluateMock(scrapedPosts: RawDomPost[]) {
+  return vi.fn().mockImplementation((script: string) => {
+    const s = String(script);
+    // Scrape script: contains parseCount function
+    if (s.includes("parseCount")) {
+      return Promise.resolve(scrapedPosts);
+    }
+    // waitForSearchResults: always pass (page loaded)
+    if (s.includes("Open control menu") || s.includes("mainFeed")) {
+      return Promise.resolve(true);
+    }
+    return Promise.resolve(null);
+  });
+}
+
 function setupMocks(scrapedPosts: RawDomPost[] = []) {
   vi.mocked(discoverTargets).mockResolvedValue([
     {
@@ -57,13 +82,7 @@ function setupMocks(scrapedPosts: RawDomPost[] = []) {
   const disconnect = vi.fn();
   const navigate = vi.fn().mockResolvedValue({ frameId: "F1" });
   const send = vi.fn().mockResolvedValue(undefined);
-
-  // evaluate: first call is waitForFeedLoad check, subsequent calls return scraped posts
-  const evaluate = vi.fn();
-  // First call from waitForFeedLoad — return count > 0 to skip polling
-  evaluate.mockResolvedValueOnce(scrapedPosts.length || 1);
-  // Subsequent calls from SCRAPE_FEED_SCRIPT
-  evaluate.mockResolvedValue(scrapedPosts);
+  const evaluate = createEvaluateMock(scrapedPosts);
 
   vi.mocked(CDPClient).mockImplementation(function () {
     return {
@@ -120,6 +139,22 @@ describe("searchPosts", () => {
     expect(post?.commentCount).toBe(7);
     expect(post?.shareCount).toBe(3);
     expect(post?.hashtags).toEqual(["linkedin", "tech"]);
+  });
+
+  it("returns posts with URNs from chameleon strategy", async () => {
+    setupMocks([
+      rawPost({ urn: "urn:li:activity:1", url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
+      rawPost({ urn: "urn:li:activity:2", url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),
+    ]);
+
+    const result = await searchPosts({ query: "test", cdpPort: CDP_PORT });
+
+    expect(result.posts).toHaveLength(2);
+    expect(result.posts[0]?.urn).toBe("urn:li:activity:1");
+    expect(result.posts[1]?.urn).toBe("urn:li:activity:2");
+    expect(result.posts[0]?.url).toBe(
+      "https://www.linkedin.com/feed/update/urn:li:activity:1/",
+    );
   });
 
   it("navigates to the search results page with query", async () => {
@@ -226,49 +261,65 @@ describe("searchPosts", () => {
   it("scrolls to load more posts when count exceeds initial scrape", async () => {
     const { evaluate, send } = setupMocks([]);
 
-    evaluate.mockReset();
-    evaluate.mockResolvedValueOnce(1);
-    // First scrape: 2 posts
-    evaluate.mockResolvedValueOnce([
+    const firstScrape = [
       rawPost({ urn: "urn:li:activity:1" }),
-      rawPost({ urn: "urn:li:activity:2" }),
-    ]);
-    // Second scrape after scroll: 4 posts
-    evaluate.mockResolvedValueOnce([
+    ];
+    const secondScrape = [
       rawPost({ urn: "urn:li:activity:1" }),
       rawPost({ urn: "urn:li:activity:2" }),
       rawPost({ urn: "urn:li:activity:3" }),
-      rawPost({ urn: "urn:li:activity:4" }),
-    ]);
+    ];
 
-    const result = await searchPosts({ query: "test", cdpPort: CDP_PORT, count: 4 });
+    let scrapeIdx = 0;
 
-    expect(result.posts).toHaveLength(4);
-    expect(send).toHaveBeenCalledWith("Input.dispatchMouseEvent", {
-      type: "mouseWheel",
-      x: 300,
-      y: 400,
-      deltaX: 0,
-      deltaY: 800,
+    evaluate.mockReset();
+    evaluate.mockImplementation((script: string) => {
+      const s = String(script);
+      if (s.includes("parseCount")) {
+        const result = [firstScrape, secondScrape][scrapeIdx] ?? secondScrape;
+        scrapeIdx++;
+        return Promise.resolve(result);
+      }
+      if (s.includes("Open control menu") || s.includes("mainFeed")) {
+        return Promise.resolve(true);
+      }
+      return Promise.resolve(null);
     });
+
+    const result = await searchPosts({ query: "test", cdpPort: CDP_PORT, count: 3 });
+
+    expect(result.posts).toHaveLength(3);
+    const scrollCalls = send.mock.calls.filter(
+      (args) => args[0] === "Input.dispatchMouseEvent",
+    );
+    expect(scrollCalls).toHaveLength(1);
   });
 
   it("stops scrolling when no new posts appear", async () => {
     const { evaluate, send } = setupMocks([]);
 
-    evaluate.mockReset();
-    evaluate.mockResolvedValueOnce(1);
     const fixedPosts = [
       rawPost({ urn: "urn:li:activity:1" }),
       rawPost({ urn: "urn:li:activity:2" }),
     ];
-    evaluate.mockResolvedValue(fixedPosts);
+
+    evaluate.mockReset();
+    evaluate.mockImplementation((script: string) => {
+      const s = String(script);
+      if (s.includes("parseCount")) return Promise.resolve(fixedPosts);
+      if (s.includes("Open control menu") || s.includes("mainFeed")) {
+        return Promise.resolve(true);
+      }
+      return Promise.resolve(null);
+    });
 
     const result = await searchPosts({ query: "test", cdpPort: CDP_PORT, count: 10 });
 
     expect(result.posts).toHaveLength(2);
-    // Should have scrolled once and then stopped (no new posts)
-    expect(send).toHaveBeenCalledTimes(1);
+    const scrollCalls = send.mock.calls.filter(
+      (args) => args[0] === "Input.dispatchMouseEvent",
+    );
+    expect(scrollCalls).toHaveLength(1);
   });
 
   it("throws when no LinkedIn page found", async () => {

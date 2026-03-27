@@ -566,7 +566,8 @@ describeE2E("feed and posts operations", () => {
           expect(parsed.posts.length).toBeGreaterThan(0);
 
           const post = parsed.posts[0] as (typeof parsed.posts)[number];
-          expect(post).toHaveProperty("urn");
+          expect(post.urn).toMatch(/^urn:li:/);
+          expect(post.url).toMatch(/^https:\/\/www\.linkedin\.com\//);
           expect(typeof post.reactionCount).toBe("number");
           expect(typeof post.commentCount).toBe("number");
         }, 60_000);
@@ -609,6 +610,10 @@ describeE2E("feed and posts operations", () => {
           expect(parsed.query).toBe("linkedin");
           expect(Array.isArray(parsed.posts)).toBe(true);
           expect(parsed.posts.length).toBeGreaterThan(0);
+
+          const post = parsed.posts[0] as (typeof parsed.posts)[number];
+          expect(post.urn).toMatch(/^urn:li:/);
+          expect(post.url).toMatch(/^https:\/\/www\.linkedin\.com\//);
         }, 60_000);
       });
     });
