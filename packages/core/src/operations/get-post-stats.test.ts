@@ -11,21 +11,19 @@ vi.mock("../cdp/client.js", () => ({
   CDPClient: vi.fn(),
 }));
 
-vi.mock("../voyager/interceptor.js", () => ({
-  VoyagerInterceptor: vi.fn(),
-}));
-
 vi.mock("./navigate-away.js", () => ({
   navigateAwayIf: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("./get-feed.js", () => ({
+  delay: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
-import { VoyagerInterceptor } from "../voyager/interceptor.js";
 import {
   extractPostUrn,
   getPostStats,
-  parseFeedUpdateStatsResponse,
 } from "./get-post-stats.js";
 
 describe("extractPostUrn", () => {
@@ -92,157 +90,19 @@ describe("extractPostUrn", () => {
   });
 });
 
-describe("parseFeedUpdateStatsResponse", () => {
-  const postUrn = "urn:li:activity:1234567890";
-
-  it("parses socialDetail.totalSocialActivityCounts with reactionTypeCounts", () => {
-    const raw = {
-      socialDetail: {
-        totalSocialActivityCounts: {
-          numLikes: 46,
-          numComments: 5,
-          numShares: 2,
-          reactionTypeCounts: [
-            { reactionType: "LIKE", count: 31 },
-            { reactionType: "PRAISE", count: 11 },
-            { reactionType: "EMPATHY", count: 4 },
-          ],
-        },
-      },
-    };
-
-    const result = parseFeedUpdateStatsResponse(raw, postUrn);
-    expect(result).toEqual({
-      postUrn,
-      reactionCount: 46,
-      reactionsByType: [
-        { type: "LIKE", count: 31 },
-        { type: "PRAISE", count: 11 },
-        { type: "EMPATHY", count: 4 },
-      ],
-      commentCount: 5,
-      shareCount: 2,
-    });
-  });
-
-  it("parses nested data.socialDetail variant", () => {
-    const raw = {
-      data: {
-        socialDetail: {
-          totalSocialActivityCounts: {
-            numLikes: 100,
-            numComments: 10,
-            numShares: 5,
-            reactionTypeCounts: [{ reactionType: "LIKE", count: 100 }],
-          },
-        },
-      },
-    };
-
-    const result = parseFeedUpdateStatsResponse(raw, postUrn);
-    expect(result.reactionCount).toBe(100);
-    expect(result.reactionsByType).toEqual([{ type: "LIKE", count: 100 }]);
-    expect(result.commentCount).toBe(10);
-    expect(result.shareCount).toBe(5);
-  });
-
-  it("parses flat totalSocialActivityCounts variant", () => {
-    const raw = {
-      totalSocialActivityCounts: {
-        numLikes: 20,
-        numComments: 3,
-        numShares: 1,
-        reactionTypeCounts: [
-          { reactionType: "LIKE", count: 15 },
-          { reactionType: "INTEREST", count: 5 },
-        ],
-      },
-    };
-
-    const result = parseFeedUpdateStatsResponse(raw, postUrn);
-    expect(result.reactionCount).toBe(20);
-    expect(result.reactionsByType).toHaveLength(2);
-  });
-
-  it("parses data.totalSocialActivityCounts variant", () => {
-    const raw = {
-      data: {
-        totalSocialActivityCounts: {
-          numLikes: 7,
-          numComments: 1,
-          numShares: 0,
-        },
-      },
-    };
-
-    const result = parseFeedUpdateStatsResponse(raw, postUrn);
-    expect(result.reactionCount).toBe(7);
-    expect(result.reactionsByType).toEqual([]);
-    expect(result.commentCount).toBe(1);
-    expect(result.shareCount).toBe(0);
-  });
-
-  it("falls back to numLikes when reactionTypeCounts is absent", () => {
-    const raw = {
-      socialDetail: {
-        totalSocialActivityCounts: {
-          numLikes: 42,
-          numComments: 3,
-          numShares: 1,
-        },
-      },
-    };
-
-    const result = parseFeedUpdateStatsResponse(raw, postUrn);
-    expect(result.reactionCount).toBe(42);
-    expect(result.reactionsByType).toEqual([]);
-  });
-
-  it("filters out entries with missing reactionType or count", () => {
-    const raw = {
-      socialDetail: {
-        totalSocialActivityCounts: {
-          numLikes: 10,
-          reactionTypeCounts: [
-            { reactionType: "LIKE", count: 8 },
-            { reactionType: undefined, count: 1 },
-            { reactionType: "PRAISE", count: undefined },
-            { reactionType: "EMPATHY", count: 2 },
-          ] as Array<{ reactionType?: string; count?: number }>,
-        },
-      },
-    };
-
-    const result = parseFeedUpdateStatsResponse(raw, postUrn);
-    expect(result.reactionsByType).toEqual([
-      { type: "LIKE", count: 8 },
-      { type: "EMPATHY", count: 2 },
-    ]);
-    expect(result.reactionCount).toBe(10);
-  });
-
-  it("handles empty response gracefully", () => {
-    const result = parseFeedUpdateStatsResponse({}, postUrn);
-    expect(result).toEqual({
-      postUrn,
-      reactionCount: 0,
-      reactionsByType: [],
-      commentCount: 0,
-      shareCount: 0,
-    });
-  });
-});
-
 describe("getPostStats", () => {
   const CDP_PORT = 9222;
   const POST_URL =
     "https://www.linkedin.com/feed/update/urn:li:activity:1234567890/";
 
   function setupMocks(opts?: {
-    responseStatus?: number;
-    responseBody?: unknown;
+    postStats?: unknown;
+    readySequence?: boolean[];
   }) {
-    const { responseStatus = 200, responseBody = {} } = opts ?? {};
+    const {
+      postStats = { reactionCount: 42, commentCount: 5, shareCount: 3 },
+      readySequence = [true],
+    } = opts ?? {};
 
     vi.mocked(discoverTargets).mockResolvedValue([
       {
@@ -255,33 +115,29 @@ describe("getPostStats", () => {
       },
     ]);
 
-    const navigate = vi.fn().mockResolvedValue(undefined);
     const disconnect = vi.fn();
+    const navigate = vi.fn().mockResolvedValue(undefined);
+
+    // Build evaluate mock call sequence:
+    // 1. readiness checks (boolean)
+    // 2. post stats scrape (object)
+    const evaluateMock = vi.fn();
+    for (const ready of readySequence) {
+      evaluateMock.mockResolvedValueOnce(ready);
+    }
+    evaluateMock.mockResolvedValueOnce(postStats);
+
     vi.mocked(CDPClient).mockImplementation(function () {
       return {
         connect: vi.fn().mockResolvedValue(undefined),
         disconnect,
         navigate,
+        evaluate: evaluateMock,
+        send: vi.fn().mockResolvedValue(undefined),
       } as unknown as CDPClient;
     });
 
-    const enable = vi.fn().mockResolvedValue(undefined);
-    const disable = vi.fn().mockResolvedValue(undefined);
-    const waitForResponse = vi.fn().mockResolvedValue({
-      url: "/voyager/api/feed/updates/urn%3Ali%3Aactivity%3A1234567890",
-      status: responseStatus,
-      body: responseBody,
-    });
-
-    vi.mocked(VoyagerInterceptor).mockImplementation(function () {
-      return {
-        enable,
-        disable,
-        waitForResponse,
-      } as unknown as VoyagerInterceptor;
-    });
-
-    return { enable, disable, waitForResponse, navigate, disconnect };
+    return { evaluateMock, disconnect, navigate };
   }
 
   beforeEach(() => {
@@ -310,69 +166,77 @@ describe("getPostStats", () => {
     ).rejects.toThrow("No LinkedIn page found in LinkedHelper");
   });
 
-  it("uses passive interception pattern", async () => {
-    const { enable, disable, waitForResponse, navigate } = setupMocks({
-      responseBody: {
-        socialDetail: {
-          totalSocialActivityCounts: {
-            numLikes: 10,
-            numComments: 2,
-            numShares: 1,
-            reactionTypeCounts: [{ reactionType: "LIKE", count: 10 }],
-          },
-        },
-      },
+  it("navigates to post detail URL and extracts stats from DOM", async () => {
+    const { navigate } = setupMocks();
+
+    const result = await getPostStats({
+      postUrl: POST_URL,
+      cdpPort: CDP_PORT,
     });
 
-    const result = await getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT });
-
-    expect(enable).toHaveBeenCalled();
-    expect(waitForResponse).toHaveBeenCalledWith(expect.any(Function));
     expect(navigate).toHaveBeenCalledWith(
       "https://www.linkedin.com/feed/update/urn:li:activity:1234567890/",
     );
-    expect(disable).toHaveBeenCalled();
 
     expect(result.stats).toEqual({
       postUrn: "urn:li:activity:1234567890",
-      reactionCount: 10,
-      reactionsByType: [{ type: "LIKE", count: 10 }],
-      commentCount: 2,
-      shareCount: 1,
+      reactionCount: 42,
+      reactionsByType: [],
+      commentCount: 5,
+      shareCount: 3,
     });
   });
 
-  it("waitForResponse filter matches /feed/updates/ URLs", async () => {
-    const { waitForResponse } = setupMocks();
+  it("returns empty reactionsByType (DOM has no breakdown)", async () => {
+    setupMocks({
+      postStats: { reactionCount: 100, commentCount: 10, shareCount: 5 },
+    });
+
+    const result = await getPostStats({
+      postUrl: POST_URL,
+      cdpPort: CDP_PORT,
+    });
+
+    expect(result.stats.reactionsByType).toEqual([]);
+    expect(result.stats.reactionCount).toBe(100);
+  });
+
+  it("handles zero counts gracefully", async () => {
+    setupMocks({
+      postStats: { reactionCount: 0, commentCount: 0, shareCount: 0 },
+    });
+
+    const result = await getPostStats({
+      postUrl: POST_URL,
+      cdpPort: CDP_PORT,
+    });
+
+    expect(result.stats).toEqual({
+      postUrn: "urn:li:activity:1234567890",
+      reactionCount: 0,
+      reactionsByType: [],
+      commentCount: 0,
+      shareCount: 0,
+    });
+  });
+
+  it("throws when DOM extraction returns null", async () => {
+    setupMocks({ postStats: null });
+
+    await expect(
+      getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toThrow("Failed to extract post stats from the DOM");
+  });
+
+  it("waits for post to load with polling", async () => {
+    const { evaluateMock } = setupMocks({
+      readySequence: [false, false, true],
+    });
 
     await getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT });
 
-    const call = waitForResponse.mock.calls[0];
-    expect(call).toBeDefined();
-    const filter = (call as unknown[])[0] as (url: string) => boolean;
-    expect(filter("/voyager/api/feed/updates/urn%3Ali%3Aactivity%3A123")).toBe(
-      true,
-    );
-    expect(filter("/voyager/api/feed/dash/feedSocialDetails")).toBe(false);
-    expect(filter("/voyager/api/other-endpoint")).toBe(false);
-  });
-
-  it("throws on non-200 response", async () => {
-    setupMocks({ responseStatus: 403 });
-
-    await expect(
-      getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT }),
-    ).rejects.toThrow("Voyager API returned HTTP 403 for post stats");
-  });
-
-  it("throws on non-object response body", async () => {
-    setupMocks({ responseBody: null });
-
-    await expect(
-      getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT }),
-    ).rejects.toThrow(
-      "Voyager API returned an unexpected response format for post stats",
-    );
+    // 3 readiness checks + 1 stats scrape = 4
+    expect(evaluateMock).toHaveBeenCalledTimes(4);
   });
 
   it("disconnects CDP client after successful operation", async () => {
@@ -383,14 +247,13 @@ describe("getPostStats", () => {
     expect(disconnect).toHaveBeenCalled();
   });
 
-  it("disconnects CDP client and disables interception even on error", async () => {
-    const { disconnect, disable } = setupMocks({ responseStatus: 500 });
+  it("disconnects CDP client even on error", async () => {
+    const { disconnect } = setupMocks({ postStats: null });
 
     await expect(
       getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT }),
     ).rejects.toThrow();
 
-    expect(disable).toHaveBeenCalled();
     expect(disconnect).toHaveBeenCalled();
   });
 });

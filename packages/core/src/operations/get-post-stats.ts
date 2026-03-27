@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import type { PostStats, ReactionCount } from "../types/post-analytics.js";
+import type { PostStats } from "../types/post-analytics.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { VoyagerInterceptor } from "../voyager/interceptor.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
+import { delay } from "./get-feed.js";
 import { navigateAwayIf } from "./navigate-away.js";
 
 /**
@@ -49,89 +49,89 @@ export function extractPostUrn(input: string): string {
   throw new Error(`Cannot extract post URN from: ${input}`);
 }
 
-/** Reaction-type count entry in the REST feed update response. */
-interface VoyagerReactionTypeCount {
-  reactionType?: string;
-  count?: number;
+// ---------------------------------------------------------------------------
+// Raw shape returned by the in-page scraping script
+// ---------------------------------------------------------------------------
+
+interface RawPostStats {
+  reactionCount: number;
+  commentCount: number;
+  shareCount: number;
 }
 
-/** Social activity counts block from the REST /feed/updates/{urn} response. */
-interface VoyagerSocialActivityCounts {
-  numLikes?: number;
-  numComments?: number;
-  numShares?: number;
-  reactionTypeCounts?: VoyagerReactionTypeCount[];
-}
-
-/** Social detail block wrapping the activity counts. */
-interface VoyagerSocialDetail {
-  totalSocialActivityCounts?: VoyagerSocialActivityCounts;
-}
+// ---------------------------------------------------------------------------
+// In-page DOM scraping script
+// ---------------------------------------------------------------------------
 
 /**
- * Shape of the REST /feed/updates/{urn} response, from which post stats
- * are extracted.  Supports both nested (data.socialDetail.) and flat layouts.
- */
-interface VoyagerFeedUpdateStatsResponse {
-  data?: {
-    socialDetail?: VoyagerSocialDetail;
-    totalSocialActivityCounts?: VoyagerSocialActivityCounts;
-  };
-  // Flat-structure variants
-  socialDetail?: VoyagerSocialDetail;
-  totalSocialActivityCounts?: VoyagerSocialActivityCounts;
-}
-
-/**
- * Parse the REST feed-update response into a normalised PostStats.
+ * JavaScript source evaluated inside the LinkedIn post detail page to
+ * extract engagement statistics from the rendered DOM.
  *
- * The `totalSocialActivityCounts` block (and its nested
- * `reactionTypeCounts` array) can appear at several nesting depths
- * depending on the LinkedIn response variant:
- *   - `socialDetail.totalSocialActivityCounts`
- *   - `data.socialDetail.totalSocialActivityCounts`
- *   - `totalSocialActivityCounts` (flat)
- *   - `data.totalSocialActivityCounts` (flat under data)
+ * The post detail page renders engagement counts as text content
+ * (e.g. "42 reactions", "5 comments", "3 reposts").  The script
+ * searches the page body text for these patterns.
  */
-export function parseFeedUpdateStatsResponse(
-  raw: VoyagerFeedUpdateStatsResponse,
-  postUrn: string,
-): PostStats {
-  const counts =
-    raw.data?.socialDetail?.totalSocialActivityCounts ??
-    raw.socialDetail?.totalSocialActivityCounts ??
-    raw.data?.totalSocialActivityCounts ??
-    raw.totalSocialActivityCounts;
+const SCRAPE_POST_STATS_SCRIPT = `(() => {
+  let reactionCount = 0;
+  let commentCount = 0;
+  let shareCount = 0;
 
-  const rawReactions = counts?.reactionTypeCounts ?? [];
+  const countText = document.body.textContent || '';
 
-  const reactionsByType: ReactionCount[] = rawReactions
-    .filter(
-      (r): r is { reactionType: string; count: number } =>
-        r.reactionType !== undefined && r.count !== undefined,
-    )
-    .map((r) => ({ type: r.reactionType, count: r.count }));
+  function parseCount(pattern) {
+    const m = countText.match(pattern);
+    if (!m) return 0;
+    const raw = m[1].replace(/,/g, '');
+    const num = parseInt(raw, 10);
+    return isNaN(num) ? 0 : num;
+  }
 
-  const reactionCount =
-    reactionsByType.length > 0
-      ? reactionsByType.reduce((sum, r) => sum + r.count, 0)
-      : (counts?.numLikes ?? 0);
+  reactionCount = parseCount(/(\\d[\\d,]*)\\s+reactions?/i);
+  commentCount = parseCount(/(\\d[\\d,]*)\\s+comments?/i);
+  shareCount = parseCount(/(\\d[\\d,]*)\\s+reposts?/i);
 
-  return {
-    postUrn,
-    reactionCount,
-    reactionsByType,
-    commentCount: counts?.numComments ?? 0,
-    shareCount: counts?.numShares ?? 0,
-  };
+  return { reactionCount, commentCount, shareCount };
+})()`;
+
+// ---------------------------------------------------------------------------
+// Wait for post detail to load
+// ---------------------------------------------------------------------------
+
+/**
+ * Poll the DOM until the post detail page has rendered.  The page is
+ * considered ready when an author link and at least one `span[dir="ltr"]`
+ * are present.
+ */
+async function waitForPostLoad(
+  client: CDPClient,
+  timeoutMs = 15_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const ready = await client.evaluate<boolean>(`(() => {
+      const authorLink = document.querySelector('a[href*="/in/"], a[href*="/company/"]');
+      if (!authorLink) return false;
+      const ltrSpans = document.querySelectorAll('span[dir="ltr"]');
+      return ltrSpans.length > 0;
+    })()`);
+    if (ready) return;
+    await delay(500);
+  }
+  throw new Error(
+    "Timed out waiting for post detail to appear in the DOM",
+  );
 }
+
+// ---------------------------------------------------------------------------
+// Main operation
+// ---------------------------------------------------------------------------
 
 /**
  * Retrieve engagement statistics for a LinkedIn post.
  *
  * Connects to the LinkedIn webview in LinkedHelper, navigates to the
- * post detail page, and passively intercepts the REST `/feed/updates/{urn}`
- * response to extract reaction breakdown, comment count, and share count.
+ * post detail page, and extracts engagement statistics from the
+ * rendered DOM.
  *
  * @param input - Post URL or URN and CDP connection parameters.
  * @returns Engagement statistics for the post.
@@ -169,47 +169,33 @@ export async function getPostStats(
   await client.connect(linkedInTarget.id);
 
   try {
-    const voyager = new VoyagerInterceptor(client);
-    await voyager.enable();
+    // Navigate away if already on the post detail page to force a fresh load
+    await navigateAwayIf(client, "/feed/update/");
 
-    try {
-      // If the browser is already on the post detail page, LinkedIn's SPA
-      // won't fire a fresh API request on navigate.  Navigate away first.
-      await navigateAwayIf(client, "/feed/update/");
+    // Navigate to the post detail page
+    const postDetailUrl = `https://www.linkedin.com/feed/update/${postUrn}/`;
+    await client.navigate(postDetailUrl);
 
-      // Register the response listener before navigating to avoid race conditions.
-      const responsePromise = voyager.waitForResponse((url) =>
-        url.includes("/feed/updates/"),
+    // Wait for the post content to render
+    await waitForPostLoad(client);
+
+    // Extract engagement stats from the DOM
+    const raw = await client.evaluate<RawPostStats>(SCRAPE_POST_STATS_SCRIPT);
+    if (!raw) {
+      throw new Error(
+        "Failed to extract post stats from the DOM",
       );
-
-      // Navigate to the post detail page — LinkedIn's SPA will fetch the
-      // update data naturally via REST /feed/updates/{urn}.
-      const postDetailUrl = `https://www.linkedin.com/feed/update/${postUrn}/`;
-      await client.navigate(postDetailUrl);
-
-      const response = await responsePromise;
-      if (response.status !== 200) {
-        throw new Error(
-          `Voyager API returned HTTP ${String(response.status)} for post stats`,
-        );
-      }
-
-      const body = response.body;
-      if (body === null || typeof body !== "object") {
-        throw new Error(
-          "Voyager API returned an unexpected response format for post stats",
-        );
-      }
-
-      const stats = parseFeedUpdateStatsResponse(
-        body as VoyagerFeedUpdateStatsResponse,
-        postUrn,
-      );
-
-      return { stats };
-    } finally {
-      await voyager.disable();
     }
+
+    const stats: PostStats = {
+      postUrn,
+      reactionCount: raw.reactionCount,
+      reactionsByType: [],
+      commentCount: raw.commentCount,
+      shareCount: raw.shareCount,
+    };
+
+    return { stats };
   } finally {
     client.disconnect();
   }
