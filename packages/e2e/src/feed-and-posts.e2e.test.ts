@@ -651,7 +651,6 @@ describeE2E("feed and posts operations", () => {
 
           expect(parsed.profilePublicId).toBe(getTestProfilePublicId());
           expect(Array.isArray(parsed.posts)).toBe(true);
-          expect(parsed.paging).toHaveProperty("total");
 
           // Profile may or may not have recent posts
           for (const post of parsed.posts) {
@@ -707,7 +706,6 @@ describeE2E("feed and posts operations", () => {
 
           expect(parsed.profilePublicId).toBe(getTestProfilePublicId());
           expect(Array.isArray(parsed.posts)).toBe(true);
-          expect(parsed.paging).toHaveProperty("total");
         }, 60_000);
       });
     });

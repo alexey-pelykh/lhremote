@@ -10,35 +10,32 @@ import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 export function registerGetProfileActivity(server: McpServer): void {
   server.tool(
     "get-profile-activity",
-    "Get recent posts/activity from a LinkedIn profile. Returns structured post data with text, author info, and engagement counts. Supports pagination.",
+    "Get recent posts/activity from a LinkedIn profile. Returns structured post data with text, author info, and engagement counts. Supports cursor-based pagination.",
     {
       profile: z
         .string()
         .describe(
           "LinkedIn profile public ID or URL (e.g. johndoe or https://www.linkedin.com/in/johndoe)",
         ),
-      start: z
-        .number()
-        .int()
-        .nonnegative()
-        .optional()
-        .default(0)
-        .describe("Pagination offset (default: 0)"),
       count: z
         .number()
         .int()
         .positive()
         .optional()
-        .default(20)
-        .describe("Number of posts per page (default: 20)"),
+        .default(10)
+        .describe("Number of posts per page (default: 10)"),
+      cursor: z
+        .string()
+        .optional()
+        .describe("Cursor token from a previous call for the next page"),
       ...cdpConnectionSchema,
     },
-    async ({ profile, start, count, cdpPort, cdpHost, allowRemote }) => {
+    async ({ profile, count, cursor, cdpPort, cdpHost, allowRemote }) => {
       try {
         const result = await getProfileActivity({
           profile,
-          start,
           count,
+          cursor,
           cdpPort,
           cdpHost,
           allowRemote,

@@ -19,10 +19,10 @@ const MOCK_ACTIVITY = {
       urn: "urn:li:activity:7123456789012345678",
       text: "Excited to announce...",
       authorName: "John Doe",
-      authorPublicId: "johndoe",
+      authorPublicId: null,
       authorHeadline: "CEO at Acme",
-      url: "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678",
-      authorProfileUrl: null,
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678/",
+      authorProfileUrl: "https://www.linkedin.com/in/johndoe",
       mediaType: null,
       reactionCount: 42,
       commentCount: 8,
@@ -31,7 +31,7 @@ const MOCK_ACTIVITY = {
       hashtags: [],
     },
   ],
-  paging: { start: 0, count: 20, total: 1 },
+  nextCursor: null,
 };
 
 describe("registerGetProfileActivity", () => {
