@@ -4,10 +4,11 @@
 import type { PostEngager } from "../types/post-analytics.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { VoyagerInterceptor } from "../voyager/interceptor.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn } from "./get-post-stats.js";
+import { delay } from "./get-feed.js";
+import { navigateAwayIf } from "./navigate-away.js";
 
 /**
  * Input for the get-post-engagers operation.
@@ -37,132 +38,234 @@ export interface GetPostEngagersOutput {
   };
 }
 
-/** Shape of the Voyager feed-reactions API response. */
-interface VoyagerReactionsResponse {
-  data?: {
-    elements?: VoyagerReactionElement[];
-    paging?: VoyagerPaging;
-  };
-  elements?: VoyagerReactionElement[];
-  paging?: VoyagerPaging;
-  included?: VoyagerIncludedEntity[];
+// ---------------------------------------------------------------------------
+// Raw shape returned by the in-page scraping script
+// ---------------------------------------------------------------------------
+
+interface RawEngager {
+  firstName: string;
+  lastName: string;
+  publicId: string | null;
+  headline: string | null;
+  engagementType: string;
 }
 
-interface VoyagerReactionElement {
-  reactionType?: string;
-  reactor?: VoyagerReactor;
-  /** URN reference to an included mini-profile entity. */
-  reactorUrn?: string;
-  /** Alternative field name in some API versions. */
-  "*reactor"?: string;
-}
-
-interface VoyagerReactor {
-  firstName?: string;
-  lastName?: string;
-  publicIdentifier?: string;
-  headline?: { text?: string } | string;
-}
-
-interface VoyagerIncludedEntity {
-  $type?: string;
-  entityUrn?: string;
-  firstName?: string;
-  lastName?: string;
-  publicIdentifier?: string;
-  headline?: { text?: string } | string;
-  occupation?: string;
-}
-
-interface VoyagerPaging {
-  start?: number;
-  count?: number;
-  total?: number;
-}
+// ---------------------------------------------------------------------------
+// In-page DOM scraping scripts
+// ---------------------------------------------------------------------------
 
 /**
- * Resolve a headline value that may be a string or an object with a `text` field.
- */
-function resolveHeadline(
-  headline: { text?: string } | string | undefined,
-): string | null {
-  if (headline === undefined || headline === null) return null;
-  if (typeof headline === "string") return headline;
-  return headline.text ?? null;
-}
-
-/**
- * Parse the Voyager reactions response into normalised PostEngager entries.
+ * JavaScript source evaluated inside the LinkedIn post detail page to
+ * find and click the reactions count element, opening the reactions modal.
  *
- * LinkedIn's API may return reactor data inline or via `included` entity
- * references. This parser handles both patterns.
+ * The post detail page shows engagement counts (e.g. "42 reactions") as
+ * clickable elements.  The script finds the first element whose trimmed
+ * text matches the reaction-count pattern and clicks it.
+ *
+ * Returns `true` if a reactions element was found and clicked.
  */
-function parseReactionsResponse(raw: VoyagerReactionsResponse): {
-  engagers: PostEngager[];
-  paging: { start: number; count: number; total: number };
-} {
-  const elements = raw.data?.elements ?? raw.elements ?? [];
-  const paging = raw.data?.paging ?? raw.paging;
-  const included = raw.included ?? [];
-
-  // Build a lookup for included mini-profile entities
-  const profilesByUrn = new Map<string, VoyagerIncludedEntity>();
-  for (const entity of included) {
-    if (entity.entityUrn) {
-      profilesByUrn.set(entity.entityUrn, entity);
+const CLICK_REACTIONS_SCRIPT = `(() => {
+  const candidates = document.querySelectorAll('button, [role="button"], span, a');
+  for (const el of candidates) {
+    const txt = (el.textContent || '').trim();
+    if (/^\\d[\\d,]*\\s+reactions?$/i.test(txt) && el.offsetHeight > 0) {
+      el.scrollIntoView({ block: 'center' });
+      el.click();
+      return true;
     }
   }
+  return false;
+})()`;
 
-  const engagers: PostEngager[] = [];
+/**
+ * JavaScript source that extracts engager data from the reactions modal.
+ *
+ * The modal (`[role="dialog"]`) contains a scrollable list of people who
+ * reacted to the post.  Each entry has a profile link (`a[href*="/in/"]`),
+ * name text, headline, and a small reaction-type icon overlay.
+ */
+const SCRAPE_ENGAGERS_SCRIPT = `(() => {
+  const engagers = [];
+  const modal = document.querySelector('[role="dialog"]');
+  if (!modal) return engagers;
 
-  for (const el of elements) {
-    const reactionType = el.reactionType ?? "LIKE";
+  const seen = new Set();
+  const profileLinks = modal.querySelectorAll('a[href*="/in/"]');
 
-    // Try inline reactor first, then look up by URN in included entities
-    let firstName = el.reactor?.firstName;
-    let lastName = el.reactor?.lastName;
-    let publicId = el.reactor?.publicIdentifier ?? null;
-    let headline = resolveHeadline(el.reactor?.headline);
+  for (const link of profileLinks) {
+    const href = (link.href || '').split('?')[0];
+    if (seen.has(href)) continue;
+    seen.add(href);
 
-    if (firstName === undefined) {
-      const urn = el.reactorUrn ?? el["*reactor"];
-      if (urn) {
-        const profile = profilesByUrn.get(urn);
-        if (profile) {
-          firstName = profile.firstName;
-          lastName = profile.lastName;
-          publicId = profile.publicIdentifier ?? null;
-          headline =
-            resolveHeadline(profile.headline) ?? profile.occupation ?? null;
+    const idMatch = href.match(/\\/in\\/([^/?]+)/);
+    const publicId = idMatch ? idMatch[1] : null;
+
+    const nameSpan = link.querySelector('span[dir="ltr"], span[aria-hidden="true"]');
+    let name = nameSpan ? (nameSpan.textContent || '').trim() : '';
+    if (!name) {
+      name = (link.textContent || '').trim().split('\\n')[0].trim();
+    }
+
+    const nameParts = name.split(/\\s+/);
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    if (!firstName) continue;
+
+    const entry = link.closest('li') || link.closest('[class]');
+
+    let headline = null;
+    if (entry) {
+      const spans = entry.querySelectorAll('span');
+      for (const span of spans) {
+        const txt = (span.textContent || '').trim();
+        if (
+          txt &&
+          txt.length > 3 &&
+          txt.length < 200 &&
+          txt !== name &&
+          !txt.match(/^Follow$/i) &&
+          !txt.match(/^Connect$/i) &&
+          !txt.match(/^Pending$/i) &&
+          !txt.match(/^Message$/i) &&
+          !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?)$/i)
+        ) {
+          headline = txt;
+          break;
         }
       }
     }
 
-    engagers.push({
-      firstName: firstName ?? "",
-      lastName: lastName ?? "",
-      publicId,
-      headline,
-      engagementType: reactionType,
-    });
+    let engagementType = 'LIKE';
+    if (entry) {
+      const imgs = entry.querySelectorAll('img[alt]');
+      for (const img of imgs) {
+        const alt = (img.alt || '').toLowerCase();
+        if (alt.includes('celebrate') || alt.includes('clap')) { engagementType = 'PRAISE'; break; }
+        if (alt.includes('support') || alt.includes('care')) { engagementType = 'EMPATHY'; break; }
+        if (alt.includes('love') || alt.includes('heart')) { engagementType = 'APPRECIATION'; break; }
+        if (alt.includes('insightful') || alt.includes('light')) { engagementType = 'INTEREST'; break; }
+        if (alt.includes('funny') || alt.includes('laugh')) { engagementType = 'ENTERTAINMENT'; break; }
+        if (alt.includes('like') || alt.includes('thumb')) { engagementType = 'LIKE'; break; }
+      }
+    }
+
+    engagers.push({ firstName, lastName, publicId, headline, engagementType });
   }
 
-  return {
-    engagers,
-    paging: {
-      start: paging?.start ?? 0,
-      count: paging?.count ?? engagers.length,
-      total: paging?.total ?? engagers.length,
-    },
-  };
+  return engagers;
+})()`;
+
+/**
+ * JavaScript source that scrolls inside the reactions modal to trigger
+ * lazy loading of additional engager entries.
+ *
+ * Returns `true` if scrolling occurred (i.e. not at the bottom).
+ */
+const SCROLL_MODAL_SCRIPT = `(() => {
+  const modal = document.querySelector('[role="dialog"]');
+  if (!modal) return false;
+
+  const divs = modal.querySelectorAll('div');
+  let scrollable = null;
+  for (const div of divs) {
+    const style = getComputedStyle(div);
+    if (
+      (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+      div.scrollHeight > div.clientHeight
+    ) {
+      scrollable = div;
+      break;
+    }
+  }
+
+  if (!scrollable) scrollable = modal;
+
+  const prev = scrollable.scrollTop;
+  scrollable.scrollTop += 500;
+  return scrollable.scrollTop > prev;
+})()`;
+
+/**
+ * JavaScript source that extracts the total reactions count from the
+ * reactions modal header text (e.g. "42 Reactions" or "All (42)").
+ */
+const GET_MODAL_TOTAL_SCRIPT = `(() => {
+  const modal = document.querySelector('[role="dialog"]');
+  if (!modal) return 0;
+
+  const text = modal.textContent || '';
+  const match = text.match(/(\\d[\\d,]*)\\s+reactions?/i);
+  if (match) return parseInt(match[1].replace(/,/g, ''), 10);
+
+  const allMatch = text.match(/All\\s*\\((\\d[\\d,]*)\\)/i);
+  if (allMatch) return parseInt(allMatch[1].replace(/,/g, ''), 10);
+
+  return 0;
+})()`;
+
+// ---------------------------------------------------------------------------
+// Wait helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Poll the DOM until the post detail page has rendered.  The page is
+ * considered ready when an author link and at least one `span[dir="ltr"]`
+ * are present.
+ */
+async function waitForPostLoad(
+  client: CDPClient,
+  timeoutMs = 15_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const ready = await client.evaluate<boolean>(`(() => {
+      const authorLink = document.querySelector('a[href*="/in/"], a[href*="/company/"]');
+      if (!authorLink) return false;
+      const ltrSpans = document.querySelectorAll('span[dir="ltr"]');
+      return ltrSpans.length > 0;
+    })()`);
+    if (ready) return;
+    await delay(500);
+  }
+  throw new Error(
+    "Timed out waiting for post detail to appear in the DOM",
+  );
 }
+
+/**
+ * Poll the DOM until the reactions modal has loaded with at least one
+ * profile link visible.
+ */
+async function waitForReactionsModal(
+  client: CDPClient,
+  timeoutMs = 10_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const ready = await client.evaluate<boolean>(`(() => {
+      const modal = document.querySelector('[role="dialog"]');
+      if (!modal) return false;
+      return modal.querySelectorAll('a[href*="/in/"]').length > 0;
+    })()`);
+    if (ready) return;
+    await delay(500);
+  }
+  throw new Error(
+    "Timed out waiting for reactions modal to appear",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main operation
+// ---------------------------------------------------------------------------
 
 /**
  * Retrieve the list of people who engaged with a LinkedIn post.
  *
- * Connects to the LinkedIn webview in LinkedHelper and calls the
- * Voyager feed-reactions API to get the list of people who reacted
- * to the post, with their profile data and reaction type.
+ * Connects to the LinkedIn webview in LinkedHelper, navigates to the
+ * post detail page, opens the reactions modal via UI interaction, and
+ * extracts engager data from the rendered DOM.
  *
  * @param input - Post URL or URN, pagination parameters, and CDP connection options.
  * @returns List of engagers with pagination metadata.
@@ -202,36 +305,83 @@ export async function getPostEngagers(
   await client.connect(linkedInTarget.id);
 
   try {
-    const voyager = new VoyagerInterceptor(client);
+    // Navigate away if already on the post detail page to force a fresh load
+    await navigateAwayIf(client, "/feed/update/");
 
-    const encodedUrn = encodeURIComponent(postUrn);
-    const path =
-      `/voyager/api/feed/dash/feedReactions` +
-      `?q=feedUpdate&feedUpdateUrn=${encodedUrn}` +
-      `&start=${String(start)}&count=${String(count)}`;
+    // Navigate to the post detail page
+    const postDetailUrl = `https://www.linkedin.com/feed/update/${postUrn}/`;
+    await client.navigate(postDetailUrl);
 
-    const response = await voyager.fetch(path);
-    if (response.status !== 200) {
-      throw new Error(
-        `Voyager API returned HTTP ${String(response.status)} for post engagers`,
-      );
+    // Wait for the post content to render
+    await waitForPostLoad(client);
+
+    // Click the reactions count to open the modal
+    const clicked = await client.evaluate<boolean>(CLICK_REACTIONS_SCRIPT);
+    if (!clicked) {
+      // No reactions on this post — return empty
+      return {
+        postUrn,
+        engagers: [],
+        paging: { start, count: 0, total: 0 },
+      };
     }
 
-    const body = response.body;
-    if (body === null || typeof body !== "object") {
-      throw new Error(
-        "Voyager API returned an unexpected response format for post engagers",
-      );
+    // Wait for the reactions modal to load
+    await waitForReactionsModal(client);
+
+    // Extract total from modal header
+    const total = await client.evaluate<number>(GET_MODAL_TOTAL_SCRIPT);
+
+    // Scroll and collect engagers until we have enough or can't load more
+    const targetCount = start + count;
+    let allEngagers: RawEngager[] = [];
+    const maxScrollAttempts = 20;
+
+    for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
+      const scraped =
+        await client.evaluate<RawEngager[]>(SCRAPE_ENGAGERS_SCRIPT);
+      allEngagers = scraped ?? [];
+
+      if (allEngagers.length >= targetCount) break;
+
+      if (scroll < maxScrollAttempts) {
+        const scrolled =
+          await client.evaluate<boolean>(SCROLL_MODAL_SCRIPT);
+        if (!scrolled) break;
+        await delay(1000);
+      }
     }
 
-    const parsed = parseReactionsResponse(
-      body as VoyagerReactionsResponse,
-    );
+    // Close the modal
+    await client.send("Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "Escape",
+      code: "Escape",
+    });
+    await client.send("Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "Escape",
+      code: "Escape",
+    });
+
+    // Apply pagination window
+    const sliced = allEngagers.slice(start, start + count);
+    const engagers: PostEngager[] = sliced.map((e) => ({
+      firstName: e.firstName,
+      lastName: e.lastName,
+      publicId: e.publicId,
+      headline: e.headline,
+      engagementType: e.engagementType,
+    }));
 
     return {
       postUrn,
-      engagers: parsed.engagers,
-      paging: parsed.paging,
+      engagers,
+      paging: {
+        start,
+        count: engagers.length,
+        total: total || allEngagers.length,
+      },
     };
   } finally {
     client.disconnect();

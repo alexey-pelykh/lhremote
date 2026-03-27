@@ -16,6 +16,7 @@ import {
 import type {
   FeedPost,
   GetFeedOutput,
+  GetPostEngagersOutput,
   GetPostOutput,
   GetPostStatsOutput,
   GetProfileActivityOutput,
@@ -35,6 +36,7 @@ import {
 import {
   registerGetFeed,
   registerGetPost,
+  registerGetPostEngagers,
   registerGetPostStats,
   registerGetProfileActivity,
   registerSearchPosts,
@@ -377,8 +379,60 @@ describeE2E("feed and posts operations", () => {
       });
     });
 
-    // NOTE: get-post-engagers (#506) is omitted because LinkedIn fully
-    // deprecated its Voyager endpoint.
+    // -----------------------------------------------------------------
+    // get-post-engagers (DOM scraping of reactions modal)
+    // -----------------------------------------------------------------
+
+    describe("get-post-engagers", () => {
+      describe("MCP tools", () => {
+        it("get-post-engagers tool returns valid JSON", async () => {
+          // Dynamically fetch a post with reactions from the feed
+          const feedServer = createMockServer();
+          registerGetFeed(feedServer.server);
+          const feedHandler = feedServer.getHandler("get-feed");
+          const feedResult = (await feedHandler({ cdpPort, count: 5 })) as {
+            isError?: boolean;
+            content: { type: string; text: string }[];
+          };
+          expect(feedResult.isError, "get-feed failed — cannot test engagers without a post").toBeUndefined();
+          const feedParsed = JSON.parse(
+            (feedResult.content[0] as { text: string }).text,
+          ) as GetFeedOutput;
+
+          // Pick first post with reactions > 0; fall back to first post
+          const postWithReactions = feedParsed.posts.find((p) => p.reactionCount > 0);
+          const postUrn = postWithReactions?.urn ?? feedParsed.posts[0]?.urn;
+          assertDefined(postUrn, "No posts returned from get-feed");
+
+          const { server, getHandler } = createMockServer();
+          registerGetPostEngagers(server);
+
+          const handler = getHandler("get-post-engagers");
+          const result = (await handler({ postUrl: postUrn, cdpPort, count: 5 })) as {
+            isError?: boolean;
+            content: { type: string; text: string }[];
+          };
+
+          expect(result.isError).toBeUndefined();
+          expect(result.content).toHaveLength(1);
+
+          const parsed = JSON.parse(
+            (result.content[0] as { text: string }).text,
+          ) as GetPostEngagersOutput;
+
+          expect(parsed).toHaveProperty("postUrn");
+          expect(Array.isArray(parsed.engagers)).toBe(true);
+          expect(parsed.paging).toHaveProperty("total");
+
+          if (parsed.engagers.length > 0) {
+            const engager = parsed.engagers[0] as (typeof parsed.engagers)[0];
+            expect(typeof engager.firstName).toBe("string");
+            expect(typeof engager.lastName).toBe("string");
+            expect(typeof engager.engagementType).toBe("string");
+          }
+        }, 120_000);
+      });
+    });
 
     // -----------------------------------------------------------------
     // get-post-stats (passive interception of /feed/updates/{urn})
