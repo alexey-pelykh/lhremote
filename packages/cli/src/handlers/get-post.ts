@@ -15,7 +15,6 @@ export async function handleGetPost(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
-    commentStart?: number;
     commentCount?: number;
     json?: boolean;
   },
@@ -27,7 +26,6 @@ export async function handleGetPost(
       cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
-      commentStart: options.commentStart,
       commentCount: options.commentCount,
     });
   } catch (error) {
