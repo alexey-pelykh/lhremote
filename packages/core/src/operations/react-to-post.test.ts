@@ -15,15 +15,18 @@ vi.mock("../linkedin/dom-automation.js", () => ({
   waitForElement: vi.fn(),
   hover: vi.fn(),
   click: vi.fn(),
+  humanizedHover: vi.fn(),
+  humanizedClick: vi.fn(),
 }));
 
 vi.mock("../utils/delay.js", () => ({
   delay: vi.fn().mockResolvedValue(undefined),
+  randomDelay: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { waitForElement, hover, click } from "../linkedin/dom-automation.js";
+import { waitForElement, humanizedHover, humanizedClick } from "../linkedin/dom-automation.js";
 import { reactToPost, REACTION_TYPES } from "./react-to-post.js";
 
 const mockClient = {
@@ -40,8 +43,8 @@ function setupMocks() {
     { id: "target-1", type: "page", title: "LinkedIn", url: "https://www.linkedin.com/feed/", description: "", devtoolsFrontendUrl: "" },
   ]);
   vi.mocked(waitForElement).mockResolvedValue(undefined);
-  vi.mocked(hover).mockResolvedValue(undefined);
-  vi.mocked(click).mockResolvedValue(undefined);
+  vi.mocked(humanizedHover).mockResolvedValue(undefined);
+  vi.mocked(humanizedClick).mockResolvedValue(undefined);
 }
 
 describe("reactToPost", () => {
@@ -147,9 +150,10 @@ describe("reactToPost", () => {
       cdpPort: 9222,
     });
 
-    expect(hover).toHaveBeenCalledWith(
+    expect(humanizedHover).toHaveBeenCalledWith(
       mockClient,
       "button.react-button__trigger",
+      undefined,
     );
   });
 
@@ -162,9 +166,10 @@ describe("reactToPost", () => {
       cdpPort: 9222,
     });
 
-    expect(click).toHaveBeenCalledWith(
+    expect(humanizedClick).toHaveBeenCalledWith(
       mockClient,
       '.reactions-menu button[aria-label="React Funny"]',
+      undefined,
     );
   });
 
