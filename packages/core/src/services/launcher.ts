@@ -62,8 +62,35 @@ export class LauncherService {
       }
       throw error;
     }
+
+    let nodeContextId: number | undefined;
+    try {
+      nodeContextId = await this.resolveNodeContextId(client);
+    } catch {
+      // No Node.js context — likely a LinkedIn page on the instance port.
+      client.disconnect();
+      throw new WrongPortError(this.port);
+    }
+
+    // Validate that the target is the launcher (has electronStore),
+    // not an instance UI page that happens to have Node.js access.
+    const isLauncher = await client.evaluate<boolean>(
+      `(() => {
+        try {
+          const r = require('@electron/remote');
+          return typeof r.getGlobal('mainWindow')?.electronStore?.get === 'function';
+        } catch { return false; }
+      })()`,
+      false,
+      nodeContextId,
+    );
+    if (!isLauncher) {
+      client.disconnect();
+      throw new WrongPortError(this.port);
+    }
+
     this.client = client;
-    this.nodeContextId = await this.resolveNodeContextId(client);
+    this.nodeContextId = nodeContextId;
   }
 
   /**

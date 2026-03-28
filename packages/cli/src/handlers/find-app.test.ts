@@ -35,7 +35,7 @@ describe("handleFindApp", () => {
 
   it("prints JSON with --json", async () => {
     const apps: DiscoveredApp[] = [
-      { pid: 1234, cdpPort: 9222, connectable: true },
+      { pid: 1234, cdpPort: 9222, connectable: true, role: "launcher" as const },
     ];
     vi.mocked(findApp).mockResolvedValue(apps);
 
@@ -48,7 +48,7 @@ describe("handleFindApp", () => {
 
   it("prints human-readable output for connectable instance", async () => {
     vi.mocked(findApp).mockResolvedValue([
-      { pid: 1234, cdpPort: 9222, connectable: true },
+      { pid: 1234, cdpPort: 9222, connectable: true, role: "launcher" as const },
     ]);
 
     await handleFindApp({});
@@ -61,7 +61,7 @@ describe("handleFindApp", () => {
 
   it("prints 'not connectable' for non-connectable instance", async () => {
     vi.mocked(findApp).mockResolvedValue([
-      { pid: 5678, cdpPort: 9222, connectable: false },
+      { pid: 5678, cdpPort: 9222, connectable: false, role: "launcher" as const },
     ]);
 
     await handleFindApp({});
@@ -71,7 +71,7 @@ describe("handleFindApp", () => {
 
   it("prints 'no CDP port' when cdpPort is null", async () => {
     vi.mocked(findApp).mockResolvedValue([
-      { pid: 5678, cdpPort: null, connectable: false },
+      { pid: 5678, cdpPort: null, connectable: false, role: "launcher" as const },
     ]);
 
     await handleFindApp({});

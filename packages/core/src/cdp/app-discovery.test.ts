@@ -51,7 +51,7 @@ describe("findApp", () => {
 
     const result = await findApp();
     expect(result).toEqual([
-      { pid: 1000, cdpPort: 9222, connectable: true },
+      { pid: 1000, cdpPort: 9222, connectable: true, role: "launcher" },
     ]);
   });
 
@@ -63,7 +63,7 @@ describe("findApp", () => {
 
     const result = await findApp();
     expect(result).toEqual([
-      { pid: 2000, cdpPort: 9333, connectable: true },
+      { pid: 2000, cdpPort: 9333, connectable: true, role: "launcher" },
     ]);
   });
 
@@ -78,8 +78,24 @@ describe("findApp", () => {
 
     const result = await findApp();
     expect(result).toEqual([
-      { pid: 1000, cdpPort: 9222, connectable: true },
-      { pid: 2000, cdpPort: 9333, connectable: true },
+      { pid: 1000, cdpPort: 9222, connectable: true, role: "launcher" },
+      { pid: 2000, cdpPort: 9333, connectable: true, role: "launcher" },
+    ]);
+  });
+
+  it("should classify child process as instance", async () => {
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 1000, name: "linked-helper", ppid: 1 },
+      { pid: 2000, name: "linked-helper", ppid: 1000 },
+    ]);
+    vi.mocked(pidToPorts)
+      .mockResolvedValueOnce(new Set([9222]) as never)
+      .mockResolvedValueOnce(new Set([55660]) as never);
+
+    const result = await findApp();
+    expect(result).toEqual([
+      { pid: 1000, cdpPort: 9222, connectable: true, role: "launcher" },
+      { pid: 2000, cdpPort: 55660, connectable: true, role: "instance" },
     ]);
   });
 
@@ -94,7 +110,7 @@ describe("findApp", () => {
 
     const result = await findApp();
     expect(result).toEqual([
-      { pid: 1000, cdpPort: 9222, connectable: false },
+      { pid: 1000, cdpPort: 9222, connectable: false, role: "launcher" },
     ]);
   });
 
@@ -106,7 +122,7 @@ describe("findApp", () => {
 
     const result = await findApp();
     expect(result).toEqual([
-      { pid: 1000, cdpPort: null, connectable: false },
+      { pid: 1000, cdpPort: null, connectable: false, role: "launcher" },
     ]);
   });
 
@@ -118,7 +134,7 @@ describe("findApp", () => {
 
     const result = await findApp();
     expect(result).toEqual([
-      { pid: 1000, cdpPort: null, connectable: false },
+      { pid: 1000, cdpPort: null, connectable: false, role: "launcher" },
     ]);
   });
 
@@ -140,7 +156,7 @@ describe("findApp", () => {
 
     const result = await findApp();
     expect(result).toEqual([
-      { pid: 1000, cdpPort: 9222, connectable: true },
+      { pid: 1000, cdpPort: 9222, connectable: true, role: "launcher" },
     ]);
   });
 

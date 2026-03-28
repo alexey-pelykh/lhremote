@@ -217,6 +217,7 @@ export {
   discoverInstancePort,
   discoverTargets,
   findApp,
+  type AppRole,
   type DiscoveredApp,
   killInstanceProcesses,
 } from "./cdp/index.js";
