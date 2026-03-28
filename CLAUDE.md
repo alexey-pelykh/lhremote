@@ -28,7 +28,19 @@ Do **not** add issue numbers (e.g. `(#12)`) to commit messages. GitHub links PRs
 - Never push directly to `main` — always create a feature/fix branch, even for small changes (`enforce_admins` is enabled)
 - Run `pnpm lint` before pushing
 - PR body must include `Closes #N` to link the related issue
-- Use Copilot review; address feedback and re-request until no actionable comments remain
+
+#### Copilot Review Cycle
+
+After pushing a PR, follow this cycle until Copilot has no actionable comments:
+
+1. **Request** Copilot review (if not auto-requested by ruleset)
+2. **Wait** for Copilot to post its review
+3. **Address** every Copilot comment systematically
+4. **Push** fixes
+5. **Re-request** Copilot review
+6. **Repeat** from step 2 until Copilot returns no actionable comments
+
+Do **not** dismiss or ignore Copilot feedback. Every comment must be explicitly addressed (fixed, rejected with rationale, or deferred with tracking).
 
 ## Testing
 
