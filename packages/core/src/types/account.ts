@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 /**
- * A LinkedHelper account as stored in the Electron store.
+ * A LinkedHelper account.
  *
  * Each account corresponds to a LinkedIn identity managed by
  * LinkedHelper and has its own database partition.

@@ -28,6 +28,23 @@ import {
  * methods to start/stop instances and query accounts.
  */
 export class LauncherService {
+  /**
+   * CDP expression snippet that waits for the webpack module registry
+   * and sets `wpRequire` in the enclosing scope.  Callers must check
+   * `wpRequire` for null and handle the failure case themselves.
+   */
+  private static readonly WEBPACK_INIT = `
+    const _wpDeadline = Date.now() + 15000;
+    while (!window.webpackChunk_linked_helper_front && Date.now() < _wpDeadline) {
+      await new Promise(r => setTimeout(r, 250));
+    }
+    let wpRequire = null;
+    if (window.webpackChunk_linked_helper_front) {
+      window.webpackChunk_linked_helper_front.push(
+        [[Symbol()], {}, (req) => { wpRequire = req; }]
+      );
+    }`;
+
   private readonly port: number;
   private readonly host: string;
   private readonly allowRemote: boolean;
@@ -127,20 +144,7 @@ export class LauncherService {
           const remote = require('@electron/remote');
           const mainWindow = remote.getGlobal('mainWindow');
 
-          // 1. Resolve renderer-side services via webpack module registry.
-          //    The webpack chunk array may not exist yet if the renderer
-          //    bundles are still loading — poll until available.
-          const wpDeadline = Date.now() + 15000;
-          while (!window.webpackChunk_linked_helper_front && Date.now() < wpDeadline) {
-            await new Promise(r => setTimeout(r, 250));
-          }
-          if (!window.webpackChunk_linked_helper_front) {
-            return { success: false, error: 'webpack module registry not available (timed out)' };
-          }
-          let wpRequire = null;
-          window.webpackChunk_linked_helper_front.push(
-            [[Symbol()], {}, (req) => { wpRequire = req; }]
-          );
+          ${LauncherService.WEBPACK_INIT}
           if (!wpRequire) {
             return { success: false, error: 'webpack module registry not available' };
           }
@@ -270,37 +274,46 @@ export class LauncherService {
   }
 
   /**
-   * List all accounts configured in the LinkedHelper Electron store.
+   * List all accounts configured in LinkedHelper.
    *
-   * Accounts are discovered from the `linkedInPasswords` store key whose
-   * entries use the format `userId:li:accountId`.
+   * Accounts are read from the renderer-side webpack service cache
+   * (`runningLiAccountsService.extendedLinkedInAccountsBS`).  The
+   * launcher populates this cache on startup via IPC; we poll until
+   * it becomes available rather than calling `refetchLinkedInAccounts`
+   * (whose backend API now rejects the old embed format with 400).
    */
   async listAccounts(): Promise<Account[]> {
     const client = this.ensureConnected();
 
     const accounts = await this.launcherEvaluate<Account[] | null>(
       client,
-      `(() => {
-        const remote = require('@electron/remote');
-        const mainWindow = remote.getGlobal('mainWindow');
-        const store = mainWindow?.electronStore;
-        if (!store) return null;
-        const passwords = store.get('linkedInPasswords') ?? {};
-        return Object.keys(passwords)
-          .map(k => {
-            const parts = k.split(':li:');
-            if (parts.length !== 2) return null;
-            const accountId = Number(parts[1]);
-            if (Number.isNaN(accountId)) return null;
-            return {
-              id: accountId,
-              liId: accountId,
-              name: '',
-              email: undefined,
-            };
-          })
-          .filter(a => a !== null);
+      `(async () => {
+        ${LauncherService.WEBPACK_INIT}
+        if (!wpRequire) return null;
+
+        const svc = wpRequire(44354).runningLiAccountsService;
+
+        // Poll until the cache is populated by the launcher's startup
+        // process (same pattern as startInstance's account polling).
+        const cacheDeadline = Date.now() + 30000;
+        while (Date.now() < cacheDeadline) {
+          const raw = svc.extendedLinkedInAccountsBS?.value;
+          if (raw) {
+            const entries = Array.isArray(raw) ? raw : Object.values(raw);
+            if (entries.length > 0) {
+              return entries.map(a => ({
+                id: a.id,
+                liId: a.id,
+                name: a.fullName ?? '',
+                email: a.email ?? undefined,
+              }));
+            }
+          }
+          await new Promise(r => setTimeout(r, 500));
+        }
+        return [];
       })()`,
+      true,
     );
 
     if (accounts === null) {
