@@ -56,7 +56,12 @@ function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
   };
 }
 
-function setupMocks(scrapedPosts: RawDomPost[] = [], urnResults: (string | null)[] = []) {
+/** Build a LinkedIn feed URL from a URN for test fixtures. */
+function urnToUrl(urn: string): string {
+  return `https://www.linkedin.com/feed/update/${urn}/`;
+}
+
+function setupMocks(scrapedPosts: RawDomPost[] = [], urlResults: (string | null)[] = []) {
   vi.mocked(discoverTargets).mockResolvedValue([
     {
       id: "target-1",
@@ -70,20 +75,32 @@ function setupMocks(scrapedPosts: RawDomPost[] = [], urnResults: (string | null)
 
   const disconnect = vi.fn();
   const navigate = vi.fn().mockResolvedValue({ frameId: "F1" });
-  let urnCallIdx = 0;
+  let urlCallIdx = 0;
   const evaluate = vi.fn().mockImplementation((script: string) => {
     // waitForActivityLoad poll — return true (ready)
     if (typeof script === "string" && script.includes("div[role=\"article\"]") && script.includes("return true")) {
       return Promise.resolve(true);
     }
-    // extractActivityPostUrn — click phase (split from scroll)
+    // Clipboard interceptor install
+    if (typeof script === "string" && script.includes("navigator.clipboard.writeText")) {
+      return Promise.resolve(undefined);
+    }
+    // Clipboard reset
+    if (typeof script === "string" && script.includes("__capturedClipboard = null")) {
+      return Promise.resolve(undefined);
+    }
+    // "Copy link to post" menu item click
+    if (typeof script === "string" && script.includes("Copy link to post")) {
+      return Promise.resolve(undefined);
+    }
+    // Read captured clipboard URL (exact match — not the reset)
+    if (script === "window.__capturedClipboard") {
+      const url = urlResults[urlCallIdx++] ?? null;
+      return Promise.resolve(url);
+    }
+    // captureActivityPostUrl — click phase (split from scroll)
     if (typeof script === "string" && script.includes("btn.click()")) {
       return Promise.resolve(true);
-    }
-    // extractActivityPostUrn — read embed link
-    if (typeof script === "string" && script.includes("embed-modal")) {
-      const urn = urnResults[urnCallIdx++] ?? null;
-      return Promise.resolve(urn);
     }
     // humanizedScrollToByIndex fallback — scrollIntoView
     if (typeof script === "string" && script.includes("scrollIntoView")) {
@@ -217,7 +234,7 @@ describe("getProfileActivity", () => {
 
   it("extracts URNs via three-dot menu for each post", async () => {
     const posts = [rawPost(), rawPost({ authorName: "Bob" })];
-    setupMocks(posts, ["urn:li:share:111", "urn:li:share:222"]);
+    setupMocks(posts, [urnToUrl("urn:li:share:111"), urnToUrl("urn:li:share:222")]);
 
     const result = await getProfileActivity({
       cdpPort: CDP_PORT,
@@ -230,7 +247,7 @@ describe("getProfileActivity", () => {
 
   it("returns posts with profilePublicId and nextCursor", async () => {
     const posts = [rawPost()];
-    setupMocks(posts, ["urn:li:share:111"]);
+    setupMocks(posts, [urnToUrl("urn:li:share:111")]);
 
     const result = await getProfileActivity({
       cdpPort: CDP_PORT,
@@ -248,8 +265,8 @@ describe("getProfileActivity", () => {
     const posts = Array.from({ length: 15 }, (_, i) =>
       rawPost({ authorName: `User ${String(i)}` }),
     );
-    const urns = posts.map((_, i) => `urn:li:share:${String(i)}`);
-    setupMocks(posts, urns);
+    const urls = posts.map((_, i) => urnToUrl(`urn:li:share:${String(i)}`));
+    setupMocks(posts, urls);
 
     const result = await getProfileActivity({
       cdpPort: CDP_PORT,
@@ -265,8 +282,8 @@ describe("getProfileActivity", () => {
     const posts = Array.from({ length: 15 }, (_, i) =>
       rawPost({ authorName: `User ${String(i)}` }),
     );
-    const urns = posts.map((_, i) => `urn:li:share:${String(i)}`);
-    setupMocks(posts, urns);
+    const urls = posts.map((_, i) => urnToUrl(`urn:li:share:${String(i)}`));
+    setupMocks(posts, urls);
 
     const result = await getProfileActivity({
       cdpPort: CDP_PORT,
@@ -280,7 +297,7 @@ describe("getProfileActivity", () => {
   });
 
   it("builds post URLs from extracted URNs", async () => {
-    setupMocks([rawPost()], ["urn:li:share:999"]);
+    setupMocks([rawPost()], [urnToUrl("urn:li:share:999")]);
 
     const result = await getProfileActivity({
       cdpPort: CDP_PORT,
