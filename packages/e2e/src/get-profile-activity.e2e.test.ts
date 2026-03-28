@@ -2,16 +2,13 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, launchApp, quitApp, retryAsync } from "@lhremote/core/testing";
+import { assertDefined, describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
 import {
-  type Account,
   type AppService,
   discoverInstancePort,
   discoverTargets,
-  killInstanceProcesses,
   LauncherService,
   startInstanceWithRecovery,
-  waitForInstanceShutdown,
 } from "@lhremote/core";
 import type { GetProfileActivityOutput } from "@lhremote/core";
 
@@ -38,37 +35,10 @@ async function fetchProfilePublicIdFromFeed(cdpPort: number): Promise<string | u
   return undefined;
 }
 
-/** Type-narrowing assertion — fails the test with `message` when `value` is nullish. */
-function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {
-  expect(value, message).toBeDefined();
-  expect(value, message).not.toBeNull();
-}
-
-/**
- * Stop the instance gracefully, falling back to SIGKILL if that fails.
- */
-async function forceStopInstance(
-  launcher: LauncherService,
-  accountId: number | undefined,
-  launcherPort: number,
-): Promise<void> {
-  if (accountId === undefined) return;
-
-  try {
-    await launcher.stopInstance(accountId);
-    await waitForInstanceShutdown(launcherPort);
-    return;
-  } catch {
-    // Graceful stop failed — escalate to OS kill
-  }
-
-  await killInstanceProcesses(launcherPort);
-}
-
 describeE2E("get-profile-activity operation", () => {
   let app: AppService;
   let port: number;
-  let accountId: number | undefined;
+  let accountId: number;
   let cdpPort: number;
   let profilePublicId: string | undefined;
 
@@ -77,18 +47,12 @@ describeE2E("get-profile-activity operation", () => {
     app = launched.app;
     port = launched.port;
 
+    accountId = await resolveAccountId(port);
+
     const launcher = new LauncherService(port);
     await retryAsync(() => launcher.connect(), { retries: 3, delay: 1_000 });
-    const accounts = await launcher.listAccounts();
-
-    if (accounts.length > 0) {
-      accountId = (accounts[0] as Account).id;
-      await startInstanceWithRecovery(launcher, accountId, port);
-    }
-
+    await startInstanceWithRecovery(launcher, accountId, port);
     launcher.disconnect();
-
-    if (accountId === undefined) return;
 
     // Discover the instance's dynamic CDP port
     const instancePort = await retryAsync(
@@ -120,16 +84,14 @@ describeE2E("get-profile-activity operation", () => {
   }, 120_000);
 
   afterAll(async () => {
-    if (accountId !== undefined) {
-      const launcher = new LauncherService(port);
-      try {
-        await launcher.connect();
-        await forceStopInstance(launcher, accountId, port);
-      } catch {
-        // Best-effort cleanup
-      } finally {
-        launcher.disconnect();
-      }
+    const launcher = new LauncherService(port);
+    try {
+      await launcher.connect();
+      await forceStopInstance(launcher, accountId, port);
+    } catch {
+      // Best-effort cleanup
+    } finally {
+      launcher.disconnect();
     }
     await quitApp(app);
   }, 60_000);

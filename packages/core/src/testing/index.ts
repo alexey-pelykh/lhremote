@@ -2,9 +2,13 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 export {
+  assertDefined,
   describeE2E,
+  forceStopInstance,
+  getE2EPersonId,
   launchApp,
   type LaunchedApp,
   quitApp,
+  resolveAccountId,
   retryAsync,
 } from "./e2e-helpers.js";

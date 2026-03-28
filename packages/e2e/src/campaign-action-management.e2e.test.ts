@@ -2,14 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, launchApp, quitApp, retryAsync } from "@lhremote/core/testing";
+import { assertDefined, describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
 import {
-  type Account,
   type AppService,
-  killInstanceProcesses,
   LauncherService,
   startInstanceWithRecovery,
-  waitForInstanceShutdown,
 } from "@lhremote/core";
 
 // CLI handlers
@@ -33,12 +30,6 @@ import {
 } from "@lhremote/mcp/tools";
 import { createMockServer } from "@lhremote/mcp/testing";
 
-/** Type-narrowing assertion — fails the test with `message` when `value` is nullish. */
-function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {
-  expect(value, message).toBeDefined();
-  expect(value, message).not.toBeNull();
-}
-
 /**
  * Campaign config with two actions so the LH instance tracks them in its
  * campaign version (required for reorder operations).
@@ -52,31 +43,10 @@ actions:
   - type: InvitePerson
 `.trimStart();
 
-/**
- * Stop the instance gracefully, falling back to SIGKILL if that fails.
- */
-async function forceStopInstance(
-  launcher: LauncherService,
-  accountId: number | undefined,
-  launcherPort: number,
-): Promise<void> {
-  if (accountId === undefined) return;
-
-  try {
-    await launcher.stopInstance(accountId);
-    await waitForInstanceShutdown(launcherPort);
-    return;
-  } catch {
-    // Graceful stop failed — escalate to OS kill
-  }
-
-  await killInstanceProcesses(launcherPort);
-}
-
 describeE2E("Campaign action management", () => {
   let app: AppService;
   let port: number;
-  let accountId: number | undefined;
+  let accountId: number;
 
   beforeAll(async () => {
     const launched = await launchApp();
@@ -84,30 +54,24 @@ describeE2E("Campaign action management", () => {
     port = launched.port;
 
     // Start an account instance — required by remove/reorder operations
+    accountId = await resolveAccountId(port);
+
     const launcher = new LauncherService(port);
     await retryAsync(() => launcher.connect(), { retries: 3, delay: 1_000 });
-    const accounts = await launcher.listAccounts();
-
-    if (accounts.length > 0) {
-      accountId = (accounts[0] as Account).id;
-      await startInstanceWithRecovery(launcher, accountId, port);
-    }
-
+    await startInstanceWithRecovery(launcher, accountId, port);
     launcher.disconnect();
   }, 120_000);
 
   afterAll(async () => {
     // Stop the instance before quitting
-    if (accountId !== undefined) {
-      const launcher = new LauncherService(port);
-      try {
-        await launcher.connect();
-        await forceStopInstance(launcher, accountId, port);
-      } catch {
-        // Best-effort cleanup
-      } finally {
-        launcher.disconnect();
-      }
+    const launcher = new LauncherService(port);
+    try {
+      await launcher.connect();
+      await forceStopInstance(launcher, accountId, port);
+    } catch {
+      // Best-effort cleanup
+    } finally {
+      launcher.disconnect();
     }
     await quitApp(app);
   }, 60_000);

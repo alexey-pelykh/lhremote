@@ -19,16 +19,13 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { describeE2E, launchApp, quitApp, retryAsync } from "@lhremote/core/testing";
+import { describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
 import {
-  type Account,
   type AppService,
   discoverInstancePort,
   InstanceService,
-  killInstanceProcesses,
   LauncherService,
   startInstanceWithRecovery,
-  waitForInstanceShutdown,
 } from "@lhremote/core";
 
 /** LinkedIn people search URL for testing collection. */
@@ -141,7 +138,7 @@ function recordFinding(section: string, test: string, result: unknown): void {
 describeE2E("spike: collection CDP entry points (#401)", () => {
   let app: AppService;
   let port: number;
-  let accountId: number | undefined;
+  let accountId: number;
   let instance: InstanceService;
 
   beforeAll(async () => {
@@ -149,15 +146,12 @@ describeE2E("spike: collection CDP entry points (#401)", () => {
     app = launched.app;
     port = launched.port;
 
+    accountId = await resolveAccountId(port);
+
     // Start an account instance
     const launcher = new LauncherService(port);
     await retryAsync(() => launcher.connect(), { retries: 3, delay: 1_000 });
-    const accounts = await launcher.listAccounts();
-
-    if (accounts.length > 0) {
-      accountId = (accounts[0] as Account).id;
-      await startInstanceWithRecovery(launcher, accountId, port);
-    }
+    await startInstanceWithRecovery(launcher, accountId, port);
     launcher.disconnect();
 
     // Discover instance CDP port (separate from launcher port)
@@ -178,21 +172,14 @@ describeE2E("spike: collection CDP entry points (#401)", () => {
     }
     instance?.disconnect();
 
-    if (accountId !== undefined) {
-      const launcher = new LauncherService(port);
-      try {
-        await launcher.connect();
-        try {
-          await launcher.stopInstance(accountId);
-          await waitForInstanceShutdown(port);
-        } catch {
-          await killInstanceProcesses(port);
-        }
-      } catch {
-        // Best-effort cleanup
-      } finally {
-        launcher.disconnect();
-      }
+    const launcher = new LauncherService(port);
+    try {
+      await launcher.connect();
+      await forceStopInstance(launcher, accountId, port);
+    } catch {
+      // Best-effort cleanup
+    } finally {
+      launcher.disconnect();
     }
 
     await quitApp(app);

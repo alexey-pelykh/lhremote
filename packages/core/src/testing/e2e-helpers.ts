@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { describe } from "vitest";
+import { describe, expect } from "vitest";
 import { AppService, type AppServiceOptions } from "../services/app.js";
 import { AppNotFoundError } from "../services/errors.js";
 import { discoverTargets } from "../cdp/discovery.js";
+import { killInstanceProcesses } from "../cdp/instance-discovery.js";
 import { LauncherService } from "../services/launcher.js";
+import { waitForInstanceShutdown } from "../services/instance-lifecycle.js";
+import type { Account } from "../types/index.js";
 import { delay } from "../utils/delay.js";
 
 const linkedHelperAvailable = (() => {
@@ -133,4 +136,64 @@ export async function retryAsync<T>(
   }
 
   throw lastError;
+}
+
+/** Type-narrowing assertion — fails the test with `message` when `value` is nullish. */
+export function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {
+  expect(value, message).toBeDefined();
+  expect(value, message).not.toBeNull();
+}
+
+/**
+ * Person ID for E2E tests that interact with a specific LinkedIn person.
+ * Read from `LHREMOTE_E2E_PERSON_ID` — must be a positive integer.
+ */
+export function getE2EPersonId(): number {
+  const raw = process.env.LHREMOTE_E2E_PERSON_ID;
+  if (!raw) throw new Error("LHREMOTE_E2E_PERSON_ID must be set");
+  const id = Number.parseInt(raw, 10);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error("LHREMOTE_E2E_PERSON_ID must be a positive integer");
+  }
+  return id;
+}
+
+/**
+ * Connect to the launcher, list accounts, and return the first account ID.
+ *
+ * Fails the test if no accounts are configured in LinkedHelper.
+ */
+export async function resolveAccountId(port: number): Promise<number> {
+  const launcher = new LauncherService(port);
+  await retryAsync(() => launcher.connect(), { retries: 3, delay: 1_000 });
+  try {
+    const accounts = await launcher.listAccounts();
+    if (accounts.length === 0) {
+      throw new Error("No accounts configured in LinkedHelper");
+    }
+    return (accounts[0] as Account).id;
+  } finally {
+    launcher.disconnect();
+  }
+}
+
+/**
+ * Stop the instance gracefully, falling back to SIGKILL if that fails.
+ */
+export async function forceStopInstance(
+  launcher: LauncherService,
+  accountId: number | undefined,
+  launcherPort: number,
+): Promise<void> {
+  if (accountId === undefined) return;
+
+  try {
+    await launcher.stopInstance(accountId);
+    await waitForInstanceShutdown(launcherPort);
+    return;
+  } catch {
+    // Graceful stop failed — escalate to OS kill
+  }
+
+  await killInstanceProcesses(launcherPort);
 }
