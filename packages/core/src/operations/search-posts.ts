@@ -22,8 +22,8 @@ export interface SearchPostsInput extends ConnectionOptions {
   readonly query: string;
   /** Number of results per page (default: 10). */
   readonly count?: number | undefined;
-  /** Cursor token from a previous search-posts call for the next page. */
-  readonly cursor?: string | undefined;
+  /** Index-based cursor (offset) from a previous search-posts call for the next page. */
+  readonly cursor?: number | undefined;
 }
 
 /**
@@ -34,8 +34,8 @@ export interface SearchPostsOutput {
   readonly query: string;
   /** List of matching posts. */
   readonly posts: FeedPost[];
-  /** Cursor token for retrieving the next page, or null if no more pages. */
-  readonly nextCursor: string | null;
+  /** Index-based cursor (offset) for retrieving the next page, or null if no more pages. */
+  readonly nextCursor: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ const SCRAPE_SEARCH_RESULTS_SCRIPT = `(() => {
       const menuBtn = card.querySelector('button[aria-label^="Open control menu for post"]');
       if (!menuBtn) continue;
 
-      // URN will be extracted in a separate phase via three-dot menu
+      // URN is not available in search results; URL extracted via three-dot menu
       let urnRaw = null;
 
       let authorName = null;
@@ -360,26 +360,24 @@ export async function searchPosts(
     // Wait for the search results to render
     await waitForSearchResults(client);
 
-    // Collect posts — scroll to load more if needed
+    // Collect posts — scroll to load more if needed.
+    //
+    // Cursor is an index-based offset (e.g. "10" means start from post
+    // at index 10).  URN-based cursors are not possible because search
+    // result posts don't expose URNs in the DOM.
     const maxScrollAttempts = 10;
     let allPosts: RawDomPost[] = [];
     let previousCount = 0;
 
-    const cursorUrn = cursor;
+    const startIdx = cursor ?? 0;
+    if (startIdx < 0) {
+      throw new Error(`Invalid cursor ${String(cursor)} — must be a non-negative integer offset`);
+    }
 
     for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
       const scraped =
         await client.evaluate<RawDomPost[]>(SCRAPE_SEARCH_RESULTS_SCRIPT);
       allPosts = scraped ?? [];
-
-      // Determine which posts to return
-      let startIdx = 0;
-      if (cursorUrn) {
-        const cursorIdx = allPosts.findIndex((p) => p.urn === cursorUrn);
-        if (cursorIdx >= 0) {
-          startIdx = cursorIdx + 1;
-        }
-      }
 
       const available = allPosts.length - startIdx;
       if (available >= count) break;
@@ -396,10 +394,12 @@ export async function searchPosts(
     }
 
     // --- URL extraction via three-dot menu → "Copy link to post" ---
-    // Search result posts don't expose URNs in the DOM.  For each post
+    // Search result posts don't expose URLs in the DOM.  For each post
     // with urn === null, open the three-dot menu, click "Copy link to
-    // post" which writes the URL to the clipboard, then parse the
-    // activity ID from the URL to derive the URN.
+    // post" which writes the URL to the clipboard.
+    //
+    // Note: URNs are NOT extractable from search results — only the URL
+    // is captured here.  Do not attempt to reconstruct URNs from URLs.
     //
     // Electron's clipboard API is broken (readText returns {}) so we
     // monkey-patch navigator.clipboard.writeText to capture into a
@@ -454,33 +454,17 @@ export async function searchPosts(
 
         if (postUrl) {
           post.url = postUrl.split("?")[0] ?? postUrl;
-          // Extract activity ID from URL patterns like:
-          // /posts/author_text-ugcPost-7443026990028226560-XXXX
-          // /feed/update/urn:li:activity:7443347992583053312/
-          const activityMatch = postUrl.match(/(?:activity|ugcPost)[:-](\d{15,25})/);
-          if (activityMatch) {
-            post.urn = `urn:li:activity:${activityMatch[1]}`;
-          }
         }
       }
     }
 
     // Slice the result window
-    let startIdx = 0;
-    if (cursorUrn) {
-      const cursorIdx = allPosts.findIndex((p) => p.urn === cursorUrn);
-      if (cursorIdx >= 0) {
-        startIdx = cursorIdx + 1;
-      }
-    }
-
     const window = allPosts.slice(startIdx, startIdx + count);
     const posts = mapRawPosts(window);
 
-    // Determine next cursor
+    // Determine next cursor (index-based offset)
     const hasMore = startIdx + count < allPosts.length;
-    const lastPost = window[window.length - 1];
-    const nextCursor = hasMore && lastPost ? lastPost.urn : null;
+    const nextCursor = hasMore ? startIdx + count : null;
 
     return { query: input.query, posts, nextCursor };
   } finally {

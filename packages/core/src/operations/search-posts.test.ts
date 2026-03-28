@@ -199,7 +199,7 @@ describe("searchPosts", () => {
 
     const result = await searchPosts({ query: "test", cdpPort: CDP_PORT, count: 2 });
 
-    expect(result.nextCursor).toBe("urn:li:activity:2");
+    expect(result.nextCursor).toBe(2);
   });
 
   it("returns null nextCursor when all posts are returned", async () => {
@@ -225,7 +225,7 @@ describe("searchPosts", () => {
       query: "test",
       cdpPort: CDP_PORT,
       count: 2,
-      cursor: "urn:li:activity:2",
+      cursor: 2,
     });
 
     expect(result.posts).toHaveLength(2);
@@ -242,7 +242,7 @@ describe("searchPosts", () => {
     const result = await searchPosts({
       query: "test",
       cdpPort: CDP_PORT,
-      cursor: "urn:li:activity:2",
+      cursor: 2,
     });
 
     expect(result.posts).toHaveLength(0);

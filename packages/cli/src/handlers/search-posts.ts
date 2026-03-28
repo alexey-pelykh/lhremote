@@ -12,7 +12,7 @@ import {
 export async function handleSearchPosts(
   query: string,
   options: {
-    cursor?: string;
+    cursor?: number;
     count?: number;
     cdpPort?: number;
     cdpHost?: string;
@@ -51,8 +51,10 @@ export async function handleSearchPosts(
 
     for (const post of posts) {
       const author = post.authorName ?? "Unknown";
-      process.stdout.write(`  ${post.urn}\n`);
-      process.stdout.write(`    Author:    ${author}\n`);
+      process.stdout.write(`  ${author}\n`);
+      if (post.url) {
+        process.stdout.write(`    URL:       ${post.url}\n`);
+      }
       if (post.authorHeadline) {
         process.stdout.write(`    Headline:  ${post.authorHeadline}\n`);
       }
@@ -71,7 +73,7 @@ export async function handleSearchPosts(
 
     if (result.nextCursor) {
       process.stdout.write(
-        `More results available. Use --cursor ${result.nextCursor} for next page.\n`,
+        `More results available. Use --cursor ${String(result.nextCursor)} for next page.\n`,
       );
     }
   }

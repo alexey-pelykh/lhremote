@@ -19,7 +19,7 @@ const MOCK_RESULTS: SearchPostsOutput = {
   query: "AI agents",
   posts: [
     {
-      urn: "urn:li:activity:7123456789012345678",
+      urn: "",
       url: "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678/",
       authorName: "Jane Smith",
       authorHeadline: "CEO at Acme Corp",
@@ -34,7 +34,7 @@ const MOCK_RESULTS: SearchPostsOutput = {
       hashtags: [],
     },
     {
-      urn: "urn:li:activity:7234567890123456789",
+      urn: "",
       url: "https://www.linkedin.com/feed/update/urn:li:activity:7234567890123456789/",
       authorName: "Bob",
       authorHeadline: null,
@@ -49,7 +49,7 @@ const MOCK_RESULTS: SearchPostsOutput = {
       hashtags: [],
     },
   ],
-  nextCursor: "urn:li:activity:7234567890123456789",
+  nextCursor: null,
 };
 
 describe("handleSearchPosts", () => {
@@ -78,7 +78,7 @@ describe("handleSearchPosts", () => {
     const output = JSON.parse(getStdout(stdoutSpy));
     expect(output.query).toBe("AI agents");
     expect(output.posts).toHaveLength(2);
-    expect(output.nextCursor).toBe("urn:li:activity:7234567890123456789");
+    expect(output.nextCursor).toBeNull();
   });
 
   it("prints human-readable output by default", async () => {
@@ -97,13 +97,13 @@ describe("handleSearchPosts", () => {
     expect(output).toContain("Reposts: 3");
   });
 
-  it("shows pagination hint when nextCursor is present", async () => {
+  it("does not show pagination hint when nextCursor is null", async () => {
     vi.mocked(searchPosts).mockResolvedValue(MOCK_RESULTS);
 
     await handleSearchPosts("AI agents", {});
 
     const output = getStdout(stdoutSpy);
-    expect(output).toContain("--cursor");
+    expect(output).not.toContain("--cursor");
   });
 
   it("handles empty results", async () => {
@@ -122,10 +122,10 @@ describe("handleSearchPosts", () => {
   it("passes pagination options to operation", async () => {
     vi.mocked(searchPosts).mockResolvedValue(MOCK_RESULTS);
 
-    await handleSearchPosts("AI agents", { cursor: "urn:li:activity:100", count: 5 });
+    await handleSearchPosts("AI agents", { cursor: 10, count: 5 });
 
     expect(searchPosts).toHaveBeenCalledWith(
-      expect.objectContaining({ query: "AI agents", cursor: "urn:li:activity:100", count: 5 }),
+      expect.objectContaining({ query: "AI agents", cursor: 10, count: 5 }),
     );
   });
 
