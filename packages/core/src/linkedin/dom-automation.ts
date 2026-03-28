@@ -4,6 +4,7 @@
 import type { CDPClient } from "../cdp/client.js";
 import { CDPEvaluationError, CDPTimeoutError } from "../cdp/errors.js";
 import { delay } from "../utils/delay.js";
+import type { HumanizedMouse } from "./humanized-mouse.js";
 
 /** Default timeout for DOM operations (ms). */
 const DEFAULT_TIMEOUT = 30_000;
@@ -203,4 +204,128 @@ export async function typeText(
       }
       break;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Humanized interaction helpers
+// ---------------------------------------------------------------------------
+
+/** Bounding rect returned by `getElementCenter`. */
+interface ElementCenter {
+  x: number;
+  y: number;
+}
+
+/**
+ * Get the viewport-relative center of a DOM element.
+ *
+ * @returns `null` if the element is not found.
+ */
+export async function getElementCenter(
+  client: CDPClient,
+  selector: string,
+): Promise<ElementCenter | null> {
+  return client.evaluate<ElementCenter | null>(
+    `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+    })()`,
+  );
+}
+
+/**
+ * Click an element with humanized mouse movement when available.
+ *
+ * When a {@link HumanizedMouse} is provided and available, the cursor
+ * follows a Bezier path to the element center before clicking.  The
+ * VirtualMouse dispatches `mousePressed` / `mouseReleased` via CDP.
+ *
+ * Falls back to the standard JS `.click()` when humanized mouse is
+ * unavailable (or the element cannot be located by bounding rect).
+ *
+ * @param client - Connected CDP client targeting the LinkedIn page.
+ * @param selector - CSS selector for the element to click.
+ * @param mouse  - Optional humanized mouse instance.
+ */
+export async function humanizedClick(
+  client: CDPClient,
+  selector: string,
+  mouse?: HumanizedMouse | null,
+): Promise<void> {
+  if (mouse?.isAvailable) {
+    const center = await getElementCenter(client, selector);
+    if (center) {
+      await mouse.click(center.x, center.y);
+      return;
+    }
+  }
+  // Fallback to JS click
+  await click(client, selector);
+}
+
+/**
+ * Hover over an element with humanized mouse movement when available.
+ *
+ * When a {@link HumanizedMouse} is provided, the cursor physically
+ * moves to the element center — which is more realistic than
+ * dispatching synthetic `mouseenter` / `mouseover` JS events.
+ *
+ * Falls back to synthetic JS events when unavailable.
+ *
+ * @param client - Connected CDP client targeting the LinkedIn page.
+ * @param selector - CSS selector for the element to hover.
+ * @param mouse  - Optional humanized mouse instance.
+ */
+export async function humanizedHover(
+  client: CDPClient,
+  selector: string,
+  mouse?: HumanizedMouse | null,
+): Promise<void> {
+  if (mouse?.isAvailable) {
+    const center = await getElementCenter(client, selector);
+    if (center) {
+      await mouse.move(center.x, center.y);
+      return;
+    }
+  }
+  // Fallback to JS hover
+  await hover(client, selector);
+}
+
+/**
+ * Scroll the page vertically with humanized mouse-wheel strokes.
+ *
+ * When a {@link HumanizedMouse} is provided, scrolling is emulated as
+ * incremental wheel strokes (150 px / 25 ms) at the given position,
+ * matching the behavior of a physical mouse wheel.
+ *
+ * Falls back to a single CDP `mouseWheel` event when unavailable.
+ *
+ * @param client - Connected CDP client targeting the LinkedIn page.
+ * @param deltaY - Pixels to scroll (positive = down).
+ * @param x      - Viewport X coordinate for the scroll position.
+ * @param y      - Viewport Y coordinate for the scroll position.
+ * @param mouse  - Optional humanized mouse instance.
+ */
+export async function humanizedScrollY(
+  client: CDPClient,
+  deltaY: number,
+  x: number,
+  y: number,
+  mouse?: HumanizedMouse | null,
+): Promise<void> {
+  if (mouse?.isAvailable) {
+    await mouse.scrollY(deltaY, x, y);
+    return;
+  }
+  // Fallback to a single CDP scroll event
+  await client.send("Input.dispatchMouseEvent", {
+    type: "mouseWheel",
+    x,
+    y,
+    deltaX: 0,
+    deltaY,
+  });
 }

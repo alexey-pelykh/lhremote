@@ -7,7 +7,7 @@ import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn } from "./get-post-stats.js";
-import { delay } from "./get-feed.js";
+import { delay, randomDelay } from "../utils/delay.js";
 import { navigateAwayIf } from "./navigate-away.js";
 
 /**
@@ -348,7 +348,7 @@ export async function getPostEngagers(
         const scrolled =
           await client.evaluate<boolean>(SCROLL_MODAL_SCRIPT);
         if (!scrolled) break;
-        await delay(1000);
+        await randomDelay(800, 1_200);
       }
     }
 

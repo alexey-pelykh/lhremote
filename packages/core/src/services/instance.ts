@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { CDPClient, CDPTimeoutError, discoverTargets } from "../cdp/index.js";
+import { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import type { CdpTarget } from "../types/cdp.js";
 import type { InstancePopup } from "../types/index.js";
 import { delay } from "../utils/delay.js";
@@ -53,6 +54,7 @@ export class InstanceService {
   private uiClient: CDPClient | null = null;
   private healthChecker: HealthChecker | null = null;
   private voyagerInterceptor: VoyagerInterceptor | null = null;
+  private humanizedMouse: HumanizedMouse | null = null;
 
   constructor(port: number, options?: { host?: string; timeout?: number; allowRemote?: boolean }) {
     this.port = port;
@@ -178,6 +180,7 @@ export class InstanceService {
    * Disconnect from both targets.
    */
   disconnect(): void {
+    this.humanizedMouse = null;
     this.voyagerInterceptor = null;
     this.linkedInClient?.disconnect();
     this.linkedInClient = null;
@@ -385,6 +388,20 @@ export class InstanceService {
       })()`,
       false,
     );
+  }
+
+  /**
+   * Create a {@link HumanizedMouse} that wraps LH's VirtualMouse.
+   *
+   * Returns a cached instance — only one exists per connection.
+   * The mouse is probed lazily; call `await mouse.initialize()` before
+   * using it if you need to check availability.
+   */
+  createHumanizedMouse(): HumanizedMouse {
+    if (!this.humanizedMouse) {
+      this.humanizedMouse = new HumanizedMouse(this);
+    }
+    return this.humanizedMouse;
   }
 
   /**

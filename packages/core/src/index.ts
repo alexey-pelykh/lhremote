@@ -423,7 +423,12 @@ export {
 // LinkedIn DOM automation & selectors
 export {
   click,
+  getElementCenter,
   hover,
+  humanizedClick,
+  humanizedHover,
+  humanizedScrollY,
+  HumanizedMouse,
   scrollTo,
   typeText,
   type TypeMethod,
@@ -453,4 +458,4 @@ export {
 export { DEFAULT_CDP_PORT } from "./constants.js";
 
 // Utilities
-export { delay, errorMessage, isCdpPort, isLoopbackAddress } from "./utils/index.js";
+export { delay, randomDelay, errorMessage, isCdpPort, isLoopbackAddress } from "./utils/index.js";

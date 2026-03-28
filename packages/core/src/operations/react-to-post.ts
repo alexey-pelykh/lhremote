@@ -4,7 +4,8 @@
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
-import { click, hover, waitForElement } from "../linkedin/dom-automation.js";
+import { humanizedClick, humanizedHover, waitForElement } from "../linkedin/dom-automation.js";
+import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import {
   REACTION_CELEBRATE,
   REACTION_FUNNY,
@@ -15,7 +16,7 @@ import {
   REACTION_TRIGGER,
   REACTIONS_MENU,
 } from "../linkedin/selectors.js";
-import { delay } from "../utils/delay.js";
+import { randomDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 
 /**
@@ -57,6 +58,8 @@ export interface ReactToPostInput extends ConnectionOptions {
   readonly postUrl: string;
   /** Reaction type to apply (default: `"like"`). */
   readonly reactionType?: ReactionType | undefined;
+  /** Optional humanized mouse for natural cursor movement and clicks. */
+  readonly mouse?: HumanizedMouse | null | undefined;
 }
 
 export interface ReactToPostOutput {
@@ -64,12 +67,6 @@ export interface ReactToPostOutput {
   readonly postUrl: string;
   readonly reactionType: ReactionType;
 }
-
-/** Delay after hover to let the reactions menu render (ms). */
-const REACTIONS_MENU_DELAY = 1_500;
-
-/** Delay after clicking a reaction to let the UI settle (ms). */
-const POST_REACTION_DELAY = 500;
 
 /**
  * React to a LinkedIn post with a specified reaction type.
@@ -123,12 +120,14 @@ export async function reactToPost(
     // Navigate to the post URL
     await client.navigate(input.postUrl);
 
+    const mouse = input.mouse;
+
     // Wait for the reaction trigger button to appear
     await waitForElement(client, REACTION_TRIGGER);
 
     // Hover over the reaction trigger to expand the reactions menu
-    await hover(client, REACTION_TRIGGER);
-    await delay(REACTIONS_MENU_DELAY);
+    await humanizedHover(client, REACTION_TRIGGER, mouse);
+    await randomDelay(1_200, 1_800);
 
     // Wait for the reactions menu to appear
     await waitForElement(client, REACTIONS_MENU, { timeout: 5_000 });
@@ -136,10 +135,10 @@ export async function reactToPost(
     // Click the specific reaction button
     const reactionSelector = REACTION_SELECTORS[reactionType];
     await waitForElement(client, reactionSelector, { timeout: 5_000 });
-    await click(client, reactionSelector);
+    await humanizedClick(client, reactionSelector, mouse);
 
     // Let the UI settle
-    await delay(POST_REACTION_DELAY);
+    await randomDelay(400, 700);
 
     return {
       success: true as const,

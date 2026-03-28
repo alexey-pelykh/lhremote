@@ -5,6 +5,9 @@ import type { FeedPost } from "../types/feed.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
+import { humanizedScrollY } from "../linkedin/dom-automation.js";
+import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
+import { delay as utilsDelay, randomDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
 
@@ -228,7 +231,7 @@ async function extractPostUrn(
 
   if (!clicked) return null;
 
-  await delay(700);
+  await randomDelay(500, 900);
 
   // Read the embed link's targetUrn from the dropdown
   const urn = await client.evaluate<string | null>(`(() => {
@@ -247,7 +250,7 @@ async function extractPostUrn(
   // Close the dropdown with Escape
   await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
   await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
-  await delay(300);
+  await randomDelay(200, 400);
 
   return urn || null;
 }
@@ -329,20 +332,23 @@ export function mapRawPosts(raw: RawDomPost[]): FeedPost[] {
 // Scroll helper
 // ---------------------------------------------------------------------------
 
-/** @internal Exported for reuse by search-posts. */
-export function delay(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
+/** @internal Exported for reuse by other operations. */
+export const delay = utilsDelay;
 
-/** @internal Exported for reuse by search-posts. */
-export async function scrollFeed(client: CDPClient): Promise<void> {
-  await client.send("Input.dispatchMouseEvent", {
-    type: "mouseWheel",
-    x: 300,
-    y: 400,
-    deltaX: 0,
-    deltaY: 800,
-  });
+/**
+ * Scroll the feed down by one viewport worth.
+ *
+ * When a {@link HumanizedMouse} is provided, scrolling uses incremental
+ * mouse-wheel strokes (150 px / 25 ms) that mimic a physical scroll
+ * wheel.  Falls back to a single CDP `mouseWheel` event otherwise.
+ *
+ * @internal Exported for reuse by search-posts.
+ */
+export async function scrollFeed(
+  client: CDPClient,
+  mouse?: HumanizedMouse | null,
+): Promise<void> {
+  await humanizedScrollY(client, 800, 300, 400, mouse);
 }
 
 // ---------------------------------------------------------------------------
@@ -454,7 +460,7 @@ export async function getFeed(
       // Scroll to load more
       if (scroll < maxScrollAttempts) {
         await scrollFeed(client);
-        await delay(1500);
+        await randomDelay(1_200, 1_800);
       }
     }
 

@@ -7,6 +7,7 @@ import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
+import { randomDelay } from "../utils/delay.js";
 import {
   type RawDomPost,
   mapRawPosts,
@@ -246,7 +247,7 @@ async function extractActivityPostUrn(
 
   if (!clicked) return null;
 
-  await delay(700);
+  await randomDelay(500, 900);
 
   const urn = await client.evaluate<string | null>(`(() => {
     for (const a of document.querySelectorAll('a[href*="embed-modal"]')) {
@@ -264,7 +265,7 @@ async function extractActivityPostUrn(
   // Close the dropdown with Escape
   await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
   await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
-  await delay(300);
+  await randomDelay(200, 400);
 
   return urn || null;
 }
@@ -350,7 +351,7 @@ export async function getProfileActivity(
       // Scroll to load more
       if (scroll < maxScrollAttempts) {
         await scrollFeed(client);
-        await delay(1500);
+        await randomDelay(1_200, 1_800);
       }
     }
 
