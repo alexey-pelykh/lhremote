@@ -801,7 +801,7 @@ export function createProgram(): Command {
     .command("search-posts")
     .description("Search LinkedIn for posts by keyword or hashtag")
     .argument("<query>", "Search query (keywords or hashtag)")
-    .option("--cursor <token>", "Cursor token from a previous search for the next page")
+    .option("--cursor <n>", "Index-based cursor from a previous search for the next page", parseNonNegativeInt)
     .option("--count <n>", "Results per page (default: 10)", parsePositiveInt)
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")

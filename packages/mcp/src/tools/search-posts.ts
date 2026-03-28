@@ -10,7 +10,7 @@ import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 export function registerSearchPosts(server: McpServer): void {
   server.tool(
     "search-posts",
-    "Search LinkedIn for posts by keyword or hashtag. Returns structured post data (URN, URL, author, text, media type, engagement counts, timestamp) with cursor-based pagination.",
+    "Search LinkedIn for posts by keyword or hashtag. Returns structured post data (URL, author, text, media type, engagement counts, timestamp) with cursor-based pagination.",
     {
       query: z
         .string()
@@ -25,10 +25,12 @@ export function registerSearchPosts(server: McpServer): void {
         .default(10)
         .describe("Number of results per page (default: 10)"),
       cursor: z
-        .string()
+        .number()
+        .int()
+        .nonnegative()
         .optional()
         .describe(
-          "Cursor token from a previous search-posts call for the next page",
+          "Index-based cursor from a previous search-posts call for the next page",
         ),
       ...cdpConnectionSchema,
     },

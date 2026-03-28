@@ -17,7 +17,7 @@ const MOCK_RESULTS: SearchPostsOutput = {
   query: "AI agents",
   posts: [
     {
-      urn: "urn:li:activity:7123456789012345678",
+      urn: "",
       url: "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678/",
       authorName: "Jane Smith",
       authorHeadline: "CEO at Acme Corp",
@@ -83,13 +83,13 @@ describe("registerSearchPosts", () => {
     const handler = getHandler("search-posts");
     await handler({
       query: "AI agents",
-      cursor: "urn:li:activity:100",
+      cursor: 10,
       count: 5,
       cdpPort: 9222,
     });
 
     expect(searchPosts).toHaveBeenCalledWith(
-      expect.objectContaining({ query: "AI agents", cursor: "urn:li:activity:100", count: 5 }),
+      expect.objectContaining({ query: "AI agents", cursor: 10, count: 5 }),
     );
   });
 
