@@ -19,6 +19,18 @@ vi.mock("./get-feed.js", () => ({
   delay: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../utils/delay.js", () => ({
+  delay: vi.fn().mockResolvedValue(undefined),
+  randomDelay: vi.fn().mockResolvedValue(undefined),
+  randomBetween: vi.fn().mockReturnValue(500),
+  maybeHesitate: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../linkedin/dom-automation.js", () => ({
+  humanizedScrollTo: vi.fn().mockResolvedValue(undefined),
+  humanizedClick: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
 import { getPostEngagers } from "./get-post-engagers.js";
@@ -49,14 +61,14 @@ describe("getPostEngagers", () => {
    * Set up CDP mocks for the standard flow:
    *
    * 1. waitForPostLoad readiness polls (boolean[])
-   * 2. CLICK_REACTIONS_SCRIPT (boolean)
+   * 2. FIND_REACTIONS_SCRIPT (boolean) — scroll + click are via dom-automation mocks
    * 3. waitForReactionsModal readiness polls (boolean[])
    * 4. GET_MODAL_TOTAL_SCRIPT (number)
    * 5. SCRAPE_ENGAGERS_SCRIPT + SCROLL_MODAL_SCRIPT interleaved
    */
   function setupMocks(opts?: {
     postReadySequence?: boolean[];
-    reactionsClicked?: boolean;
+    reactionsFound?: boolean;
     modalReadySequence?: boolean[];
     totalReactions?: number;
     scrapeSequence?: (unknown[] | null)[];
@@ -64,7 +76,7 @@ describe("getPostEngagers", () => {
   }) {
     const {
       postReadySequence = [true],
-      reactionsClicked = true,
+      reactionsFound = true,
       modalReadySequence = [true],
       totalReactions = 2,
       scrapeSequence = [DEFAULT_ENGAGERS],
@@ -92,10 +104,10 @@ describe("getPostEngagers", () => {
       evaluateMock.mockResolvedValueOnce(ready);
     }
 
-    // 2. Click reactions
-    evaluateMock.mockResolvedValueOnce(reactionsClicked);
+    // 2. Find reactions element (scroll + click handled by dom-automation mocks)
+    evaluateMock.mockResolvedValueOnce(reactionsFound);
 
-    if (reactionsClicked) {
+    if (reactionsFound) {
       // 3. Modal readiness polls
       for (const ready of modalReadySequence) {
         evaluateMock.mockResolvedValueOnce(ready);
@@ -183,7 +195,7 @@ describe("getPostEngagers", () => {
   });
 
   it("returns empty engagers when no reactions button found", async () => {
-    setupMocks({ reactionsClicked: false });
+    setupMocks({ reactionsFound: false });
 
     const result = await getPostEngagers({
       postUrl: POST_URL,

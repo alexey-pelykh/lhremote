@@ -7,7 +7,9 @@ import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn } from "./get-post-stats.js";
-import { delay, randomDelay } from "../utils/delay.js";
+import { delay, randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
+import { humanizedScrollTo, humanizedClick } from "../linkedin/dom-automation.js";
+import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { navigateAwayIf } from "./navigate-away.js";
 
 /**
@@ -20,6 +22,8 @@ export interface GetPostEngagersInput extends ConnectionOptions {
   readonly count?: number | undefined;
   /** Offset for pagination (default: 0). */
   readonly start?: number | undefined;
+  /** Optional humanized mouse for natural cursor movement and scrolling. */
+  readonly mouse?: HumanizedMouse | null | undefined;
 }
 
 /**
@@ -56,26 +60,25 @@ interface RawEngager {
 
 /**
  * JavaScript source evaluated inside the LinkedIn post detail page to
- * find and click the reactions count element, opening the reactions modal.
+ * find the reactions count element and mark it with a data attribute
+ * for subsequent humanized scroll + click.
  *
- * The post detail page shows engagement counts (e.g. "42 reactions") as
- * clickable elements.  The script finds the first element whose trimmed
- * text matches the reaction-count pattern and clicks it.
- *
- * Returns `true` if a reactions element was found and clicked.
+ * Returns `true` if a reactions element was found and marked.
  */
-const CLICK_REACTIONS_SCRIPT = `(() => {
+const FIND_REACTIONS_SCRIPT = `(() => {
   const candidates = document.querySelectorAll('button, [role="button"], span, a');
   for (const el of candidates) {
     const txt = (el.textContent || '').trim();
     if (/^\\d[\\d,]*\\s+reactions?$/i.test(txt) && el.offsetHeight > 0) {
-      el.scrollIntoView({ block: 'center' });
-      el.click();
+      el.setAttribute('data-lhremote-reactions', 'true');
       return true;
     }
   }
   return false;
 })()`;
+
+/** Selector for the marked reactions element. */
+const REACTIONS_SELECTOR = "[data-lhremote-reactions]";
 
 /**
  * JavaScript source that extracts engager data from the reactions modal.
@@ -157,12 +160,13 @@ const SCRAPE_ENGAGERS_SCRIPT = `(() => {
 })()`;
 
 /**
- * JavaScript source that scrolls inside the reactions modal to trigger
- * lazy loading of additional engager entries.
+ * Build a scroll-modal script with a randomised scroll distance.
  *
- * Returns `true` if scrolling occurred (i.e. not at the bottom).
+ * The distance varies between 350–650 px to avoid the detection signal
+ * of a perfectly uniform modal scroll cadence.
  */
-const SCROLL_MODAL_SCRIPT = `(() => {
+function createScrollModalScript(distance: number): string {
+  return `(() => {
   const modal = document.querySelector('[role="dialog"]');
   if (!modal) return false;
 
@@ -182,9 +186,10 @@ const SCROLL_MODAL_SCRIPT = `(() => {
   if (!scrollable) scrollable = modal;
 
   const prev = scrollable.scrollTop;
-  scrollable.scrollTop += 500;
+  scrollable.scrollTop += ${String(distance)};
   return scrollable.scrollTop > prev;
 })()`;
+}
 
 /**
  * JavaScript source that extracts the total reactions count from the
@@ -315,9 +320,11 @@ export async function getPostEngagers(
     // Wait for the post content to render
     await waitForPostLoad(client);
 
-    // Click the reactions count to open the modal
-    const clicked = await client.evaluate<boolean>(CLICK_REACTIONS_SCRIPT);
-    if (!clicked) {
+    const mouse = input.mouse ?? null;
+
+    // Find the reactions count element and mark it
+    const found = await client.evaluate<boolean>(FIND_REACTIONS_SCRIPT);
+    if (!found) {
       // No reactions on this post — return empty
       return {
         postUrn,
@@ -325,6 +332,11 @@ export async function getPostEngagers(
         paging: { start, count: 0, total: 0 },
       };
     }
+
+    // Humanized scroll to the reactions element and click it
+    await maybeHesitate(); // Probabilistic pause before interaction
+    await humanizedScrollTo(client, REACTIONS_SELECTOR, mouse);
+    await humanizedClick(client, REACTIONS_SELECTOR, mouse);
 
     // Wait for the reactions modal to load
     await waitForReactionsModal(client);
@@ -345,8 +357,9 @@ export async function getPostEngagers(
       if (allEngagers.length >= targetCount) break;
 
       if (scroll < maxScrollAttempts) {
+        const modalDistance = Math.round(randomBetween(350, 650));
         const scrolled =
-          await client.evaluate<boolean>(SCROLL_MODAL_SCRIPT);
+          await client.evaluate<boolean>(createScrollModalScript(modalDistance));
         if (!scrolled) break;
         await randomDelay(800, 1_200);
       }

@@ -5,9 +5,9 @@ import type { FeedPost } from "../types/feed.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
-import { humanizedScrollY } from "../linkedin/dom-automation.js";
+import { humanizedScrollY, humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
-import { delay as utilsDelay, randomDelay } from "../utils/delay.js";
+import { delay as utilsDelay, randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
 
@@ -19,6 +19,8 @@ export interface GetFeedInput extends ConnectionOptions {
   readonly count?: number | undefined;
   /** Cursor token from a previous get-feed call for the next page. */
   readonly cursor?: string | undefined;
+  /** Optional humanized mouse for natural cursor movement and scrolling. */
+  readonly mouse?: HumanizedMouse | null | undefined;
 }
 
 /**
@@ -205,6 +207,10 @@ export { SCRAPE_FEED_POSTS_SCRIPT as SCRAPE_FEED_SCRIPT };
 // URN extraction via three-dot menu → Embed link
 // ---------------------------------------------------------------------------
 
+/** CSS selector for feed post menu buttons. */
+const FEED_MENU_BUTTON_SELECTOR =
+  '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]';
+
 /**
  * Extract the post URN for a single feed item by opening its three-dot
  * menu and reading the `targetUrn` parameter from the "Embed this post"
@@ -216,15 +222,20 @@ export { SCRAPE_FEED_POSTS_SCRIPT as SCRAPE_FEED_SCRIPT };
 async function extractPostUrn(
   client: CDPClient,
   postIndex: number,
+  mouse?: HumanizedMouse | null,
 ): Promise<string | null> {
-  // Scroll the menu button into view and click it
+  await maybeHesitate(); // Probabilistic pause before menu interaction
+
+  // Scroll the menu button into view (humanized when mouse available)
+  await humanizedScrollToByIndex(client, FEED_MENU_BUTTON_SELECTOR, postIndex, mouse);
+
+  // Click the menu button
   const clicked = await client.evaluate<boolean>(`(() => {
     const btns = document.querySelectorAll(
-      '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]'
+      ${JSON.stringify(FEED_MENU_BUTTON_SELECTOR)}
     );
     const btn = btns[${String(postIndex)}];
     if (!btn) return false;
-    btn.scrollIntoView({ block: 'center' });
     btn.click();
     return true;
   })()`);
@@ -336,7 +347,10 @@ export function mapRawPosts(raw: RawDomPost[]): FeedPost[] {
 export const delay = utilsDelay;
 
 /**
- * Scroll the feed down by one viewport worth.
+ * Scroll the feed down by a randomised viewport-like distance.
+ *
+ * The distance varies between 600–1000 px per scroll to avoid the
+ * detection signal of a perfectly uniform scroll cadence.
  *
  * When a {@link HumanizedMouse} is provided, scrolling uses incremental
  * mouse-wheel strokes (150 px / 25 ms) that mimic a physical scroll
@@ -348,7 +362,8 @@ export async function scrollFeed(
   client: CDPClient,
   mouse?: HumanizedMouse | null,
 ): Promise<void> {
-  await humanizedScrollY(client, 800, 300, 400, mouse);
+  const distance = Math.round(randomBetween(600, 1_000));
+  await humanizedScrollY(client, distance, 300, 400, mouse);
 }
 
 // ---------------------------------------------------------------------------
@@ -430,6 +445,8 @@ export async function getFeed(
   await client.connect(linkedInTarget.id);
 
   try {
+    const mouse = input.mouse ?? null;
+
     // Navigate away if already on the feed page to force a fresh load
     await navigateAwayIf(client, "/feed");
     await client.navigate("https://www.linkedin.com/feed/");
@@ -446,6 +463,7 @@ export async function getFeed(
     const cursorUrn = cursor;
 
     for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
+      const countBeforeScroll = previousCount;
       const scraped = await client.evaluate<RawDomPost[]>(SCRAPE_FEED_POSTS_SCRIPT);
       allPosts = scraped ?? [];
 
@@ -459,8 +477,20 @@ export async function getFeed(
 
       // Scroll to load more
       if (scroll < maxScrollAttempts) {
-        await scrollFeed(client);
-        await randomDelay(1_200, 1_800);
+        await scrollFeed(client, mouse);
+
+        // Progressive session fatigue: delays increase with each scroll
+        const fatigueMultiplier = 1 + scroll * 0.1;
+        // Scale delay by newly visible content volume
+        const newPostCount = allPosts.length - countBeforeScroll;
+        const contentBonus = Math.min(
+          newPostCount * randomBetween(200, 500),
+          3_000,
+        );
+        await randomDelay(
+          1_200 * fatigueMultiplier + contentBonus,
+          1_800 * fatigueMultiplier + contentBonus,
+        );
       }
     }
 
@@ -470,7 +500,8 @@ export async function getFeed(
     for (let i = 0; i < allPosts.length; i++) {
       const post = allPosts[i];
       if (!post) continue;
-      const urn = await extractPostUrn(client, i);
+      if (i > 0) await randomDelay(300, 800); // Inter-post delay
+      const urn = await extractPostUrn(client, i, mouse);
       if (urn) {
         post.urn = urn;
         post.url = buildPostUrl(urn);

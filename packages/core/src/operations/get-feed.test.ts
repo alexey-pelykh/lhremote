@@ -15,6 +15,13 @@ vi.mock("./navigate-away.js", () => ({
   navigateAwayIf: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../utils/delay.js", () => ({
+  delay: vi.fn().mockResolvedValue(undefined),
+  randomDelay: vi.fn().mockResolvedValue(undefined),
+  randomBetween: vi.fn().mockReturnValue(800),
+  maybeHesitate: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
 import { getFeed, extractHashtags, parseTimestamp } from "./get-feed.js";
@@ -46,7 +53,7 @@ function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
  * Create a script-aware evaluate mock that handles the getFeed call sequence:
  * 1. waitForFeedLoad → truthy when posts exist
  * 2. SCRAPE_FEED_POSTS_SCRIPT → posts array (may repeat on scroll)
- * 3. Per-post URN extraction: menu click → true, embed read → urn string
+ * 3. Per-post URN extraction: scroll → void, menu click → true, embed read → urn string
  */
 function createEvaluateMock(scrapedPosts: RawDomPost[]) {
   let urnIdx = 0;
@@ -63,9 +70,13 @@ function createEvaluateMock(scrapedPosts: RawDomPost[]) {
       urnIdx++;
       return Promise.resolve(urn);
     }
-    // Menu button click: contains scrollIntoView
-    if (s.includes("scrollIntoView")) {
+    // Menu button click (split from scroll): contains btn.click()
+    if (s.includes("btn.click()")) {
       return Promise.resolve(true);
+    }
+    // Humanized scroll-to-element fallback: contains scrollIntoView
+    if (s.includes("scrollIntoView")) {
+      return Promise.resolve(undefined);
     }
     // waitForFeedLoad: short script with mainFeed check — always pass
     if (s.includes("mainFeed")) {
@@ -309,8 +320,11 @@ describe("getFeed", () => {
         urnIdx++;
         return Promise.resolve(`urn:li:activity:${String(urnIdx)}`);
       }
-      if (s.includes("scrollIntoView")) {
+      if (s.includes("btn.click()")) {
         return Promise.resolve(true);
+      }
+      if (s.includes("scrollIntoView")) {
+        return Promise.resolve(undefined);
       }
       if (s.includes("mainFeed")) {
         return Promise.resolve(true);
@@ -321,6 +335,7 @@ describe("getFeed", () => {
     const result = await getFeed({ cdpPort: CDP_PORT, count: 4 });
 
     expect(result.posts).toHaveLength(4);
+    // scrollFeed uses randomBetween (mocked to return 800)
     expect(send).toHaveBeenCalledWith("Input.dispatchMouseEvent", {
       type: "mouseWheel",
       x: 300,
@@ -349,8 +364,11 @@ describe("getFeed", () => {
         urnIdx++;
         return Promise.resolve(`urn:li:activity:${String(urnIdx)}`);
       }
-      if (s.includes("scrollIntoView")) {
+      if (s.includes("btn.click()")) {
         return Promise.resolve(true);
+      }
+      if (s.includes("scrollIntoView")) {
+        return Promise.resolve(undefined);
       }
       if (s.includes("mainFeed")) {
         return Promise.resolve(true);

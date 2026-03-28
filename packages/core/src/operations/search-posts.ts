@@ -7,7 +7,9 @@ import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
-import { randomDelay } from "../utils/delay.js";
+import { randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
+import { humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
+import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import {
   type RawDomPost,
   mapRawPosts,
@@ -25,6 +27,8 @@ export interface SearchPostsInput extends ConnectionOptions {
   readonly count?: number | undefined;
   /** Index-based cursor (offset) from a previous search-posts call for the next page. */
   readonly cursor?: number | undefined;
+  /** Optional humanized mouse for natural cursor movement and scrolling. */
+  readonly mouse?: HumanizedMouse | null | undefined;
 }
 
 /**
@@ -361,6 +365,8 @@ export async function searchPosts(
     // Wait for the search results to render
     await waitForSearchResults(client);
 
+    const mouse = input.mouse ?? null;
+
     // Collect posts — scroll to load more if needed.
     //
     // Cursor is an index-based offset (e.g. "10" means start from post
@@ -376,6 +382,7 @@ export async function searchPosts(
     }
 
     for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
+      const countBeforeScroll = previousCount;
       const scraped =
         await client.evaluate<RawDomPost[]>(SCRAPE_SEARCH_RESULTS_SCRIPT);
       allPosts = scraped ?? [];
@@ -389,8 +396,20 @@ export async function searchPosts(
 
       // Scroll to load more
       if (scroll < maxScrollAttempts) {
-        await scrollFeed(client);
-        await randomDelay(1_200, 1_800);
+        await scrollFeed(client, mouse);
+
+        // Progressive session fatigue: delays increase with each scroll
+        const fatigueMultiplier = 1 + scroll * 0.1;
+        // Scale delay by newly visible content volume
+        const newPostCount = allPosts.length - countBeforeScroll;
+        const contentBonus = Math.min(
+          newPostCount * randomBetween(200, 500),
+          3_000,
+        );
+        await randomDelay(
+          1_200 * fatigueMultiplier + contentBonus,
+          1_800 * fatigueMultiplier + contentBonus,
+        );
       }
     }
 
@@ -415,21 +434,29 @@ export async function searchPosts(
         };`,
       );
 
+      const SEARCH_MENU_BUTTON_SELECTOR =
+        'div[role="listitem"] button[aria-label^="Open control menu for post"]';
+
       for (let i = 0; i < allPosts.length; i++) {
         const post = allPosts[i];
         if (!post || post.urn) continue;
 
+        if (i > 0) await randomDelay(300, 800); // Inter-post delay
+        await maybeHesitate(); // Probabilistic pause before menu interaction
+
         // Reset capture
         await client.evaluate(`window.__capturedClipboard = null;`);
+
+        // Scroll the menu button into view (humanized when mouse available)
+        await humanizedScrollToByIndex(client, SEARCH_MENU_BUTTON_SELECTOR, i, mouse);
 
         // Click the i-th menu button
         const clicked = await client.evaluate<boolean>(`(() => {
           const btns = document.querySelectorAll(
-            'div[role="listitem"] button[aria-label^="Open control menu for post"]'
+            ${JSON.stringify(SEARCH_MENU_BUTTON_SELECTOR)}
           );
           const btn = btns[${String(i)}];
           if (!btn) return false;
-          btn.scrollIntoView({ block: 'center' });
           btn.click();
           return true;
         })()`);

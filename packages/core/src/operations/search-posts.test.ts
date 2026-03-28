@@ -15,6 +15,13 @@ vi.mock("./navigate-away.js", () => ({
   navigateAwayIf: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../utils/delay.js", () => ({
+  delay: vi.fn().mockResolvedValue(undefined),
+  randomDelay: vi.fn().mockResolvedValue(undefined),
+  randomBetween: vi.fn().mockReturnValue(800),
+  maybeHesitate: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
 import { searchPosts } from "./search-posts.js";

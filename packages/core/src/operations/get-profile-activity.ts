@@ -7,7 +7,9 @@ import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
-import { randomDelay } from "../utils/delay.js";
+import { randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
+import { humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
+import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import {
   type RawDomPost,
   mapRawPosts,
@@ -26,6 +28,8 @@ export interface GetProfileActivityInput extends ConnectionOptions {
   readonly count?: number | undefined;
   /** Cursor token from a previous get-profile-activity call for the next page. */
   readonly cursor?: string | undefined;
+  /** Optional humanized mouse for natural cursor movement and scrolling. */
+  readonly mouse?: HumanizedMouse | null | undefined;
 }
 
 /**
@@ -219,6 +223,10 @@ async function waitForActivityLoad(
   );
 }
 
+/** CSS selector for activity post menu buttons. */
+const ACTIVITY_MENU_BUTTON_SELECTOR =
+  'div[role="article"] button[aria-label^="Open control menu"]';
+
 /**
  * Extract the post URN for a single activity post by opening its
  * three-dot menu and reading the embed link's `targetUrn`.
@@ -228,21 +236,22 @@ async function waitForActivityLoad(
 async function extractActivityPostUrn(
   client: CDPClient,
   postIndex: number,
+  mouse?: HumanizedMouse | null,
 ): Promise<string | null> {
+  await maybeHesitate(); // Probabilistic pause before menu interaction
+
+  // Scroll the menu button into view (humanized when mouse available)
+  await humanizedScrollToByIndex(client, ACTIVITY_MENU_BUTTON_SELECTOR, postIndex, mouse);
+
+  // Click the menu button
   const clicked = await client.evaluate<boolean>(`(() => {
-    const articles = document.querySelectorAll('div[role="article"]');
-    let idx = 0;
-    for (const a of articles) {
-      const btn = a.querySelector('button[aria-label^="Open control menu"]');
-      if (!btn) continue;
-      if (idx === ${String(postIndex)}) {
-        btn.scrollIntoView({ block: 'center' });
-        btn.click();
-        return true;
-      }
-      idx++;
-    }
-    return false;
+    const btns = document.querySelectorAll(
+      ${JSON.stringify(ACTIVITY_MENU_BUTTON_SELECTOR)}
+    );
+    const btn = btns[${String(postIndex)}];
+    if (!btn) return false;
+    btn.click();
+    return true;
   })()`);
 
   if (!clicked) return null;
@@ -329,6 +338,8 @@ export async function getProfileActivity(
     // Wait for activity posts to render
     await waitForActivityLoad(client);
 
+    const mouse = input.mouse ?? null;
+
     // Collect posts — scroll to load more if needed
     const maxScrollAttempts = 10;
     let allPosts: RawDomPost[] = [];
@@ -337,6 +348,7 @@ export async function getProfileActivity(
     const cursorUrn = cursor;
 
     for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
+      const countBeforeScroll = previousCount;
       const scraped =
         await client.evaluate<RawDomPost[]>(SCRAPE_ACTIVITY_POSTS_SCRIPT);
       allPosts = scraped ?? [];
@@ -350,8 +362,20 @@ export async function getProfileActivity(
 
       // Scroll to load more
       if (scroll < maxScrollAttempts) {
-        await scrollFeed(client);
-        await randomDelay(1_200, 1_800);
+        await scrollFeed(client, mouse);
+
+        // Progressive session fatigue: delays increase with each scroll
+        const fatigueMultiplier = 1 + scroll * 0.1;
+        // Scale delay by newly visible content volume
+        const newPostCount = allPosts.length - countBeforeScroll;
+        const contentBonus = Math.min(
+          newPostCount * randomBetween(200, 500),
+          3_000,
+        );
+        await randomDelay(
+          1_200 * fatigueMultiplier + contentBonus,
+          1_800 * fatigueMultiplier + contentBonus,
+        );
       }
     }
 
@@ -359,7 +383,8 @@ export async function getProfileActivity(
     for (let i = 0; i < allPosts.length; i++) {
       const post = allPosts[i];
       if (!post) continue;
-      const urn = await extractActivityPostUrn(client, i);
+      if (i > 0) await randomDelay(300, 800); // Inter-post delay
+      const urn = await extractActivityPostUrn(client, i, mouse);
       if (urn) {
         post.urn = urn;
         post.url = buildPostUrl(urn);
