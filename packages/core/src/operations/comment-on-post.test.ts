@@ -27,11 +27,13 @@ vi.mock("../linkedin/dom-automation.js", () => ({
   waitForElement: vi.fn(),
   scrollTo: vi.fn(),
   click: vi.fn(),
+  humanizedClick: vi.fn(),
   typeText: vi.fn(),
 }));
 
 vi.mock("../utils/delay.js", () => ({
   delay: vi.fn().mockResolvedValue(undefined),
+  randomDelay: vi.fn().mockResolvedValue(undefined),
 }));
 
 import type { DatabaseContext } from "../services/instance-context.js";
@@ -40,7 +42,7 @@ import { withDatabase } from "../services/instance-context.js";
 import { ActionBudgetRepository } from "../db/index.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
-import { waitForElement, scrollTo, click, typeText } from "../linkedin/dom-automation.js";
+import { waitForElement, scrollTo, humanizedClick, typeText } from "../linkedin/dom-automation.js";
 import type { ActionBudgetEntry } from "../types/action-budget.js";
 import { BudgetExceededError } from "../services/errors.js";
 import { commentOnPost } from "./comment-on-post.js";
@@ -95,7 +97,7 @@ function setupMocks(budgetEntries: ActionBudgetEntry[] = [
   // Reset DOM automation mocks to default resolved state
   vi.mocked(waitForElement).mockResolvedValue(undefined);
   vi.mocked(scrollTo).mockResolvedValue(undefined);
-  vi.mocked(click).mockResolvedValue(undefined);
+  vi.mocked(humanizedClick).mockResolvedValue(undefined);
   vi.mocked(typeText).mockResolvedValue(undefined);
 
   return mockClient;
@@ -276,7 +278,7 @@ describe("commentOnPost", () => {
     // Verify DOM automation sequence
     expect(waitForElement).toHaveBeenCalled();
     expect(scrollTo).toHaveBeenCalled();
-    expect(click).toHaveBeenCalledTimes(2); // comment input + submit
+    expect(humanizedClick).toHaveBeenCalledTimes(2); // comment input + submit
     expect(typeText).toHaveBeenCalled();
   });
 
