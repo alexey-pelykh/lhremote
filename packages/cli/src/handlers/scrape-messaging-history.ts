@@ -13,6 +13,8 @@ import {
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | scrape-messaging-history} CLI command. */
 export async function handleScrapeMessagingHistory(options: {
   personId: number[];
+  startRunner?: boolean;
+  pauseOthers?: boolean;
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
@@ -30,6 +32,8 @@ export async function handleScrapeMessagingHistory(options: {
   try {
     result = await scrapeMessagingHistory({
       personIds: options.personId,
+      startRunner: options.startRunner,
+      pauseOthers: options.pauseOthers,
       cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,

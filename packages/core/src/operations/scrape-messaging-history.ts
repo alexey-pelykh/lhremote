@@ -19,6 +19,8 @@ const POLL_INTERVAL = 2_000;
 
 export interface ScrapeMessagingHistoryInput extends ConnectionOptions {
   readonly personIds: number[];
+  readonly startRunner?: boolean | undefined;
+  readonly pauseOthers?: boolean | undefined;
 }
 
 export interface ScrapeMessagingHistoryOutput {
@@ -72,12 +74,25 @@ export async function scrapeMessagingHistory(
       }],
     });
 
+    // Pause other campaigns if requested (restore in finally)
+    let pausedCampaignIds: number[] = [];
+    if (input.pauseOthers) {
+      pausedCampaignIds = await campaignService.pauseAllExcept(campaign.id);
+    }
+
     try {
       // Import target persons into campaign
       await campaignService.importPeopleFromUrls(campaign.id, linkedInUrls);
 
-      // Start campaign runner
-      await campaignService.start(campaign.id, []);
+      if (input.startRunner) {
+        // Caller manages runner lifecycle: just unpause our campaign
+        // and start the runner via the high-level RPC.
+        await campaignService.unpauseCampaign(campaign.id);
+        await campaignService.startRunner();
+      } else {
+        // Default path: wait for idle runner, unpause, start
+        await campaignService.start(campaign.id, []);
+      }
 
       // Poll for completion (runner idle + no queued persons)
       const deadline = Date.now() + CAMPAIGN_TIMEOUT;
@@ -113,6 +128,12 @@ export async function scrapeMessagingHistory(
     } finally {
       try { await campaignService.stop(campaign.id); } catch { /* best-effort cleanup */ }
       try { campaignService.hardDelete(campaign.id); } catch { /* best-effort cleanup */ }
+      if (input.startRunner) {
+        try { await campaignService.stopRunner(); } catch { /* best-effort cleanup */ }
+      }
+      if (pausedCampaignIds.length > 0) {
+        try { await campaignService.unpauseCampaigns(pausedCampaignIds); } catch { /* best-effort restore */ }
+      }
     }
-  }, { instanceTimeout: CAMPAIGN_TIMEOUT });
+  }, { instanceTimeout: CAMPAIGN_TIMEOUT, db: { readOnly: false } });
 }

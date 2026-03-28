@@ -405,6 +405,129 @@ export class CampaignService {
   }
 
   /**
+   * Start the global campaign runner via the high-level RPC.
+   *
+   * Uses `@electron/remote` to call `startRunningCampaigns` on the
+   * main-process mainWindowService (the renderer proxy does not expose `.call()`).
+   */
+  async startRunner(liAccountId: number = 1): Promise<void> {
+    try {
+      await this.instance.evaluateUI(
+        `(async function() {
+          const mws = require('@electron/remote').getGlobal('mainWindowService');
+          await mws.call('startRunningCampaigns', ${String(liAccountId)});
+        })()`,
+      );
+    } catch (error) {
+      const message = errorMessage(error);
+      throw new CampaignExecutionError(
+        `Failed to start campaign runner: ${message}`,
+        undefined,
+        { cause: error },
+      );
+    }
+  }
+
+  /**
+   * Stop the global campaign runner via the high-level RPC.
+   *
+   * Uses `@electron/remote` to call `stopRunningCampaigns` on the
+   * main-process mainWindowService.
+   */
+  async stopRunner(liAccountId: number = 1, force: boolean = true): Promise<void> {
+    try {
+      await this.instance.evaluateUI(
+        `(async function() {
+          const mws = require('@electron/remote').getGlobal('mainWindowService');
+          await mws.call('stopRunningCampaigns', ${String(liAccountId)}, ${String(force)});
+        })()`,
+      );
+    } catch (error) {
+      const message = errorMessage(error);
+      throw new CampaignExecutionError(
+        `Failed to stop campaign runner: ${message}`,
+        undefined,
+        { cause: error },
+      );
+    }
+  }
+
+  /**
+   * Unpause a single campaign via CDP.
+   *
+   * @throws {CampaignNotFoundError} if the campaign does not exist.
+   */
+  async unpauseCampaign(campaignId: number): Promise<void> {
+    const campaign = this.campaignRepo.getCampaign(campaignId);
+    try {
+      await this.instance.evaluateUI(
+        `(async function() {
+          const src = window.mainWindowService.mainWindow.source.campaigns;
+          await src.setCampaignPaused(${String(campaign.id)}, false, ${String(campaign.liAccountId)});
+        })()`,
+      );
+    } catch (error) {
+      const message = errorMessage(error);
+      throw new CampaignExecutionError(
+        `Failed to unpause campaign ${String(campaignId)}: ${message}`,
+        campaignId,
+        { cause: error },
+      );
+    }
+  }
+
+  /**
+   * Pause all non-archived campaigns except the given one.
+   *
+   * Returns the IDs of campaigns that were unpaused and are now paused,
+   * so the caller can restore them later via {@link unpauseCampaigns}.
+   */
+  async pauseAllExcept(excludeCampaignId: number): Promise<number[]> {
+    const campaigns = this.campaignRepo.listCampaigns();
+    const paused: number[] = [];
+
+    for (const c of campaigns) {
+      if (c.id === excludeCampaignId) continue;
+
+      const isPaused = await this.getIsPaused(c.id);
+      if (isPaused) continue;
+
+      try {
+        await this.instance.evaluateUI(
+          `(async function() {
+            const src = window.mainWindowService.mainWindow.source.campaigns;
+            await src.setCampaignPaused(${String(c.id)}, true, ${String(c.liAccountId)});
+          })()`,
+        );
+        paused.push(c.id);
+      } catch {
+        // Best-effort — continue with remaining campaigns
+      }
+    }
+
+    return paused;
+  }
+
+  /**
+   * Unpause the given campaigns (restore previous state).
+   */
+  async unpauseCampaigns(campaignIds: number[]): Promise<void> {
+    for (const id of campaignIds) {
+      try {
+        const campaign = this.campaignRepo.getCampaign(id);
+        await this.instance.evaluateUI(
+          `(async function() {
+            const src = window.mainWindowService.mainWindow.source.campaigns;
+            await src.setCampaignPaused(${String(id)}, false, ${String(campaign.liAccountId)});
+          })()`,
+        );
+      } catch {
+        // Best-effort — continue with remaining campaigns
+      }
+    }
+  }
+
+  /**
    * Start campaign execution for the specified persons.
    *
    * Performs the full start sequence:

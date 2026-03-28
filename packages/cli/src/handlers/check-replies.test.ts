@@ -65,10 +65,17 @@ describe("handleCheckReplies", () => {
     vi.restoreAllMocks();
   });
 
+  it("prints error when no person IDs provided", async () => {
+    await handleCheckReplies({ personId: [] });
+
+    expect(process.exitCode).toBe(1);
+    expect(getStderr(stderrSpy)).toContain("at least one --person-id is required");
+  });
+
   it("prints JSON with --json", async () => {
     vi.mocked(checkReplies).mockResolvedValue(MOCK_RESULT);
 
-    await handleCheckReplies({ json: true });
+    await handleCheckReplies({ personId: [456], json: true });
 
     expect(process.exitCode).toBeUndefined();
     const output = JSON.parse(getStdout(stdoutSpy));
@@ -80,7 +87,7 @@ describe("handleCheckReplies", () => {
   it("prints human-readable output by default", async () => {
     vi.mocked(checkReplies).mockResolvedValue(MOCK_RESULT);
 
-    await handleCheckReplies({});
+    await handleCheckReplies({ personId: [456] });
 
     expect(process.exitCode).toBeUndefined();
     const output = getStdout(stdoutSpy);
@@ -92,7 +99,7 @@ describe("handleCheckReplies", () => {
   it("prints progress to stderr", async () => {
     vi.mocked(checkReplies).mockResolvedValue(MOCK_RESULT);
 
-    await handleCheckReplies({});
+    await handleCheckReplies({ personId: [456] });
 
     const stderr = getStderr(stderrSpy);
     expect(stderr).toContain("Checking for new replies...");
@@ -106,7 +113,7 @@ describe("handleCheckReplies", () => {
       checkedAt: "2025-01-15T12:00:00Z",
     });
 
-    await handleCheckReplies({});
+    await handleCheckReplies({ personId: [456] });
 
     expect(getStdout(stdoutSpy)).toContain("No new messages found.");
   });
@@ -118,11 +125,28 @@ describe("handleCheckReplies", () => {
       checkedAt: "2025-01-15T12:00:00Z",
     });
 
-    await handleCheckReplies({ since: "2025-01-14T00:00:00Z" });
+    await handleCheckReplies({ personId: [456], since: "2025-01-14T00:00:00Z" });
 
     expect(checkReplies).toHaveBeenCalledWith(
       expect.objectContaining({
+        personIds: [456],
         since: "2025-01-14T00:00:00Z",
+      }),
+    );
+  });
+
+  it("passes personIds to core operation", async () => {
+    vi.mocked(checkReplies).mockResolvedValue({
+      newMessages: [],
+      totalNew: 0,
+      checkedAt: "2025-01-15T12:00:00Z",
+    });
+
+    await handleCheckReplies({ personId: [100, 200] });
+
+    expect(checkReplies).toHaveBeenCalledWith(
+      expect.objectContaining({
+        personIds: [100, 200],
       }),
     );
   });
@@ -132,7 +156,7 @@ describe("handleCheckReplies", () => {
       new Error("No accounts found."),
     );
 
-    await handleCheckReplies({});
+    await handleCheckReplies({ personId: [456] });
 
     expect(process.exitCode).toBe(1);
     expect(getStderr(stderrSpy)).toContain("No accounts found.");
@@ -145,7 +169,7 @@ describe("handleCheckReplies", () => {
       ),
     );
 
-    await handleCheckReplies({});
+    await handleCheckReplies({ personId: [456] });
 
     expect(process.exitCode).toBe(1);
     expect(getStderr(stderrSpy)).toContain(
@@ -178,7 +202,7 @@ describe("handleCheckReplies", () => {
       checkedAt: "2025-01-15T12:00:00Z",
     });
 
-    await handleCheckReplies({});
+    await handleCheckReplies({ personId: [1] });
 
     expect(getStdout(stdoutSpy)).toContain("2 new messages found:");
   });
