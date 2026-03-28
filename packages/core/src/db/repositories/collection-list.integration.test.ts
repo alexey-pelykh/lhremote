@@ -2,23 +2,26 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { DatabaseSync } from "node:sqlite";
 
 import { DatabaseClient } from "../client.js";
-import { FIXTURE_PATH } from "../testing/open-fixture.js";
+import { openFixture } from "../testing/open-fixture.js";
 import { CollectionListRepository } from "./collection-list.js";
 
 describe("CollectionListRepository (integration)", () => {
+  let rawDb: DatabaseSync;
   let client: DatabaseClient;
   let repo: CollectionListRepository;
 
   beforeAll(() => {
-    // Open in write mode so we can test write operations
-    client = new DatabaseClient(FIXTURE_PATH, { readOnly: false });
+    // Use openFixture() for an isolated writable copy
+    rawDb = openFixture();
+    client = { db: rawDb, close: () => rawDb.close() } as unknown as DatabaseClient;
     repo = new CollectionListRepository(client);
   });
 
   afterAll(() => {
-    client.close();
+    rawDb.close();
   });
 
   describe("listCollections", () => {
