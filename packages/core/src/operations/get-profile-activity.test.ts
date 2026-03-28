@@ -25,6 +25,11 @@ vi.mock("./get-feed.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../utils/delay.js", () => ({
+  delay: vi.fn().mockResolvedValue(undefined),
+  randomDelay: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
 import { getProfileActivity } from "./get-profile-activity.js";
