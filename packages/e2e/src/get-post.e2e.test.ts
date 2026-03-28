@@ -23,11 +23,11 @@ import { createMockServer } from "@lhremote/mcp/testing";
  * Fetch a fresh post URN by scraping the feed.  Returns the URN of the
  * first feed post, or `undefined` when the feed returns no posts.
  */
-async function fetchPostUrnFromFeed(cdpPort: number): Promise<string | undefined> {
+async function fetchPostUrlFromFeed(cdpPort: number): Promise<string | undefined> {
   const { getFeed } = await import("@lhremote/core");
   const result = await getFeed({ cdpPort, count: 1 });
   const first = result.posts[0];
-  return first?.urn ?? undefined;
+  return first?.url ?? undefined;
 }
 
 describeE2E("get-post operation", () => {
@@ -35,7 +35,7 @@ describeE2E("get-post operation", () => {
   let port: number;
   let accountId: number;
   let cdpPort: number;
-  let capturedPostUrn: string | undefined;
+  let capturedPostUrl: string | undefined;
 
   beforeAll(async () => {
     const launched = await launchApp();
@@ -75,7 +75,7 @@ describeE2E("get-post operation", () => {
     );
 
     // Pre-fetch a live post URN from the feed
-    capturedPostUrn = await fetchPostUrnFromFeed(cdpPort);
+    capturedPostUrl = await fetchPostUrlFromFeed(cdpPort);
   }, 120_000);
 
   afterAll(async () => {
@@ -104,13 +104,13 @@ describeE2E("get-post operation", () => {
     });
 
     it("get-post --json returns post content", async () => {
-      assertDefined(capturedPostUrn, "No post URN — feed returned no posts");
+      assertDefined(capturedPostUrl, "No post URL — feed returned no posts");
 
       const stdoutSpy = vi
         .spyOn(process.stdout, "write")
         .mockReturnValue(true);
 
-      await handleGetPost(capturedPostUrn, { cdpPort, json: true });
+      await handleGetPost(capturedPostUrl, { cdpPort, json: true });
 
       expect(process.exitCode).toBeUndefined();
       expect(stdoutSpy).toHaveBeenCalled();
@@ -131,13 +131,13 @@ describeE2E("get-post operation", () => {
     }, 60_000);
 
     it("get-post prints human-friendly output", async () => {
-      assertDefined(capturedPostUrn, "No post URN — feed returned no posts");
+      assertDefined(capturedPostUrl, "No post URL — feed returned no posts");
 
       const stdoutSpy = vi
         .spyOn(process.stdout, "write")
         .mockReturnValue(true);
 
-      await handleGetPost(capturedPostUrn, { cdpPort });
+      await handleGetPost(capturedPostUrl, { cdpPort });
 
       expect(process.exitCode).toBeUndefined();
       expect(stdoutSpy).toHaveBeenCalled();
@@ -152,13 +152,13 @@ describeE2E("get-post operation", () => {
 
   describe("MCP tools", () => {
     it("get-post tool returns valid JSON", async () => {
-      assertDefined(capturedPostUrn, "No post URN — feed returned no posts");
+      assertDefined(capturedPostUrl, "No post URL — feed returned no posts");
 
       const { server, getHandler } = createMockServer();
       registerGetPost(server);
 
       const handler = getHandler("get-post");
-      const result = (await handler({ postUrl: capturedPostUrn, cdpPort })) as {
+      const result = (await handler({ postUrl: capturedPostUrl, cdpPort })) as {
         isError?: boolean;
         content: { type: string; text: string }[];
       };

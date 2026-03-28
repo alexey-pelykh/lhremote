@@ -15,7 +15,6 @@ import { getStderr, getStdout } from "./testing/mock-helpers.js";
 const MOCK_RESULT: GetFeedOutput = {
   posts: [
     {
-      urn: "urn:li:activity:123",
       url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
       authorName: "Alice Smith",
       authorPublicId: "alice",
@@ -58,7 +57,7 @@ describe("handleGetFeed", () => {
     expect(process.exitCode).toBeUndefined();
     const output = JSON.parse(getStdout(stdoutSpy));
     expect(output.posts).toHaveLength(1);
-    expect(output.posts[0].urn).toBe("urn:li:activity:123");
+    expect(output.posts[0].url).toBe("https://www.linkedin.com/feed/update/urn:li:activity:123/");
     expect(output.nextCursor).toBe("cursor-abc");
   });
 
@@ -129,7 +128,6 @@ describe("handleGetFeed", () => {
     vi.mocked(getFeed).mockResolvedValue({
       posts: [
         {
-          urn: "urn:li:activity:999",
           url: "https://www.linkedin.com/feed/update/urn:li:activity:999/",
           authorName: "Jane Doe",
           authorPublicId: null,

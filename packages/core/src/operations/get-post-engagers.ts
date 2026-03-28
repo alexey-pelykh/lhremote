@@ -6,7 +6,7 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
-import { extractPostUrn } from "./get-post-stats.js";
+import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
 import { delay, randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
 import { humanizedScrollTo, humanizedClick } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
@@ -284,7 +284,15 @@ export async function getPostEngagers(
   const count = input.count ?? 20;
   const start = input.start ?? 0;
 
-  const postUrn = extractPostUrn(input.postUrl);
+  const postDetailUrl = resolvePostDetailUrl(input.postUrl);
+
+  // Try to extract URN for the output postUrn field
+  let postUrn: string;
+  try {
+    postUrn = extractPostUrn(input.postUrl);
+  } catch {
+    postUrn = input.postUrl;
+  }
 
   // Enforce loopback guard
   if (!allowRemote && cdpHost !== "127.0.0.1" && cdpHost !== "localhost") {
@@ -314,7 +322,6 @@ export async function getPostEngagers(
     await navigateAwayIf(client, "/feed/update/");
 
     // Navigate to the post detail page
-    const postDetailUrl = `https://www.linkedin.com/feed/update/${postUrn}/`;
     await client.navigate(postDetailUrl);
 
     // Wait for the post content to render

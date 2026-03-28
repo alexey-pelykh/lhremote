@@ -107,8 +107,8 @@ describeE2E("get-feed operation", () => {
       expect(parsed.posts.length).toBeGreaterThan(0);
 
       const post = parsed.posts[0] as FeedPost;
-      expect(post).toHaveProperty("urn");
-      expect(typeof post.urn).toBe("string");
+      expect(post).toHaveProperty("url");
+      expect(typeof post.url).toBe("string");
       expect(typeof post.reactionCount).toBe("number");
       expect(typeof post.commentCount).toBe("number");
       expect(typeof post.shareCount).toBe("number");
@@ -154,7 +154,7 @@ describeE2E("get-feed operation", () => {
       expect(parsed.posts.length).toBeGreaterThan(0);
 
       const post = parsed.posts[0] as FeedPost;
-      expect(post).toHaveProperty("urn");
+      expect(post).toHaveProperty("url");
       expect(typeof post.reactionCount).toBe("number");
     }, 60_000);
   });

@@ -16,7 +16,6 @@ import {
   scrollFeed,
   delay,
 } from "./get-feed.js";
-import { extractPostUrn as parsePostUrn } from "./get-post-stats.js";
 
 /**
  * Input for the get-profile-activity operation.
@@ -179,7 +178,6 @@ const SCRAPE_ACTIVITY_POSTS_SCRIPT = `(() => {
     }
 
     posts.push({
-      urn: null,
       url: null,
       authorName: authorName,
       authorHeadline: authorHeadline,
@@ -351,7 +349,7 @@ export async function getProfileActivity(
     let allPosts: RawDomPost[] = [];
     let previousCount = 0;
 
-    const cursorUrn = cursor;
+    const cursorUrl = cursor;
 
     for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
       const countBeforeScroll = previousCount;
@@ -360,7 +358,7 @@ export async function getProfileActivity(
       allPosts = scraped ?? [];
 
       const available = allPosts.length;
-      if (available >= count && !cursorUrn) break;
+      if (available >= count && !cursorUrl) break;
 
       // No new posts appeared after scroll — stop
       if (allPosts.length === previousCount && scroll > 0) break;
@@ -401,18 +399,13 @@ export async function getProfileActivity(
       const url = await captureActivityPostUrl(client, i, mouse);
       if (url) {
         post.url = url;
-        try {
-          post.urn = parsePostUrn(url);
-        } catch {
-          // URL format not recognized — keep url but leave urn null
-        }
       }
     }
 
-    // Slice the result window (now that URNs are populated)
+    // Slice the result window
     let startIdx = 0;
-    if (cursorUrn) {
-      const cursorIdx = allPosts.findIndex((p) => p.urn === cursorUrn);
+    if (cursorUrl) {
+      const cursorIdx = allPosts.findIndex((p) => p.url === cursorUrl);
       if (cursorIdx >= 0) {
         startIdx = cursorIdx + 1;
       }
@@ -421,14 +414,14 @@ export async function getProfileActivity(
     const window = allPosts.slice(startIdx, startIdx + count);
     const posts = mapRawPosts(window);
 
-    // Determine next cursor — use last post with a non-null URN
+    // Determine next cursor — use last post with a non-null URL
     const hasMore = startIdx + count < allPosts.length;
     let nextCursor: string | null = null;
     if (hasMore) {
       for (let i = window.length - 1; i >= 0; i--) {
-        const urn = window[i]?.urn;
-        if (urn) {
-          nextCursor = urn;
+        const url = window[i]?.url;
+        if (url) {
+          nextCursor = url;
           break;
         }
       }

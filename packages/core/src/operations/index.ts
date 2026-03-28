@@ -215,6 +215,7 @@ export {
 export {
   getPostStats,
   extractPostUrn,
+  resolvePostDetailUrl,
   type GetPostStatsInput,
   type GetPostStatsOutput,
 } from "./get-post-stats.js";

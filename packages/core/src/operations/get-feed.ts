@@ -10,7 +10,6 @@ import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { delay as utilsDelay, randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
-import { extractPostUrn as parsePostUrn } from "./get-post-stats.js";
 
 /**
  * Input for the get-feed operation.
@@ -40,7 +39,6 @@ export interface GetFeedOutput {
 
 /** @internal Exported for reuse by search-posts. */
 export interface RawDomPost {
-  urn: string | null;
   url: string | null;
   authorName: string | null;
   authorHeadline: string | null;
@@ -178,7 +176,6 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     }
 
     posts.push({
-      urn: null,
       url: null,
       authorName: authorName,
       authorHeadline: authorHeadline,
@@ -342,8 +339,7 @@ export function buildPostUrl(urn: string): string {
 /** @internal Exported for reuse by search-posts. */
 export function mapRawPosts(raw: RawDomPost[]): FeedPost[] {
   return raw.map((r) => ({
-    urn: r.urn ?? "",
-    url: r.url ?? (r.urn ? buildPostUrl(r.urn) : null),
+    url: r.url ?? "",
     authorName: r.authorName,
     authorHeadline: r.authorHeadline,
     authorProfileUrl: r.authorProfileUrl,
@@ -479,16 +475,16 @@ export async function getFeed(
     let previousCount = 0;
 
     // If resuming with a cursor, we need to scroll past already-seen posts
-    const cursorUrn = cursor;
+    const cursorUrl = cursor;
 
     for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
       const countBeforeScroll = previousCount;
       const scraped = await client.evaluate<RawDomPost[]>(SCRAPE_FEED_POSTS_SCRIPT);
       allPosts = scraped ?? [];
 
-      // Determine which posts to return (URNs not yet available, use index)
+      // Determine which posts to return
       const available = allPosts.length;
-      if (available >= count && !cursorUrn) break;
+      if (available >= count && !cursorUrl) break;
 
       // No new posts appeared after scroll — stop
       if (allPosts.length === previousCount && scroll > 0) break;
@@ -526,18 +522,13 @@ export async function getFeed(
       const url = await capturePostUrl(client, i, mouse);
       if (url) {
         post.url = url;
-        try {
-          post.urn = parsePostUrn(url);
-        } catch {
-          // URL format not recognized — keep url but leave urn null
-        }
       }
     }
 
-    // Slice the result window (now that URNs are populated)
+    // Slice the result window
     let startIdx = 0;
-    if (cursorUrn) {
-      const cursorIdx = allPosts.findIndex((p) => p.urn === cursorUrn);
+    if (cursorUrl) {
+      const cursorIdx = allPosts.findIndex((p) => p.url === cursorUrl);
       if (cursorIdx >= 0) {
         startIdx = cursorIdx + 1;
       }
@@ -549,7 +540,7 @@ export async function getFeed(
     // Determine next cursor
     const hasMore = startIdx + count < allPosts.length;
     const lastPost = window[window.length - 1];
-    const nextCursor = hasMore && lastPost ? lastPost.urn : null;
+    const nextCursor = hasMore && lastPost ? lastPost.url : null;
 
     return { posts, nextCursor };
   } finally {

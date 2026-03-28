@@ -70,8 +70,7 @@ const SCRAPE_SEARCH_RESULTS_SCRIPT = `(() => {
       const menuBtn = card.querySelector('button[aria-label^="Open control menu for post"]');
       if (!menuBtn) continue;
 
-      // URN is not available in search results; URL extracted via three-dot menu
-      let urnRaw = null;
+      // URL extracted via three-dot menu
 
       let authorName = null;
       let authorHeadline = null;
@@ -149,8 +148,7 @@ const SCRAPE_SEARCH_RESULTS_SCRIPT = `(() => {
       }
 
       posts.push({
-        urn: urnRaw,
-        url: urnRaw ? 'https://www.linkedin.com/feed/update/' + urnRaw + '/' : null,
+        url: null,
         authorName,
         authorHeadline,
         authorProfileUrl,
@@ -248,7 +246,6 @@ const SCRAPE_SEARCH_RESULTS_SCRIPT = `(() => {
     }
 
     posts.push({
-      urn: null,
       url: null,
       authorName,
       authorHeadline,
@@ -424,7 +421,7 @@ export async function searchPosts(
     // Electron's clipboard API is broken (readText returns {}) so we
     // monkey-patch navigator.clipboard.writeText to capture into a
     // window global instead.
-    const needsUrlExtraction = allPosts.some((p) => p.urn === null);
+    const needsUrlExtraction = allPosts.some((p) => p.url === null);
     if (needsUrlExtraction) {
       // Install clipboard interceptor once
       await client.evaluate(
@@ -439,7 +436,7 @@ export async function searchPosts(
 
       for (let i = 0; i < allPosts.length; i++) {
         const post = allPosts[i];
-        if (!post || post.urn) continue;
+        if (!post || post.url) continue;
 
         if (i > 0) await randomDelay(300, 800); // Inter-post delay
         await maybeHesitate(); // Probabilistic pause before menu interaction

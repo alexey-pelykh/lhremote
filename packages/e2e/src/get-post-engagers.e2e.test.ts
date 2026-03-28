@@ -90,14 +90,14 @@ describeE2E("get-post-engagers operation", () => {
 
       // Pick first post with reactions > 0; fall back to first post
       const postWithReactions = feedParsed.posts.find((p) => p.reactionCount > 0);
-      const postUrn = postWithReactions?.urn ?? feedParsed.posts[0]?.urn;
-      assertDefined(postUrn, "No posts returned from get-feed");
+      const postUrl = postWithReactions?.url ?? feedParsed.posts[0]?.url;
+      assertDefined(postUrl, "No posts returned from get-feed");
 
       const { server, getHandler } = createMockServer();
       registerGetPostEngagers(server);
 
       const handler = getHandler("get-post-engagers");
-      const result = (await handler({ postUrl: postUrn, cdpPort, count: 5 })) as {
+      const result = (await handler({ postUrl: postUrl, cdpPort, count: 5 })) as {
         isError?: boolean;
         content: { type: string; text: string }[];
       };

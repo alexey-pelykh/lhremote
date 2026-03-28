@@ -16,7 +16,6 @@ const MOCK_ACTIVITY = {
   profilePublicId: "johndoe",
   posts: [
     {
-      urn: "urn:li:activity:7123456789012345678",
       text: "Excited to announce...",
       authorName: "John Doe",
       authorPublicId: null,

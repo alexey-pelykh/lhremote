@@ -6,7 +6,7 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
-import { extractPostUrn } from "./get-post-stats.js";
+import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
 import { delay, parseTimestamp } from "./get-feed.js";
 import { navigateAwayIf } from "./navigate-away.js";
 
@@ -395,7 +395,15 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
   const allowRemote = input.allowRemote ?? false;
   const maxComments = input.commentCount ?? 100;
 
-  const postUrn = extractPostUrn(input.postUrl);
+  const postDetailUrl = resolvePostDetailUrl(input.postUrl);
+
+  // Try to extract URN for the output postUrn field
+  let postUrn: string;
+  try {
+    postUrn = extractPostUrn(input.postUrl);
+  } catch {
+    postUrn = input.postUrl;
+  }
 
   // Enforce loopback guard
   if (!allowRemote && cdpHost !== "127.0.0.1" && cdpHost !== "localhost") {
@@ -425,7 +433,6 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
     await navigateAwayIf(client, "/feed/update/");
 
     // Navigate to the post detail page
-    const postDetailUrl = `https://www.linkedin.com/feed/update/${postUrn}/`;
     await client.navigate(postDetailUrl);
 
     // Wait for the post content to render

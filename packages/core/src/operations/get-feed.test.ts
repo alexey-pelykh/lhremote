@@ -33,10 +33,8 @@ const CDP_PORT = 9222;
  * Build a minimal raw DOM post object.
  */
 function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
-  const urn = overrides.urn ?? "urn:li:activity:123";
   return {
-    urn,
-    url: `https://www.linkedin.com/feed/update/${urn}/`,
+    url: overrides.url ?? "https://www.linkedin.com/feed/update/urn:li:activity:123/",
     authorName: null,
     authorHeadline: null,
     authorProfileUrl: null,
@@ -143,7 +141,6 @@ describe("getFeed", () => {
   it("parses posts from DOM-scraped data", async () => {
     setupMocks([
       rawPost({
-        urn: "urn:li:activity:123",
         url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
         authorName: "Alice Smith",
         authorHeadline: "Engineer at Acme",
@@ -161,7 +158,6 @@ describe("getFeed", () => {
 
     expect(result.posts).toHaveLength(1);
     const [post] = result.posts;
-    expect(post?.urn).toBe("urn:li:activity:123");
     expect(post?.url).toBe("https://www.linkedin.com/feed/update/urn:li:activity:123/");
     expect(post?.authorName).toBe("Alice Smith");
     expect(post?.authorHeadline).toBe("Engineer at Acme");
@@ -174,14 +170,12 @@ describe("getFeed", () => {
     expect(post?.hashtags).toEqual(["linkedin", "tech"]);
   });
 
-  it("constructs URL when raw post has null url", async () => {
-    setupMocks([rawPost({ urn: "urn:li:activity:456", url: null })]);
+  it("returns empty string URL when raw post has null url", async () => {
+    setupMocks([rawPost({ url: null })]);
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
-    expect(result.posts[0]?.url).toBe(
-      "https://www.linkedin.com/feed/update/urn:li:activity:456/",
-    );
+    expect(result.posts[0]?.url).toBe("");
   });
 
   it("navigates to the LinkedIn feed page", async () => {
@@ -202,34 +196,34 @@ describe("getFeed", () => {
 
   it("limits results to count parameter", async () => {
     setupMocks([
-      rawPost({ urn: "urn:li:activity:1" }),
-      rawPost({ urn: "urn:li:activity:2" }),
-      rawPost({ urn: "urn:li:activity:3" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:3/" }),
     ]);
 
     const result = await getFeed({ cdpPort: CDP_PORT, count: 2 });
 
     expect(result.posts).toHaveLength(2);
-    expect(result.posts[0]?.urn).toBe("urn:li:activity:1");
-    expect(result.posts[1]?.urn).toBe("urn:li:activity:2");
+    expect(result.posts[0]?.url).toBe("https://www.linkedin.com/feed/update/urn:li:activity:1/");
+    expect(result.posts[1]?.url).toBe("https://www.linkedin.com/feed/update/urn:li:activity:2/");
   });
 
   it("returns nextCursor when more posts are available", async () => {
     setupMocks([
-      rawPost({ urn: "urn:li:activity:1" }),
-      rawPost({ urn: "urn:li:activity:2" }),
-      rawPost({ urn: "urn:li:activity:3" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:3/" }),
     ]);
 
     const result = await getFeed({ cdpPort: CDP_PORT, count: 2 });
 
-    expect(result.nextCursor).toBe("urn:li:activity:2");
+    expect(result.nextCursor).toBe("https://www.linkedin.com/feed/update/urn:li:activity:2/");
   });
 
   it("returns null nextCursor when all posts are returned", async () => {
     setupMocks([
-      rawPost({ urn: "urn:li:activity:1" }),
-      rawPost({ urn: "urn:li:activity:2" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),
     ]);
 
     const result = await getFeed({ cdpPort: CDP_PORT, count: 10 });
@@ -239,32 +233,32 @@ describe("getFeed", () => {
 
   it("supports cursor-based pagination", { timeout: 15_000 }, async () => {
     setupMocks([
-      rawPost({ urn: "urn:li:activity:1" }),
-      rawPost({ urn: "urn:li:activity:2" }),
-      rawPost({ urn: "urn:li:activity:3" }),
-      rawPost({ urn: "urn:li:activity:4" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:3/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:4/" }),
     ]);
 
     const result = await getFeed({
       cdpPort: CDP_PORT,
       count: 2,
-      cursor: "urn:li:activity:2",
+      cursor: "https://www.linkedin.com/feed/update/urn:li:activity:2/",
     });
 
     expect(result.posts).toHaveLength(2);
-    expect(result.posts[0]?.urn).toBe("urn:li:activity:3");
-    expect(result.posts[1]?.urn).toBe("urn:li:activity:4");
+    expect(result.posts[0]?.url).toBe("https://www.linkedin.com/feed/update/urn:li:activity:3/");
+    expect(result.posts[1]?.url).toBe("https://www.linkedin.com/feed/update/urn:li:activity:4/");
   });
 
   it("returns empty posts when cursor is at the end", async () => {
     setupMocks([
-      rawPost({ urn: "urn:li:activity:1" }),
-      rawPost({ urn: "urn:li:activity:2" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),
     ]);
 
     const result = await getFeed({
       cdpPort: CDP_PORT,
-      cursor: "urn:li:activity:2",
+      cursor: "https://www.linkedin.com/feed/update/urn:li:activity:2/",
     });
 
     expect(result.posts).toHaveLength(0);
@@ -273,13 +267,13 @@ describe("getFeed", () => {
 
   it("treats unknown cursor as start of feed", async () => {
     setupMocks([
-      rawPost({ urn: "urn:li:activity:1" }),
-      rawPost({ urn: "urn:li:activity:2" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),
     ]);
 
     const result = await getFeed({
       cdpPort: CDP_PORT,
-      cursor: "urn:li:activity:unknown",
+      cursor: "https://www.linkedin.com/feed/update/urn:li:activity:unknown/",
     });
 
     // When cursor is not found, all posts are returned from the start
@@ -313,14 +307,14 @@ describe("getFeed", () => {
 
     let scrapeCall = 0;
     const firstScrape = [
-      rawPost({ urn: "urn:li:activity:1" }),
-      rawPost({ urn: "urn:li:activity:2" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),
     ];
     const secondScrape = [
-      rawPost({ urn: "urn:li:activity:1" }),
-      rawPost({ urn: "urn:li:activity:2" }),
-      rawPost({ urn: "urn:li:activity:3" }),
-      rawPost({ urn: "urn:li:activity:4" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:3/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:4/" }),
     ];
 
     let urnIdx = 0;
@@ -364,8 +358,8 @@ describe("getFeed", () => {
     const { evaluate, send } = setupMocks([]);
 
     const fixedPosts = [
-      rawPost({ urn: "urn:li:activity:1" }),
-      rawPost({ urn: "urn:li:activity:2" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),
     ];
     let urnIdx = 0;
 

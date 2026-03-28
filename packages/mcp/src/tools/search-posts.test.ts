@@ -17,7 +17,6 @@ const MOCK_RESULTS: SearchPostsOutput = {
   query: "AI agents",
   posts: [
     {
-      urn: "",
       url: "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678/",
       authorName: "Jane Smith",
       authorHeadline: "CEO at Acme Corp",

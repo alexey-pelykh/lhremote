@@ -15,7 +15,6 @@ import { createMockServer } from "./testing/mock-server.js";
 const MOCK_RESULT = {
   posts: [
     {
-      urn: "urn:li:activity:123",
       url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
       authorName: "Alice Smith",
       authorPublicId: null,
