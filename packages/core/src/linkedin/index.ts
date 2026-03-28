@@ -3,13 +3,19 @@
 
 export {
   click,
+  getElementCenter,
   hover,
+  humanizedClick,
+  humanizedHover,
+  humanizedScrollY,
   scrollTo,
   typeText,
   type TypeMethod,
   waitForElement,
   type WaitForElementOptions,
 } from "./dom-automation.js";
+
+export { HumanizedMouse } from "./humanized-mouse.js";
 
 export {
   COMMENT_INPUT,

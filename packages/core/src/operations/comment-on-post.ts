@@ -5,12 +5,13 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import { ActionBudgetRepository } from "../db/index.js";
-import { waitForElement, scrollTo, click, typeText } from "../linkedin/dom-automation.js";
+import { waitForElement, scrollTo, humanizedClick, typeText } from "../linkedin/dom-automation.js";
+import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { COMMENT_INPUT, COMMENT_SUBMIT_BUTTON } from "../linkedin/selectors.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { BudgetExceededError } from "../services/errors.js";
 import { withDatabase } from "../services/instance-context.js";
-import { delay } from "../utils/delay.js";
+import { randomDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 
 /** Pattern matching supported LinkedIn post URL formats. */
@@ -20,12 +21,6 @@ const LINKEDIN_POST_URL_RE =
 /** Limit type ID for PostComment in the LinkedHelper budget system. */
 const POST_COMMENT_LIMIT_TYPE_ID = 19;
 
-/** Delay after clicking the comment input to let the editor expand (ms). */
-const EDITOR_EXPAND_DELAY = 500;
-
-/** Delay after clicking submit to let the comment post (ms). */
-const POST_SUBMIT_DELAY = 2000;
-
 /**
  * Input for the comment-on-post operation.
  */
@@ -34,6 +29,8 @@ export interface CommentOnPostInput extends ConnectionOptions {
   readonly postUrl: string;
   /** Comment text to post. */
   readonly text: string;
+  /** Optional humanized mouse for natural cursor movement and clicks. */
+  readonly mouse?: HumanizedMouse | null | undefined;
 }
 
 /**
@@ -135,21 +132,23 @@ export async function commentOnPost(
       await client.send("Page.disable").catch(() => {});
     }
 
+    const mouse = input.mouse;
+
     // Wait for the comment input and interact
     await waitForElement(client, COMMENT_INPUT);
     await scrollTo(client, COMMENT_INPUT);
-    await click(client, COMMENT_INPUT);
-    await delay(EDITOR_EXPAND_DELAY);
+    await humanizedClick(client, COMMENT_INPUT, mouse);
+    await randomDelay(400, 700);
 
     // Type comment text character-by-character
     await typeText(client, COMMENT_INPUT, input.text);
 
     // Wait for submit button and click
     await waitForElement(client, COMMENT_SUBMIT_BUTTON);
-    await click(client, COMMENT_SUBMIT_BUTTON);
+    await humanizedClick(client, COMMENT_SUBMIT_BUTTON, mouse);
 
     // Brief wait for the comment to post
-    await delay(POST_SUBMIT_DELAY);
+    await randomDelay(1_500, 2_500);
 
     return {
       success: true as const,

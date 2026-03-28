@@ -7,6 +7,7 @@ import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
+import { randomDelay } from "../utils/delay.js";
 import {
   type RawDomPost,
   mapRawPosts,
@@ -389,7 +390,7 @@ export async function searchPosts(
       // Scroll to load more
       if (scroll < maxScrollAttempts) {
         await scrollFeed(client);
-        await delay(1500);
+        await randomDelay(1_200, 1_800);
       }
     }
 
@@ -434,7 +435,7 @@ export async function searchPosts(
         })()`);
         if (!clicked) continue;
 
-        await delay(700);
+        await randomDelay(500, 900);
 
         // Click "Copy link to post" menu item
         await client.evaluate(`(() => {
@@ -446,7 +447,7 @@ export async function searchPosts(
           }
         })()`);
 
-        await delay(500);
+        await randomDelay(400, 700);
 
         // Read captured URL
         const postUrl =
