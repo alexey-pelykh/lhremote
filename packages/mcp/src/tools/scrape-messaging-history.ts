@@ -18,11 +18,23 @@ export function registerScrapeMessagingHistory(server: McpServer): void {
         .array(z.number().int().positive())
         .nonempty()
         .describe("Person IDs whose messaging history should be scraped"),
+      startRunner: z
+        .boolean()
+        .optional()
+        .describe(
+          "Start the campaign runner before execution and stop it after (needed when runner is not already active)",
+        ),
+      pauseOthers: z
+        .boolean()
+        .optional()
+        .describe(
+          "Pause all other campaigns during execution to ensure the runner is available, then restore them",
+        ),
       ...cdpConnectionSchema,
     },
-    async ({ personIds, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personIds, startRunner, pauseOthers, cdpPort, cdpHost, allowRemote }) => {
       try {
-        const result = await scrapeMessagingHistory({ personIds, cdpPort, cdpHost, allowRemote });
+        const result = await scrapeMessagingHistory({ personIds, startRunner, pauseOthers, cdpPort, cdpHost, allowRemote });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to scrape messaging history");

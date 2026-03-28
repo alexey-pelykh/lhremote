@@ -104,7 +104,7 @@ describe("registerCheckReplies", () => {
     });
 
     const handler = getHandler("check-replies");
-    const result = await handler({ cdpPort: 9222 });
+    const result = await handler({ personIds: [456, 790], cdpPort: 9222 });
 
     expect(result).toEqual({
       content: [
@@ -135,10 +135,10 @@ describe("registerCheckReplies", () => {
     });
 
     const handler = getHandler("check-replies");
-    await handler({ since: "2025-01-14T00:00:00Z", cdpPort: 9222 });
+    await handler({ personIds: [456], since: "2025-01-14T00:00:00Z", cdpPort: 9222 });
 
     expect(checkReplies).toHaveBeenCalledWith(
-      expect.objectContaining({ since: "2025-01-14T00:00:00Z", cdpPort: 9222 }),
+      expect.objectContaining({ personIds: [456], since: "2025-01-14T00:00:00Z", cdpPort: 9222 }),
     );
   });
 
@@ -153,10 +153,10 @@ describe("registerCheckReplies", () => {
     });
 
     const handler = getHandler("check-replies");
-    await handler({ cdpPort: 9222 });
+    await handler({ personIds: [456], cdpPort: 9222 });
 
     expect(checkReplies).toHaveBeenCalledWith(
-      expect.objectContaining({ cdpPort: 9222 }),
+      expect.objectContaining({ personIds: [456], cdpPort: 9222 }),
     );
   });
 
@@ -171,7 +171,7 @@ describe("registerCheckReplies", () => {
     });
 
     const handler = getHandler("check-replies");
-    const result = await handler({ cdpPort: 9222 });
+    const result = await handler({ personIds: [456], cdpPort: 9222 });
 
     expect(result).toEqual({
       content: [
@@ -200,7 +200,7 @@ describe("registerCheckReplies", () => {
     );
 
     const handler = getHandler("check-replies");
-    const result = await handler({ cdpPort: 9222 });
+    const result = await handler({ personIds: [456], cdpPort: 9222 });
 
     expect(result).toEqual({
       isError: true,
@@ -217,7 +217,7 @@ describe("registerCheckReplies", () => {
     );
 
     const handler = getHandler("check-replies");
-    const result = await handler({ cdpPort: 9222 });
+    const result = await handler({ personIds: [456], cdpPort: 9222 });
 
     expect(result).toEqual({
       isError: true,
@@ -239,7 +239,7 @@ describe("registerCheckReplies", () => {
     );
 
     const handler = getHandler("check-replies");
-    const result = await handler({ cdpPort: 9222 });
+    const result = await handler({ personIds: [456], cdpPort: 9222 });
 
     expect(result).toEqual({
       isError: true,
@@ -255,7 +255,7 @@ describe("registerCheckReplies", () => {
   describeInfrastructureErrors(
     registerCheckReplies,
     "check-replies",
-    () => ({ cdpPort: 9222 }),
+    () => ({ personIds: [456], cdpPort: 9222 }),
     (error) => vi.mocked(checkReplies).mockRejectedValue(error),
     "Failed to check replies",
   );

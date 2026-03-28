@@ -614,6 +614,8 @@ export function createProgram(): Command {
       "Scrape messaging history from LinkedIn into the local database",
     )
     .option("--person-id <id>", "Person ID to scrape (repeatable, at least one required)", collectPositiveInt, [])
+    .option("--start-runner", "Start the campaign runner before execution and stop it after")
+    .option("--pause-others", "Pause all other campaigns during execution, then restore them")
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
@@ -637,7 +639,10 @@ export function createProgram(): Command {
   program
     .command("check-replies")
     .description("Check for new message replies from LinkedIn")
+    .option("--person-id <id>", "Person ID to check (repeatable, at least one required)", collectPositiveInt, [])
     .option("--since <timestamp>", "Only show replies after this ISO timestamp")
+    .option("--start-runner", "Start the campaign runner before execution and stop it after")
+    .option("--pause-others", "Pause all other campaigns during execution, then restore them")
     .option("--cdp-port <port>", "CDP debugging port", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")

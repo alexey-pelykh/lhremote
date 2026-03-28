@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import {
   describeE2E,
   forceStopInstance,
+  getE2EPersonId,
   launchApp,
   quitApp,
   resolveAccountId,
@@ -72,6 +73,9 @@ describeE2E("check-replies", () => {
         .mockReturnValue(true);
 
       await handleCheckReplies({
+        personId: [getE2EPersonId()],
+        startRunner: true,
+        pauseOthers: true,
         cdpPort: port,
         json: true,
       });
@@ -87,7 +91,7 @@ describeE2E("check-replies", () => {
       expect(Array.isArray(parsed.newMessages)).toBe(true);
       expect(typeof parsed.totalNew).toBe("number");
       expect(parsed.checkedAt).toBeTruthy();
-    }, 180_000);
+    }, 300_000);
 
     it("prints human-friendly output", async () => {
       const stdoutSpy = vi
@@ -95,6 +99,9 @@ describeE2E("check-replies", () => {
         .mockReturnValue(true);
 
       await handleCheckReplies({
+        personId: [getE2EPersonId()],
+        startRunner: true,
+        pauseOthers: true,
         cdpPort: port,
       });
 
@@ -105,7 +112,7 @@ describeE2E("check-replies", () => {
         .map((call) => String(call[0]))
         .join("");
       expect(output).toMatch(/new message|No new messages/);
-    }, 180_000);
+    }, 300_000);
   });
 
   describe("MCP tool", () => {
@@ -115,6 +122,9 @@ describeE2E("check-replies", () => {
 
       const handler = getHandler("check-replies");
       const result = (await handler({
+        personIds: [getE2EPersonId()],
+        startRunner: true,
+        pauseOthers: true,
         cdpPort: port,
       })) as {
         isError?: boolean;
@@ -131,6 +141,6 @@ describeE2E("check-replies", () => {
       expect(Array.isArray(parsed.newMessages)).toBe(true);
       expect(typeof parsed.totalNew).toBe("number");
       expect(parsed.checkedAt).toBeTruthy();
-    }, 180_000);
+    }, 300_000);
   });
 });

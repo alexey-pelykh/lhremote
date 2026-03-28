@@ -228,7 +228,7 @@ describe("scrapeMessagingHistory", () => {
       9222,
       1,
       expect.any(Function),
-      { instanceTimeout: 300_000 },
+      { instanceTimeout: 300_000, db: { readOnly: false } },
     );
   });
 

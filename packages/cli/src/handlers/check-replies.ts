@@ -12,18 +12,30 @@ import {
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | check-replies} CLI command. */
 export async function handleCheckReplies(options: {
+  personId: number[];
   since?: string;
+  startRunner?: boolean;
+  pauseOthers?: boolean;
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
   json?: boolean;
 }): Promise<void> {
+  if (options.personId.length === 0) {
+    process.stderr.write("Error: at least one --person-id is required.\n");
+    process.exitCode = 1;
+    return;
+  }
+
   process.stderr.write("Checking for new replies...\n");
 
   let result: CheckRepliesOutput;
   try {
     result = await checkReplies({
+      personIds: options.personId,
       since: options.since,
+      startRunner: options.startRunner,
+      pauseOthers: options.pauseOthers,
       cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
