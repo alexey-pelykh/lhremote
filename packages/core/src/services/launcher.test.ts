@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   LinkedHelperNotRunningError,
-  NodeIntegrationUnavailableError,
   ServiceError,
   StartInstanceError,
   WrongPortError,
@@ -63,10 +62,14 @@ describe("LauncherService", () => {
     mockConnect.mockResolvedValue(undefined);
     nextEvaluateResult = undefined;
 
-    // Default: require is available in the default context.
-    // The probe call returns true; all other calls return nextEvaluateResult.
+    // Default: require is available in the default context, and the
+    // launcher validation (electronStore probe) succeeds.
+    // All other calls return nextEvaluateResult.
     mockEvaluate.mockImplementation((expression: string) => {
       if (expression === "typeof require === 'function'") {
+        return Promise.resolve(true);
+      }
+      if (expression.includes("electronStore?.get")) {
         return Promise.resolve(true);
       }
       return Promise.resolve(nextEvaluateResult);
@@ -104,6 +107,21 @@ describe("LauncherService", () => {
 
       await expect(service.connect()).rejects.toThrow(TypeError);
     });
+
+    it("throws WrongPortError when electronStore validation fails", async () => {
+      mockEvaluate.mockImplementation((expression: string) => {
+        if (expression === "typeof require === 'function'") {
+          return Promise.resolve(true);
+        }
+        if (expression.includes("electronStore?.get")) {
+          return Promise.resolve(false);
+        }
+        return Promise.resolve(undefined);
+      });
+
+      await expect(service.connect()).rejects.toThrow(WrongPortError);
+      expect(mockDisconnect).toHaveBeenCalled();
+    });
   });
 
   describe("connect with context fallback", () => {
@@ -115,6 +133,9 @@ describe("LauncherService", () => {
           // First probe (default context): no require
           // Second probe (preload context id=2): has require
           return Promise.resolve(probeCount >= 2 && contextId === 2);
+        }
+        if (expression.includes("electronStore?.get")) {
+          return Promise.resolve(true);
         }
         return Promise.resolve(undefined);
       });
@@ -134,7 +155,7 @@ describe("LauncherService", () => {
       expect(mockSend).toHaveBeenCalledWith("Runtime.disable");
     });
 
-    it("throws NodeIntegrationUnavailableError when no context has require", async () => {
+    it("throws WrongPortError when no context has require (instance port)", async () => {
       mockEvaluate.mockImplementation((expression: string) => {
         if (expression === "typeof require === 'function'") {
           return Promise.resolve(false);
@@ -150,9 +171,8 @@ describe("LauncherService", () => {
       });
       mockSend.mockResolvedValue(undefined);
 
-      await expect(service.connect()).rejects.toThrow(
-        NodeIntegrationUnavailableError,
-      );
+      await expect(service.connect()).rejects.toThrow(WrongPortError);
+      expect(mockDisconnect).toHaveBeenCalled();
     });
 
     it("uses preload context for subsequent evaluations", async () => {
@@ -163,6 +183,9 @@ describe("LauncherService", () => {
         if (expression === "typeof require === 'function'") {
           probeCount++;
           return Promise.resolve(probeCount >= 2 && contextId === PRELOAD_CONTEXT_ID);
+        }
+        if (expression.includes("electronStore?.get")) {
+          return Promise.resolve(true);
         }
         return Promise.resolve(nextEvaluateResult);
       });

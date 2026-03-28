@@ -7,7 +7,7 @@ export {
   discoverInstancePort,
   killInstanceProcesses,
 } from "./instance-discovery.js";
-export { findApp, type DiscoveredApp } from "./app-discovery.js";
+export { findApp, type AppRole, type DiscoveredApp } from "./app-discovery.js";
 export {
   CDPConnectionError,
   CDPError,

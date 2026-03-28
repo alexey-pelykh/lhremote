@@ -45,7 +45,7 @@ describe("registerFindApp", () => {
     registerFindApp(server);
 
     const apps: DiscoveredApp[] = [
-      { pid: 1234, cdpPort: 9222, connectable: true },
+      { pid: 1234, cdpPort: 9222, connectable: true, role: "launcher" as const },
     ];
     mockedFindApp.mockResolvedValue(apps);
 

@@ -285,8 +285,8 @@ describe("AppService", () => {
 
     it("kills all processes when connectable app exists", async () => {
       mockedFindApp.mockResolvedValue([
-        { pid: 111, cdpPort: 9222, connectable: true },
-        { pid: 222, cdpPort: null, connectable: false },
+        { pid: 111, cdpPort: 9222, connectable: true, role: "launcher" as const },
+        { pid: 222, cdpPort: null, connectable: false, role: "instance" as const },
       ]);
       mockedAccessSync.mockReturnValue(undefined);
       mockedGetPort.mockResolvedValue(54321);
@@ -305,7 +305,7 @@ describe("AppService", () => {
 
     it("kills unreachable processes before relaunching", async () => {
       mockedFindApp.mockResolvedValue([
-        { pid: 333, cdpPort: null, connectable: false },
+        { pid: 333, cdpPort: null, connectable: false, role: "launcher" as const },
       ]);
       mockedAccessSync.mockReturnValue(undefined);
       mockedGetPort.mockResolvedValue(54321);
@@ -322,7 +322,7 @@ describe("AppService", () => {
 
     it("kills processes even when explicit port is already running", async () => {
       mockedFindApp.mockResolvedValue([
-        { pid: 444, cdpPort: 9222, connectable: true },
+        { pid: 444, cdpPort: 9222, connectable: true, role: "launcher" as const },
       ]);
       mockedAccessSync.mockReturnValue(undefined);
 
@@ -402,7 +402,7 @@ describe("AppService", () => {
 
     it("does not close an externally-detected instance", async () => {
       mockedFindApp.mockResolvedValue([
-        { pid: 555, cdpPort: 9222, connectable: true },
+        { pid: 555, cdpPort: 9222, connectable: true, role: "launcher" as const },
       ]);
 
       const service = new AppService(undefined, FAST_OPTIONS);
