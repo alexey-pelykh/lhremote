@@ -10,6 +10,7 @@ import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { delay as utilsDelay, randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
+import { extractPostUrn as parsePostUrn } from "./get-post-stats.js";
 
 /**
  * Input for the get-feed operation.
@@ -69,8 +70,8 @@ export interface RawDomPost {
  * relies on semantic attributes and structural heuristics.
  *
  * Post URNs are NOT available in the DOM.  They are extracted in a
- * separate phase by opening each post's three-dot menu and reading
- * the "Embed this post" link's `targetUrn` query parameter.
+ * separate phase by opening each post's three-dot menu, clicking
+ * "Copy link to post", and deriving the URN from the captured URL.
  */
 const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   const posts = [];
@@ -204,7 +205,7 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
 export { SCRAPE_FEED_POSTS_SCRIPT as SCRAPE_FEED_SCRIPT };
 
 // ---------------------------------------------------------------------------
-// URN extraction via three-dot menu → Embed link
+// URL capture via three-dot menu → "Copy link to post"
 // ---------------------------------------------------------------------------
 
 /** CSS selector for feed post menu buttons. */
@@ -212,19 +213,23 @@ const FEED_MENU_BUTTON_SELECTOR =
   '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]';
 
 /**
- * Extract the post URN for a single feed item by opening its three-dot
- * menu and reading the `targetUrn` parameter from the "Embed this post"
- * link.
+ * Capture the post URL for a single feed item by opening its three-dot
+ * menu and clicking "Copy link to post".
  *
- * @returns The URN string (e.g. `urn:li:share:123`) or `null` if the
- *   menu does not contain an embed link (e.g. ad posts).
+ * Requires the clipboard interceptor to be installed beforehand via
+ * {@link installClipboardInterceptor}.
+ *
+ * @returns The post URL (query params stripped) or `null` if capture failed.
  */
-async function extractPostUrn(
+async function capturePostUrl(
   client: CDPClient,
   postIndex: number,
   mouse?: HumanizedMouse | null,
 ): Promise<string | null> {
   await maybeHesitate(); // Probabilistic pause before menu interaction
+
+  // Reset clipboard capture
+  await client.evaluate(`window.__capturedClipboard = null;`);
 
   // Scroll the menu button into view (humanized when mouse available)
   await humanizedScrollToByIndex(client, FEED_MENU_BUTTON_SELECTOR, postIndex, mouse);
@@ -234,7 +239,7 @@ async function extractPostUrn(
     const btns = document.querySelectorAll(
       ${JSON.stringify(FEED_MENU_BUTTON_SELECTOR)}
     );
-    const btn = btns[${String(postIndex)}];
+    const btn = btns[${postIndex}];
     if (!btn) return false;
     btn.click();
     return true;
@@ -244,26 +249,40 @@ async function extractPostUrn(
 
   await randomDelay(500, 900);
 
-  // Read the embed link's targetUrn from the dropdown
-  const urn = await client.evaluate<string | null>(`(() => {
-    for (const a of document.querySelectorAll('a[href*="embed-modal"]')) {
-      const rect = a.getBoundingClientRect();
-      if (rect.width > 0 || rect.height > 0) {
-        try {
-          const url = new URL(a.href);
-          return decodeURIComponent(url.searchParams.get('targetUrn') || '');
-        } catch { return null; }
+  // Click "Copy link to post" menu item
+  await client.evaluate(`(() => {
+    for (const el of document.querySelectorAll('[role="menuitem"]')) {
+      if (el.textContent.trim() === 'Copy link to post') {
+        el.click();
+        return;
       }
     }
-    return null;
   })()`);
 
-  // Close the dropdown with Escape
-  await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
-  await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
-  await randomDelay(200, 400);
+  await randomDelay(400, 700);
 
-  return urn || null;
+  // Read captured URL
+  const postUrl =
+    await client.evaluate<string | null>(`window.__capturedClipboard`);
+
+  if (!postUrl) return null;
+
+  // Strip query parameters
+  return postUrl.split("?")[0] ?? postUrl;
+}
+
+/**
+ * Install a clipboard interceptor that captures `navigator.clipboard.writeText`
+ * calls into `window.__capturedClipboard`.  Required because Electron's
+ * clipboard API is broken (readText returns `{}`).
+ */
+async function installClipboardInterceptor(client: CDPClient): Promise<void> {
+  await client.evaluate(
+    `navigator.clipboard.writeText = function(text) {
+      window.__capturedClipboard = text;
+      return Promise.resolve();
+    };`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -494,17 +513,24 @@ export async function getFeed(
       }
     }
 
-    // --- URN extraction phase ---
-    // Open each post's three-dot menu and read the embed link's targetUrn.
-    // This populates the urn/url fields that the scrape script left null.
+    // --- URL extraction phase ---
+    // Open each post's three-dot menu, click "Copy link to post", and
+    // derive the URN from the captured URL.  This populates the urn/url
+    // fields that the scrape script left null.
+    await installClipboardInterceptor(client);
+
     for (let i = 0; i < allPosts.length; i++) {
       const post = allPosts[i];
       if (!post) continue;
       if (i > 0) await randomDelay(300, 800); // Inter-post delay
-      const urn = await extractPostUrn(client, i, mouse);
-      if (urn) {
-        post.urn = urn;
-        post.url = buildPostUrl(urn);
+      const url = await capturePostUrl(client, i, mouse);
+      if (url) {
+        post.url = url;
+        try {
+          post.urn = parsePostUrn(url);
+        } catch {
+          // URL format not recognized — keep url but leave urn null
+        }
       }
     }
 

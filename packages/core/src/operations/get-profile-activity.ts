@@ -15,8 +15,8 @@ import {
   mapRawPosts,
   scrollFeed,
   delay,
-  buildPostUrl,
 } from "./get-feed.js";
+import { extractPostUrn as parsePostUrn } from "./get-post-stats.js";
 
 /**
  * Input for the get-profile-activity operation.
@@ -228,17 +228,22 @@ const ACTIVITY_MENU_BUTTON_SELECTOR =
   'div[role="article"] button[aria-label^="Open control menu"]';
 
 /**
- * Extract the post URN for a single activity post by opening its
- * three-dot menu and reading the embed link's `targetUrn`.
+ * Capture the post URL for a single activity post by opening its
+ * three-dot menu and clicking "Copy link to post".
  *
- * Uses `div[role="article"]` as the post selector (activity page).
+ * Requires the clipboard interceptor to be installed beforehand.
+ *
+ * @returns The post URL (query params stripped) or `null` if capture failed.
  */
-async function extractActivityPostUrn(
+async function captureActivityPostUrl(
   client: CDPClient,
   postIndex: number,
   mouse?: HumanizedMouse | null,
 ): Promise<string | null> {
   await maybeHesitate(); // Probabilistic pause before menu interaction
+
+  // Reset clipboard capture
+  await client.evaluate(`window.__capturedClipboard = null;`);
 
   // Scroll the menu button into view (humanized when mouse available)
   await humanizedScrollToByIndex(client, ACTIVITY_MENU_BUTTON_SELECTOR, postIndex, mouse);
@@ -248,7 +253,7 @@ async function extractActivityPostUrn(
     const btns = document.querySelectorAll(
       ${JSON.stringify(ACTIVITY_MENU_BUTTON_SELECTOR)}
     );
-    const btn = btns[${String(postIndex)}];
+    const btn = btns[${postIndex}];
     if (!btn) return false;
     btn.click();
     return true;
@@ -258,25 +263,26 @@ async function extractActivityPostUrn(
 
   await randomDelay(500, 900);
 
-  const urn = await client.evaluate<string | null>(`(() => {
-    for (const a of document.querySelectorAll('a[href*="embed-modal"]')) {
-      const rect = a.getBoundingClientRect();
-      if (rect.width > 0 || rect.height > 0) {
-        try {
-          const url = new URL(a.href);
-          return decodeURIComponent(url.searchParams.get('targetUrn') || '');
-        } catch { return null; }
+  // Click "Copy link to post" menu item
+  await client.evaluate(`(() => {
+    for (const el of document.querySelectorAll('[role="menuitem"]')) {
+      if (el.textContent.trim() === 'Copy link to post') {
+        el.click();
+        return;
       }
     }
-    return null;
   })()`);
 
-  // Close the dropdown with Escape
-  await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
-  await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
-  await randomDelay(200, 400);
+  await randomDelay(400, 700);
 
-  return urn || null;
+  // Read captured URL
+  const postUrl =
+    await client.evaluate<string | null>(`window.__capturedClipboard`);
+
+  if (!postUrl) return null;
+
+  // Strip query parameters
+  return postUrl.split("?")[0] ?? postUrl;
 }
 
 // ---------------------------------------------------------------------------
@@ -379,15 +385,27 @@ export async function getProfileActivity(
       }
     }
 
-    // --- URN extraction phase ---
+    // --- URL extraction phase ---
+    // Install clipboard interceptor (Electron's clipboard API is broken)
+    await client.evaluate(
+      `navigator.clipboard.writeText = function(text) {
+        window.__capturedClipboard = text;
+        return Promise.resolve();
+      };`,
+    );
+
     for (let i = 0; i < allPosts.length; i++) {
       const post = allPosts[i];
       if (!post) continue;
       if (i > 0) await randomDelay(300, 800); // Inter-post delay
-      const urn = await extractActivityPostUrn(client, i, mouse);
-      if (urn) {
-        post.urn = urn;
-        post.url = buildPostUrl(urn);
+      const url = await captureActivityPostUrl(client, i, mouse);
+      if (url) {
+        post.url = url;
+        try {
+          post.urn = parsePostUrn(url);
+        } catch {
+          // URL format not recognized — keep url but leave urn null
+        }
       }
     }
 

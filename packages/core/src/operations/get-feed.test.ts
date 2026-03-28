@@ -33,9 +33,10 @@ const CDP_PORT = 9222;
  * Build a minimal raw DOM post object.
  */
 function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
+  const urn = overrides.urn ?? "urn:li:activity:123";
   return {
-    urn: "urn:li:activity:123",
-    url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+    urn,
+    url: `https://www.linkedin.com/feed/update/${urn}/`,
     authorName: null,
     authorHeadline: null,
     authorProfileUrl: null,
@@ -53,10 +54,12 @@ function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
  * Create a script-aware evaluate mock that handles the getFeed call sequence:
  * 1. waitForFeedLoad → truthy when posts exist
  * 2. SCRAPE_FEED_POSTS_SCRIPT → posts array (may repeat on scroll)
- * 3. Per-post URN extraction: scroll → void, menu click → true, embed read → urn string
+ * 3. Clipboard interceptor install → void
+ * 4. Per-post URL capture: reset → void, scroll → void, menu click → true,
+ *    copy-link click → void, clipboard read → url string
  */
 function createEvaluateMock(scrapedPosts: RawDomPost[]) {
-  let urnIdx = 0;
+  let urlIdx = 0;
   return vi.fn().mockImplementation((script: string) => {
     const s = String(script);
     // Order matters: check most specific patterns first
@@ -64,11 +67,23 @@ function createEvaluateMock(scrapedPosts: RawDomPost[]) {
     if (s.includes("parseCount")) {
       return Promise.resolve(scrapedPosts);
     }
-    // Embed URN read: contains embed-modal
-    if (s.includes("embed-modal")) {
-      const urn = scrapedPosts[urnIdx]?.urn ?? null;
-      urnIdx++;
-      return Promise.resolve(urn);
+    // Clipboard interceptor install
+    if (s.includes("navigator.clipboard.writeText")) {
+      return Promise.resolve(undefined);
+    }
+    // Clipboard reset
+    if (s.includes("__capturedClipboard = null")) {
+      return Promise.resolve(undefined);
+    }
+    // "Copy link to post" menu item click
+    if (s.includes("Copy link to post")) {
+      return Promise.resolve(undefined);
+    }
+    // Read captured clipboard URL (exact match — not the reset)
+    if (s === "window.__capturedClipboard") {
+      const url = scrapedPosts[urlIdx]?.url ?? null;
+      urlIdx++;
+      return Promise.resolve(url);
     }
     // Menu button click (split from scroll): contains btn.click()
     if (s.includes("btn.click()")) {
