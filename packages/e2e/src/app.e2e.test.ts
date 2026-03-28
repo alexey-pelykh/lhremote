@@ -9,12 +9,14 @@ import {
   DatabaseClient,
   checkStatus,
   discoverDatabase,
+  discoverInstancePort,
   discoverTargets,
   findApp,
   killInstanceProcesses,
   LauncherService,
   startInstanceWithRecovery,
   waitForInstanceShutdown,
+  WrongPortError,
 } from "@lhremote/core";
 import type {
   Account,
@@ -153,6 +155,14 @@ describeE2E("App lifecycle", () => {
       const match = apps.find((a) => a.cdpPort === port);
       assertDefined(match, `Expected findApp to discover port ${String(port)}`);
       expect(match.connectable).toBe(true);
+    });
+
+    it("classifies launcher process with role 'launcher'", async () => {
+      const apps = await findApp();
+
+      const match = apps.find((a) => a.cdpPort === port);
+      assertDefined(match, `Expected findApp to discover port ${String(port)}`);
+      expect(match.role).toBe("launcher");
     });
   });
 
@@ -389,6 +399,42 @@ describeE2E("App lifecycle", () => {
       expect(result.status).toBe("already_running");
       expect(result).toHaveProperty("port");
       expect((result as { port: number }).port).toBeGreaterThan(0);
+    }, 60_000);
+
+    it("findApp classifies launcher and instance processes", async () => {
+      assertDefined(accountId, "No accounts configured in LinkedHelper");
+
+      // Ensure instance is running (may already be started by prior test)
+      await startInstanceWithRecovery(launcher, accountId, port);
+
+      const apps = await findApp();
+
+      const launchers = apps.filter((a) => a.role === "launcher");
+      const instances = apps.filter((a) => a.role === "instance");
+
+      expect(launchers.length).toBeGreaterThanOrEqual(1);
+      expect(instances.length).toBeGreaterThanOrEqual(1);
+
+      // The launcher should be the one on our known port
+      const launcherMatch = launchers.find((a) => a.cdpPort === port);
+      assertDefined(launcherMatch, "Launcher not found on expected port");
+      expect(launcherMatch.connectable).toBe(true);
+    }, 60_000);
+
+    it("LauncherService.connect rejects instance CDP port with WrongPortError", async () => {
+      assertDefined(accountId, "No accounts configured in LinkedHelper");
+
+      // Ensure instance is running
+      await startInstanceWithRecovery(launcher, accountId, port);
+
+      const instancePort = await discoverInstancePort(port);
+      if (instancePort === null) {
+        console.log("  skipping: instance CDP port not discoverable");
+        return;
+      }
+
+      const wrongLauncher = new LauncherService(instancePort);
+      await expect(wrongLauncher.connect()).rejects.toThrow(WrongPortError);
     }, 60_000);
 
     it("instance can be stopped after start", async () => {
@@ -1038,3 +1084,4 @@ describeE2E("App lifecycle", () => {
     }, 15_000);
   });
 });
+
