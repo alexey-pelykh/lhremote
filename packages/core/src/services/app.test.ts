@@ -5,7 +5,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { accessSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AppLaunchError, AppNotFoundError } from "./errors.js";
+import { AppLaunchError, AppNotFoundError, LinkedHelperUnreachableError } from "./errors.js";
 import { AppService } from "./app.js";
 
 vi.mock("node:child_process", () => ({
@@ -243,6 +243,18 @@ describe("AppService", () => {
       // spawn must not be called again — app is already running
       expect(mockedSpawn).not.toHaveBeenCalled();
       expect(service.cdpPort).toBe(54321);
+    });
+
+    it("throws LinkedHelperUnreachableError when only instance is connectable", async () => {
+      mockedFindApp.mockResolvedValue([
+        { pid: 111, cdpPort: 50982, connectable: false, role: "launcher" as const },
+        { pid: 222, cdpPort: 51011, connectable: true, role: "instance" as const },
+      ]);
+
+      const service = new AppService(undefined, FAST_OPTIONS);
+
+      await expect(service.launch()).rejects.toThrow(LinkedHelperUnreachableError);
+      expect(mockedSpawn).not.toHaveBeenCalled();
     });
 
     it("throws AppLaunchError on spawn error", async () => {

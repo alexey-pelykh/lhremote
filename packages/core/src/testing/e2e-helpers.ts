@@ -73,12 +73,14 @@ export async function launchApp(options?: {
     await delay(250);
   }
 
-  // Phase 2: Wait for full launcher readiness (WebSocket + renderer loaded)
+  // Phase 2: Wait for full launcher readiness (WebSocket + renderer loaded).
+  // We only verify that LauncherService.connect() succeeds (which validates
+  // electronStore access).  listAccounts() has its own internal cache
+  // polling, so calling it here would double the timeout budget.
   while (Date.now() < deadline) {
     const launcher = new LauncherService(port);
     try {
       await launcher.connect();
-      await launcher.listAccounts();
       launcher.disconnect();
       return { app, port };
     } catch {

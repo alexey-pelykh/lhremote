@@ -82,10 +82,14 @@ export class AppService {
     const existingApps = await findApp();
     if (existingApps.length > 0) {
       if (!this.force) {
-        const connectable = existingApps.find((a) => a.connectable);
-        if (connectable) {
-          // Already running with CDP — use that port
-          this.assignedPort = connectable.cdpPort;
+        // Only reuse a launcher process — connecting to an instance port
+        // as a launcher yields WrongPortError because the instance lacks
+        // the electronStore / mainWindow globals.
+        const connectableLauncher = existingApps.find(
+          (a) => a.connectable && a.role === "launcher",
+        );
+        if (connectableLauncher) {
+          this.assignedPort = connectableLauncher.cdpPort;
           this.detectedExternal = true;
           return;
         }

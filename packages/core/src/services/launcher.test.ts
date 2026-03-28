@@ -342,11 +342,24 @@ describe("LauncherService", () => {
       await expect(service.listAccounts()).rejects.toThrow(CDPEvaluationError);
     });
 
-    it("throws WrongPortError when electronStore is not available", async () => {
+    it("throws WrongPortError when webpack is not available", async () => {
       await service.connect();
       nextEvaluateResult = null;
 
       await expect(service.listAccounts()).rejects.toThrow(WrongPortError);
+    });
+
+    it("passes awaitPromise=true for the async expression", async () => {
+      await service.connect();
+      nextEvaluateResult = [];
+
+      await service.listAccounts();
+
+      const listCall = mockEvaluate.mock.calls.find(
+        (c) => typeof c[0] === "string" && c[0].includes("extendedLinkedInAccountsBS"),
+      );
+      expect(listCall).toBeDefined();
+      expect(listCall?.[1]).toBe(true);
     });
   });
 });
