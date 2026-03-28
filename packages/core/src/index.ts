@@ -312,6 +312,7 @@ export {
   // Post analytics
   getPostStats,
   extractPostUrn,
+  resolvePostDetailUrl,
   type GetPostStatsInput,
   type GetPostStatsOutput,
   getPostEngagers,

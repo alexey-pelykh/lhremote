@@ -49,6 +49,16 @@ export function extractPostUrn(input: string): string {
   throw new Error(`Cannot extract post URN from: ${input}`);
 }
 
+/**
+ * Resolve a post URL or URN into a navigable LinkedIn post detail URL.
+ * Accepts full LinkedIn URLs (returned as-is) or raw URNs (converted to URL).
+ */
+export function resolvePostDetailUrl(input: string): string {
+  if (input.startsWith("https://")) return input;
+  if (input.startsWith("urn:li:")) return `https://www.linkedin.com/feed/update/${input}/`;
+  throw new Error(`Invalid post identifier: ${input}`);
+}
+
 // ---------------------------------------------------------------------------
 // Raw shape returned by the in-page scraping script
 // ---------------------------------------------------------------------------
@@ -143,7 +153,15 @@ export async function getPostStats(
   const cdpHost = input.cdpHost ?? "127.0.0.1";
   const allowRemote = input.allowRemote ?? false;
 
-  const postUrn = extractPostUrn(input.postUrl);
+  const postDetailUrl = resolvePostDetailUrl(input.postUrl);
+
+  // Keep using extractPostUrn for the output postUrn field
+  let postUrn: string;
+  try {
+    postUrn = extractPostUrn(input.postUrl);
+  } catch {
+    postUrn = input.postUrl;
+  }
 
   // Enforce loopback guard
   if (!allowRemote && cdpHost !== "127.0.0.1" && cdpHost !== "localhost") {
@@ -173,7 +191,6 @@ export async function getPostStats(
     await navigateAwayIf(client, "/feed/update/");
 
     // Navigate to the post detail page
-    const postDetailUrl = `https://www.linkedin.com/feed/update/${postUrn}/`;
     await client.navigate(postDetailUrl);
 
     // Wait for the post content to render

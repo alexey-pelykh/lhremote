@@ -43,7 +43,7 @@ export async function handleGetProfileActivity(
     process.stdout.write(`Profile: ${result.profilePublicId}\n\n`);
 
     for (const post of result.posts) {
-      process.stdout.write(`  ${post.urn}\n`);
+      process.stdout.write(`  ${post.url}\n`);
       if (post.authorName) {
         process.stdout.write(`    Author:    ${post.authorName}\n`);
       }

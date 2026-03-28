@@ -41,7 +41,6 @@ const CDP_PORT = 9222;
 
 function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
   return {
-    urn: null,
     url: null,
     authorName: "Jane Doe",
     authorHeadline: "Engineer at Acme",
@@ -232,7 +231,7 @@ describe("getProfileActivity", () => {
     expect(evaluate).toHaveBeenCalled();
   });
 
-  it("extracts URNs via three-dot menu for each post", async () => {
+  it("extracts URLs via three-dot menu for each post", async () => {
     const posts = [rawPost(), rawPost({ authorName: "Bob" })];
     setupMocks(posts, [urnToUrl("urn:li:share:111"), urnToUrl("urn:li:share:222")]);
 
@@ -241,8 +240,8 @@ describe("getProfileActivity", () => {
       profile: "johndoe",
     });
 
-    expect(result.posts[0]?.urn).toBe("urn:li:share:111");
-    expect(result.posts[1]?.urn).toBe("urn:li:share:222");
+    expect(result.posts[0]?.url).toBe("https://www.linkedin.com/feed/update/urn:li:share:111/");
+    expect(result.posts[1]?.url).toBe("https://www.linkedin.com/feed/update/urn:li:share:222/");
   });
 
   it("returns posts with profilePublicId and nextCursor", async () => {
@@ -275,7 +274,7 @@ describe("getProfileActivity", () => {
     });
 
     expect(result.posts).toHaveLength(10);
-    expect(result.nextCursor).toBe("urn:li:share:9");
+    expect(result.nextCursor).toBe("https://www.linkedin.com/feed/update/urn:li:share:9/");
   });
 
   it("uses cursor to skip past already-seen posts", async () => {
@@ -289,7 +288,7 @@ describe("getProfileActivity", () => {
       cdpPort: CDP_PORT,
       profile: "johndoe",
       count: 5,
-      cursor: "urn:li:share:4",
+      cursor: "https://www.linkedin.com/feed/update/urn:li:share:4/",
     });
 
     expect(result.posts).toHaveLength(5);
@@ -309,7 +308,7 @@ describe("getProfileActivity", () => {
     );
   });
 
-  it("handles posts where URN extraction fails", async () => {
+  it("handles posts where URL extraction fails", async () => {
     setupMocks([rawPost()], [null]);
 
     const result = await getProfileActivity({
@@ -317,8 +316,7 @@ describe("getProfileActivity", () => {
       profile: "johndoe",
     });
 
-    expect(result.posts[0]?.urn).toBe("");
-    expect(result.posts[0]?.url).toBeNull();
+    expect(result.posts[0]?.url).toBe("");
   });
 
   it("throws when no LinkedIn page found", async () => {

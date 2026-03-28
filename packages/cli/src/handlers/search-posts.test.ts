@@ -19,7 +19,6 @@ const MOCK_RESULTS: SearchPostsOutput = {
   query: "AI agents",
   posts: [
     {
-      urn: "",
       url: "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678/",
       authorName: "Jane Smith",
       authorHeadline: "CEO at Acme Corp",
@@ -34,7 +33,6 @@ const MOCK_RESULTS: SearchPostsOutput = {
       hashtags: [],
     },
     {
-      urn: "",
       url: "https://www.linkedin.com/feed/update/urn:li:activity:7234567890123456789/",
       authorName: "Bob",
       authorHeadline: null,
