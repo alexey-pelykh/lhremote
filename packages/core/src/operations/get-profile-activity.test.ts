@@ -28,6 +28,8 @@ vi.mock("./get-feed.js", async (importOriginal) => {
 vi.mock("../utils/delay.js", () => ({
   delay: vi.fn().mockResolvedValue(undefined),
   randomDelay: vi.fn().mockResolvedValue(undefined),
+  randomBetween: vi.fn().mockReturnValue(800),
+  maybeHesitate: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { discoverTargets } from "../cdp/discovery.js";
@@ -74,7 +76,7 @@ function setupMocks(scrapedPosts: RawDomPost[] = [], urnResults: (string | null)
     if (typeof script === "string" && script.includes("div[role=\"article\"]") && script.includes("return true")) {
       return Promise.resolve(true);
     }
-    // extractActivityPostUrn — click phase
+    // extractActivityPostUrn — click phase (split from scroll)
     if (typeof script === "string" && script.includes("btn.click()")) {
       return Promise.resolve(true);
     }
@@ -82,6 +84,10 @@ function setupMocks(scrapedPosts: RawDomPost[] = [], urnResults: (string | null)
     if (typeof script === "string" && script.includes("embed-modal")) {
       const urn = urnResults[urnCallIdx++] ?? null;
       return Promise.resolve(urn);
+    }
+    // humanizedScrollToByIndex fallback — scrollIntoView
+    if (typeof script === "string" && script.includes("scrollIntoView")) {
+      return Promise.resolve(undefined);
     }
     // SCRAPE_ACTIVITY_POSTS_SCRIPT — return posts
     return Promise.resolve(scrapedPosts);

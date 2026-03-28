@@ -3,7 +3,7 @@
 
 import type { CDPClient } from "../cdp/client.js";
 import { CDPEvaluationError, CDPTimeoutError } from "../cdp/errors.js";
-import { delay } from "../utils/delay.js";
+import { delay, randomDelay } from "../utils/delay.js";
 import type { HumanizedMouse } from "./humanized-mouse.js";
 
 /** Default timeout for DOM operations (ms). */
@@ -207,6 +207,168 @@ export async function typeText(
 }
 
 // ---------------------------------------------------------------------------
+// Element geometry helpers
+// ---------------------------------------------------------------------------
+
+/** Bounding rect returned by element bounds queries. */
+export interface ElementBounds {
+  top: number;
+  bottom: number;
+  height: number;
+}
+
+/**
+ * Get the bounding rect of a DOM element selected by CSS selector.
+ *
+ * @returns `null` if the element is not found.
+ */
+export async function getElementBounds(
+  client: CDPClient,
+  selector: string,
+): Promise<ElementBounds | null> {
+  return client.evaluate<ElementBounds | null>(
+    `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, height: r.height };
+    })()`,
+  );
+}
+
+/**
+ * Get the bounding rect of the Nth element matching a CSS selector.
+ *
+ * Equivalent to `document.querySelectorAll(baseSelector)[index]`.
+ *
+ * @returns `null` if no element exists at the given index.
+ */
+export async function getElementBoundsByIndex(
+  client: CDPClient,
+  baseSelector: string,
+  index: number,
+): Promise<ElementBounds | null> {
+  return client.evaluate<ElementBounds | null>(
+    `(() => {
+      const els = document.querySelectorAll(${JSON.stringify(baseSelector)});
+      const el = els[${String(index)}];
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, height: r.height };
+    })()`,
+  );
+}
+
+/**
+ * Get the viewport height (`window.innerHeight`).
+ */
+export async function getViewportHeight(
+  client: CDPClient,
+): Promise<number> {
+  return client.evaluate<number>(`window.innerHeight`);
+}
+
+// ---------------------------------------------------------------------------
+// Humanized scroll-to-element
+// ---------------------------------------------------------------------------
+
+/**
+ * Internal: incremental scroll loop that centers an element in the viewport.
+ *
+ * @returns `true` if the element was centered within `maxIterations`.
+ */
+async function scrollToElementLoop(
+  client: CDPClient,
+  getBounds: () => Promise<ElementBounds | null>,
+  mouse: HumanizedMouse,
+): Promise<boolean> {
+  const viewportHeight = await getViewportHeight(client);
+  const maxIterations = 10;
+  const tolerance = viewportHeight / 4;
+
+  for (let i = 0; i < maxIterations; i++) {
+    const bounds = await getBounds();
+    if (!bounds) return false;
+
+    const elementCenter = bounds.top + bounds.height / 2;
+    const viewportCenter = viewportHeight / 2;
+
+    if (Math.abs(elementCenter - viewportCenter) <= tolerance) {
+      return true;
+    }
+
+    const deltaY = elementCenter - viewportCenter;
+    await humanizedScrollY(client, deltaY, 300, 400, mouse);
+    await randomDelay(200, 400);
+  }
+
+  return false;
+}
+
+/**
+ * Scroll the page until the target element is centered in the viewport,
+ * using incremental humanized mouse-wheel strokes.
+ *
+ * When a {@link HumanizedMouse} is available, the cursor scrolls the page
+ * in small increments until the element's bounding rect is in the viewport
+ * center zone.  Falls back to instant `scrollIntoView` otherwise.
+ *
+ * @param client   - Connected CDP client targeting the page.
+ * @param selector - CSS selector for the element to scroll to.
+ * @param mouse    - Optional humanized mouse instance.
+ */
+export async function humanizedScrollTo(
+  client: CDPClient,
+  selector: string,
+  mouse?: HumanizedMouse | null,
+): Promise<void> {
+  if (mouse?.isAvailable) {
+    const success = await scrollToElementLoop(
+      client,
+      () => getElementBounds(client, selector),
+      mouse,
+    );
+    if (success) return;
+  }
+  await scrollTo(client, selector);
+}
+
+/**
+ * Scroll the page until the Nth element matching a selector is centered,
+ * using incremental humanized mouse-wheel strokes.
+ *
+ * Falls back to instant `scrollIntoView` when humanized mouse is unavailable.
+ *
+ * @param client       - Connected CDP client targeting the page.
+ * @param baseSelector - CSS selector matching multiple elements.
+ * @param index        - Zero-based index into the matched elements.
+ * @param mouse        - Optional humanized mouse instance.
+ */
+export async function humanizedScrollToByIndex(
+  client: CDPClient,
+  baseSelector: string,
+  index: number,
+  mouse?: HumanizedMouse | null,
+): Promise<void> {
+  if (mouse?.isAvailable) {
+    const success = await scrollToElementLoop(
+      client,
+      () => getElementBoundsByIndex(client, baseSelector, index),
+      mouse,
+    );
+    if (success) return;
+  }
+  // Fallback to instant scrollIntoView
+  await client.evaluate(
+    `(() => {
+      const els = document.querySelectorAll(${JSON.stringify(baseSelector)});
+      const el = els[${String(index)}];
+      if (el) el.scrollIntoView({ behavior: "instant", block: "center" });
+    })()`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Humanized interaction helpers
 // ---------------------------------------------------------------------------
 
@@ -254,15 +416,18 @@ export async function humanizedClick(
   selector: string,
   mouse?: HumanizedMouse | null,
 ): Promise<void> {
+  await randomDelay(0, 50); // Pre-click approach hesitation
   if (mouse?.isAvailable) {
     const center = await getElementCenter(client, selector);
     if (center) {
       await mouse.click(center.x, center.y);
+      await randomDelay(50, 150); // Post-click visual confirmation
       return;
     }
   }
   // Fallback to JS click
   await click(client, selector);
+  await randomDelay(50, 150); // Post-click visual confirmation
 }
 
 /**
@@ -283,6 +448,7 @@ export async function humanizedHover(
   selector: string,
   mouse?: HumanizedMouse | null,
 ): Promise<void> {
+  await randomDelay(0, 50); // Pre-hover approach hesitation
   if (mouse?.isAvailable) {
     const center = await getElementCenter(client, selector);
     if (center) {

@@ -5,7 +5,7 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
 import { ActionBudgetRepository } from "../db/index.js";
-import { waitForElement, scrollTo, humanizedClick, typeText } from "../linkedin/dom-automation.js";
+import { waitForElement, humanizedScrollTo, humanizedClick, typeText } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { COMMENT_INPUT, COMMENT_SUBMIT_BUTTON } from "../linkedin/selectors.js";
 import { resolveAccount } from "../services/account-resolution.js";
@@ -136,7 +136,7 @@ export async function commentOnPost(
 
     // Wait for the comment input and interact
     await waitForElement(client, COMMENT_INPUT);
-    await scrollTo(client, COMMENT_INPUT);
+    await humanizedScrollTo(client, COMMENT_INPUT, mouse);
     await humanizedClick(client, COMMENT_INPUT, mouse);
     await randomDelay(400, 700);
 
