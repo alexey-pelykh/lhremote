@@ -43,6 +43,9 @@ Do **not** add issue numbers (e.g. `(#12)`) to commit messages. GitHub links PRs
 - Test helper `packages/core/src/cdp/testing/launch-chromium.ts` manages Chromium lifecycle.
 - Chromium is installed in CI via `npx playwright-core install chromium --with-deps`.
 - E2E tests live in `packages/e2e/src/` and are **not** run in CI. Always run `pnpm test:e2e` locally before submitting PRs that add or modify E2E tests.
+- Run a single E2E file: `pnpm --filter @lhremote/e2e test:e2e:file -- <pattern>` (e.g., `list-accounts`). Do **not** use `test:e2e -- file.ts` — that filters by test name, not file, and loads all 23 files (~30s each).
+- E2E tests must assert preconditions explicitly — never silently skip via `if (accounts.length > 0)`. Use `resolveAccountId(port)` from `@lhremote/core/testing` which throws if no accounts exist.
+- Shared E2E helpers (`resolveAccountId`, `forceStopInstance`, `assertDefined`, `getE2EPersonId`) are exported from `@lhremote/core/testing` — do not duplicate them locally in test files.
 
 ## Infrastructure
 

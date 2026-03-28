@@ -2,15 +2,8 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, launchApp, quitApp, retryAsync } from "@lhremote/core/testing";
-import {
-  type Account,
-  type AppService,
-  killInstanceProcesses,
-  LauncherService,
-  startInstanceWithRecovery,
-  waitForInstanceShutdown,
-} from "@lhremote/core";
+import { describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
+import { type AppService, LauncherService, startInstanceWithRecovery } from "@lhremote/core";
 
 // CLI handler
 import { handleGetErrors } from "@lhremote/cli/handlers";
@@ -19,59 +12,28 @@ import { handleGetErrors } from "@lhremote/cli/handlers";
 import { registerGetErrors } from "@lhremote/mcp/tools";
 import { createMockServer } from "@lhremote/mcp/testing";
 
-/**
- * Stop the instance gracefully, falling back to SIGKILL if that fails.
- */
-async function forceStopInstance(
-  launcher: LauncherService,
-  accountId: number | undefined,
-  launcherPort: number,
-): Promise<void> {
-  if (accountId === undefined) return;
-
-  try {
-    await launcher.stopInstance(accountId);
-    await waitForInstanceShutdown(launcherPort);
-    return;
-  } catch {
-    // Graceful stop failed — escalate to OS kill
-  }
-
-  await killInstanceProcesses(launcherPort);
-}
-
 describeE2E("get-errors operation", () => {
   let app: AppService;
   let port: number;
-  let accountId: number | undefined;
+  let accountId: number;
 
   beforeAll(async () => {
     const launched = await launchApp();
     app = launched.app;
     port = launched.port;
 
-    const launcher = new LauncherService(port);
-    await retryAsync(() => launcher.connect(), { retries: 3, delay: 1_000 });
-    const accounts = await launcher.listAccounts();
-
-    if (accounts.length > 0) {
-      accountId = (accounts[0] as Account).id;
-    }
-
-    launcher.disconnect();
+    accountId = await resolveAccountId(port);
   }, 120_000);
 
   afterAll(async () => {
-    if (accountId !== undefined) {
-      const launcher = new LauncherService(port);
-      try {
-        await launcher.connect();
-        await forceStopInstance(launcher, accountId, port);
-      } catch {
-        // Best-effort cleanup
-      } finally {
-        launcher.disconnect();
-      }
+    const launcher = new LauncherService(port);
+    try {
+      await launcher.connect();
+      await forceStopInstance(launcher, accountId, port);
+    } catch {
+      // Best-effort cleanup
+    } finally {
+      launcher.disconnect();
     }
     await quitApp(app);
   }, 60_000);
@@ -174,8 +136,6 @@ describeE2E("get-errors operation", () => {
 
   describe("with instance running", () => {
     beforeAll(async () => {
-      if (accountId === undefined) return;
-
       const launcher = new LauncherService(port);
       await retryAsync(() => launcher.connect(), { retries: 3, delay: 1_000 });
       await startInstanceWithRecovery(launcher, accountId, port);
@@ -183,8 +143,6 @@ describeE2E("get-errors operation", () => {
     }, 120_000);
 
     afterAll(async () => {
-      if (accountId === undefined) return;
-
       const launcher = new LauncherService(port);
       try {
         await launcher.connect();

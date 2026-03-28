@@ -12,7 +12,8 @@
   "scripts": {
     "build": "tsc",
     "test": "echo 'No unit tests'",
-    "test:e2e": "vitest run --config ../../vitest.e2e.config.ts",
+    "test:e2e": "vitest run --config ../../vitest.e2e.config.ts --reporter=verbose",
+    "test:e2e:file": "vitest run --config ../../vitest.e2e.config.ts --reporter=verbose --testPathPattern",
     "lint": "eslint src/"
   },
   "dependencies": {
