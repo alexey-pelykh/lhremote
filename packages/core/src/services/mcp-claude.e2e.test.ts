@@ -181,8 +181,16 @@ describeE2E("MCP tools via Claude CLI", () => {
     it(
       "check-replies checks for new replies and returns results",
       () => {
+        const personIdRaw = process.env.LHREMOTE_E2E_PERSON_ID;
+        expect(personIdRaw, "LHREMOTE_E2E_PERSON_ID must be set").toBeTruthy();
+        const personId = Number.parseInt(personIdRaw as string, 10);
+        expect(
+          Number.isInteger(personId) && personId > 0,
+          "LHREMOTE_E2E_PERSON_ID must be a positive integer",
+        ).toBe(true);
+
         const result = runClaude(
-          "Use the check-replies tool to check for new message replies. " +
+          `Use the check-replies tool with personIds [${personId}] to check for new message replies. ` +
           "Report the raw JSON from the tool response, nothing else.",
           180_000,
         );
