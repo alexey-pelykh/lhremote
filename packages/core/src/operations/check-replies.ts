@@ -75,9 +75,9 @@ export async function checkReplies(
         coolDown: 0,
         maxActionResultsPerIteration: input.personIds.length,
         actionSettings: {
-          moveToSuccessfulAfterMs: 86_400_000,
+          moveToSuccessfulAfterMs: 1_000,
           treatMessageAcceptedAsReply: false,
-          keepInQueueIfRequestIsNotAccepted: true,
+          keepInQueueIfRequestIsNotAccepted: false,
         },
       }],
     });

@@ -168,9 +168,9 @@ describe("checkReplies", () => {
         coolDown: 0,
         maxActionResultsPerIteration: 2,
         actionSettings: {
-          moveToSuccessfulAfterMs: 86_400_000,
+          moveToSuccessfulAfterMs: 1_000,
           treatMessageAcceptedAsReply: false,
-          keepInQueueIfRequestIsNotAccepted: true,
+          keepInQueueIfRequestIsNotAccepted: false,
         },
       }],
     });
