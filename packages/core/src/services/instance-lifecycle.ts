@@ -59,7 +59,7 @@ export async function startInstanceWithRecovery(
       }
 
       // Stale state — crash recovery
-      await launcher.stopInstance(accountId);
+      await launcher.stopInstanceWithDialogDismissal(accountId);
       await delay(CRASH_RECOVERY_DELAY);
       await launcher.startInstance(accountId);
     } else {
