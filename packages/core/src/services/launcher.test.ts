@@ -397,4 +397,122 @@ describe("LauncherService", () => {
       ).rejects.toThrow(ServiceError);
     });
   });
+
+  describe("stopInstanceWithDialogDismissal", () => {
+    it("calls stopInstance then polls and dismisses a dialog", async () => {
+      await service.connect();
+
+      let pollCount = 0;
+      mockEvaluate.mockImplementation((expression: string) => {
+        if (expression === "typeof require === 'function'") {
+          return Promise.resolve(true);
+        }
+        if (expression.includes("electronStore?.get")) {
+          return Promise.resolve(true);
+        }
+        // stopInstance call
+        if (expression.includes("stopInstance")) {
+          return Promise.resolve(undefined);
+        }
+        // getInstanceIssues — return a dialog on the second poll
+        if (expression.includes("issues?.items")) {
+          pollCount++;
+          if (pollCount >= 2) {
+            return Promise.resolve([
+              {
+                type: "dialog",
+                id: "dlg-close",
+                data: {
+                  id: "dlg-close",
+                  options: {
+                    message: "Are you sure?",
+                    controls: [{ id: "btn-yes", text: "Yes" }],
+                  },
+                },
+              },
+            ]);
+          }
+          return Promise.resolve([]);
+        }
+        // dismissInstanceDialog call
+        if (expression.includes("closeInstanceDialog")) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.resolve(undefined);
+      });
+
+      await service.stopInstanceWithDialogDismissal(42);
+
+      // Verify stopInstance was called
+      expect(mockEvaluate).toHaveBeenCalledWith(
+        expect.stringContaining("stopInstance"),
+        true,
+        undefined,
+      );
+      // Verify dismissInstanceDialog was called with the dialog's first button
+      expect(mockEvaluate).toHaveBeenCalledWith(
+        expect.stringContaining("closeInstanceDialog"),
+        true,
+        undefined,
+      );
+      expect(mockEvaluate).toHaveBeenCalledWith(
+        expect.stringContaining('"dlg-close"'),
+        true,
+        undefined,
+      );
+      expect(mockEvaluate).toHaveBeenCalledWith(
+        expect.stringContaining('"btn-yes"'),
+        true,
+        undefined,
+      );
+    });
+
+    it("returns normally when no dialog appears within timeout", async () => {
+      await service.connect();
+
+      mockEvaluate.mockImplementation((expression: string) => {
+        if (expression === "typeof require === 'function'") {
+          return Promise.resolve(true);
+        }
+        if (expression.includes("electronStore?.get")) {
+          return Promise.resolve(true);
+        }
+        if (expression.includes("stopInstance")) {
+          return Promise.resolve(undefined);
+        }
+        // Always return empty issues
+        if (expression.includes("issues?.items")) {
+          return Promise.resolve([]);
+        }
+        return Promise.resolve(undefined);
+      });
+
+      // Use fake timers to avoid waiting 10s
+      vi.useFakeTimers();
+      const promise = service.stopInstanceWithDialogDismissal(42);
+
+      // Advance past the polling timeout
+      await vi.advanceTimersByTimeAsync(11_000);
+      await promise;
+      vi.useRealTimers();
+
+      // Verify stopInstance was called but dismissInstanceDialog was not
+      expect(mockEvaluate).toHaveBeenCalledWith(
+        expect.stringContaining("stopInstance"),
+        true,
+        undefined,
+      );
+      expect(mockEvaluate).not.toHaveBeenCalledWith(
+        expect.stringContaining("closeInstanceDialog"),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it("throws ServiceError when not connected", async () => {
+      await expect(
+        service.stopInstanceWithDialogDismissal(42),
+      ).rejects.toThrow(ServiceError);
+    });
+  });
 });

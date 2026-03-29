@@ -438,6 +438,38 @@ export class LauncherService {
   }
 
   /**
+   * Stop a running instance, automatically dismissing the confirmation
+   * dialog that LinkedHelper may show.
+   *
+   * Calls {@link stopInstance}, then polls {@link getInstanceIssues} at
+   * 500 ms intervals for up to 10 s.  When a dialog issue appears, its
+   * first control button is clicked via {@link dismissInstanceDialog}.
+   * If no dialog surfaces within the timeout the method returns normally.
+   *
+   * @param liId  LinkedIn account ID that owns the instance.
+   */
+  async stopInstanceWithDialogDismissal(liId: number): Promise<void> {
+    await this.stopInstance(liId);
+
+    const POLL_INTERVAL = 500;
+    const POLL_TIMEOUT = 10_000;
+    const deadline = Date.now() + POLL_TIMEOUT;
+
+    while (Date.now() < deadline) {
+      const issues = await this.getInstanceIssues(liId);
+      const dialog = issues.find((i) => i.type === "dialog");
+      if (dialog) {
+        const firstControl = dialog.data.options.controls[0];
+        if (firstControl) {
+          await this.dismissInstanceDialog(liId, dialog.id, firstControl.id);
+        }
+        return;
+      }
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL));
+    }
+  }
+
+  /**
    * Check the overall UI health of a LinkedHelper instance.
    *
    * Combines instance issue queries with popup overlay detection
