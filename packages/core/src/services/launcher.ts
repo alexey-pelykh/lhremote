@@ -404,6 +404,40 @@ export class LauncherService {
   }
 
   /**
+   * Dismiss an active dialog issue on a LinkedHelper instance.
+   *
+   * Dialogs appear as "issues" on the instance (e.g. when the launcher
+   * sends a close command).  Each dialog exposes one or more control
+   * buttons identified by `buttonId`.  This method programmatically
+   * clicks the specified button to dismiss the dialog.
+   *
+   * @param liId       LinkedIn account ID that owns the instance.
+   * @param dialogId   The dialog issue ID (from {@link InstanceIssue}).
+   * @param buttonId   The control button ID to click (from `DialogIssueData.options.controls[].id`).
+   */
+  async dismissInstanceDialog(
+    liId: number,
+    dialogId: string,
+    buttonId: string,
+  ): Promise<void> {
+    const client = this.ensureConnected();
+
+    await this.launcherEvaluate(
+      client,
+      `(async () => {
+        const remote = require('@electron/remote');
+        const mainWindow = remote.getGlobal('mainWindow');
+        return await mainWindow.instanceManager.closeInstanceDialog(
+          ${String(liId)},
+          ${JSON.stringify(dialogId)},
+          { buttonId: ${JSON.stringify(buttonId)} }
+        );
+      })()`,
+      true,
+    );
+  }
+
+  /**
    * Check the overall UI health of a LinkedHelper instance.
    *
    * Combines instance issue queries with popup overlay detection
