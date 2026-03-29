@@ -103,12 +103,49 @@ export async function launchApp(options?: {
 
 /**
  * Quit LinkedHelper, swallowing errors for cleanup use.
+ *
+ * When {@link port} is provided, dismisses the "All instances will be
+ * closed" launcher popup concurrently with the quit signal so the
+ * process can exit cleanly instead of stalling on the dialog.
  */
-export async function quitApp(app: AppService): Promise<void> {
+export async function quitApp(app: AppService, port?: number): Promise<void> {
   try {
-    await app.quit();
+    if (port !== undefined) {
+      await Promise.all([
+        app.quit(),
+        dismissLauncherPopupDuringQuit(port),
+      ]);
+    } else {
+      await app.quit();
+    }
   } catch {
     // Swallow errors during cleanup
+  }
+}
+
+/**
+ * Poll for and dismiss the launcher popup that appears when quitting
+ * while instances are still running.  Best-effort — returns silently
+ * on any error (the launcher may already be gone).
+ */
+async function dismissLauncherPopupDuringQuit(port: number): Promise<void> {
+  const launcher = new LauncherService(port);
+  try {
+    await launcher.connect();
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      try {
+        const dismissed = await launcher.dismissPopup();
+        if (dismissed) return;
+      } catch {
+        return;
+      }
+      await delay(500);
+    }
+  } catch {
+    // Best effort — launcher may not be reachable
+  } finally {
+    launcher.disconnect();
   }
 }
 
@@ -190,7 +227,7 @@ export async function forceStopInstance(
   if (accountId === undefined) return;
 
   try {
-    await launcher.stopInstance(accountId);
+    await launcher.stopInstanceWithDialogDismissal(accountId);
     await waitForInstanceShutdown(launcherPort);
     return;
   } catch {

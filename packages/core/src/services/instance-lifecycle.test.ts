@@ -37,6 +37,7 @@ function createMockLauncher(
     disconnect: vi.fn(),
     startInstance: vi.fn().mockResolvedValue(undefined),
     stopInstance: vi.fn().mockResolvedValue(undefined),
+    stopInstanceWithDialogDismissal: vi.fn().mockResolvedValue(undefined),
     listAccounts: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as unknown as LauncherService;
@@ -100,7 +101,7 @@ describe("startInstanceWithRecovery", () => {
 
     const result = await startInstanceWithRecovery(launcher, 42, 9222);
 
-    expect(launcher.stopInstance).toHaveBeenCalledWith(42);
+    expect(launcher.stopInstanceWithDialogDismissal).toHaveBeenCalledWith(42);
     expect(startInstance).toHaveBeenCalledTimes(2);
     expect(result).toEqual({ status: "started", port: 55999 });
   });
