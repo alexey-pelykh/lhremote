@@ -129,9 +129,14 @@ export async function quitApp(app: AppService, port?: number): Promise<void> {
  * on any error (the launcher may already be gone).
  */
 async function dismissLauncherPopupDuringQuit(port: number): Promise<void> {
+  const CONNECT_TIMEOUT = 5_000;
   const launcher = new LauncherService(port);
   try {
-    await launcher.connect();
+    const connected = await Promise.race([
+      launcher.connect().then(() => true as const),
+      delay(CONNECT_TIMEOUT).then(() => false as const),
+    ]);
+    if (!connected) return;
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
       try {
