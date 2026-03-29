@@ -53,6 +53,7 @@ export class InstanceService {
   private linkedInClient: CDPClient | null = null;
   private uiClient: CDPClient | null = null;
   private healthChecker: HealthChecker | null = null;
+  private healthCheckRunning = false;
   private voyagerInterceptor: VoyagerInterceptor | null = null;
   private humanizedMouse: HumanizedMouse | null = null;
 
@@ -452,12 +453,15 @@ export class InstanceService {
    * not mask the original operation result.
    */
   private async runHealthCheck(): Promise<void> {
-    if (!this.healthChecker) return;
+    if (!this.healthChecker || this.healthCheckRunning) return;
+    this.healthCheckRunning = true;
     try {
       await this.healthChecker();
     } catch (error) {
       if (error instanceof UIBlockedError) throw error;
       // Health check infrastructure failure — do not mask the original result.
+    } finally {
+      this.healthCheckRunning = false;
     }
   }
 }

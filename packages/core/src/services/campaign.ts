@@ -405,18 +405,15 @@ export class CampaignService {
   }
 
   /**
-   * Start the global campaign runner via the high-level RPC.
-   *
-   * Uses `@electron/remote` to call `startRunningCampaigns` on the
-   * main-process mainWindowService (the renderer proxy does not expose `.call()`).
+   * Start the global campaign runner via the instance UI controller.
    */
-  async startRunner(liAccountId: number = 1): Promise<void> {
+  async startRunner(): Promise<void> {
     try {
       await this.instance.evaluateUI(
-        `(async function() {
-          const mws = require('@electron/remote').getGlobal('mainWindowService');
-          await mws.call('startRunningCampaigns', ${String(liAccountId)});
+        `(function() {
+          return window.mainWindowService.mainWindow.campaignController.start();
         })()`,
+        false,
       );
     } catch (error) {
       const message = errorMessage(error);
@@ -429,18 +426,15 @@ export class CampaignService {
   }
 
   /**
-   * Stop the global campaign runner via the high-level RPC.
-   *
-   * Uses `@electron/remote` to call `stopRunningCampaigns` on the
-   * main-process mainWindowService.
+   * Stop the global campaign runner via the instance UI controller.
    */
-  async stopRunner(liAccountId: number = 1, force: boolean = true): Promise<void> {
+  async stopRunner(): Promise<void> {
     try {
       await this.instance.evaluateUI(
-        `(async function() {
-          const mws = require('@electron/remote').getGlobal('mainWindowService');
-          await mws.call('stopRunningCampaigns', ${String(liAccountId)}, ${String(force)});
+        `(function() {
+          return window.mainWindowService.mainWindow.campaignController.stop();
         })()`,
+        false,
       );
     } catch (error) {
       const message = errorMessage(error);

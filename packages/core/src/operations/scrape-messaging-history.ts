@@ -84,15 +84,8 @@ export async function scrapeMessagingHistory(
       // Import target persons into campaign
       await campaignService.importPeopleFromUrls(campaign.id, linkedInUrls);
 
-      if (input.startRunner) {
-        // Caller manages runner lifecycle: just unpause our campaign
-        // and start the runner via the high-level RPC.
-        await campaignService.unpauseCampaign(campaign.id);
-        await campaignService.startRunner();
-      } else {
-        // Default path: wait for idle runner, unpause, start
-        await campaignService.start(campaign.id, []);
-      }
+      // Start the campaign: wait for idle, unpause, start runner
+      await campaignService.start(campaign.id, []);
 
       // Poll for completion (runner idle + no queued persons)
       const deadline = Date.now() + CAMPAIGN_TIMEOUT;
@@ -128,9 +121,7 @@ export async function scrapeMessagingHistory(
     } finally {
       try { await campaignService.stop(campaign.id); } catch { /* best-effort cleanup */ }
       try { campaignService.hardDelete(campaign.id); } catch { /* best-effort cleanup */ }
-      if (input.startRunner) {
-        try { await campaignService.stopRunner(); } catch { /* best-effort cleanup */ }
-      }
+      try { await campaignService.stopRunner(); } catch { /* best-effort cleanup */ }
       if (pausedCampaignIds.length > 0) {
         try { await campaignService.unpauseCampaigns(pausedCampaignIds); } catch { /* best-effort restore */ }
       }
