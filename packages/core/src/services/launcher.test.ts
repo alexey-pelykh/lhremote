@@ -362,4 +362,39 @@ describe("LauncherService", () => {
       expect(listCall?.[1]).toBe(true);
     });
   });
+
+  describe("dismissInstanceDialog", () => {
+    it("evaluates the closeInstanceDialog expression", async () => {
+      await service.connect();
+
+      await service.dismissInstanceDialog(42, "dlg-1", "btn-ok");
+
+      expect(mockEvaluate).toHaveBeenCalledWith(
+        expect.stringContaining("closeInstanceDialog"),
+        true,
+        undefined,
+      );
+      expect(mockEvaluate).toHaveBeenCalledWith(
+        expect.stringContaining("42"),
+        true,
+        undefined,
+      );
+      expect(mockEvaluate).toHaveBeenCalledWith(
+        expect.stringContaining('"dlg-1"'),
+        true,
+        undefined,
+      );
+      expect(mockEvaluate).toHaveBeenCalledWith(
+        expect.stringContaining('"btn-ok"'),
+        true,
+        undefined,
+      );
+    });
+
+    it("throws ServiceError when not connected", async () => {
+      await expect(
+        service.dismissInstanceDialog(42, "dlg-1", "btn-ok"),
+      ).rejects.toThrow(ServiceError);
+    });
+  });
 });
