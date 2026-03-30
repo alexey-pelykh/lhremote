@@ -48,13 +48,13 @@ async function findFreePort(): Promise<number> {
  * is configured for test isolation (temp profile, no sandbox).
  *
  * @param options.timeout - Maximum time (ms) to wait for CDP to become
- *   available (default 10 000).
+ *   available (default 30 000).
  * @returns A {@link ChromiumInstance} handle.
  */
 export async function launchChromium(options?: {
   timeout?: number;
 }): Promise<ChromiumInstance> {
-  const timeout = options?.timeout ?? 10_000;
+  const timeout = options?.timeout ?? 30_000;
   const port = await findFreePort();
   const userDataDir = join(
     tmpdir(),
