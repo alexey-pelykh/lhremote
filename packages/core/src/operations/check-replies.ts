@@ -66,6 +66,10 @@ export async function checkReplies(
       linkedInUrls.push(`https://www.linkedin.com/in/${publicId.externalId}`);
     }
 
+    // Capture runner state and stop if active to avoid SQLite lock contention
+    const runnerWasActive = (await campaignService.getRunnerState()) !== "idle";
+    await campaignService.stopRunnerAndWaitForIdle();
+
     // Create ephemeral campaign with CheckForReplies action
     const campaign = await campaignService.create({
       name: `[ephemeral] CheckForReplies ${new Date().toISOString()}`,
@@ -135,11 +139,15 @@ export async function checkReplies(
         checkedAt: new Date().toISOString(),
       };
     } finally {
+      // Stop runner first so DB writes don't contend with it
+      try { await campaignService.stopRunnerAndWaitForIdle(); } catch { /* best-effort */ }
       try { await campaignService.stop(campaign.id); } catch { /* best-effort cleanup */ }
       try { campaignService.hardDelete(campaign.id); } catch { /* best-effort cleanup */ }
-      try { await campaignService.stopRunner(); } catch { /* best-effort cleanup */ }
       if (pausedCampaignIds.length > 0) {
         try { await campaignService.unpauseCampaigns(pausedCampaignIds); } catch { /* best-effort restore */ }
+      }
+      if (runnerWasActive) {
+        try { await campaignService.startRunner(); } catch { /* best-effort restore */ }
       }
     }
   }, { instanceTimeout: CAMPAIGN_TIMEOUT, db: { readOnly: false } });

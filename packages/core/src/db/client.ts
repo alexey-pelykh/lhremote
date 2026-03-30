@@ -30,6 +30,9 @@ export class DatabaseClient {
   constructor(dbPath: string, options: DatabaseClientOptions = {}) {
     const { readOnly = true } = options;
     this.db = new DatabaseSync(dbPath, { readOnly });
+    // Allow SQLite to retry internally for up to 5 seconds when the database
+    // is locked by another process (e.g. the LinkedHelper campaign runner).
+    this.db.exec("PRAGMA busy_timeout = 5000");
   }
 
   close(): void {

@@ -447,6 +447,20 @@ export class CampaignService {
   }
 
   /**
+   * Stop the runner and wait until it reaches the idle state.
+   *
+   * Useful before DB-write operations that would conflict with the
+   * runner's own SQLite writes.
+   */
+  async stopRunnerAndWaitForIdle(): Promise<void> {
+    const state = await this.getRunnerState();
+    if (state === "idle") return;
+    await this.stopRunner();
+    // Reuse the idle-wait loop (campaignId=0 is only used in the error message)
+    await this.waitForIdle(0);
+  }
+
+  /**
    * Unpause a single campaign via CDP.
    *
    * @throws {CampaignNotFoundError} if the campaign does not exist.
@@ -696,7 +710,7 @@ export class CampaignService {
   /**
    * Get the current runner state from CDP.
    */
-  private async getRunnerState(): Promise<RunnerState> {
+  async getRunnerState(): Promise<RunnerState> {
     return this.instance.evaluateUI<RunnerState>(
       `window.mainWindowService.mainWindow.state`,
       false,
