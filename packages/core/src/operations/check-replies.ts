@@ -8,6 +8,7 @@ import { CampaignService } from "../services/campaign.js";
 import { CampaignTimeoutError } from "../services/errors.js";
 import { MessageRepository, ProfileRepository } from "../db/index.js";
 import { delay } from "../utils/delay.js";
+import { errorMessage } from "../utils/error-message.js";
 import type { ConnectionOptions } from "./types.js";
 
 /** Timeout for ephemeral campaign completion (5 minutes). */
@@ -139,16 +140,16 @@ export async function checkReplies(
       };
     } finally {
       // Stop runner first so DB writes don't contend with it
-      try { await campaignService.stopRunnerAndWaitForIdle(); } catch { /* best-effort */ }
+      try { await campaignService.stopRunnerAndWaitForIdle(); } catch (e) { console.warn("Best-effort stopRunner failed:", errorMessage(e)); }
       if (campaign) {
-        try { await campaignService.stop(campaign.id); } catch { /* best-effort cleanup */ }
-        try { campaignService.hardDelete(campaign.id); } catch { /* best-effort cleanup */ }
+        try { await campaignService.stop(campaign.id); } catch (e) { console.warn("Best-effort campaign stop failed:", errorMessage(e)); }
+        try { campaignService.hardDelete(campaign.id); } catch (e) { console.warn("Best-effort campaign hardDelete failed:", errorMessage(e)); }
       }
       if (pausedCampaignIds.length > 0) {
-        try { await campaignService.unpauseCampaigns(pausedCampaignIds); } catch { /* best-effort restore */ }
+        try { await campaignService.unpauseCampaigns(pausedCampaignIds); } catch (e) { console.warn("Best-effort unpauseCampaigns failed:", errorMessage(e)); }
       }
       if (runnerWasActive) {
-        try { await campaignService.startRunner(); } catch { /* best-effort restore */ }
+        try { await campaignService.startRunner(); } catch (e) { console.warn("Best-effort startRunner failed:", errorMessage(e)); }
       }
     }
   }, { instanceTimeout: CAMPAIGN_TIMEOUT, db: { readOnly: false } });
