@@ -26,10 +26,12 @@ export async function handleCheckStatus(options: {
       process.stdout.write(
         `Launcher: reachable on port ${String(report.launcher.port)}\n`,
       );
-    } else {
+    } else if (report.launcher.port !== null) {
       process.stdout.write(
         `Launcher: not reachable on port ${String(report.launcher.port)}\n`,
       );
+    } else {
+      process.stdout.write("Launcher: not available\n");
     }
 
     // Instance status

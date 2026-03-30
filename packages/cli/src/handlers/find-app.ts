@@ -25,7 +25,7 @@ export async function handleFindApp(options: {
         app.cdpPort !== null ? `CDP port ${String(app.cdpPort)}` : "no CDP port";
       const status = app.connectable ? "connectable" : "not connectable";
       process.stdout.write(
-        `PID ${String(app.pid)} — ${port} — ${status}\n`,
+        `PID ${String(app.pid)} — ${port} — ${status} — ${app.role}\n`,
       );
     }
   } catch (error) {

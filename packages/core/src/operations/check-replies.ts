@@ -7,7 +7,6 @@ import { withInstanceDatabase } from "../services/instance-context.js";
 import { CampaignService } from "../services/campaign.js";
 import { CampaignTimeoutError } from "../services/errors.js";
 import { MessageRepository, ProfileRepository } from "../db/index.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import { delay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 
@@ -36,7 +35,7 @@ export async function checkReplies(
     throw new Error("At least one personId is required");
   }
 
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort;
   const cutoff =
     input.since ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 

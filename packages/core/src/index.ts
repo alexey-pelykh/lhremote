@@ -217,6 +217,7 @@ export {
   discoverInstancePort,
   discoverTargets,
   findApp,
+  resolveAppPort,
   type AppRole,
   type DiscoveredApp,
   killInstanceProcesses,

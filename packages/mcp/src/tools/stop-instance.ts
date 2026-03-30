@@ -5,6 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   type Account,
   LauncherService,
+  resolveAppPort,
 } from "@lhremote/core";
 import { z } from "zod";
 import { buildCdpOptions, cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
@@ -26,7 +27,8 @@ export function registerStopInstance(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ accountId, cdpPort, cdpHost, allowRemote }) => {
-      const launcher = new LauncherService(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
+      const port = cdpPort ?? await resolveAppPort("launcher");
+      const launcher = new LauncherService(port, buildCdpOptions({ cdpHost, allowRemote }));
 
       try {
         await launcher.connect();

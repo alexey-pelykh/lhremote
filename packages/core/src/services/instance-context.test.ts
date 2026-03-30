@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../cdp/index.js", () => ({
   discoverInstancePort: vi.fn(),
+  findApp: vi.fn(),
+  resolveAppPort: vi.fn(),
 }));
 
 vi.mock("../db/index.js", () => ({
@@ -20,7 +22,7 @@ vi.mock("./launcher.js", () => ({
   LauncherService: vi.fn(),
 }));
 
-import { discoverInstancePort } from "../cdp/index.js";
+import { discoverInstancePort, findApp } from "../cdp/index.js";
 import { DatabaseClient, discoverDatabase } from "../db/index.js";
 import { InstanceService } from "./instance.js";
 import { LauncherService } from "./launcher.js";
@@ -28,6 +30,7 @@ import { InstanceNotRunningError, UIBlockedError } from "./errors.js";
 import { withDatabase, withInstanceDatabase } from "./instance-context.js";
 
 const mockedDiscoverInstancePort = vi.mocked(discoverInstancePort);
+const mockedFindApp = vi.mocked(findApp);
 const mockedDiscoverDatabase = vi.mocked(discoverDatabase);
 const mockedDatabaseClient = vi.mocked(DatabaseClient);
 const mockedInstanceService = vi.mocked(InstanceService);
@@ -253,6 +256,7 @@ describe("withInstanceDatabase", () => {
 
   it("throws InstanceNotRunningError when no instance port discovered", async () => {
     mockedDiscoverInstancePort.mockResolvedValue(null);
+    mockedFindApp.mockResolvedValue([]);
 
     await expect(
       withInstanceDatabase(9222, 42, () => undefined),

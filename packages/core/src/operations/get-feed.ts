@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+import { resolveAppPort } from "../cdp/index.js";
 import type { FeedPost } from "../types/feed.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import { humanizedScrollY, humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { delay as utilsDelay, randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
@@ -430,7 +430,7 @@ export async function waitForFeedLoad(
 export async function getFeed(
   input: GetFeedInput,
 ): Promise<GetFeedOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort ?? await resolveAppPort("instance");
   const cdpHost = input.cdpHost ?? "127.0.0.1";
   const allowRemote = input.allowRemote ?? false;
   const count = input.count ?? 10;

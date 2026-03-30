@@ -176,7 +176,7 @@ describe("dismissErrors", () => {
     expect(result.nonDismissable).toBe(0);
   });
 
-  it("disconnects services even on error", async () => {
+  it("disconnects launcher and proceeds with instance when launcher throws", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
 
     const mockLauncher = {
@@ -188,7 +188,19 @@ describe("dismissErrors", () => {
       return mockLauncher as unknown as LauncherService;
     });
 
-    await expect(dismissErrors({ cdpPort: 9222 })).rejects.toThrow("CDP failure");
+    const mockInstance = {
+      connectUiOnly: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn(),
+      dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 0, nonDismissable: 0 }),
+    };
+    vi.mocked(InstanceService).mockImplementation(function () {
+      return mockInstance as unknown as InstanceService;
+    });
+
+    const result = await dismissErrors({ cdpPort: 9222 });
+
     expect(mockLauncher.disconnect).toHaveBeenCalledOnce();
+    expect(result.dismissed).toBe(0);
+    expect(result.nonDismissable).toBe(0);
   });
 });

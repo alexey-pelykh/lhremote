@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   LauncherService,
+  resolveAppPort,
   startInstanceWithRecovery,
 } from "@lhremote/core";
 
@@ -14,7 +14,7 @@ export async function handleStartInstance(
   options: { cdpPort?: number; cdpHost?: string; allowRemote?: boolean },
 ): Promise<void> {
   const accountId = Number(accountIdArg);
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = options.cdpPort ?? await resolveAppPort("launcher");
   const launcher = new LauncherService(cdpPort, {
     ...(options.cdpHost !== undefined && { host: options.cdpHost }),
     ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),

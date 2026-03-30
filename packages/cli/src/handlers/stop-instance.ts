@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { DEFAULT_CDP_PORT, errorMessage, LauncherService } from "@lhremote/core";
+import { errorMessage, LauncherService, resolveAppPort } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | stop-instance} CLI command. */
 export async function handleStopInstance(
@@ -9,7 +9,7 @@ export async function handleStopInstance(
   options: { cdpPort?: number; cdpHost?: string; allowRemote?: boolean },
 ): Promise<void> {
   const accountId = Number(accountIdArg);
-  const cdpPort = options.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = options.cdpPort ?? await resolveAppPort("launcher");
   const launcher = new LauncherService(cdpPort, {
     ...(options.cdpHost !== undefined && { host: options.cdpHost }),
     ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),

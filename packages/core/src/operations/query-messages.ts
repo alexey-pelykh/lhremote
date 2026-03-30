@@ -5,7 +5,6 @@ import type { Chat, ConversationThread, Message } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withDatabase } from "../services/instance-context.js";
 import { MessageRepository } from "../db/index.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 export interface QueryMessagesInput extends ConnectionOptions {
@@ -24,7 +23,7 @@ export type QueryMessagesOutput =
 export async function queryMessages(
   input: QueryMessagesInput,
 ): Promise<QueryMessagesOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort;
   const limit = input.limit ?? 20;
   const offset = input.offset ?? 0;
 

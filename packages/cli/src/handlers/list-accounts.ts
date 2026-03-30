@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { errorMessage, LauncherService } from "@lhremote/core";
+import { errorMessage, LauncherService, resolveAppPort } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | list-accounts} CLI command. */
 export async function handleListAccounts(options: {
@@ -10,7 +10,8 @@ export async function handleListAccounts(options: {
   allowRemote?: boolean;
   json?: boolean;
 }): Promise<void> {
-  const launcher = new LauncherService(options.cdpPort, {
+  const port = options.cdpPort ?? await resolveAppPort("launcher");
+  const launcher = new LauncherService(port, {
     ...(options.cdpHost !== undefined && { host: options.cdpHost }),
     ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
   });

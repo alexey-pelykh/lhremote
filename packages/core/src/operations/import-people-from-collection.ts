@@ -5,7 +5,6 @@ import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { CampaignService } from "../services/campaign.js";
 import { CollectionListRepository } from "../db/index.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import { IMPORT_CHUNK_SIZE } from "./import-people-from-urls.js";
 import type { ConnectionOptions } from "./types.js";
 
@@ -41,7 +40,7 @@ export interface ImportPeopleFromCollectionOutput {
 export async function importPeopleFromCollection(
   input: ImportPeopleFromCollectionInput,
 ): Promise<ImportPeopleFromCollectionOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort;
 
   const accountId = await resolveAccount(cdpPort, {
     ...(input.cdpHost !== undefined && { host: input.cdpHost }),

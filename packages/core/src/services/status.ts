@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { type DiscoveredApp, discoverInstancePort, findApp } from "../cdp/index.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
+import { type DiscoveredApp, discoverInstancePort, findApp, resolveAppPort } from "../cdp/index.js";
 import { DatabaseClient, discoverAllDatabases } from "../db/index.js";
 import { ProfileRepository } from "../db/repositories/profile.js";
 import { errorMessage } from "../utils/error-message.js";
@@ -11,7 +10,7 @@ import { LauncherService } from "./launcher.js";
 /** Status of the LinkedHelper launcher process. */
 export interface LauncherStatus {
   reachable: boolean;
-  port: number;
+  port: number | null;
   /** Detected LH processes (populated only when launcher is unreachable). */
   processes?: DiscoveredApp[];
 }
@@ -44,55 +43,95 @@ export interface StatusReport {
  * The function is intentionally fault-tolerant: individual component
  * failures are reported in the result rather than thrown as exceptions.
  *
- * @param cdpPort - The CDP port of the LinkedHelper launcher (default 9222).
+ * When {@link cdpPort} is omitted, the launcher port is auto-discovered
+ * via {@link resolveAppPort}.  If no launcher is available, the report
+ * reflects this and still includes database and process information.
+ *
+ * @param cdpPort - The CDP port of the LinkedHelper launcher (auto-discovered if omitted).
  */
 export async function checkStatus(
-  cdpPort = DEFAULT_CDP_PORT,
+  cdpPort?: number,
   options?: { host?: string; allowRemote?: boolean },
 ): Promise<StatusReport> {
-  const launcher: LauncherStatus = { reachable: false, port: cdpPort };
+  // Resolve launcher port: explicit, auto-discovered, or none
+  let resolvedPort: number | null;
+  if (cdpPort !== undefined) {
+    resolvedPort = cdpPort;
+  } else {
+    try {
+      resolvedPort = await resolveAppPort("launcher");
+    } catch {
+      resolvedPort = null;
+    }
+  }
+
+  const launcher: LauncherStatus = { reachable: false, port: resolvedPort };
   const instances: AccountInstanceStatus[] = [];
   const databases: DatabaseStatus[] = [];
   const warnings: string[] = [];
 
   // 1. Probe launcher
-  const launcherService = new LauncherService(cdpPort, options);
-  try {
-    await launcherService.connect();
-    launcher.reachable = true;
-  } catch (error: unknown) {
-    warnings.push(`Launcher not reachable on port ${cdpPort.toString()}: ${errorMessage(error)}`);
+  if (resolvedPort !== null) {
+    const launcherService = new LauncherService(resolvedPort, options);
+    try {
+      await launcherService.connect();
+      launcher.reachable = true;
 
-    // Enrich with process-level detection when CDP is unreachable
+      // 2. List accounts and discover instance CDP ports
+      try {
+        const accounts = await launcherService.listAccounts();
+        const instancePort = await discoverInstancePort(resolvedPort);
+
+        for (const account of accounts) {
+          // discoverInstancePort finds a single child-process port but cannot
+          // determine which account owns it.  Assign the port only when there
+          // is exactly one account (the common case); otherwise report null.
+          instances.push({
+            accountId: account.id,
+            accountName: account.name,
+            cdpPort: accounts.length === 1 ? instancePort : null,
+          });
+        }
+      } catch (error: unknown) {
+        warnings.push(`Failed to query accounts: ${errorMessage(error)}`);
+      } finally {
+        launcherService.disconnect();
+      }
+    } catch (error: unknown) {
+      warnings.push(`Launcher not reachable on port ${resolvedPort.toString()}: ${errorMessage(error)}`);
+
+      // Enrich with process-level detection when CDP is unreachable
+      const apps = await findApp();
+      if (apps.length > 0) {
+        launcher.processes = apps;
+        warnings.push(
+          `LinkedHelper process(es) detected (PID ${apps.map((a) => String(a.pid)).join(", ")}) but CDP not reachable. Restart may be needed.`,
+        );
+      }
+    }
+  } else {
+    // No launcher port — check for running processes
     const apps = await findApp();
     if (apps.length > 0) {
       launcher.processes = apps;
-      warnings.push(
-        `LinkedHelper process(es) detected (PID ${apps.map((a) => String(a.pid)).join(", ")}) but CDP not reachable. Restart may be needed.`,
+      const connectableInstances = apps.filter(
+        (a) => a.role === "instance" && a.connectable && a.cdpPort !== null,
       );
-    }
-  }
-
-  // 2. List accounts and discover instance CDP ports (only if launcher is reachable)
-  if (launcher.reachable) {
-    try {
-      const accounts = await launcherService.listAccounts();
-      const instancePort = await discoverInstancePort(cdpPort);
-
-      for (const account of accounts) {
-        // discoverInstancePort finds a single child-process port but cannot
-        // determine which account owns it.  Assign the port only when there
-        // is exactly one account (the common case); otherwise report null.
-        instances.push({
-          accountId: account.id,
-          accountName: account.name,
-          cdpPort: accounts.length === 1 ? instancePort : null,
-        });
+      if (connectableInstances.length > 0) {
+        warnings.push(
+          "Launcher CDP not available. Instance(s) detected — " +
+            "instance-level operations work, but launcher operations " +
+            "(list-accounts, start/stop-instance) are unavailable. " +
+            "Relaunch LinkedHelper with --remote-debugging-port or use launch-app.",
+        );
+      } else {
+        warnings.push(
+          `LinkedHelper process(es) detected (PID ${apps.map((a) => String(a.pid)).join(", ")}) ` +
+            "but no CDP endpoints are reachable.",
+        );
       }
-    } catch (error: unknown) {
-      warnings.push(`Failed to query accounts: ${errorMessage(error)}`);
-    } finally {
-      launcherService.disconnect();
+    } else {
+      warnings.push("LinkedHelper is not running.");
     }
   }
 

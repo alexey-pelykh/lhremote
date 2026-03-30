@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+import { resolveAppPort } from "../cdp/index.js";
 import type { InstancePopup, UIHealthStatus } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
 import { LauncherService } from "../services/launcher.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 /**
@@ -29,6 +29,10 @@ export interface GetErrorsOutput extends UIHealthStatus {
  * aggregated UI health status including active instance issues,
  * popup overlay state, and instance UI popups.
  *
+ * When the launcher is not available (e.g. connecting directly to an
+ * instance), launcher health is reported as healthy and only instance
+ * popups are checked.
+ *
  * Instance popups are detected on a best-effort basis: if the instance
  * is not running or the UI target is unavailable, the operation still
  * succeeds and returns an empty `instancePopups` array.
@@ -36,7 +40,7 @@ export interface GetErrorsOutput extends UIHealthStatus {
 export async function getErrors(
   input: GetErrorsInput,
 ): Promise<GetErrorsOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort ?? await resolveAppPort("instance");
 
   const cdpOptions = {
     ...(input.cdpHost !== undefined && { host: input.cdpHost }),
@@ -45,13 +49,24 @@ export async function getErrors(
 
   const accountId = await resolveAccount(cdpPort, cdpOptions);
 
-  const launcher = new LauncherService(cdpPort, cdpOptions);
-  let health: UIHealthStatus;
+  // Launcher health check (best-effort — returns default healthy
+  // status when connected directly to an instance)
+  let health: UIHealthStatus = {
+    issues: [],
+    popup: null,
+    instancePopups: [],
+    healthy: true,
+  };
   try {
-    await launcher.connect();
-    health = await launcher.checkUIHealth(accountId);
-  } finally {
-    launcher.disconnect();
+    const launcher = new LauncherService(cdpPort, cdpOptions);
+    try {
+      await launcher.connect();
+      health = await launcher.checkUIHealth(accountId);
+    } finally {
+      launcher.disconnect();
+    }
+  } catch {
+    // Launcher not available — proceed with instance-only health info
   }
 
   // Best-effort: detect instance UI popups if the UI target is available.
