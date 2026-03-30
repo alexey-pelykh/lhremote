@@ -188,6 +188,8 @@ describe("getErrors", () => {
 
     const result = await getErrors({ cdpPort: 9222 });
 
+    expect(discoverInstancePort).toHaveBeenCalledWith(9222);
+    expect(InstanceService).toHaveBeenCalledWith(9223, expect.anything());
     expect(result.instancePopups).toHaveLength(1);
     expect(result.instancePopups[0]?.title).toBe("Failed to initialize UI");
     expect(result.healthy).toBe(false);

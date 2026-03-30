@@ -6,6 +6,7 @@ import type { InstancePopup, UIHealthStatus } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
 import { LauncherService } from "../services/launcher.js";
+import { isLoopbackAddress } from "../utils/loopback.js";
 import type { ConnectionOptions } from "./types.js";
 
 /**
@@ -62,8 +63,8 @@ export async function getErrors(
     const launcher = new LauncherService(cdpPort, cdpOptions);
     try {
       await launcher.connect();
-      health = await launcher.checkUIHealth(accountId);
       connectedToLauncher = true;
+      health = await launcher.checkUIHealth(accountId);
     } finally {
       launcher.disconnect();
     }
@@ -74,15 +75,17 @@ export async function getErrors(
   // Best-effort: detect instance UI popups if the UI target is available.
   // When connected to a launcher, discover the instance's dynamic CDP port
   // first — the launcher port does not host instance UI targets.
+  // Discovery only works locally (process inspection), so skip for remote hosts.
+  const isLocal = input.cdpHost === undefined || isLoopbackAddress(input.cdpHost);
   let instancePopups: InstancePopup[] = [];
-  if (connectedToLauncher) {
+  if (connectedToLauncher && isLocal) {
     const instancePort = await discoverInstancePort(cdpPort).catch(
       () => null,
     );
     if (instancePort !== null) {
       instancePopups = await detectInstancePopups(instancePort, cdpOptions);
     }
-  } else {
+  } else if (!connectedToLauncher) {
     // Direct instance connection — cdpPort IS the instance port
     instancePopups = await detectInstancePopups(cdpPort, cdpOptions);
   }

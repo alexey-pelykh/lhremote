@@ -91,6 +91,8 @@ describe("dismissErrors", () => {
 
     const result = await dismissErrors({ cdpPort: 9222 });
 
+    expect(discoverInstancePort).toHaveBeenCalledWith(9222);
+    expect(InstanceService).toHaveBeenCalledWith(9223, expect.anything());
     expect(result.dismissed).toBe(3);
     expect(result.nonDismissable).toBe(0);
   });
