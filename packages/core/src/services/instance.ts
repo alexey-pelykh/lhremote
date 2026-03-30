@@ -7,7 +7,6 @@ import type { CdpTarget } from "../types/cdp.js";
 import type { InstancePopup } from "../types/index.js";
 import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
-import { VoyagerInterceptor } from "../voyager/index.js";
 import { ActionExecutionError, InstanceNotRunningError, ServiceError, UIBlockedError } from "./errors.js";
 
 /**
@@ -54,7 +53,6 @@ export class InstanceService {
   private uiClient: CDPClient | null = null;
   private healthChecker: HealthChecker | null = null;
   private healthCheckRunning = false;
-  private voyagerInterceptor: VoyagerInterceptor | null = null;
   private humanizedMouse: HumanizedMouse | null = null;
 
   constructor(port: number, options?: { host?: string; timeout?: number; allowRemote?: boolean }) {
@@ -137,7 +135,7 @@ export class InstanceService {
    * Use this for partial-start scenarios where LinkedHelper failed to initialize
    * and the LinkedIn webview was never created. After this call, {@link evaluateUI}
    * and UI-dependent methods work, but LinkedIn-dependent methods like
-   * {@link navigateLinkedIn} and {@link createVoyagerInterceptor} will throw.
+   * {@link navigateLinkedIn} will throw.
    *
    * @throws {InstanceNotRunningError} if the UI target is not found within the timeout.
    */
@@ -182,7 +180,6 @@ export class InstanceService {
    */
   disconnect(): void {
     this.humanizedMouse = null;
-    this.voyagerInterceptor = null;
     this.linkedInClient?.disconnect();
     this.linkedInClient = null;
     this.uiClient?.disconnect();
@@ -403,22 +400,6 @@ export class InstanceService {
       this.humanizedMouse = new HumanizedMouse(this);
     }
     return this.humanizedMouse;
-  }
-
-  /**
-   * Create a {@link VoyagerInterceptor} attached to the LinkedIn WebView.
-   *
-   * Returns a cached instance — only one interceptor exists per
-   * InstanceService connection.  The interceptor is invalidated on
-   * {@link disconnect}.
-   */
-  createVoyagerInterceptor(): VoyagerInterceptor {
-    if (!this.voyagerInterceptor) {
-      this.voyagerInterceptor = new VoyagerInterceptor(
-        this.ensureLinkedInClient(),
-      );
-    }
-    return this.voyagerInterceptor;
   }
 
   /** Whether both clients are currently connected. */
