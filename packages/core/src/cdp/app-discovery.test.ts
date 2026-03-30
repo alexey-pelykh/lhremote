@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { findApp } from "./app-discovery.js";
+import { findApp, resolveAppPort, resolveInstancePort, resolveLauncherPort } from "./app-discovery.js";
+import { LinkedHelperNotRunningError, LinkedHelperUnreachableError } from "../services/errors.js";
 
 vi.mock("pid-port", () => ({
   pidToPorts: vi.fn(),
@@ -168,5 +169,207 @@ describe("findApp", () => {
 
     const result = await findApp();
     expect(result).toEqual([]);
+  });
+});
+
+describe("resolveAppPort", () => {
+  beforeEach(() => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("[]", { status: 200 }),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("should return port when connectable process with matching role exists", async () => {
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 1000, name: "linked-helper", ppid: 1 },
+      { pid: 2000, name: "linked-helper", ppid: 1000 },
+    ]);
+    vi.mocked(pidToPorts)
+      .mockResolvedValueOnce(new Set([9222]) as never)
+      .mockResolvedValueOnce(new Set([55660]) as never);
+
+    const port = await resolveAppPort("instance");
+    expect(port).toBe(55660);
+  });
+
+  it("should return launcher port when launcher role requested", async () => {
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 1000, name: "linked-helper", ppid: 1 },
+      { pid: 2000, name: "linked-helper", ppid: 1000 },
+    ]);
+    vi.mocked(pidToPorts)
+      .mockResolvedValueOnce(new Set([9222]) as never)
+      .mockResolvedValueOnce(new Set([55660]) as never);
+
+    const port = await resolveAppPort("launcher");
+    expect(port).toBe(9222);
+  });
+
+  it("should throw LinkedHelperNotRunningError when no processes found", async () => {
+    vi.mocked(psList).mockResolvedValue([]);
+
+    await expect(resolveAppPort("instance")).rejects.toThrow(LinkedHelperNotRunningError);
+  });
+
+  it("should throw LinkedHelperUnreachableError when processes found but none connectable with role", async () => {
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 1000, name: "linked-helper", ppid: 1 },
+    ]);
+    vi.mocked(pidToPorts).mockResolvedValue(new Set([9222]) as never);
+    // Only launcher found — request instance
+    const port = await resolveAppPort("launcher");
+    expect(port).toBe(9222);
+
+    // Now test the failure case — no instance process
+    await expect(resolveAppPort("instance")).rejects.toThrow(LinkedHelperUnreachableError);
+  });
+
+  it("should select correct role (launcher vs instance)", async () => {
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 1000, name: "linked-helper", ppid: 1 },
+      { pid: 2000, name: "linked-helper", ppid: 1000 },
+    ]);
+    vi.mocked(pidToPorts)
+      .mockResolvedValueOnce(new Set([9222]) as never)
+      .mockResolvedValueOnce(new Set([55660]) as never);
+
+    // First call discovers both
+    const instancePort = await resolveAppPort("instance");
+    expect(instancePort).toBe(55660);
+
+    // Reset mocks for second call
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 1000, name: "linked-helper", ppid: 1 },
+      { pid: 2000, name: "linked-helper", ppid: 1000 },
+    ]);
+    vi.mocked(pidToPorts)
+      .mockResolvedValueOnce(new Set([9222]) as never)
+      .mockResolvedValueOnce(new Set([55660]) as never);
+
+    const launcherPort = await resolveAppPort("launcher");
+    expect(launcherPort).toBe(9222);
+  });
+});
+
+describe("resolveInstancePort", () => {
+  beforeEach(() => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("[]", { status: 200 }),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("should return explicit port when provided", async () => {
+    const port = await resolveInstancePort(12345);
+    expect(port).toBe(12345);
+  });
+
+  it("should return explicit port even with non-loopback host", async () => {
+    const port = await resolveInstancePort(12345, "192.168.1.100");
+    expect(port).toBe(12345);
+  });
+
+  it("should throw when non-loopback host and no port", async () => {
+    await expect(resolveInstancePort(undefined, "192.168.1.100")).rejects.toThrow(
+      "cdpPort is required when using a non-loopback cdpHost",
+    );
+  });
+
+  it("should throw when remote hostname and no port", async () => {
+    await expect(resolveInstancePort(undefined, "my-server.example.com")).rejects.toThrow(
+      "cdpPort is required when using a non-loopback cdpHost",
+    );
+  });
+
+  it("should auto-discover when no host specified", async () => {
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 1000, name: "linked-helper", ppid: 1 },
+      { pid: 2000, name: "linked-helper", ppid: 1000 },
+    ]);
+    vi.mocked(pidToPorts)
+      .mockResolvedValueOnce(new Set([9222]) as never)
+      .mockResolvedValueOnce(new Set([55660]) as never);
+
+    const port = await resolveInstancePort();
+    expect(port).toBe(55660);
+  });
+
+  it("should auto-discover when host is localhost", async () => {
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 1000, name: "linked-helper", ppid: 1 },
+      { pid: 2000, name: "linked-helper", ppid: 1000 },
+    ]);
+    vi.mocked(pidToPorts)
+      .mockResolvedValueOnce(new Set([9222]) as never)
+      .mockResolvedValueOnce(new Set([55660]) as never);
+
+    const port = await resolveInstancePort(undefined, "localhost");
+    expect(port).toBe(55660);
+  });
+
+  it("should auto-discover when host is 127.0.0.1", async () => {
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 1000, name: "linked-helper", ppid: 1 },
+      { pid: 2000, name: "linked-helper", ppid: 1000 },
+    ]);
+    vi.mocked(pidToPorts)
+      .mockResolvedValueOnce(new Set([9222]) as never)
+      .mockResolvedValueOnce(new Set([55660]) as never);
+
+    const port = await resolveInstancePort(undefined, "127.0.0.1");
+    expect(port).toBe(55660);
+  });
+
+  it("should auto-discover when host is IPv6 loopback", async () => {
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 1000, name: "linked-helper", ppid: 1 },
+      { pid: 2000, name: "linked-helper", ppid: 1000 },
+    ]);
+    vi.mocked(pidToPorts)
+      .mockResolvedValueOnce(new Set([9222]) as never)
+      .mockResolvedValueOnce(new Set([55660]) as never);
+
+    const port = await resolveInstancePort(undefined, "::1");
+    expect(port).toBe(55660);
+  });
+});
+
+describe("resolveLauncherPort", () => {
+  beforeEach(() => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("[]", { status: 200 }),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("should return explicit port when provided", async () => {
+    const port = await resolveLauncherPort(9222);
+    expect(port).toBe(9222);
+  });
+
+  it("should throw when non-loopback host and no port", async () => {
+    await expect(resolveLauncherPort(undefined, "10.0.0.5")).rejects.toThrow(
+      "cdpPort is required when using a non-loopback cdpHost",
+    );
+  });
+
+  it("should auto-discover when no host specified", async () => {
+    vi.mocked(psList).mockResolvedValue([
+      { pid: 1000, name: "linked-helper", ppid: 1 },
+    ]);
+    vi.mocked(pidToPorts).mockResolvedValue(new Set([9222]) as never);
+
+    const port = await resolveLauncherPort();
+    expect(port).toBe(9222);
   });
 });

@@ -10,6 +10,8 @@ export {
 export {
   findApp,
   resolveAppPort,
+  resolveInstancePort,
+  resolveLauncherPort,
   type AppRole,
   type DiscoveredApp,
 } from "./app-discovery.js";

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { resolveAppPort } from "../cdp/index.js";
+import { resolveInstancePort } from "../cdp/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
 import { LauncherService } from "../services/launcher.js";
@@ -34,7 +34,7 @@ export interface DismissErrorsOutput {
 export async function dismissErrors(
   input: DismissErrorsInput,
 ): Promise<DismissErrorsOutput> {
-  const cdpPort = input.cdpPort ?? await resolveAppPort("instance");
+  const cdpPort = await resolveInstancePort(input.cdpPort, input.cdpHost);
 
   const cdpOptions = {
     ...(input.cdpHost !== undefined && { host: input.cdpHost }),

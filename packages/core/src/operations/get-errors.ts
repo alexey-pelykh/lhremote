@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { resolveAppPort } from "../cdp/index.js";
+import { resolveInstancePort } from "../cdp/index.js";
 import type { InstancePopup, UIHealthStatus } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
@@ -40,7 +40,7 @@ export interface GetErrorsOutput extends UIHealthStatus {
 export async function getErrors(
   input: GetErrorsInput,
 ): Promise<GetErrorsOutput> {
-  const cdpPort = input.cdpPort ?? await resolveAppPort("instance");
+  const cdpPort = await resolveInstancePort(input.cdpPort, input.cdpHost);
 
   const cdpOptions = {
     ...(input.cdpHost !== undefined && { host: input.cdpHost }),
