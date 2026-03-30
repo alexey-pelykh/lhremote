@@ -5,7 +5,6 @@ import type { CampaignActionResult, CampaignStatus } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { CampaignService } from "../services/campaign.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 /**
@@ -35,7 +34,7 @@ export interface CampaignStatusOutput extends CampaignStatus {
 export async function campaignStatus(
   input: CampaignStatusInput,
 ): Promise<CampaignStatusOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort;
   const limit = input.limit ?? 20;
 
   const accountId = await resolveAccount(cdpPort, {

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { DatabaseClient, type DatabaseClientOptions, discoverDatabase } from "../db/index.js";
-import { discoverInstancePort } from "../cdp/index.js";
+import { discoverInstancePort, findApp, resolveAppPort } from "../cdp/index.js";
 import type { UIHealthStatus } from "../types/index.js";
 import { InstanceService } from "./instance.js";
 import { LauncherService } from "./launcher.js";
@@ -51,6 +51,10 @@ export async function withDatabase<T>(
  *
  * All resources are cleaned up automatically when the callback finishes.
  *
+ * When {@link cdpPort} is omitted, the instance port is auto-discovered
+ * via {@link resolveAppPort}.  When the provided port is an instance
+ * port (rather than a launcher port), it is used directly.
+ *
  * A launcher connection is opened alongside the instance so that
  * post-evaluation UI health checks can detect blocking dialogs and
  * popups.  If the launcher connection fails the operation proceeds
@@ -59,7 +63,7 @@ export async function withDatabase<T>(
  * @throws {InstanceNotRunningError} if no instance port can be discovered.
  */
 export async function withInstanceDatabase<T>(
-  cdpPort: number,
+  cdpPort: number | undefined,
   accountId: number,
   callback: (ctx: InstanceDatabaseContext) => T | Promise<T>,
   options?: {
@@ -68,12 +72,7 @@ export async function withInstanceDatabase<T>(
     launcher?: { host?: string; allowRemote?: boolean };
   },
 ): Promise<T> {
-  const instancePort = await discoverInstancePort(cdpPort);
-  if (instancePort === null) {
-    throw new InstanceNotRunningError(
-      "No LinkedHelper instance is running. Use start-instance first.",
-    );
-  }
+  const { instancePort, launcherPort } = await resolveInstancePort(cdpPort);
 
   const instance = new InstanceService(
     instancePort,
@@ -86,28 +85,30 @@ export async function withInstanceDatabase<T>(
     await instance.connect();
 
     // Open a launcher connection for health checking.
-    try {
-      launcher = new LauncherService(cdpPort, options?.launcher);
-      await launcher.connect();
-      const connectedLauncher = launcher;
-      instance.setHealthChecker(async () => {
-        const [launcherHealth, instancePopups] = await Promise.all([
-          connectedLauncher.checkUIHealth(accountId),
-          instance.getInstancePopups(),
-        ]);
-        const health: UIHealthStatus = {
-          ...launcherHealth,
-          instancePopups: [...launcherHealth.instancePopups, ...instancePopups],
-          healthy: launcherHealth.healthy && instancePopups.length === 0,
-        };
-        if (!health.healthy) {
-          throw new UIBlockedError(health);
-        }
-      });
-    } catch {
-      // Launcher connection failed — proceed without health checking.
-      launcher?.disconnect();
-      launcher = null;
+    if (launcherPort !== null) {
+      try {
+        launcher = new LauncherService(launcherPort, options?.launcher);
+        await launcher.connect();
+        const connectedLauncher = launcher;
+        instance.setHealthChecker(async () => {
+          const [launcherHealth, instancePopups] = await Promise.all([
+            connectedLauncher.checkUIHealth(accountId),
+            instance.getInstancePopups(),
+          ]);
+          const health: UIHealthStatus = {
+            ...launcherHealth,
+            instancePopups: [...launcherHealth.instancePopups, ...instancePopups],
+            healthy: launcherHealth.healthy && instancePopups.length === 0,
+          };
+          if (!health.healthy) {
+            throw new UIBlockedError(health);
+          }
+        });
+      } catch {
+        // Launcher connection failed — proceed without health checking.
+        launcher?.disconnect();
+        launcher = null;
+      }
     }
 
     const dbPath = discoverDatabase(accountId);
@@ -119,4 +120,51 @@ export async function withInstanceDatabase<T>(
     launcher?.disconnect();
     db?.close();
   }
+}
+
+/**
+ * Resolve the instance and launcher ports from the provided cdpPort.
+ *
+ * When cdpPort is undefined, auto-discovers via {@link resolveAppPort}.
+ * When cdpPort is a launcher port, discovers instance from its children.
+ * When cdpPort is an instance port, uses it directly.
+ */
+async function resolveInstancePort(
+  cdpPort: number | undefined,
+): Promise<{ instancePort: number; launcherPort: number | null }> {
+  // Auto-discover when no port provided
+  if (cdpPort === undefined) {
+    const instancePort = await resolveAppPort("instance");
+    // Try to find a launcher port for health checking
+    let launcherPort: number | null = null;
+    try {
+      launcherPort = await resolveAppPort("launcher");
+    } catch {
+      // Launcher not available — proceed without it
+    }
+    return { instancePort, launcherPort };
+  }
+
+  // Try launcher-based discovery (current behavior)
+  const instancePort = await discoverInstancePort(cdpPort);
+  if (instancePort !== null) {
+    return { instancePort, launcherPort: cdpPort };
+  }
+
+  // The provided port might be an instance port itself
+  const apps = await findApp();
+  const match = apps.find(
+    (a) => a.cdpPort === cdpPort && a.role === "instance" && a.connectable,
+  );
+  if (match) {
+    // Find launcher port for health checking
+    const launcherMatch = apps.find(
+      (a) => a.role === "launcher" && a.connectable && a.cdpPort !== null,
+    );
+    return { instancePort: cdpPort, launcherPort: launcherMatch?.cdpPort ?? null };
+  }
+
+  throw new InstanceNotRunningError(
+    "No LinkedHelper instance is running. Use start-instance first.",
+  );
 }

@@ -5,7 +5,6 @@ import type { CampaignSummary } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withDatabase } from "../services/instance-context.js";
 import { CampaignRepository } from "../db/index.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 /**
@@ -29,7 +28,7 @@ export interface CampaignListOutput {
 export async function campaignList(
   input: CampaignListInput,
 ): Promise<CampaignListOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort;
   const includeArchived = input.includeArchived ?? false;
 
   const accountId = await resolveAccount(cdpPort, {

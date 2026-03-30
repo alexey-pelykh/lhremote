@@ -5,7 +5,6 @@ import type { Campaign, CampaignConfig } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { CampaignService } from "../services/campaign.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 /**
@@ -26,7 +25,7 @@ export type CampaignCreateOutput = Campaign;
 export async function campaignCreate(
   input: CampaignCreateInput,
 ): Promise<CampaignCreateOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort;
 
   const accountId = await resolveAccount(cdpPort, {
     ...(input.cdpHost !== undefined && { host: input.cdpHost }),

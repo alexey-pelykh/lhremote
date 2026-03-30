@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+import { resolveAppPort } from "../cdp/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
 import { LauncherService } from "../services/launcher.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 /**
@@ -27,11 +27,14 @@ export interface DismissErrorsOutput {
  * Connects to the launcher and instance UI (LinkedIn webview is not
  * required), finds popup close/OK buttons, and clicks them via CDP.
  * Returns the number of dismissed vs non-dismissable popups.
+ *
+ * When the launcher is not available (e.g. connecting directly to an
+ * instance), launcher popup dismissal is skipped gracefully.
  */
 export async function dismissErrors(
   input: DismissErrorsInput,
 ): Promise<DismissErrorsOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort ?? await resolveAppPort("instance");
 
   const cdpOptions = {
     ...(input.cdpHost !== undefined && { host: input.cdpHost }),
@@ -43,22 +46,27 @@ export async function dismissErrors(
   let dismissed = 0;
   let nonDismissable = 0;
 
-  // Dismiss launcher popup
-  const launcher = new LauncherService(cdpPort, cdpOptions);
+  // Dismiss launcher popup (best-effort — skipped when connected
+  // directly to an instance or launcher is unreachable)
   try {
-    await launcher.connect();
-    const popupDismissed = await launcher.dismissPopup();
-    if (popupDismissed) {
-      dismissed++;
-    } else {
-      // Check if there's a non-dismissable popup
-      const popupState = await launcher.getPopupState();
-      if (popupState !== null && popupState.blocked) {
-        nonDismissable++;
+    const launcher = new LauncherService(cdpPort, cdpOptions);
+    try {
+      await launcher.connect();
+      const popupDismissed = await launcher.dismissPopup();
+      if (popupDismissed) {
+        dismissed++;
+      } else {
+        // Check if there's a non-dismissable popup
+        const popupState = await launcher.getPopupState();
+        if (popupState !== null && popupState.blocked) {
+          nonDismissable++;
+        }
       }
+    } finally {
+      launcher.disconnect();
     }
-  } finally {
-    launcher.disconnect();
+  } catch {
+    // Launcher not available at this port — skip launcher popup dismissal
   }
 
   // Dismiss instance UI popups

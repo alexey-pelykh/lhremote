@@ -4,7 +4,6 @@
 import type { ThrottleStatus } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 export type GetThrottleStatusInput = ConnectionOptions;
@@ -14,7 +13,7 @@ export type GetThrottleStatusOutput = ThrottleStatus;
 export async function getThrottleStatus(
   input: GetThrottleStatusInput,
 ): Promise<GetThrottleStatusOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort;
 
   const accountId = await resolveAccount(cdpPort, {
     ...(input.cdpHost !== undefined && { host: input.cdpHost }),

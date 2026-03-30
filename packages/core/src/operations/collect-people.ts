@@ -7,7 +7,6 @@ import { withInstanceDatabase } from "../services/instance-context.js";
 import { CollectionService } from "../services/collection.js";
 import { CollectionError } from "../services/errors.js";
 import { detectSourceType, validateSourceType } from "../services/source-type-registry.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 /**
@@ -51,7 +50,7 @@ export interface CollectPeopleOutput {
 export async function collectPeople(
   input: CollectPeopleInput,
 ): Promise<CollectPeopleOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort;
 
   // Resolve source type: explicit override or URL detection
   let sourceType: SourceType;

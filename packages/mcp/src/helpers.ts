@@ -5,7 +5,6 @@ import {
   AccountResolutionError,
   BudgetExceededError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   LinkedHelperNotRunningError,
   LinkedHelperUnreachableError,
@@ -30,8 +29,7 @@ export const cdpConnectionSchema = {
     .int()
     .positive()
     .optional()
-    .default(DEFAULT_CDP_PORT)
-    .describe("CDP port"),
+    .describe("CDP port (auto-discovered from running LinkedHelper processes when omitted)"),
   cdpHost: z
     .string()
     .optional()
@@ -88,6 +86,17 @@ export function mcpSuccess(text: string): McpResult {
 export function mapErrorToMcpResponse(error: unknown): McpResult | undefined {
   if (error instanceof LinkedHelperUnreachableError) {
     const pids = error.processes.map((p) => String(p.pid)).join(", ");
+    const connectableInstances = error.processes.filter(
+      (p) => p.role === "instance" && p.connectable && p.cdpPort !== null,
+    );
+    if (connectableInstances.length > 0) {
+      return mcpError(
+        `Launcher CDP not available (PID ${pids}). ` +
+          "Instance(s) detected — instance-level operations work, " +
+          "but launcher operations (list-accounts, start/stop-instance) are unavailable. " +
+          "Relaunch LinkedHelper with --remote-debugging-port or use launch-app.",
+      );
+    }
     return mcpError(
       `LinkedHelper is running (PID ${pids}) but CDP is not reachable. ` +
         "Restart LinkedHelper or use launch-app with force: true.",

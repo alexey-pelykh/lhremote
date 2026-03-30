@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../cdp/index.js", () => ({
   discoverInstancePort: vi.fn(),
   findApp: vi.fn(),
+  resolveAppPort: vi.fn(),
 }));
 
 vi.mock("../db/index.js", () => ({
@@ -17,7 +18,7 @@ vi.mock("./launcher.js", () => ({
   LauncherService: vi.fn(),
 }));
 
-import { discoverInstancePort, findApp } from "../cdp/index.js";
+import { discoverInstancePort, findApp, resolveAppPort } from "../cdp/index.js";
 import { DatabaseClient, discoverAllDatabases } from "../db/index.js";
 import { LauncherService } from "./launcher.js";
 import { checkStatus } from "./status.js";
@@ -25,6 +26,7 @@ import { checkStatus } from "./status.js";
 const mockedLauncherService = vi.mocked(LauncherService);
 const mockedDiscoverInstancePort = vi.mocked(discoverInstancePort);
 const mockedFindApp = vi.mocked(findApp);
+const mockedResolveAppPort = vi.mocked(resolveAppPort);
 const mockedDiscoverAllDatabases = vi.mocked(discoverAllDatabases);
 const mockedDatabaseClient = vi.mocked(DatabaseClient);
 
@@ -125,13 +127,15 @@ describe("checkStatus", () => {
     expect(mockedLauncherService).toHaveBeenCalledWith(4567, undefined);
   });
 
-  it("defaults cdpPort to 9222", async () => {
+  it("auto-discovers launcher port when cdpPort omitted", async () => {
+    mockedResolveAppPort.mockResolvedValue(9222);
     mockLauncher();
     mockedDiscoverInstancePort.mockResolvedValue(null);
     mockedDiscoverAllDatabases.mockReturnValue(new Map());
 
     const report = await checkStatus();
 
+    expect(mockedResolveAppPort).toHaveBeenCalledWith("launcher");
     expect(report.launcher.port).toBe(9222);
   });
 

@@ -4,9 +4,12 @@
 /**
  * Connection options shared by all operations that need to reach a
  * running LinkedHelper instance via CDP.
+ *
+ * When {@link cdpPort} is omitted, the appropriate port is
+ * auto-discovered from running LinkedHelper processes.
  */
 export interface ConnectionOptions {
-  readonly cdpPort: number;
+  readonly cdpPort?: number | undefined;
   readonly cdpHost?: string | undefined;
   readonly allowRemote?: boolean | undefined;
 }

@@ -4,7 +4,6 @@
 import { resolveAccount } from "../services/account-resolution.js";
 import { withDatabase } from "../services/instance-context.js";
 import { CampaignStatisticsRepository } from "../db/index.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 export interface CampaignRetryInput extends ConnectionOptions {
@@ -22,7 +21,7 @@ export interface CampaignRetryOutput {
 export async function campaignRetry(
   input: CampaignRetryInput,
 ): Promise<CampaignRetryOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort;
 
   const accountId = await resolveAccount(cdpPort, {
     ...(input.cdpHost !== undefined && { host: input.cdpHost }),

@@ -3,6 +3,7 @@
 
 import { pidToPorts } from "pid-port";
 import psList from "ps-list";
+import { LinkedHelperNotRunningError, LinkedHelperUnreachableError } from "../services/errors.js";
 import { isCdpPort } from "../utils/cdp-port.js";
 
 /**
@@ -69,6 +70,37 @@ export async function findApp(): Promise<DiscoveredApp[]> {
   return Promise.all(
     roledProcesses.map((p) => probeProcess(p.pid, p.role)),
   );
+}
+
+/**
+ * Discover the CDP port for a running LinkedHelper process with the
+ * specified role.
+ *
+ * Scans running processes via {@link findApp} and returns the first
+ * connectable port matching the requested role.
+ *
+ * @param role - Process role to look for (`"launcher"` or `"instance"`).
+ * @returns The CDP port number.
+ * @throws {LinkedHelperNotRunningError} if no LinkedHelper processes are found.
+ * @throws {LinkedHelperUnreachableError} if processes are found but none are
+ *   connectable with the requested role.
+ */
+export async function resolveAppPort(
+  role: "launcher" | "instance",
+): Promise<number> {
+  const apps = await findApp();
+  if (apps.length === 0) {
+    throw new LinkedHelperNotRunningError();
+  }
+
+  const match = apps.find(
+    (a) => a.role === role && a.connectable && a.cdpPort !== null,
+  );
+  if (match?.cdpPort !== null && match?.cdpPort !== undefined) {
+    return match.cdpPort;
+  }
+
+  throw new LinkedHelperUnreachableError(apps);
 }
 
 /**

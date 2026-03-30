@@ -137,7 +137,7 @@ describe("getErrors", () => {
     });
   });
 
-  it("disconnects launcher even on error", async () => {
+  it("disconnects launcher and returns healthy status when launcher throws", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
 
     const mock = {
@@ -149,8 +149,12 @@ describe("getErrors", () => {
       return mock as unknown as LauncherService;
     });
 
-    await expect(getErrors({ cdpPort: 9222 })).rejects.toThrow("CDP failure");
+    const result = await getErrors({ cdpPort: 9222 });
+
     expect(mock.disconnect).toHaveBeenCalledOnce();
+    expect(result.healthy).toBe(true);
+    expect(result.issues).toEqual([]);
+    expect(result.instancePopups).toEqual([]);
   });
 
   it("propagates resolveAccount errors", async () => {

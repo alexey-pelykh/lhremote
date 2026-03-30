@@ -5,7 +5,6 @@ import type { Profile } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { ProfileRepository } from "../db/index.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 export interface VisitProfileInput extends ConnectionOptions {
@@ -39,7 +38,7 @@ export async function visitProfile(
     throw new Error("Exactly one of personId or url must be provided");
   }
 
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort;
 
   const accountId = await resolveAccount(cdpPort, {
     ...(input.cdpHost !== undefined && { host: input.cdpHost }),

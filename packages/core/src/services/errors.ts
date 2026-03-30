@@ -42,9 +42,11 @@ export class AppLaunchError extends ServiceError {
  * Thrown when the LinkedHelper launcher is not reachable via CDP.
  */
 export class LinkedHelperNotRunningError extends ServiceError {
-  constructor(port: number) {
+  constructor(port?: number) {
     super(
-      `LinkedHelper is not running (no CDP endpoint at port ${String(port)})`,
+      port !== undefined
+        ? `LinkedHelper is not running (no CDP endpoint at port ${String(port)})`
+        : "LinkedHelper is not running (no processes found)",
     );
     this.name = "LinkedHelperNotRunningError";
   }
@@ -99,12 +101,15 @@ export class InstanceNotRunningError extends ServiceError {
  * (webview) rather than the launcher process.
  */
 export class WrongPortError extends ServiceError {
+  readonly port: number;
+
   constructor(port: number) {
     super(
       `CDP port ${String(port)} appears to be a LinkedHelper instance, not the launcher. ` +
         `Use the launcher port instead (default: ${String(DEFAULT_CDP_PORT)}).`,
     );
     this.name = "WrongPortError";
+    this.port = port;
   }
 }
 

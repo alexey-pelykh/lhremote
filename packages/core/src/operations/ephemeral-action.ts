@@ -5,7 +5,6 @@ import type { ActionSettings, EphemeralActionResult } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { EphemeralCampaignService } from "../services/ephemeral-campaign.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { ConnectionOptions } from "./types.js";
 
 /**
@@ -37,7 +36,7 @@ export async function executeEphemeralAction(
   }
 
   const target: number | string = input.personId ?? (input.url as string);
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort;
 
   const accountId = await resolveAccount(cdpPort, {
     ...(input.cdpHost !== undefined && { host: input.cdpHost }),

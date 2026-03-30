@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+import { resolveAppPort } from "../cdp/index.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import { humanizedClick, humanizedHover, waitForElement } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import {
@@ -81,7 +81,7 @@ export interface ReactToPostOutput {
 export async function reactToPost(
   input: ReactToPostInput,
 ): Promise<ReactToPostOutput> {
-  const cdpPort = input.cdpPort ?? DEFAULT_CDP_PORT;
+  const cdpPort = input.cdpPort ?? await resolveAppPort("instance");
   const cdpHost = input.cdpHost ?? "127.0.0.1";
   const allowRemote = input.allowRemote ?? false;
   const reactionType = input.reactionType ?? "like";
