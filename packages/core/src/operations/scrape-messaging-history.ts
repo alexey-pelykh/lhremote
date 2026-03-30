@@ -62,13 +62,13 @@ export async function scrapeMessagingHistory(
       linkedInUrls.push(`https://www.linkedin.com/in/${publicId.externalId}`);
     }
 
-    // Capture runner state and stop if active to avoid SQLite lock contention
-    const runnerWasActive = (await campaignService.getRunnerState()) !== "idle";
-    await campaignService.stopRunnerAndWaitForIdle();
-
+    let runnerWasActive = false;
     let campaign: { id: number } | undefined;
     let pausedCampaignIds: number[] = [];
     try {
+      // Capture runner state and stop if active to avoid SQLite lock contention
+      runnerWasActive = (await campaignService.getRunnerState()) !== "idle";
+      await campaignService.stopRunnerAndWaitForIdle();
       // Create ephemeral campaign with ScrapeMessagingHistory action
       campaign = await campaignService.create({
         name: `[ephemeral] ScrapeMessagingHistory ${new Date().toISOString()}`,
