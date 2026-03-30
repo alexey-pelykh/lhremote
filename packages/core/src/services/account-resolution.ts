@@ -4,7 +4,12 @@
 import { resolveAppPort } from "../cdp/index.js";
 import { discoverAllDatabases } from "../db/index.js";
 import type { Account } from "../types/index.js";
-import { ServiceError, WrongPortError } from "./errors.js";
+import {
+  LinkedHelperNotRunningError,
+  LinkedHelperUnreachableError,
+  ServiceError,
+  WrongPortError,
+} from "./errors.js";
 import { LauncherService } from "./launcher.js";
 
 /**
@@ -42,7 +47,22 @@ export async function resolveAccount(
   cdpPort?: number,
   options?: { host?: string; allowRemote?: boolean },
 ): Promise<number> {
-  const port = cdpPort ?? await resolveAppPort("launcher");
+  let port: number;
+  try {
+    port = cdpPort ?? await resolveAppPort("launcher");
+  } catch (error: unknown) {
+    // When cdpPort was omitted and the launcher is unreachable or not
+    // running, fall back to database-based resolution instead of
+    // propagating the error (the "instance-only" scenario).
+    if (
+      cdpPort === undefined &&
+      (error instanceof LinkedHelperUnreachableError ||
+        error instanceof LinkedHelperNotRunningError)
+    ) {
+      return resolveAccountFromDatabases();
+    }
+    throw error;
+  }
 
   try {
     return await resolveAccountViaLauncher(port, options);

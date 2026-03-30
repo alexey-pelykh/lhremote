@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { DiscoveredApp } from "../cdp/index.js";
-import { DEFAULT_CDP_PORT } from "../constants.js";
 import type { UIHealthStatus } from "../types/index.js";
 
 /**
@@ -106,7 +105,7 @@ export class WrongPortError extends ServiceError {
   constructor(port: number) {
     super(
       `CDP port ${String(port)} appears to be a LinkedHelper instance, not the launcher. ` +
-        `Use the launcher port instead (default: ${String(DEFAULT_CDP_PORT)}).`,
+        "Use the launcher port instead (omit cdpPort to auto-discover).",
     );
     this.name = "WrongPortError";
     this.port = port;

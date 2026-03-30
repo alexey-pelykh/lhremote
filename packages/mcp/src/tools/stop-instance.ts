@@ -27,40 +27,44 @@ export function registerStopInstance(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ accountId, cdpPort, cdpHost, allowRemote }) => {
-      const port = cdpPort ?? await resolveAppPort("launcher");
-      const launcher = new LauncherService(port, buildCdpOptions({ cdpHost, allowRemote }));
-
       try {
-        await launcher.connect();
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
+        const port = cdpPort ?? await resolveAppPort("launcher");
+        const launcher = new LauncherService(port, buildCdpOptions({ cdpHost, allowRemote }));
 
-      try {
-        let resolvedId = accountId;
-
-        if (resolvedId === undefined) {
-          const accounts = await launcher.listAccounts();
-          if (accounts.length === 0) {
-            return mcpError("No accounts found.");
-          }
-          if (accounts.length > 1) {
-            return mcpError(
-              "Multiple accounts found. Specify accountId. Use list-accounts to see available accounts.",
-            );
-          }
-          resolvedId = (accounts[0] as Account).id;
+        try {
+          await launcher.connect();
+        } catch (error) {
+          return mcpCatchAll(error, "Failed to connect to LinkedHelper");
         }
 
-        await launcher.stopInstance(resolvedId);
+        try {
+          let resolvedId = accountId;
 
-        return mcpSuccess(
-          `Instance stopped for account ${String(resolvedId)}`,
-        );
+          if (resolvedId === undefined) {
+            const accounts = await launcher.listAccounts();
+            if (accounts.length === 0) {
+              return mcpError("No accounts found.");
+            }
+            if (accounts.length > 1) {
+              return mcpError(
+                "Multiple accounts found. Specify accountId. Use list-accounts to see available accounts.",
+              );
+            }
+            resolvedId = (accounts[0] as Account).id;
+          }
+
+          await launcher.stopInstance(resolvedId);
+
+          return mcpSuccess(
+            `Instance stopped for account ${String(resolvedId)}`,
+          );
+        } catch (error) {
+          return mcpCatchAll(error, "Failed to stop instance");
+        } finally {
+          launcher.disconnect();
+        }
       } catch (error) {
         return mcpCatchAll(error, "Failed to stop instance");
-      } finally {
-        launcher.disconnect();
       }
     },
   );

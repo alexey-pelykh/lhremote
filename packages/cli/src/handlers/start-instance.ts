@@ -14,7 +14,17 @@ export async function handleStartInstance(
   options: { cdpPort?: number; cdpHost?: string; allowRemote?: boolean },
 ): Promise<void> {
   const accountId = Number(accountIdArg);
-  const cdpPort = options.cdpPort ?? await resolveAppPort("launcher");
+
+  let cdpPort: number;
+  try {
+    cdpPort = options.cdpPort ?? await resolveAppPort("launcher");
+  } catch (error) {
+    const message = errorMessage(error);
+    process.stderr.write(`${message}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
   const launcher = new LauncherService(cdpPort, {
     ...(options.cdpHost !== undefined && { host: options.cdpHost }),
     ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),

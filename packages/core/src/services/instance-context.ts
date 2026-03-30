@@ -4,6 +4,7 @@
 import { DatabaseClient, type DatabaseClientOptions, discoverDatabase } from "../db/index.js";
 import { discoverInstancePort, findApp, resolveAppPort } from "../cdp/index.js";
 import type { UIHealthStatus } from "../types/index.js";
+import { isCdpPort } from "../utils/cdp-port.js";
 import { InstanceService } from "./instance.js";
 import { LauncherService } from "./launcher.js";
 import { InstanceNotRunningError, UIBlockedError } from "./errors.js";
@@ -151,17 +152,36 @@ async function resolveInstancePort(
     return { instancePort, launcherPort: cdpPort };
   }
 
-  // The provided port might be an instance port itself
-  const apps = await findApp();
-  const match = apps.find(
-    (a) => a.cdpPort === cdpPort && a.role === "instance" && a.connectable,
-  );
-  if (match) {
-    // Find launcher port for health checking
-    const launcherMatch = apps.find(
+  // The provided port might be an instance port itself.
+  // findApp() is best-effort — if it fails or does not list the port,
+  // we fall back to probing the port directly with isCdpPort.  When the
+  // port is valid, InstanceService.connect will succeed regardless of
+  // what findApp() reports.
+  let launcherPort: number | null = null;
+  try {
+    const apps = await findApp();
+    const match = apps.find(
+      (a) => a.cdpPort === cdpPort && a.role === "instance" && a.connectable,
+    );
+    if (match) {
+      const launcherMatch = apps.find(
+        (a) => a.role === "launcher" && a.connectable && a.cdpPort !== null,
+      );
+      return { instancePort: cdpPort, launcherPort: launcherMatch?.cdpPort ?? null };
+    }
+    // Capture launcher port even when the instance match fails —
+    // we may still succeed via the CDP probe below.
+    const launcherApp = apps.find(
       (a) => a.role === "launcher" && a.connectable && a.cdpPort !== null,
     );
-    return { instancePort: cdpPort, launcherPort: launcherMatch?.cdpPort ?? null };
+    launcherPort = launcherApp?.cdpPort ?? null;
+  } catch {
+    // findApp() failed — fall through to CDP probe
+  }
+
+  // Last resort: probe the port directly
+  if (await isCdpPort(cdpPort)) {
+    return { instancePort: cdpPort, launcherPort };
   }
 
   throw new InstanceNotRunningError(
