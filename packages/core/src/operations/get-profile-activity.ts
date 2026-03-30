@@ -238,49 +238,61 @@ async function captureActivityPostUrl(
   postIndex: number,
   mouse?: HumanizedMouse | null,
 ): Promise<string | null> {
-  await maybeHesitate(); // Probabilistic pause before menu interaction
+  const MAX_ATTEMPTS = 3;
 
-  // Reset clipboard capture
-  await client.evaluate(`window.__capturedClipboard = null;`);
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    await maybeHesitate(); // Probabilistic pause before menu interaction
 
-  // Scroll the menu button into view (humanized when mouse available)
-  await humanizedScrollToByIndex(client, ACTIVITY_MENU_BUTTON_SELECTOR, postIndex, mouse);
+    // Reset clipboard capture
+    await client.evaluate(`window.__capturedClipboard = null;`);
 
-  // Click the menu button
-  const clicked = await client.evaluate<boolean>(`(() => {
-    const btns = document.querySelectorAll(
-      ${JSON.stringify(ACTIVITY_MENU_BUTTON_SELECTOR)}
-    );
-    const btn = btns[${postIndex}];
-    if (!btn) return false;
-    btn.click();
-    return true;
-  })()`);
+    // Scroll the menu button into view (humanized when mouse available)
+    await humanizedScrollToByIndex(client, ACTIVITY_MENU_BUTTON_SELECTOR, postIndex, mouse);
 
-  if (!clicked) return null;
+    // Click the menu button
+    const clicked = await client.evaluate<boolean>(`(() => {
+      const btns = document.querySelectorAll(
+        ${JSON.stringify(ACTIVITY_MENU_BUTTON_SELECTOR)}
+      );
+      const btn = btns[${postIndex}];
+      if (!btn) return false;
+      btn.click();
+      return true;
+    })()`);
 
-  await randomDelay(500, 900);
+    if (!clicked) return null; // No menu button — structural, retrying won't help
 
-  // Click "Copy link to post" menu item
-  await client.evaluate(`(() => {
-    for (const el of document.querySelectorAll('[role="menuitem"]')) {
-      if (el.textContent.trim() === 'Copy link to post') {
-        el.click();
-        return;
+    await randomDelay(500, 900);
+
+    // Click "Copy link to post" menu item
+    await client.evaluate(`(() => {
+      for (const el of document.querySelectorAll('[role="menuitem"]')) {
+        if (el.textContent.trim() === 'Copy link to post') {
+          el.click();
+          return;
+        }
       }
+    })()`);
+
+    await randomDelay(400, 700);
+
+    // Read captured URL
+    const postUrl =
+      await client.evaluate<string | null>(`window.__capturedClipboard`);
+
+    if (postUrl) {
+      // Strip query parameters
+      return postUrl.split("?")[0] ?? postUrl;
     }
-  })()`);
 
-  await randomDelay(400, 700);
+    // Dismiss any open menu before retrying
+    await client.evaluate(`(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    })()`);
+    await randomDelay(300, 500);
+  }
 
-  // Read captured URL
-  const postUrl =
-    await client.evaluate<string | null>(`window.__capturedClipboard`);
-
-  if (!postUrl) return null;
-
-  // Strip query parameters
-  return postUrl.split("?")[0] ?? postUrl;
+  return null;
 }
 
 // ---------------------------------------------------------------------------

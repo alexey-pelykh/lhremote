@@ -309,14 +309,26 @@ describe("getProfileActivity", () => {
   });
 
   it("handles posts where URL extraction fails", async () => {
-    setupMocks([rawPost()], [null]);
+    setupMocks([rawPost()], [null, null, null]);
 
     const result = await getProfileActivity({
       cdpPort: CDP_PORT,
       profile: "johndoe",
     });
 
-    expect(result.posts[0]?.url).toBe("");
+    expect(result.posts[0]?.url).toBeNull();
+  });
+
+  it("retries URL extraction when clipboard capture fails on first attempt", async () => {
+    const retryUrl = "https://www.linkedin.com/feed/update/urn:li:share:retried/";
+    setupMocks([rawPost()], [null, retryUrl]);
+
+    const result = await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "johndoe",
+    });
+
+    expect(result.posts[0]?.url).toBe(retryUrl);
   });
 
   it("throws when no LinkedIn page found", async () => {

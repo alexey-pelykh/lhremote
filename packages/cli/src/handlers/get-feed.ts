@@ -46,7 +46,9 @@ export async function handleGetFeed(
         if (post.authorHeadline) {
           process.stdout.write(`  ${post.authorHeadline}\n`);
         }
-        process.stdout.write(`  ${post.url}\n`);
+        if (post.url) {
+          process.stdout.write(`  ${post.url}\n`);
+        }
         if (post.text) {
           const truncated =
             post.text.length > 120

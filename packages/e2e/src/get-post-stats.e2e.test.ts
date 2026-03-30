@@ -20,8 +20,9 @@ import { registerGetPostStats } from "@lhremote/mcp/tools";
 import { createMockServer } from "@lhremote/mcp/testing";
 
 /**
- * Fetch a fresh post URN by scraping the feed.  Returns the URN of the
- * first feed post, or `undefined` when the feed returns no posts.
+ * Fetch a fresh post URL by scraping the feed.  Returns the URL of the
+ * first feed post, or `undefined` when the feed returns no posts or the
+ * first post has no URL.
  */
 async function fetchPostUrlFromFeed(cdpPort: number): Promise<string | undefined> {
   const { getFeed } = await import("@lhremote/core");

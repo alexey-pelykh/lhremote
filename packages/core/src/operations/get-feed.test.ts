@@ -170,12 +170,61 @@ describe("getFeed", () => {
     expect(post?.hashtags).toEqual(["linkedin", "tech"]);
   });
 
-  it("returns empty string URL when raw post has null url", async () => {
+  it("returns null URL when raw post has null url", async () => {
     setupMocks([rawPost({ url: null })]);
 
     const result = await getFeed({ cdpPort: CDP_PORT });
 
-    expect(result.posts[0]?.url).toBe("");
+    expect(result.posts[0]?.url).toBeNull();
+  });
+
+  it("retries URL extraction when clipboard capture fails on first attempt", async () => {
+    const retryUrl = "https://www.linkedin.com/feed/update/urn:li:activity:retried/";
+    // Post scraped without a URL — URL extraction must fill it in
+    const post = rawPost({ url: null });
+
+    vi.mocked(discoverTargets).mockResolvedValue([
+      {
+        id: "target-1",
+        type: "page",
+        title: "LinkedIn",
+        url: "https://www.linkedin.com/feed/",
+        description: "",
+        devtoolsFrontendUrl: "",
+      },
+    ]);
+
+    let clipboardReadCount = 0;
+    const evaluate = vi.fn().mockImplementation((script: string) => {
+      const s = String(script);
+      if (s.includes("parseCount")) return Promise.resolve([post]);
+      if (s.includes("navigator.clipboard.writeText")) return Promise.resolve(undefined);
+      if (s.includes("__capturedClipboard = null")) return Promise.resolve(undefined);
+      if (s.includes("Copy link to post")) return Promise.resolve(undefined);
+      if (s === "window.__capturedClipboard") {
+        clipboardReadCount++;
+        return Promise.resolve(clipboardReadCount === 1 ? null : retryUrl);
+      }
+      if (s.includes("btn.click()")) return Promise.resolve(true);
+      if (s.includes("scrollIntoView")) return Promise.resolve(undefined);
+      if (s.includes("mainFeed")) return Promise.resolve(true);
+      return Promise.resolve(undefined);
+    });
+
+    vi.mocked(CDPClient).mockImplementation(function () {
+      return {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect: vi.fn(),
+        navigate: vi.fn().mockResolvedValue({ frameId: "F1" }),
+        evaluate,
+        send: vi.fn().mockResolvedValue(undefined),
+      } as unknown as CDPClient;
+    });
+
+    const result = await getFeed({ cdpPort: CDP_PORT });
+
+    expect(result.posts[0]?.url).toBe(retryUrl);
+    expect(clipboardReadCount).toBeGreaterThanOrEqual(2);
   });
 
   it("navigates to the LinkedIn feed page", async () => {
