@@ -5,8 +5,8 @@
  * A post from the LinkedIn home feed or profile activity stream.
  */
 export interface FeedPost {
-  /** Direct URL to the post on LinkedIn. */
-  readonly url: string;
+  /** Direct URL to the post on LinkedIn, or `null` when URL extraction failed. */
+  readonly url: string | null;
   /** Display name of the post author. */
   readonly authorName: string | null;
   /** Professional headline of the author, if available. */
