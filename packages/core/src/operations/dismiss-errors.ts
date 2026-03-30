@@ -5,6 +5,7 @@ import { discoverInstancePort, resolveInstancePort } from "../cdp/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
 import { LauncherService } from "../services/launcher.js";
+import { isLoopbackAddress } from "../utils/loopback.js";
 import type { ConnectionOptions } from "./types.js";
 
 /**
@@ -74,9 +75,11 @@ export async function dismissErrors(
   // Dismiss instance UI popups.
   // When connected to a launcher, discover the instance's dynamic CDP
   // port — the launcher port does not host instance UI targets.
-  const instancePort = connectedToLauncher
+  // Discovery only works locally (process inspection), so skip for remote hosts.
+  const isLocal = input.cdpHost === undefined || isLoopbackAddress(input.cdpHost);
+  const instancePort = connectedToLauncher && isLocal
     ? await discoverInstancePort(cdpPort).catch(() => null)
-    : cdpPort;
+    : connectedToLauncher ? null : cdpPort;
 
   if (instancePort !== null) {
     const instance = new InstanceService(instancePort, cdpOptions);
