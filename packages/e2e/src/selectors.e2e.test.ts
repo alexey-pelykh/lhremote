@@ -2,30 +2,24 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CDPClient } from "../../cdp/client.js";
-import { discoverTargets } from "../../cdp/discovery.js";
-import {
-  discoverInstancePort,
-  killInstanceProcesses,
-} from "../../cdp/instance-discovery.js";
-import type { AppService } from "../../services/app.js";
-import {
-  startInstanceWithRecovery,
-  waitForInstanceShutdown,
-} from "../../services/instance-lifecycle.js";
-import { LauncherService } from "../../services/launcher.js";
 import {
   describeE2E,
+  forceStopInstance,
   launchApp,
   quitApp,
+  resolveAccountId,
   retryAsync,
-} from "../../testing/e2e-helpers.js";
-import type { Account } from "../../types/account.js";
-import { delay } from "../../utils/delay.js";
+} from "@lhremote/core/testing";
 import {
+  type AppService,
+  CDPClient,
   COMMENT_INPUT,
   COMMENT_SUBMIT_BUTTON,
+  delay,
+  discoverInstancePort,
+  discoverTargets,
   FEED_POST_CONTAINER,
+  LauncherService,
   PAGINATION_TRIGGER,
   POST_AUTHOR_INFO,
   POST_AUTHOR_NAME,
@@ -40,7 +34,8 @@ import {
   REACTIONS_MENU,
   SCROLL_CONTAINER,
   SELECTORS,
-} from "../selectors.js";
+  startInstanceWithRecovery,
+} from "@lhremote/core";
 
 /**
  * Query the number of elements matching a CSS selector in the LinkedIn
@@ -113,33 +108,33 @@ const COMMENT_BUTTON = 'button[aria-label*="Comment" i]';
 
 describeE2E("LinkedIn selectors registry", () => {
   let app: AppService;
-  let launcherPort: number;
-  let accountId: number | undefined;
+  let port: number;
+  let accountId: number;
   let linkedInClient: CDPClient;
 
   beforeAll(async () => {
     // 1. Launch LinkedHelper
     const launched = await launchApp();
     app = launched.app;
-    launcherPort = launched.port;
+    port = launched.port;
 
     // 2. Start an account instance
-    const launcher = new LauncherService(launcherPort);
+    accountId = await resolveAccountId(port);
+
+    const launcher = new LauncherService(port);
     await retryAsync(() => launcher.connect(), { retries: 3, delay: 1_000 });
-    const accounts = await launcher.listAccounts();
-    expect(
-      accounts.length,
-      "No accounts configured in LinkedHelper",
-    ).toBeGreaterThan(0);
-    accountId = (accounts[0] as Account).id;
-    await startInstanceWithRecovery(launcher, accountId, launcherPort);
+    await startInstanceWithRecovery(launcher, accountId, port);
     launcher.disconnect();
 
     // 3. Discover the instance's CDP port
-    const instancePort = await discoverInstancePort(launcherPort);
-    if (instancePort === null) {
-      throw new Error("Instance CDP port not discovered");
-    }
+    const instancePort = await retryAsync(
+      async () => {
+        const p = await discoverInstancePort(port);
+        if (p === null) throw new Error("Instance CDP port not discovered yet");
+        return p;
+      },
+      { retries: 10, delay: 2_000 },
+    );
 
     // 4. Connect directly to the LinkedIn WebView target
     const liTarget = await retryAsync(
@@ -168,27 +163,20 @@ describeE2E("LinkedIn selectors registry", () => {
   afterAll(async () => {
     linkedInClient?.disconnect();
 
-    if (accountId !== undefined) {
-      const launcher = new LauncherService(launcherPort);
-      try {
-        await launcher.connect();
-        try {
-          await launcher.stopInstance(accountId);
-          await waitForInstanceShutdown(launcherPort);
-        } catch {
-          await killInstanceProcesses(launcherPort);
-        }
-      } catch {
-        // Best-effort cleanup
-      } finally {
-        launcher.disconnect();
-      }
+    const launcher = new LauncherService(port);
+    try {
+      await launcher.connect();
+      await forceStopInstance(launcher, accountId, port);
+    } catch {
+      // Best-effort cleanup
+    } finally {
+      launcher.disconnect();
     }
 
     await quitApp(app);
   }, 60_000);
 
-  // ── Module export sanity checks ─────────────────────────────────
+  // -- Module export sanity checks -----------------------------------------
 
   describe("module exports", () => {
     it("SELECTORS object contains all expected keys", () => {
@@ -225,7 +213,7 @@ describeE2E("LinkedIn selectors registry", () => {
     });
   });
 
-  // ── Feed page selectors ─────────────────────────────────────────
+  // -- Feed page selectors -------------------------------------------------
 
   describe("feed page selectors", () => {
     it("FEED_POST_CONTAINER matches at least one element", async () => {
@@ -259,7 +247,7 @@ describeE2E("LinkedIn selectors registry", () => {
     });
   });
 
-  // ── Reactions menu selectors (hover-triggered) ──────────────────
+  // -- Reactions menu selectors (hover-triggered) --------------------------
 
   describe("reactions menu selectors", () => {
     beforeAll(async () => {
@@ -305,7 +293,7 @@ describeE2E("LinkedIn selectors registry", () => {
     });
   });
 
-  // ── Comment selectors (click-triggered) ─────────────────────────
+  // -- Comment selectors (click-triggered) ---------------------------------
 
   describe("comment selectors", () => {
     beforeAll(async () => {
@@ -352,7 +340,7 @@ describeE2E("LinkedIn selectors registry", () => {
     });
   });
 
-  // ── Pagination trigger ──────────────────────────────────────────
+  // -- Pagination trigger --------------------------------------------------
 
   describe("pagination selectors", () => {
     it("PAGINATION_TRIGGER matches at least one element after scrolling", async () => {
