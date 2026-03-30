@@ -7,6 +7,7 @@ vi.mock("../cdp/index.js", () => ({
   discoverInstancePort: vi.fn(),
   findApp: vi.fn(),
   resolveAppPort: vi.fn(),
+  resolveLauncherPort: vi.fn(),
 }));
 
 vi.mock("../db/index.js", () => ({
@@ -18,7 +19,7 @@ vi.mock("./launcher.js", () => ({
   LauncherService: vi.fn(),
 }));
 
-import { discoverInstancePort, findApp, resolveAppPort } from "../cdp/index.js";
+import { discoverInstancePort, findApp, resolveLauncherPort } from "../cdp/index.js";
 import { DatabaseClient, discoverAllDatabases } from "../db/index.js";
 import { LauncherService } from "./launcher.js";
 import { checkStatus } from "./status.js";
@@ -26,7 +27,7 @@ import { checkStatus } from "./status.js";
 const mockedLauncherService = vi.mocked(LauncherService);
 const mockedDiscoverInstancePort = vi.mocked(discoverInstancePort);
 const mockedFindApp = vi.mocked(findApp);
-const mockedResolveAppPort = vi.mocked(resolveAppPort);
+const mockedResolveLauncherPort = vi.mocked(resolveLauncherPort);
 const mockedDiscoverAllDatabases = vi.mocked(discoverAllDatabases);
 const mockedDatabaseClient = vi.mocked(DatabaseClient);
 
@@ -46,6 +47,8 @@ function mockLauncher(overrides: Partial<LauncherService> = {}) {
 describe("checkStatus", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: pass through explicit port, auto-discover returns 9222
+    mockedResolveLauncherPort.mockImplementation(async (port) => port ?? 9222);
   });
 
   afterEach(() => {
@@ -128,14 +131,14 @@ describe("checkStatus", () => {
   });
 
   it("auto-discovers launcher port when cdpPort omitted", async () => {
-    mockedResolveAppPort.mockResolvedValue(9222);
+    mockedResolveLauncherPort.mockResolvedValue(9222);
     mockLauncher();
     mockedDiscoverInstancePort.mockResolvedValue(null);
     mockedDiscoverAllDatabases.mockReturnValue(new Map());
 
     const report = await checkStatus();
 
-    expect(mockedResolveAppPort).toHaveBeenCalledWith("launcher");
+    expect(mockedResolveLauncherPort).toHaveBeenCalledWith(undefined, undefined);
     expect(report.launcher.port).toBe(9222);
   });
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { type DiscoveredApp, discoverInstancePort, findApp, resolveAppPort } from "../cdp/index.js";
+import { type DiscoveredApp, discoverInstancePort, findApp, resolveLauncherPort } from "../cdp/index.js";
 import { DatabaseClient, discoverAllDatabases } from "../db/index.js";
 import { ProfileRepository } from "../db/repositories/profile.js";
 import { errorMessage } from "../utils/error-message.js";
@@ -44,7 +44,7 @@ export interface StatusReport {
  * failures are reported in the result rather than thrown as exceptions.
  *
  * When {@link cdpPort} is omitted, the launcher port is auto-discovered
- * via {@link resolveAppPort}.  If no launcher is available, the report
+ * via {@link resolveLauncherPort}.  If no launcher is available, the report
  * reflects this and still includes database and process information.
  *
  * @param cdpPort - The CDP port of the LinkedHelper launcher (auto-discovered if omitted).
@@ -55,14 +55,10 @@ export async function checkStatus(
 ): Promise<StatusReport> {
   // Resolve launcher port: explicit, auto-discovered, or none
   let resolvedPort: number | null;
-  if (cdpPort !== undefined) {
-    resolvedPort = cdpPort;
-  } else {
-    try {
-      resolvedPort = await resolveAppPort("launcher");
-    } catch {
-      resolvedPort = null;
-    }
+  try {
+    resolvedPort = await resolveLauncherPort(cdpPort, options?.host);
+  } catch {
+    resolvedPort = null;
   }
 
   const launcher: LauncherStatus = { reachable: false, port: resolvedPort };

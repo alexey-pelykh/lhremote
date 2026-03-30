@@ -218,6 +218,8 @@ export {
   discoverTargets,
   findApp,
   resolveAppPort,
+  resolveInstancePort,
+  resolveLauncherPort,
   type AppRole,
   type DiscoveredApp,
   killInstanceProcesses,

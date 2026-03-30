@@ -5,6 +5,7 @@ import { pidToPorts } from "pid-port";
 import psList from "ps-list";
 import { LinkedHelperNotRunningError, LinkedHelperUnreachableError } from "../services/errors.js";
 import { isCdpPort } from "../utils/cdp-port.js";
+import { isLoopbackAddress } from "../utils/loopback.js";
 
 /**
  * Known LinkedHelper binary names across platforms.
@@ -101,6 +102,50 @@ export async function resolveAppPort(
   }
 
   throw new LinkedHelperUnreachableError(apps);
+}
+
+/**
+ * Resolve the instance CDP port, requiring an explicit port for non-loopback hosts.
+ *
+ * When {@link cdpPort} is provided it is returned as-is.  When it is
+ * omitted and the host is loopback (or omitted), the port is
+ * auto-discovered via {@link resolveAppPort}.  For non-loopback hosts
+ * auto-discovery cannot work (it scans local processes), so an error
+ * is thrown to prevent silently connecting to the wrong endpoint.
+ *
+ * @param cdpPort - Explicit CDP port (returned verbatim when provided).
+ * @param cdpHost - Target host for the CDP connection.
+ * @returns The resolved CDP port number.
+ */
+export async function resolveInstancePort(
+  cdpPort?: number,
+  cdpHost?: string,
+): Promise<number> {
+  if (cdpPort !== undefined) return cdpPort;
+  if (cdpHost !== undefined && !isLoopbackAddress(cdpHost)) {
+    throw new Error("cdpPort is required when using a non-loopback cdpHost — auto-discovery only works locally");
+  }
+  return resolveAppPort("instance");
+}
+
+/**
+ * Resolve the launcher CDP port, requiring an explicit port for non-loopback hosts.
+ *
+ * Analogous to {@link resolveInstancePort} but discovers the launcher role.
+ *
+ * @param cdpPort - Explicit CDP port (returned verbatim when provided).
+ * @param cdpHost - Target host for the CDP connection.
+ * @returns The resolved CDP port number.
+ */
+export async function resolveLauncherPort(
+  cdpPort?: number,
+  cdpHost?: string,
+): Promise<number> {
+  if (cdpPort !== undefined) return cdpPort;
+  if (cdpHost !== undefined && !isLoopbackAddress(cdpHost)) {
+    throw new Error("cdpPort is required when using a non-loopback cdpHost — auto-discovery only works locally");
+  }
+  return resolveAppPort("launcher");
 }
 
 /**

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { resolveAppPort } from "../cdp/index.js";
+import { resolveLauncherPort } from "../cdp/index.js";
 import { discoverAllDatabases } from "../db/index.js";
 import type { Account } from "../types/index.js";
 import {
@@ -35,7 +35,7 @@ export class AccountResolutionError extends ServiceError {
  * and return its ID.
  *
  * When {@link cdpPort} is omitted the launcher port is auto-discovered
- * via {@link resolveAppPort}.  If the provided port belongs to an
+ * via {@link resolveLauncherPort}.  If the provided port belongs to an
  * instance (not the launcher), the account is resolved from local
  * databases instead.
  *
@@ -49,7 +49,7 @@ export async function resolveAccount(
 ): Promise<number> {
   let port: number;
   try {
-    port = cdpPort ?? await resolveAppPort("launcher");
+    port = await resolveLauncherPort(cdpPort, options?.host);
   } catch (error: unknown) {
     // When cdpPort was omitted and the launcher is unreachable or not
     // running, fall back to database-based resolution instead of
