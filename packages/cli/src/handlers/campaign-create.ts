@@ -7,7 +7,6 @@ import {
   type CampaignConfig,
   CampaignExecutionError,
   CampaignFormatError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   parseCampaignJson,
@@ -80,7 +79,7 @@ export async function handleCampaignCreate(options: {
   try {
     result = await campaignCreate({
       config,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

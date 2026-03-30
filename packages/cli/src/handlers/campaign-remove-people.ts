@@ -4,7 +4,6 @@
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   campaignRemovePeople,
@@ -40,7 +39,7 @@ export async function handleCampaignRemovePeople(
     result = await campaignRemovePeople({
       campaignId,
       personIds,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

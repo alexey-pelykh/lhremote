@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   getPostStats,
   type GetPostStatsOutput,
@@ -22,7 +21,7 @@ export async function handleGetPostStats(
   try {
     result = await getPostStats({
       postUrl,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

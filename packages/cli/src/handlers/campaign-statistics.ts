@@ -4,7 +4,6 @@
 import {
   ActionNotFoundError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   campaignStatistics,
   type CampaignStatisticsOutput,
@@ -28,7 +27,7 @@ export async function handleCampaignStatistics(
       campaignId,
       actionId: options.actionId,
       maxErrors: options.maxErrors,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

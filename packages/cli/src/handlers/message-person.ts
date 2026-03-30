@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   messagePerson,
   type EphemeralActionResult,
@@ -62,7 +61,7 @@ export async function handleMessagePerson(options: {
       rejectIfReplied: options.rejectIfReplied,
       rejectIfMessaged: options.rejectIfMessaged,
       keepCampaign: options.keepCampaign,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });
