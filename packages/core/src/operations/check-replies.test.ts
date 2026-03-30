@@ -62,6 +62,9 @@ const mockCampaignService = {
     runnerState: "idle",
     actionCounts: [{ queued: 0, processed: 0, successful: 2, failed: 0 }],
   }),
+  getRunnerState: vi.fn().mockResolvedValue("idle"),
+  stopRunnerAndWaitForIdle: vi.fn().mockResolvedValue(undefined),
+  startRunner: vi.fn().mockResolvedValue(undefined),
   stop: vi.fn().mockResolvedValue(undefined),
   hardDelete: vi.fn(),
 };
@@ -213,6 +216,7 @@ describe("checkReplies", () => {
       cdpPort: 9222,
     });
 
+    expect(mockCampaignService.stopRunnerAndWaitForIdle).toHaveBeenCalled();
     expect(mockCampaignService.stop).toHaveBeenCalledWith(42);
     expect(mockCampaignService.hardDelete).toHaveBeenCalledWith(42);
   });
@@ -225,6 +229,7 @@ describe("checkReplies", () => {
       checkReplies({ personIds: [100, 200], cdpPort: 9222 }),
     ).rejects.toThrow("start failed");
 
+    expect(mockCampaignService.stopRunnerAndWaitForIdle).toHaveBeenCalled();
     expect(mockCampaignService.stop).toHaveBeenCalledWith(42);
     expect(mockCampaignService.hardDelete).toHaveBeenCalledWith(42);
   });
