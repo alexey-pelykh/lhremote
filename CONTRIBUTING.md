@@ -57,13 +57,14 @@ pnpm lint          # lint checks
 
 ### Project Structure
 
-The repository is a pnpm monorepo with four packages:
+The repository is a pnpm monorepo with five packages:
 
 | Package | Description |
 |---------|-------------|
 | `packages/core` | CDP client, LinkedHelper service layer, database access |
 | `packages/mcp` | MCP server exposing LinkedHelper tools |
 | `packages/cli` | CLI interface wrapping the same tools |
+| `packages/e2e` | End-to-end tests (requires LinkedHelper with active license) |
 | `packages/lhremote` | Umbrella package published to npm |
 
 ### E2E Tests
