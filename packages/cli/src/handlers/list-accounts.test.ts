@@ -8,6 +8,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   return {
     ...actual,
     LauncherService: vi.fn(),
+    resolveAppPort: vi.fn(),
   };
 });
 
@@ -15,6 +16,7 @@ import {
   type Account,
   LauncherService,
   LinkedHelperNotRunningError,
+  resolveAppPort,
 } from "@lhremote/core";
 
 import { handleListAccounts } from "./list-accounts.js";
@@ -26,6 +28,7 @@ describe("handleListAccounts", () => {
   beforeEach(() => {
     process.exitCode = undefined;
     vi.clearAllMocks();
+    vi.mocked(resolveAppPort).mockResolvedValue(9222);
   });
 
   afterEach(() => {

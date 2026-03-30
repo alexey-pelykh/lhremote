@@ -8,6 +8,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   return {
     ...actual,
     LauncherService: vi.fn(),
+    resolveAppPort: vi.fn(),
     startInstanceWithRecovery: vi.fn(),
   };
 });
@@ -15,6 +16,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import {
   LauncherService,
   LinkedHelperNotRunningError,
+  resolveAppPort,
   startInstanceWithRecovery,
 } from "@lhremote/core";
 
@@ -27,6 +29,7 @@ describe("handleStartInstance", () => {
   beforeEach(() => {
     process.exitCode = undefined;
     vi.clearAllMocks();
+    vi.mocked(resolveAppPort).mockResolvedValue(9222);
   });
 
   afterEach(() => {
