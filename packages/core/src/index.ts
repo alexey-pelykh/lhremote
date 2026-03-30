@@ -223,6 +223,7 @@ export {
 
 // Operations (shared business logic for CLI + MCP)
 export {
+  buildCdpOptions,
   type ConnectionOptions,
   // Campaign CRUD
   campaignGet,

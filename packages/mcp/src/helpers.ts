@@ -40,21 +40,8 @@ export const cdpConnectionSchema = {
     .describe("SECURITY: Allow non-loopback CDP connections. Enables remote code execution on target host. Only use if network path is secured."),
 };
 
-/**
- * Build the CDP connection options object from parsed tool arguments.
- *
- * Replaces the inline conditional-spread pattern used by tools that
- * call `resolveAccount` or construct a `LauncherService`.
- */
-export function buildCdpOptions(args: {
-  cdpHost?: string | undefined;
-  allowRemote?: boolean | undefined;
-}): { host?: string; allowRemote?: boolean } {
-  return {
-    ...(args.cdpHost !== undefined && { host: args.cdpHost }),
-    ...(args.allowRemote !== undefined && { allowRemote: args.allowRemote }),
-  };
-}
+// Re-export from core so existing MCP tool files keep working.
+export { buildCdpOptions } from "@lhremote/core";
 
 /**
  * Build an MCP error response from a plain message string.

@@ -4,7 +4,7 @@
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { CampaignService } from "../services/campaign.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 export interface CampaignRemoveActionInput extends ConnectionOptions {
   readonly campaignId: number;
@@ -22,10 +22,7 @@ export async function campaignRemoveAction(
 ): Promise<CampaignRemoveActionOutput> {
   const cdpPort = input.cdpPort;
 
-  const accountId = await resolveAccount(cdpPort, {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  });
+  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
     const campaignService = new CampaignService(instance, db);

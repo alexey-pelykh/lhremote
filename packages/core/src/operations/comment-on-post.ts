@@ -12,7 +12,7 @@ import { resolveAccount } from "../services/account-resolution.js";
 import { BudgetExceededError } from "../services/errors.js";
 import { withDatabase } from "../services/instance-context.js";
 import { randomDelay } from "../utils/delay.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 /** Pattern matching supported LinkedIn post URL formats. */
 const LINKEDIN_POST_URL_RE =
@@ -85,10 +85,7 @@ export async function commentOnPost(
   }
 
   // Check action budget before attempting the comment
-  const accountId = await resolveAccount(cdpPort, {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  });
+  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   await withDatabase(accountId, ({ db }) => {
     const repo = new ActionBudgetRepository(db);
