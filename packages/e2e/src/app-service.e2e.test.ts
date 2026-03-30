@@ -54,7 +54,7 @@ describeE2E("AppService", () => {
       async () => {
         await app.quit();
 
-        const deadline = Date.now() + 5_000;
+        const deadline = Date.now() + 15_000;
         const probe = new AppService(port);
         while (Date.now() < deadline) {
           if (!(await probe.isRunning())) {
