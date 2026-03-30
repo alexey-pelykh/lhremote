@@ -3,6 +3,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../cdp/index.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../cdp/index.js")>();
+  return {
+    ...original,
+    discoverInstancePort: vi.fn().mockResolvedValue(null),
+  };
+});
+
 vi.mock("../services/account-resolution.js", () => ({
   resolveAccount: vi.fn(),
 }));
@@ -15,6 +23,7 @@ vi.mock("../services/instance.js", () => ({
   InstanceService: vi.fn(),
 }));
 
+import { discoverInstancePort } from "../cdp/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
 import { LauncherService } from "../services/launcher.js";
@@ -60,6 +69,7 @@ describe("dismissErrors", () => {
 
   it("dismisses launcher popup and instance popups", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(discoverInstancePort).mockResolvedValue(9223);
 
     const mockLauncher = {
       connect: vi.fn().mockResolvedValue(undefined),
@@ -87,6 +97,7 @@ describe("dismissErrors", () => {
 
   it("reports non-dismissable launcher popup", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(discoverInstancePort).mockResolvedValue(9223);
 
     const mockLauncher = {
       connect: vi.fn().mockResolvedValue(undefined),
@@ -149,6 +160,7 @@ describe("dismissErrors", () => {
 
   it("works when LinkedIn webview is absent (partial start)", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(discoverInstancePort).mockResolvedValue(9223);
 
     const mockLauncher = {
       connect: vi.fn().mockResolvedValue(undefined),

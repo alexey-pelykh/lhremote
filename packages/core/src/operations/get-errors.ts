@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { resolveInstancePort } from "../cdp/index.js";
+import { discoverInstancePort, resolveInstancePort } from "../cdp/index.js";
 import type { InstancePopup, UIHealthStatus } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
@@ -57,11 +57,13 @@ export async function getErrors(
     instancePopups: [],
     healthy: true,
   };
+  let connectedToLauncher = false;
   try {
     const launcher = new LauncherService(cdpPort, cdpOptions);
     try {
       await launcher.connect();
       health = await launcher.checkUIHealth(accountId);
+      connectedToLauncher = true;
     } finally {
       launcher.disconnect();
     }
@@ -70,7 +72,20 @@ export async function getErrors(
   }
 
   // Best-effort: detect instance UI popups if the UI target is available.
-  const instancePopups = await detectInstancePopups(cdpPort, cdpOptions);
+  // When connected to a launcher, discover the instance's dynamic CDP port
+  // first — the launcher port does not host instance UI targets.
+  let instancePopups: InstancePopup[] = [];
+  if (connectedToLauncher) {
+    const instancePort = await discoverInstancePort(cdpPort).catch(
+      () => null,
+    );
+    if (instancePort !== null) {
+      instancePopups = await detectInstancePopups(instancePort, cdpOptions);
+    }
+  } else {
+    // Direct instance connection — cdpPort IS the instance port
+    instancePopups = await detectInstancePopups(cdpPort, cdpOptions);
+  }
 
   const healthy =
     health.healthy && instancePopups.length === 0;
