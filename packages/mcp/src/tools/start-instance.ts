@@ -28,55 +28,59 @@ export function registerStartInstance(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ accountId, cdpPort, cdpHost, allowRemote }) => {
-      const port = cdpPort ?? await resolveAppPort("launcher");
-      const launcher = new LauncherService(port, buildCdpOptions({ cdpHost, allowRemote }));
-
       try {
-        await launcher.connect();
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
+        const port = cdpPort ?? await resolveAppPort("launcher");
+        const launcher = new LauncherService(port, buildCdpOptions({ cdpHost, allowRemote }));
 
-      try {
-        let resolvedId = accountId;
+        try {
+          await launcher.connect();
+        } catch (error) {
+          return mcpCatchAll(error, "Failed to connect to LinkedHelper");
+        }
 
-        if (resolvedId === undefined) {
-          const accounts = await launcher.listAccounts();
-          if (accounts.length === 0) {
-            return mcpError("No accounts found.");
+        try {
+          let resolvedId = accountId;
+
+          if (resolvedId === undefined) {
+            const accounts = await launcher.listAccounts();
+            if (accounts.length === 0) {
+              return mcpError("No accounts found.");
+            }
+            if (accounts.length > 1) {
+              return mcpError(
+                "Multiple accounts found. Specify accountId. Use list-accounts to see available accounts.",
+              );
+            }
+            resolvedId = (accounts[0] as Account).id;
           }
-          if (accounts.length > 1) {
+
+          const outcome = await startInstanceWithRecovery(
+            launcher,
+            resolvedId,
+            port,
+          );
+
+          if (outcome.status === "timeout") {
             return mcpError(
-              "Multiple accounts found. Specify accountId. Use list-accounts to see available accounts.",
+              "Instance started but failed to initialize within timeout.",
             );
           }
-          resolvedId = (accounts[0] as Account).id;
-        }
 
-        const outcome = await startInstanceWithRecovery(
-          launcher,
-          resolvedId,
-          port,
-        );
+          const verb =
+            outcome.status === "already_running"
+              ? "already running"
+              : "started";
 
-        if (outcome.status === "timeout") {
-          return mcpError(
-            "Instance started but failed to initialize within timeout.",
+          return mcpSuccess(
+            `Instance ${verb} for account ${String(resolvedId)} on CDP port ${String(outcome.port)}`,
           );
+        } catch (error) {
+          return mcpCatchAll(error, "Failed to start instance");
+        } finally {
+          launcher.disconnect();
         }
-
-        const verb =
-          outcome.status === "already_running"
-            ? "already running"
-            : "started";
-
-        return mcpSuccess(
-          `Instance ${verb} for account ${String(resolvedId)} on CDP port ${String(outcome.port)}`,
-        );
       } catch (error) {
         return mcpCatchAll(error, "Failed to start instance");
-      } finally {
-        launcher.disconnect();
       }
     },
   );

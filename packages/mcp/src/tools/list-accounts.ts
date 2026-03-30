@@ -14,22 +14,26 @@ export function registerListAccounts(server: McpServer): void {
       ...cdpConnectionSchema,
     },
     async ({ cdpPort, cdpHost, allowRemote }) => {
-      const port = cdpPort ?? await resolveAppPort("launcher");
-      const launcher = new LauncherService(port, buildCdpOptions({ cdpHost, allowRemote }));
-
       try {
-        await launcher.connect();
-      } catch (error) {
-        return mcpCatchAll(error, "Failed to connect to LinkedHelper");
-      }
+        const port = cdpPort ?? await resolveAppPort("launcher");
+        const launcher = new LauncherService(port, buildCdpOptions({ cdpHost, allowRemote }));
 
-      try {
-        const accounts = await launcher.listAccounts();
-        return mcpSuccess(JSON.stringify(accounts, null, 2));
+        try {
+          await launcher.connect();
+        } catch (error) {
+          return mcpCatchAll(error, "Failed to connect to LinkedHelper");
+        }
+
+        try {
+          const accounts = await launcher.listAccounts();
+          return mcpSuccess(JSON.stringify(accounts, null, 2));
+        } catch (error) {
+          return mcpCatchAll(error, "Failed to list accounts");
+        } finally {
+          launcher.disconnect();
+        }
       } catch (error) {
         return mcpCatchAll(error, "Failed to list accounts");
-      } finally {
-        launcher.disconnect();
       }
     },
   );

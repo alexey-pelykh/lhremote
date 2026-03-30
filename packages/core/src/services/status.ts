@@ -98,6 +98,7 @@ export async function checkStatus(
         launcherService.disconnect();
       }
     } catch (error: unknown) {
+      launcherService.disconnect();
       warnings.push(`Launcher not reachable on port ${resolvedPort.toString()}: ${errorMessage(error)}`);
 
       // Enrich with process-level detection when CDP is unreachable

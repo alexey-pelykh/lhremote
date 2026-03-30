@@ -10,7 +10,16 @@ export async function handleListAccounts(options: {
   allowRemote?: boolean;
   json?: boolean;
 }): Promise<void> {
-  const port = options.cdpPort ?? await resolveAppPort("launcher");
+  let port: number;
+  try {
+    port = options.cdpPort ?? await resolveAppPort("launcher");
+  } catch (error) {
+    const message = errorMessage(error);
+    process.stderr.write(`${message}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
   const launcher = new LauncherService(port, {
     ...(options.cdpHost !== undefined && { host: options.cdpHost }),
     ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
