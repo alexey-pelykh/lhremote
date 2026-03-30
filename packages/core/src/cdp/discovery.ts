@@ -42,5 +42,11 @@ export async function discoverTargets(
     );
   }
 
-  return (await response.json()) as CdpTarget[];
+  const targets: unknown = await response.json();
+  if (!Array.isArray(targets)) {
+    throw new CDPConnectionError(
+      "Unexpected response from CDP endpoint",
+    );
+  }
+  return targets as CdpTarget[];
 }
