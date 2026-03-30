@@ -345,6 +345,18 @@ describe("checkReplies", () => {
     expect(mockCampaignService.startRunner).not.toHaveBeenCalled();
   });
 
+  it("restores runner when stopRunnerAndWaitForIdle fails and runner was active", async () => {
+    setupMocks();
+    mockCampaignService.getRunnerState.mockResolvedValueOnce("campaigns");
+    mockCampaignService.stopRunnerAndWaitForIdle.mockRejectedValueOnce(new Error("timeout"));
+
+    await expect(
+      checkReplies({ personIds: [100, 200], cdpPort: 9222 }),
+    ).rejects.toThrow("timeout");
+
+    expect(mockCampaignService.startRunner).toHaveBeenCalled();
+  });
+
   it("propagates MessageRepository errors", async () => {
     setupMocks();
     vi.mocked(MessageRepository).mockImplementation(function () {
