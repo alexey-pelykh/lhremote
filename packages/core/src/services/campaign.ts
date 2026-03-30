@@ -456,8 +456,7 @@ export class CampaignService {
     const state = await this.getRunnerState();
     if (state === "idle") return;
     await this.stopRunner();
-    // Reuse the idle-wait loop (campaignId=0 is only used in the error message)
-    await this.waitForIdle(0);
+    await this.waitForIdle();
   }
 
   /**
@@ -689,7 +688,7 @@ export class CampaignService {
   /**
    * Wait for the campaign runner to reach idle state.
    */
-  private async waitForIdle(campaignId: number): Promise<void> {
+  private async waitForIdle(campaignId?: number): Promise<void> {
     const deadline = Date.now() + IDLE_WAIT_TIMEOUT;
 
     while (Date.now() < deadline) {
@@ -701,8 +700,11 @@ export class CampaignService {
       await delay(Math.min(IDLE_POLL_INTERVAL, remaining));
     }
 
+    const context = campaignId !== undefined
+      ? ` for campaign ${String(campaignId)}`
+      : "";
     throw new CampaignTimeoutError(
-      `Campaign runner did not reach idle state within ${String(IDLE_WAIT_TIMEOUT)}ms`,
+      `Campaign runner did not reach idle state within ${String(IDLE_WAIT_TIMEOUT)}ms${context}`,
       campaignId,
     );
   }

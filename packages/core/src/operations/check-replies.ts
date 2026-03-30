@@ -20,7 +20,6 @@ const POLL_INTERVAL = 2_000;
 export interface CheckRepliesInput extends ConnectionOptions {
   readonly personIds: number[];
   readonly since?: string | undefined;
-  readonly startRunner?: boolean | undefined;
   readonly pauseOthers?: boolean | undefined;
 }
 
@@ -70,29 +69,30 @@ export async function checkReplies(
     const runnerWasActive = (await campaignService.getRunnerState()) !== "idle";
     await campaignService.stopRunnerAndWaitForIdle();
 
-    // Create ephemeral campaign with CheckForReplies action
-    const campaign = await campaignService.create({
-      name: `[ephemeral] CheckForReplies ${new Date().toISOString()}`,
-      actions: [{
-        name: "CheckForReplies",
-        actionType: "CheckForReplies",
-        coolDown: 0,
-        maxActionResultsPerIteration: input.personIds.length,
-        actionSettings: {
-          moveToSuccessfulAfterMs: 1_000,
-          treatMessageAcceptedAsReply: false,
-          keepInQueueIfRequestIsNotAccepted: false,
-        },
-      }],
-    });
-
-    // Pause other campaigns if requested (restore in finally)
+    let campaign: { id: number } | undefined;
     let pausedCampaignIds: number[] = [];
-    if (input.pauseOthers) {
-      pausedCampaignIds = await campaignService.pauseAllExcept(campaign.id);
-    }
-
     try {
+      // Create ephemeral campaign with CheckForReplies action
+      campaign = await campaignService.create({
+        name: `[ephemeral] CheckForReplies ${new Date().toISOString()}`,
+        actions: [{
+          name: "CheckForReplies",
+          actionType: "CheckForReplies",
+          coolDown: 0,
+          maxActionResultsPerIteration: input.personIds.length,
+          actionSettings: {
+            moveToSuccessfulAfterMs: 1_000,
+            treatMessageAcceptedAsReply: false,
+            keepInQueueIfRequestIsNotAccepted: false,
+          },
+        }],
+      });
+
+      // Pause other campaigns if requested (restore in finally)
+      if (input.pauseOthers) {
+        pausedCampaignIds = await campaignService.pauseAllExcept(campaign.id);
+      }
+
       // Import target persons into campaign
       await campaignService.importPeopleFromUrls(campaign.id, linkedInUrls);
 
@@ -141,8 +141,10 @@ export async function checkReplies(
     } finally {
       // Stop runner first so DB writes don't contend with it
       try { await campaignService.stopRunnerAndWaitForIdle(); } catch { /* best-effort */ }
-      try { await campaignService.stop(campaign.id); } catch { /* best-effort cleanup */ }
-      try { campaignService.hardDelete(campaign.id); } catch { /* best-effort cleanup */ }
+      if (campaign) {
+        try { await campaignService.stop(campaign.id); } catch { /* best-effort cleanup */ }
+        try { campaignService.hardDelete(campaign.id); } catch { /* best-effort cleanup */ }
+      }
       if (pausedCampaignIds.length > 0) {
         try { await campaignService.unpauseCampaigns(pausedCampaignIds); } catch { /* best-effort restore */ }
       }
