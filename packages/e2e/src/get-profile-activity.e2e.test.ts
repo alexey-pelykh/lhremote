@@ -134,7 +134,7 @@ describeE2E("get-profile-activity operation", () => {
 
       // Profile may or may not have recent posts
       for (const post of parsed.posts) {
-        expect(post).toHaveProperty("urn");
+        expect(post).toHaveProperty("url");
         expect(typeof post.reactionCount).toBe("number");
         expect(typeof post.commentCount).toBe("number");
         expect(typeof post.shareCount).toBe("number");
