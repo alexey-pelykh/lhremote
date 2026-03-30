@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   reactToPost,
   type ReactToPostOutput,
@@ -25,7 +24,7 @@ export async function handleReactToPost(
     result = await reactToPost({
       postUrl,
       reactionType: (options.type as ReactionType | undefined),
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

@@ -4,7 +4,6 @@
 import {
   ActionNotFoundError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   campaignListPeople,
   type CampaignListPeopleOutput,
@@ -33,7 +32,7 @@ export async function handleCampaignListPeople(
       status: options.status as CampaignPersonState | undefined,
       limit: options.limit,
       offset: options.offset,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

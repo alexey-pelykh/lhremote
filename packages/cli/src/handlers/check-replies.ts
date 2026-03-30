@@ -3,7 +3,6 @@
 
 import {
   type ConversationMessages,
-  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   checkReplies,
@@ -34,7 +33,7 @@ export async function handleCheckReplies(options: {
       personIds: options.personId,
       since: options.since,
       pauseOthers: options.pauseOthers,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

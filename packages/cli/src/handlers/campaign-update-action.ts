@@ -4,7 +4,6 @@
 import {
   ActionNotFoundError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   campaignUpdateAction,
   type CampaignUpdateActionOutput,
@@ -57,7 +56,7 @@ export async function handleCampaignUpdateAction(
       coolDown: options.coolDown,
       maxActionResultsPerIteration: options.maxResults,
       actionSettings: parsedSettings,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

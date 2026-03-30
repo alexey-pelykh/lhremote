@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { dismissErrors, errorMessage, DEFAULT_CDP_PORT } from "@lhremote/core";
+import { dismissErrors, errorMessage } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#dismiss-errors | dismiss-errors} CLI command. */
 export async function handleDismissErrors(options: {
@@ -12,7 +12,7 @@ export async function handleDismissErrors(options: {
 }): Promise<void> {
   try {
     const result = await dismissErrors({
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

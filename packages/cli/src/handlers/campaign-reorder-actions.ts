@@ -5,7 +5,6 @@ import {
   ActionNotFoundError,
   CampaignExecutionError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   campaignReorderActions,
@@ -53,7 +52,7 @@ export async function handleCampaignReorderActions(
     result = await campaignReorderActions({
       campaignId,
       actionIds,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

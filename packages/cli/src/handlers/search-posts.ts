@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   searchPosts,
   type SearchPostsOutput,
@@ -26,7 +25,7 @@ export async function handleSearchPosts(
       query,
       cursor: options.cursor,
       count: options.count,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

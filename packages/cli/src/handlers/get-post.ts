@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   getPost,
   type GetPostOutput,
@@ -23,7 +22,7 @@ export async function handleGetPost(
   try {
     result = await getPost({
       postUrl,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
       commentCount: options.commentCount,

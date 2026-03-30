@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   getProfileActivity,
   type GetProfileActivityOutput,
@@ -24,7 +23,7 @@ export async function handleGetProfileActivity(
   try {
     result = await getProfileActivity({
       profile,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
       count: options.count,

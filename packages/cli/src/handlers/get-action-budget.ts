@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   getActionBudget,
   type GetActionBudgetOutput,
@@ -20,7 +19,7 @@ export async function handleGetActionBudget(
   let result: GetActionBudgetOutput;
   try {
     result = await getActionBudget({
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });
