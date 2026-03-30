@@ -5,7 +5,7 @@ import type { Chat, ConversationThread, Message } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withDatabase } from "../services/instance-context.js";
 import { MessageRepository } from "../db/index.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 export interface QueryMessagesInput extends ConnectionOptions {
   readonly personId?: number | undefined;
@@ -27,10 +27,7 @@ export async function queryMessages(
   const limit = input.limit ?? 20;
   const offset = input.offset ?? 0;
 
-  const accountId = await resolveAccount(cdpPort, {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  });
+  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withDatabase(accountId, ({ db }) => {
     const repo = new MessageRepository(db);

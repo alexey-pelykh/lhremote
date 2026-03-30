@@ -5,7 +5,7 @@ import type { CollectionSummary } from "../db/repositories/collection-list.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withDatabase } from "../services/instance-context.js";
 import { CollectionListRepository } from "../db/index.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 /**
  * Input for the list-collections operation.
@@ -28,10 +28,7 @@ export async function listCollections(
 ): Promise<ListCollectionsOutput> {
   const cdpPort = input.cdpPort;
 
-  const accountId = await resolveAccount(cdpPort, {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  });
+  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withDatabase(accountId, ({ db }) => {
     const repo = new CollectionListRepository(db);

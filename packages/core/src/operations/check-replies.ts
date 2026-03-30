@@ -9,7 +9,7 @@ import { CampaignTimeoutError } from "../services/errors.js";
 import { MessageRepository, ProfileRepository } from "../db/index.js";
 import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 /** Timeout for ephemeral campaign completion (5 minutes). */
 const CAMPAIGN_TIMEOUT = 300_000;
@@ -40,10 +40,7 @@ export async function checkReplies(
   const cutoff =
     input.since ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const accountId = await resolveAccount(cdpPort, {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  });
+  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
     const campaignService = new CampaignService(instance, db);
