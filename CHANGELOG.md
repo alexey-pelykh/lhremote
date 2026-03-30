@@ -4,6 +4,78 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-03-22
+
+### Added
+
+- `visit-profile` tool for visiting a LinkedIn profile as a standalone action
+- `get-feed` tool for fetching the LinkedIn home feed
+- `get-profile-activity` tool for viewing a profile's recent activity
+- `search-posts` tool for searching LinkedIn posts
+- `get-post` tool for retrieving single post details with comments
+- `get-post-stats` tool for post engagement statistics
+- `get-post-engagers` tool for listing users who engaged with a post
+- `react-to-post` tool for reacting to LinkedIn posts
+- `comment-on-post` tool for commenting on LinkedIn posts
+- `like-person-posts` tool for liking a person's recent posts
+- `message-person` tool for sending direct messages
+- `send-invite` tool for sending connection invitations
+- `send-inmail` tool for sending InMail messages
+- `endorse-skills` tool for endorsing a person's LinkedIn skills
+- `enrich-profile` tool for enriching stored profile data via VisitAndExtract
+- `follow-person` tool for following LinkedIn profiles
+- `remove-connection` tool for removing LinkedIn connections
+- `get-action-budget` tool for querying daily action budget usage
+- `get-throttle-status` tool for checking LinkedIn throttle status
+- `campaign-erase` tool for permanent campaign deletion (bypasses soft delete)
+- `dismiss-errors` tool for clearing instance UI error popups
+- Instance UI popup detection via CDP with visibility filtering and cross-strategy deduplication
+- Health checker integration for automatic instance popup detection
+- Ephemeral campaign service for executing individual actions without persistent campaign setup
+- DOM automation primitives for LinkedIn WebView interaction
+- Voyager API interceptor for capturing LinkedIn API responses
+- LinkedIn CSS selectors registry for robust element targeting
+
+### Changed
+
+- `campaign-delete` gained `hard` option for permanent deletion alongside the default soft delete
+- `get-errors` enhanced to include instance UI popups
+- `query-profile` gained URL-based lookup support
+
+### Fixed
+
+- Null school handling in profile data extraction
+- Poll `canCollect` after navigation instead of single check
+- Bound poll delay to remaining deadline time
+
+## [0.7.0] — 2026-03-20
+
+### Added
+
+- `build-linkedin-url` tool for constructing LinkedIn URLs from entity types, reference data, and search parameters
+- `resolve-linkedin-entity` tool for resolving LinkedIn entity identifiers to names and metadata
+- `list-linkedin-reference-data` tool for listing LinkedIn reference data (industries, regions, company sizes, etc.)
+- LinkedIn URL builder service with boolean expression support for complex search queries
+- LinkedIn search URL builder for Sales Navigator advanced searches
+
+### Fixed
+
+- Navigate LinkedIn webview to source URL before collection
+- Respect `force` flag in `launch-app` when a connectable app already exists
+- Resolve Node.js execution context for launcher CDP injection
+
+## [0.6.0] — 2026-03-17
+
+### Added
+
+- `list-collections` tool for listing LinkedHelper collections (Lists)
+- `create-collection` and `delete-collection` tools for collection CRUD operations
+- `add-people-to-collection` and `remove-people-from-collection` tools for managing collection membership
+- `collect-people` tool for collecting people from LinkedIn pages into campaigns
+- `import-people-from-collection` tool for importing collection members into a campaign
+- `CollectionService` for LinkedHelper collection management via IPC
+- Source type registry for LinkedIn page URL detection and classification
+
 ## [0.5.0] — 2026-03-17
 
 ### Added
