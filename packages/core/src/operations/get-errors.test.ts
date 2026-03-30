@@ -3,6 +3,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../cdp/index.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../cdp/index.js")>();
+  return {
+    ...original,
+    discoverInstancePort: vi.fn().mockResolvedValue(null),
+  };
+});
+
 vi.mock("../services/account-resolution.js", () => ({
   resolveAccount: vi.fn(),
 }));
@@ -15,6 +23,7 @@ vi.mock("../services/instance.js", () => ({
   InstanceService: vi.fn(),
 }));
 
+import { discoverInstancePort } from "../cdp/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
 import { LauncherService } from "../services/launcher.js";
@@ -169,6 +178,7 @@ describe("getErrors", () => {
 
   it("includes instance popups when instance is running", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(discoverInstancePort).mockResolvedValue(9223);
     mockLauncher({ healthy: true, issues: [], popup: null, instancePopups: [] });
     mockInstance({
       popups: [
@@ -185,6 +195,7 @@ describe("getErrors", () => {
 
   it("marks unhealthy when instance popups are present even if launcher is healthy", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(discoverInstancePort).mockResolvedValue(9223);
     mockLauncher({ healthy: true, issues: [], popup: null, instancePopups: [] });
     mockInstance({
       popups: [{ title: "Error popup", closable: false }],
@@ -209,6 +220,7 @@ describe("getErrors", () => {
 
   it("disconnects instance service even when getInstancePopups fails", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(discoverInstancePort).mockResolvedValue(9223);
     mockLauncher({ healthy: true, issues: [], popup: null, instancePopups: [] });
     const inst = mockInstance({ getPopupsFails: true });
 
@@ -220,6 +232,7 @@ describe("getErrors", () => {
 
   it("detects popups when LinkedIn webview is absent (UI-only start)", async () => {
     vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(discoverInstancePort).mockResolvedValue(9223);
     mockLauncher({ healthy: true, issues: [], popup: null, instancePopups: [] });
     mockInstance({
       popups: [

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { resolveInstancePort } from "../cdp/index.js";
+import { discoverInstancePort, resolveInstancePort } from "../cdp/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
 import { LauncherService } from "../services/launcher.js";
@@ -48,10 +48,12 @@ export async function dismissErrors(
 
   // Dismiss launcher popup (best-effort — skipped when connected
   // directly to an instance or launcher is unreachable)
+  let connectedToLauncher = false;
   try {
     const launcher = new LauncherService(cdpPort, cdpOptions);
     try {
       await launcher.connect();
+      connectedToLauncher = true;
       const popupDismissed = await launcher.dismissPopup();
       if (popupDismissed) {
         dismissed++;
@@ -69,15 +71,23 @@ export async function dismissErrors(
     // Launcher not available at this port — skip launcher popup dismissal
   }
 
-  // Dismiss instance UI popups
-  const instance = new InstanceService(cdpPort, cdpOptions);
-  try {
-    await instance.connectUiOnly();
-    const result = await instance.dismissInstancePopups();
-    dismissed += result.dismissed;
-    nonDismissable += result.nonDismissable;
-  } finally {
-    instance.disconnect();
+  // Dismiss instance UI popups.
+  // When connected to a launcher, discover the instance's dynamic CDP
+  // port — the launcher port does not host instance UI targets.
+  const instancePort = connectedToLauncher
+    ? await discoverInstancePort(cdpPort).catch(() => null)
+    : cdpPort;
+
+  if (instancePort !== null) {
+    const instance = new InstanceService(instancePort, cdpOptions);
+    try {
+      await instance.connectUiOnly();
+      const result = await instance.dismissInstancePopups();
+      dismissed += result.dismissed;
+      nonDismissable += result.nonDismissable;
+    } finally {
+      instance.disconnect();
+    }
   }
 
   return { accountId, dismissed, nonDismissable };
