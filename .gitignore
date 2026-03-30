@@ -4,6 +4,9 @@
 # Turbo
 .turbo/
 
+# Scratch / temporary files
+.tmp/
+
 # MCP configuration with credentials
 .mcp.json.local
 
