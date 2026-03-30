@@ -179,8 +179,10 @@ async function resolveInstancePort(
     // findApp() failed — fall through to CDP probe
   }
 
-  // Last resort: probe the port directly
-  if (await isCdpPort(cdpPort)) {
+  // Last resort: probe the port directly, but reject known launcher ports
+  // to avoid connecting InstanceService to a launcher (which would fail
+  // with a confusing error instead of InstanceNotRunningError).
+  if (cdpPort !== launcherPort && await isCdpPort(cdpPort)) {
     return { instancePort: cdpPort, launcherPort };
   }
 
