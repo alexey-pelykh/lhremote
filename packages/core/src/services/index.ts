@@ -4,12 +4,6 @@
 export { AppService, type AppServiceOptions } from "./app.js";
 export { InstanceService, type ActionResult, type HealthChecker } from "./instance.js";
 export {
-  VoyagerInterceptor,
-  type VoyagerFetchOptions,
-  type VoyagerResponse,
-  type VoyagerResponseHandler,
-} from "../voyager/index.js";
-export {
   startInstanceWithRecovery,
   waitForInstancePort,
   waitForInstanceShutdown,
