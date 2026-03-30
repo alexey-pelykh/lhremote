@@ -14,7 +14,6 @@ import {
 export async function handleCheckReplies(options: {
   personId: number[];
   since?: string;
-  startRunner?: boolean;
   pauseOthers?: boolean;
   cdpPort?: number;
   cdpHost?: string;
@@ -34,7 +33,6 @@ export async function handleCheckReplies(options: {
     result = await checkReplies({
       personIds: options.personId,
       since: options.since,
-      startRunner: options.startRunner,
       pauseOthers: options.pauseOthers,
       cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
       cdpHost: options.cdpHost,

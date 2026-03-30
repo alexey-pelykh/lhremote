@@ -74,7 +74,6 @@ describeE2E("check-replies", () => {
 
       await handleCheckReplies({
         personId: [getE2EPersonId()],
-        startRunner: true,
         pauseOthers: true,
         cdpPort: port,
         json: true,
@@ -100,7 +99,6 @@ describeE2E("check-replies", () => {
 
       await handleCheckReplies({
         personId: [getE2EPersonId()],
-        startRunner: true,
         pauseOthers: true,
         cdpPort: port,
       });
@@ -123,7 +121,6 @@ describeE2E("check-replies", () => {
       const handler = getHandler("check-replies");
       const result = (await handler({
         personIds: [getE2EPersonId()],
-        startRunner: true,
         pauseOthers: true,
         cdpPort: port,
       })) as {

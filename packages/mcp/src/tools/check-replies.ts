@@ -24,12 +24,6 @@ export function registerCheckReplies(server: McpServer): void {
         .describe(
           "ISO timestamp; only return messages after this time. If omitted, returns messages from the last 24 hours",
         ),
-      startRunner: z
-        .boolean()
-        .optional()
-        .describe(
-          "Start the campaign runner before execution and stop it after (needed when runner is not already active)",
-        ),
       pauseOthers: z
         .boolean()
         .optional()
@@ -38,9 +32,9 @@ export function registerCheckReplies(server: McpServer): void {
         ),
       ...cdpConnectionSchema,
     },
-    async ({ personIds, since, startRunner, pauseOthers, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personIds, since, pauseOthers, cdpPort, cdpHost, allowRemote }) => {
       try {
-        const result = await checkReplies({ personIds, since, startRunner, pauseOthers, cdpPort, cdpHost, allowRemote });
+        const result = await checkReplies({ personIds, since, pauseOthers, cdpPort, cdpHost, allowRemote });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to check replies");

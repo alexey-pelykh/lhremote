@@ -283,6 +283,29 @@ describe("scrapeMessagingHistory", () => {
     ).rejects.toThrow("instance not running");
   });
 
+  it("restores runner when it was active before execution", async () => {
+    setupMocks();
+    mockCampaignService.getRunnerState.mockResolvedValueOnce("campaigns");
+
+    await scrapeMessagingHistory({
+      personIds: [100, 200],
+      cdpPort: 9222,
+    });
+
+    expect(mockCampaignService.startRunner).toHaveBeenCalled();
+  });
+
+  it("does not restore runner when it was idle before execution", async () => {
+    setupMocks();
+
+    await scrapeMessagingHistory({
+      personIds: [100, 200],
+      cdpPort: 9222,
+    });
+
+    expect(mockCampaignService.startRunner).not.toHaveBeenCalled();
+  });
+
   it("propagates MessageRepository errors", async () => {
     setupMocks();
     vi.mocked(MessageRepository).mockImplementation(function () {
