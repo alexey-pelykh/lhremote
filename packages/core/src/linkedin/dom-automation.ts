@@ -471,9 +471,14 @@ export async function getElementCenter(
   const jx = cx + gaussianBetween(0, rect.width * 0.15, -rect.width * 0.4, rect.width * 0.4);
   const jy = cy + gaussianBetween(0, rect.height * 0.15, -rect.height * 0.4, rect.height * 0.4);
 
+  const roundedJx = Math.round(jx);
+  const roundedJy = Math.round(jy);
+  const maxX = rect.width >= 1 ? rect.x + rect.width - 1 : rect.x;
+  const maxY = rect.height >= 1 ? rect.y + rect.height - 1 : rect.y;
+
   return {
-    x: Math.round(Math.max(rect.x, Math.min(rect.x + rect.width, jx))),
-    y: Math.round(Math.max(rect.y, Math.min(rect.y + rect.height, jy))),
+    x: Math.max(rect.x, Math.min(maxX, roundedJx)),
+    y: Math.max(rect.y, Math.min(maxY, roundedJy)),
   };
 }
 
