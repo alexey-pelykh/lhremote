@@ -15,6 +15,55 @@ const DEFAULT_POLL_INTERVAL = 100;
 /** Probability of a micro-hesitation between keystrokes. */
 const MICRO_HESITATION_PROBABILITY = 0.05;
 
+/** Physical key code info for a character, used to enrich CDP key events. */
+interface KeyCodeInfo {
+  code: string;
+  windowsVirtualKeyCode: number;
+}
+
+/**
+ * Map a character to its physical key code and Windows virtual key code.
+ *
+ * Covers ASCII letters, digits, common punctuation, and special keys
+ * (space, enter, tab, backspace, escape).  Returns `undefined` for
+ * unmapped characters — the event still fires, just without enrichment.
+ */
+function getKeyCodeInfo(char: string): KeyCodeInfo | undefined {
+  // Letters a-z / A-Z
+  const lower = char.toLowerCase();
+  if (lower >= "a" && lower <= "z") {
+    const vk = 65 + lower.charCodeAt(0) - "a".charCodeAt(0);
+    return { code: `Key${lower.toUpperCase()}`, windowsVirtualKeyCode: vk };
+  }
+
+  // Digits 0-9
+  if (char >= "0" && char <= "9") {
+    const vk = 48 + char.charCodeAt(0) - "0".charCodeAt(0);
+    return { code: `Digit${char}`, windowsVirtualKeyCode: vk };
+  }
+
+  // Special keys and punctuation
+  const special: Record<string, KeyCodeInfo> = {
+    " ": { code: "Space", windowsVirtualKeyCode: 32 },
+    "\n": { code: "Enter", windowsVirtualKeyCode: 13 },
+    "\r": { code: "Enter", windowsVirtualKeyCode: 13 },
+    "\t": { code: "Tab", windowsVirtualKeyCode: 9 },
+    "-": { code: "Minus", windowsVirtualKeyCode: 189 },
+    "=": { code: "Equal", windowsVirtualKeyCode: 187 },
+    "[": { code: "BracketLeft", windowsVirtualKeyCode: 219 },
+    "]": { code: "BracketRight", windowsVirtualKeyCode: 221 },
+    "\\": { code: "Backslash", windowsVirtualKeyCode: 220 },
+    ";": { code: "Semicolon", windowsVirtualKeyCode: 186 },
+    "'": { code: "Quote", windowsVirtualKeyCode: 222 },
+    ",": { code: "Comma", windowsVirtualKeyCode: 188 },
+    ".": { code: "Period", windowsVirtualKeyCode: 190 },
+    "/": { code: "Slash", windowsVirtualKeyCode: 191 },
+    "`": { code: "Backquote", windowsVirtualKeyCode: 192 },
+  };
+
+  return special[char];
+}
+
 /** Options for {@link waitForElement}. */
 export interface WaitForElementOptions {
   /** Maximum time to wait in ms (default: 30 000). */
@@ -164,8 +213,16 @@ export async function hover(
     `(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return false;
-      el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      const r = el.getBoundingClientRect();
+      const cx = Math.round(r.x + r.width / 2);
+      const cy = Math.round(r.y + r.height / 2);
+      const opts = {
+        bubbles: true, clientX: cx, clientY: cy,
+        screenX: cx + window.screenX, screenY: cy + window.screenY,
+        button: 0, buttons: 0,
+      };
+      el.dispatchEvent(new MouseEvent('mouseenter', opts));
+      el.dispatchEvent(new MouseEvent('mouseover', opts));
       return true;
     })()`,
   );
@@ -251,14 +308,17 @@ export async function typeText(
     case "type": {
       let previousChar = "";
       for (const char of text) {
+        const kc = getKeyCodeInfo(char);
         await client.send("Input.dispatchKeyEvent", {
           type: "keyDown",
           key: char,
           text: char,
+          ...(kc && { code: kc.code, windowsVirtualKeyCode: kc.windowsVirtualKeyCode }),
         });
         await client.send("Input.dispatchKeyEvent", {
           type: "keyUp",
           key: char,
+          ...(kc && { code: kc.code, windowsVirtualKeyCode: kc.windowsVirtualKeyCode }),
         });
 
         // Character-aware delay
@@ -531,7 +591,33 @@ export async function humanizedClick(
       return;
     }
   }
-  // Fallback to JS click
+  // Fallback: simulate mouse movement path before JS click
+  const center = await getElementCenter(client, selector);
+  if (center) {
+    const viewportSize = await client.evaluate<{ w: number; h: number }>(
+      `({ w: window.innerWidth, h: window.innerHeight })`,
+    );
+    // Random starting position within the viewport
+    const startX = Math.round(Math.random() * viewportSize.w);
+    const startY = Math.round(Math.random() * viewportSize.h);
+    const steps = Math.round(gaussianBetween(4, 0.7, 3, 5));
+
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const baseX = startX + (center.x - startX) * t;
+      const baseY = startY + (center.y - startY) * t;
+      // Add random offset to intermediate points, not the final point
+      const offsetX = i < steps ? Math.round(gaussianBetween(0, 10, -20, 20)) : 0;
+      const offsetY = i < steps ? Math.round(gaussianBetween(0, 10, -20, 20)) : 0;
+      await client.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: Math.round(baseX) + offsetX,
+        y: Math.round(baseY) + offsetY,
+      });
+      await gaussianDelay(25, 10, 10, 50);
+    }
+  }
+
   await click(client, selector);
   await gaussianDelay(100, 25, 50, 150); // Post-click visual confirmation
 }
