@@ -390,7 +390,9 @@ export async function scrollFeed(
   mouse?: HumanizedMouse | null,
 ): Promise<void> {
   const distance = Math.round(gaussianBetween(800, 100, 600, 1_000));
-  await humanizedScrollY(client, distance, 300, 400, mouse);
+  const x = Math.round(gaussianBetween(350, 100, 150, 550));
+  const y = Math.round(gaussianBetween(400, 80, 250, 550));
+  await humanizedScrollY(client, distance, x, y, mouse);
 }
 
 // ---------------------------------------------------------------------------
@@ -556,6 +558,7 @@ export async function getFeed(
     const lastPost = window[window.length - 1];
     const nextCursor = hasMore && lastPost ? lastPost.url : null;
 
+    await gaussianDelay(800, 300, 300, 1_800); // Post-action dwell
     return { posts, nextCursor };
   } finally {
     client.disconnect();

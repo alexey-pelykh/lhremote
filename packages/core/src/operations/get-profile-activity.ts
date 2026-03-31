@@ -441,6 +441,7 @@ export async function getProfileActivity(
       }
     }
 
+    await gaussianDelay(800, 300, 300, 1_800); // Post-action dwell
     return { profilePublicId, posts, nextCursor };
   } finally {
     client.disconnect();

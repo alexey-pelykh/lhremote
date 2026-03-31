@@ -3,7 +3,7 @@
 
 import type { CDPClient } from "../cdp/client.js";
 import { CDPEvaluationError, CDPTimeoutError } from "../cdp/errors.js";
-import { delay, gaussianDelay } from "../utils/delay.js";
+import { delay, gaussianBetween, gaussianDelay } from "../utils/delay.js";
 import type { HumanizedMouse } from "./humanized-mouse.js";
 
 /** Default timeout for DOM operations (ms). */
@@ -450,14 +450,25 @@ export async function humanizedScrollToByIndex(
 // Humanized interaction helpers
 // ---------------------------------------------------------------------------
 
-/** Bounding rect returned by `getElementCenter`. */
+/** Bounding rect returned by the element center helper. */
+interface ElementRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Viewport-relative point returned by `getElementCenter`. */
 interface ElementCenter {
   x: number;
   y: number;
 }
 
 /**
- * Get the viewport-relative center of a DOM element.
+ * Get a jittered viewport-relative point near the center of a DOM element.
+ *
+ * A Gaussian offset is applied so the click target varies naturally within
+ * the element bounds, removing the dead-center automation fingerprint.
  *
  * @returns `null` if the element is not found.
  */
@@ -465,14 +476,31 @@ export async function getElementCenter(
   client: CDPClient,
   selector: string,
 ): Promise<ElementCenter | null> {
-  return client.evaluate<ElementCenter | null>(
+  const rect = await client.evaluate<ElementRect | null>(
     `(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return null;
       const r = el.getBoundingClientRect();
-      return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
     })()`,
   );
+  if (!rect) return null;
+
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
+
+  const jx = cx + gaussianBetween(0, rect.width * 0.15, -rect.width * 0.4, rect.width * 0.4);
+  const jy = cy + gaussianBetween(0, rect.height * 0.15, -rect.height * 0.4, rect.height * 0.4);
+
+  const roundedJx = Math.round(jx);
+  const roundedJy = Math.round(jy);
+  const maxX = rect.width >= 1 ? rect.x + rect.width - 1 : rect.x;
+  const maxY = rect.height >= 1 ? rect.y + rect.height - 1 : rect.y;
+
+  return {
+    x: Math.max(rect.x, Math.min(maxX, roundedJx)),
+    y: Math.max(rect.y, Math.min(maxY, roundedJy)),
+  };
 }
 
 /**

@@ -394,6 +394,7 @@ export async function getPostEngagers(
       engagementType: e.engagementType,
     }));
 
+    await gaussianDelay(800, 300, 300, 1_800); // Post-action dwell
     return {
       postUrn,
       engagers,

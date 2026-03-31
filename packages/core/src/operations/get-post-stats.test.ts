@@ -11,6 +11,10 @@ vi.mock("../cdp/client.js", () => ({
   CDPClient: vi.fn(),
 }));
 
+vi.mock("../utils/delay.js", () => ({
+  gaussianDelay: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("./navigate-away.js", () => ({
   navigateAwayIf: vi.fn().mockResolvedValue(undefined),
 }));

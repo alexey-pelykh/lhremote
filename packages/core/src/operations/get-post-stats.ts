@@ -5,6 +5,7 @@ import { resolveInstancePort } from "../cdp/index.js";
 import type { PostStats } from "../types/post-analytics.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
+import { gaussianDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { delay } from "./get-feed.js";
 import { navigateAwayIf } from "./navigate-away.js";
@@ -212,6 +213,7 @@ export async function getPostStats(
       shareCount: raw.shareCount,
     };
 
+    await gaussianDelay(800, 300, 300, 1_800); // Post-action dwell
     return { stats };
   } finally {
     client.disconnect();
