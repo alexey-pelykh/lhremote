@@ -4,7 +4,6 @@
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   InstanceNotRunningError,
   errorMessage,
   importPeopleFromCollection,
@@ -27,7 +26,7 @@ export async function handleImportPeopleFromCollection(
     result = await importPeopleFromCollection({
       collectionId,
       campaignId,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

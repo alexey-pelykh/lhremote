@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   createCollection,
   errorMessage,
 } from "@lhremote/core";
@@ -20,7 +19,7 @@ export async function handleCreateCollection(
   try {
     const result = await createCollection({
       name,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

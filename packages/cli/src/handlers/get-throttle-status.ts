@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   getThrottleStatus,
   type GetThrottleStatusOutput,
@@ -20,7 +19,7 @@ export async function handleGetThrottleStatus(
   let result: GetThrottleStatusOutput;
   try {
     result = await getThrottleStatus({
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

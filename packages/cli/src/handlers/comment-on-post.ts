@@ -3,7 +3,6 @@
 
 import {
   BudgetExceededError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   commentOnPost,
   type CommentOnPostOutput,
@@ -25,7 +24,7 @@ export async function handleCommentOnPost(options: {
     result = await commentOnPost({
       postUrl: options.url,
       text: options.text,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

@@ -4,7 +4,6 @@
 import {
   CollectionBusyError,
   CollectionError,
-  DEFAULT_CDP_PORT,
   collectPeople,
   errorMessage,
 } from "@lhremote/core";
@@ -32,7 +31,7 @@ export async function handleCollectPeople(
       ...(options.maxPages !== undefined && { maxPages: options.maxPages }),
       ...(options.pageSize !== undefined && { pageSize: options.pageSize }),
       ...(options.sourceType !== undefined && { sourceType: options.sourceType }),
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       ...(options.cdpHost !== undefined && { cdpHost: options.cdpHost }),
       ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
     });

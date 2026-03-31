@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   removeConnection,
   type EphemeralActionResult,
@@ -34,7 +33,7 @@ export async function handleRemoveConnection(options: {
       personId: options.personId,
       url: options.url,
       keepCampaign: options.keepCampaign,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

@@ -4,7 +4,6 @@
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   campaignStop,
@@ -25,7 +24,7 @@ export async function handleCampaignStop(
   try {
     result = await campaignStop({
       campaignId,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   likePersonPosts,
   type EphemeralActionResult,
@@ -59,7 +58,7 @@ export async function handleLikePersonPosts(options: {
       messageTemplate: parsedMessageTemplate,
       skipIfNotLiked: options.skipIfNotLiked,
       keepCampaign: options.keepCampaign,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

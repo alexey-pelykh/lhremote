@@ -5,7 +5,6 @@ import { writeFileSync } from "node:fs";
 
 import {
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   campaignExport,
   type CampaignExportOutput,
@@ -37,7 +36,7 @@ export async function handleCampaignExport(
     result = await campaignExport({
       campaignId,
       format,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });
