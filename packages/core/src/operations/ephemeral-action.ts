@@ -5,7 +5,7 @@ import type { ActionSettings, EphemeralActionResult } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { EphemeralCampaignService } from "../services/ephemeral-campaign.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 /**
  * Shared input fields for all ephemeral action operations.
@@ -38,10 +38,7 @@ export async function executeEphemeralAction(
   const target: number | string = input.personId ?? (input.url as string);
   const cdpPort = input.cdpPort;
 
-  const accountId = await resolveAccount(cdpPort, {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  });
+  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
     const ephemeral = new EphemeralCampaignService(instance, db);
