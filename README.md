@@ -28,7 +28,20 @@ lhremote lets AI assistants (Claude, etc.) control LinkedHelper through the [Mod
 - **Budget & throttle monitoring** — check daily action limits and LinkedIn throttling status
 - **Action discovery** — list available LinkedHelper action types with configuration schemas
 
-**New to lhremote?** Check out the [Getting Started guide](docs/getting-started.md) for a step-by-step walkthrough.
+## Quick Start
+
+```sh
+npm install -g lhremote        # or: npx lhremote --help
+lhremote launch-app            # start LinkedHelper with remote debugging
+lhremote list-accounts         # find your LinkedIn account ID
+lhremote start-instance        # start an instance (auto-selects single account)
+lhremote campaign-create --file my-campaign.yaml   # create a campaign
+lhremote import-people-from-urls <campaignId> --urls "https://www.linkedin.com/in/..."
+lhremote campaign-start <campaignId> --person-ids <id1,id2,...>
+lhremote campaign-status <campaignId>              # monitor progress
+```
+
+> **Pacing**: LinkedIn monitors automated activity. See the [Rate Limiting guide](docs/rate-limiting.md) for recommended settings.
 
 ## Prerequisites
 
