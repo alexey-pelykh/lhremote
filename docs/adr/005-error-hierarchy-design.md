@@ -37,14 +37,20 @@ Error (built-in)
     ├── AppNotFoundError            LinkedHelper binary not found
     ├── AppLaunchError              Process spawn failed
     ├── LinkedHelperNotRunningError CDP endpoint not reachable
+    ├── LinkedHelperUnreachableError Process found but CDP not reachable (carries processes)
     ├── InstanceNotRunningError     Expected instance not running
     ├── StartInstanceError          Account instance failed to start
     ├── WrongPortError              CDP port is instance, not launcher
+    ├── NodeIntegrationUnavailableError Launcher lacks Node.js APIs (unsupported LH version)
     ├── ActionExecutionError        Action execution failed (carries actionType)
     ├── InvalidProfileUrlError      Profile URL validation failed
     ├── ExtractionTimeoutError      Profile data didn't appear in DB in time
+    ├── CollectionError             Collection operation failed during execution
+    │   └── CollectionBusyError     Instance busy, cannot start collection (carries runnerState)
     ├── CampaignExecutionError      Campaign operation failed (carries campaignId)
     ├── CampaignTimeoutError        Campaign state transition timeout (carries campaignId)
+    ├── BudgetExceededError         Daily action budget exhausted (carries limitType, dailyLimit, totalUsed)
+    ├── UIBlockedError              UI blocked by dialog/error/popup (carries health)
     └── AccountResolutionError      Account resolution ambiguous (carries reason: "no-accounts" | "multiple-accounts")
 ```
 
