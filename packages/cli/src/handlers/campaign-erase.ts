@@ -4,7 +4,6 @@
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   campaignErase,
@@ -25,7 +24,7 @@ export async function handleCampaignErase(
   try {
     result = await campaignErase({
       campaignId,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

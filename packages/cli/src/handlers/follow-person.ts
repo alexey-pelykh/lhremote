@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   followPerson,
   type EphemeralActionResult,
@@ -39,7 +38,7 @@ export async function handleFollowPerson(options: {
       mode: options.mode,
       skipIfUnfollowable: options.skipIfUnfollowable,
       keepCampaign: options.keepCampaign,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

@@ -5,7 +5,6 @@ import {
   CampaignExecutionError,
   CampaignNotFoundError,
   CampaignTimeoutError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   campaignStart,
@@ -41,7 +40,7 @@ export async function handleCampaignStart(
     result = await campaignStart({
       campaignId,
       personIds,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

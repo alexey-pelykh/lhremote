@@ -4,7 +4,6 @@
 import { readFileSync } from "node:fs";
 
 import {
-  DEFAULT_CDP_PORT,
   removePeopleFromCollection,
   errorMessage,
 } from "@lhremote/core";
@@ -74,7 +73,7 @@ export async function handleRemovePeopleFromCollection(
     const result = await removePeopleFromCollection({
       collectionId,
       personIds,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

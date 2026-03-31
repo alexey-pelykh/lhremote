@@ -4,7 +4,6 @@
 import { readFileSync } from "node:fs";
 
 import {
-  DEFAULT_CDP_PORT,
   addPeopleToCollection,
   errorMessage,
 } from "@lhremote/core";
@@ -74,7 +73,7 @@ export async function handleAddPeopleToCollection(
     const result = await addPeopleToCollection({
       collectionId,
       personIds,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

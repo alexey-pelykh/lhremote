@@ -4,7 +4,6 @@
 import {
   ActionNotFoundError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   ExcludeListNotFoundError,
   campaignExcludeRemove,
@@ -42,7 +41,7 @@ export async function handleCampaignExcludeRemove(
       campaignId,
       personIds,
       actionId: options.actionId,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

@@ -3,7 +3,6 @@
 
 import {
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   campaignRetry,
   type CampaignRetryOutput,
@@ -38,7 +37,7 @@ export async function handleCampaignRetry(
     result = await campaignRetry({
       campaignId,
       personIds,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

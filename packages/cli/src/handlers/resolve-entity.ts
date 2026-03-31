@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   type EntityType,
   resolveLinkedInEntity,
   errorMessage,
@@ -39,7 +38,7 @@ export async function handleResolveEntity(
     const result = await resolveLinkedInEntity({
       query,
       entityType: entityType as EntityType,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       ...(options.cdpHost !== undefined && { cdpHost: options.cdpHost }),
       ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
     });

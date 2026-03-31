@@ -3,7 +3,6 @@
 
 import {
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   campaignGet,
   type CampaignGetOutput,
@@ -23,7 +22,7 @@ export async function handleCampaignGet(
   try {
     result = await campaignGet({
       campaignId,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });
