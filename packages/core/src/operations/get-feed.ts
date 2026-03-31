@@ -5,9 +5,9 @@ import { resolveInstancePort } from "../cdp/index.js";
 import type { FeedPost } from "../types/feed.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { humanizedScrollY, humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
+import { humanizedScrollY, humanizedScrollToByIndex, retryInteraction } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
-import { delay as utilsDelay, gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak } from "../utils/delay.js";
+import { delay as utilsDelay, gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak, simulateReadingTime } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
 
@@ -274,7 +274,23 @@ async function capturePostUrl(
     await client.evaluate(`(() => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     })()`);
-    await gaussianDelay(400, 50, 300, 500);
+
+    // Escalating retry delays: longer waits on later attempts
+    const retryDelays = [
+      { mean: 700, stdDev: 200 },
+      { mean: 1_200, stdDev: 400 },
+      { mean: 2_500, stdDev: 800 },
+    ] as const;
+    const rd = retryDelays[attempt] ?? retryDelays[2];
+    await gaussianDelay(rd.mean, rd.stdDev, rd.mean * 0.5, rd.mean * 1.5);
+
+    // 50% chance of a small "confusion" scroll to reset visual state
+    if (Math.random() < 0.5) {
+      const scrollDist = Math.round(gaussianBetween(75, 15, 50, 100));
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      await humanizedScrollY(client, scrollDist * dir, 300, 400, mouse);
+      await gaussianDelay(300, 100, 150, 500);
+    }
   }
 
   return null;
@@ -522,6 +538,13 @@ export async function getFeed(
           1_200 * fatigueMultiplier + contentBonus,
           1_800 * fatigueMultiplier + contentBonus,
         );
+
+        // Reading simulation: pause proportional to visible content volume.
+        // Estimate ~300 chars per newly visible post (headline + snippet).
+        if (newPostCount > 0) {
+          await simulateReadingTime(newPostCount * 300);
+        }
+
         await maybeBreak();
       }
     }
@@ -537,7 +560,9 @@ export async function getFeed(
       if (!post) continue;
       if (i > 0) await gaussianDelay(550, 125, 300, 800); // Inter-post delay
       await maybeBreak();
-      const url = await capturePostUrl(client, i, mouse);
+      const url = await retryInteraction(
+        () => capturePostUrl(client, i, mouse),
+      );
       if (url) {
         post.url = url;
       }

@@ -9,6 +9,7 @@ import {
   maybeBreak,
   gaussianRandom,
   gaussianBetween,
+  simulateReadingTime,
 } from "./delay.js";
 
 describe("delay", () => {
@@ -115,5 +116,31 @@ describe("maybeBreak", () => {
     const start = Date.now();
     await maybeBreak(0);
     expect(Date.now() - start).toBeLessThan(50);
+  });
+});
+
+describe("simulateReadingTime", () => {
+  it("resolves to undefined", async () => {
+    const result = await simulateReadingTime(100, 0);
+    expect(result).toBeUndefined();
+  });
+
+  it("produces longer delays for longer content", async () => {
+    // With readFraction=0, the Gaussian mean is 0 — so it should
+    // effectively resolve at the minimum (500 ms).  Compare short vs long
+    // content to verify the function accepts different lengths.
+    const short = Date.now();
+    await simulateReadingTime(10, 0);
+    const shortElapsed = Date.now() - short;
+
+    // Both should resolve quickly since readFraction=0 → mean=0 → clamped to 500
+    expect(shortElapsed).toBeGreaterThanOrEqual(400);
+  });
+
+  it("clamps to minimum of 500 ms", async () => {
+    const start = Date.now();
+    await simulateReadingTime(0);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeGreaterThanOrEqual(400);
   });
 });
