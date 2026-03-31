@@ -107,8 +107,8 @@ access as a local one, over an unauthenticated CDP connection.
   including destructive operations.
 - **Review agent tool calls for destructive operations.** When using an
   AI agent as the MCP client, monitor its actions — especially
-  `campaign-delete`, `campaign-erase`, `remove-connection`, and other
-  state-changing tools.
+  `campaign-delete`, `campaign-erase`, `delete-collection`,
+  `remove-connection`, and other state-changing tools.
 - **Do not combine `--allow-remote` with AI agent MCP clients** unless
   the network path is secured. This combination extends unauthenticated
   tool access to remote CDP endpoints under AI-agent control.
