@@ -103,6 +103,8 @@ export async function waitForElement(
   // Last known cursor position for idle drift (lazy-initialised)
   let driftX = -1;
   let driftY = -1;
+  let viewportW = 0;
+  let viewportH = 0;
 
   while (Date.now() < deadline) {
     const found = await client.evaluate<boolean>(
@@ -111,7 +113,8 @@ export async function waitForElement(
     if (found) return;
 
     // Idle mouse drift: after 500 ms of waiting, 20% of poll cycles
-    // dispatch a tiny mouseMoved event to avoid a perfectly still cursor.
+    // move the cursor by 1–5 px to avoid a perfectly still cursor.
+    // Uses mouse.move() to keep VirtualMouse position in sync.
     if (mouse?.isAvailable && Date.now() - startTime > 500 && Math.random() < 0.2) {
       if (driftX < 0) {
         try {
@@ -119,21 +122,27 @@ export async function waitForElement(
           driftX = pos.x;
           driftY = pos.y;
         } catch {
-          // Default to viewport center when position is unavailable
-          const vh = await getViewportHeight(client);
-          driftX = 400;
-          driftY = Math.round(vh / 2);
+          // Ignored — fall through to viewport center default
+        }
+        const size = await client.evaluate<{ w: number; h: number }>(
+          `({ w: window.innerWidth, h: window.innerHeight })`,
+        );
+        viewportW = size.w;
+        viewportH = size.h;
+        if (driftX < 0) {
+          driftX = Math.round(viewportW / 2);
+          driftY = Math.round(viewportH / 2);
         }
       }
-      const offsetX = Math.round(randomBetween(-5, 5));
-      const offsetY = Math.round(randomBetween(-5, 5));
-      driftX += offsetX;
-      driftY += offsetY;
-      await client.send("Input.dispatchMouseEvent", {
-        type: "mouseMoved",
-        x: driftX,
-        y: driftY,
-      });
+      // Guaranteed non-zero magnitude (1–5 px), random direction
+      const magX = Math.round(randomBetween(1, 5));
+      const magY = Math.round(randomBetween(1, 5));
+      const offsetX = (Math.random() < 0.5 ? -1 : 1) * magX;
+      const offsetY = (Math.random() < 0.5 ? -1 : 1) * magY;
+      // Clamp to viewport bounds
+      driftX = Math.max(0, Math.min(viewportW - 1, driftX + offsetX));
+      driftY = Math.max(0, Math.min(viewportH - 1, driftY + offsetY));
+      await mouse.move(driftX, driftY);
     }
 
     await delay(pollInterval);
@@ -615,12 +624,24 @@ async function viewportComfortZone(
   mouse?: HumanizedMouse | null,
 ): Promise<void> {
   const viewportHeight = await getViewportHeight(client);
-  const center = await getElementCenter(client, selector);
-  if (!center) return;
+  // Use the raw bounding-rect center (not the jittered getElementCenter)
+  // so the comfort-zone check is deterministic and not affected by jitter.
+  const rect = await client.evaluate<ElementRect | null>(
+    `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    })()`,
+  );
+  if (!rect) return;
 
-  if (center.y < viewportHeight * 0.2 || center.y > viewportHeight * 0.8) {
-    const deltaY = center.y - viewportHeight / 2;
-    await humanizedScrollY(client, deltaY * 0.5, center.x, center.y, mouse);
+  const centerX = rect.x + rect.width / 2;
+  const centerY = rect.y + rect.height / 2;
+
+  if (centerY < viewportHeight * 0.2 || centerY > viewportHeight * 0.8) {
+    const deltaY = centerY - viewportHeight / 2;
+    await humanizedScrollY(client, deltaY * 0.5, centerX, centerY, mouse);
     await gaussianDelay(300, 100, 150, 600);
   }
 }

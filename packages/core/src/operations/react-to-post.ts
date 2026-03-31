@@ -123,18 +123,18 @@ export async function reactToPost(
     const mouse = input.mouse;
 
     // Wait for the reaction trigger button to appear
-    await waitForElement(client, REACTION_TRIGGER);
+    await waitForElement(client, REACTION_TRIGGER, undefined, mouse);
 
     // Hover over the reaction trigger to expand the reactions menu
     await humanizedHover(client, REACTION_TRIGGER, mouse);
     await gaussianDelay(1_500, 150, 1_200, 1_800);
 
     // Wait for the reactions menu to appear
-    await waitForElement(client, REACTIONS_MENU, { timeout: 5_000 });
+    await waitForElement(client, REACTIONS_MENU, { timeout: 5_000 }, mouse);
 
     // Click the specific reaction button
     const reactionSelector = REACTION_SELECTORS[reactionType];
-    await waitForElement(client, reactionSelector, { timeout: 5_000 });
+    await waitForElement(client, reactionSelector, { timeout: 5_000 }, mouse);
     await humanizedClick(client, reactionSelector, mouse);
 
     // Let the UI settle

@@ -132,7 +132,7 @@ export async function commentOnPost(
     const mouse = input.mouse;
 
     // Wait for the comment input and interact
-    await waitForElement(client, COMMENT_INPUT);
+    await waitForElement(client, COMMENT_INPUT, undefined, mouse);
     await humanizedScrollTo(client, COMMENT_INPUT, mouse);
     await humanizedClick(client, COMMENT_INPUT, mouse);
     await gaussianDelay(550, 75, 400, 700);
@@ -141,7 +141,7 @@ export async function commentOnPost(
     await typeText(client, COMMENT_INPUT, input.text);
 
     // Wait for submit button and click
-    await waitForElement(client, COMMENT_SUBMIT_BUTTON);
+    await waitForElement(client, COMMENT_SUBMIT_BUTTON, undefined, mouse);
     await humanizedClick(client, COMMENT_SUBMIT_BUTTON, mouse);
 
     // Brief wait for the comment to post
