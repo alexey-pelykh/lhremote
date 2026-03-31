@@ -74,6 +74,19 @@ describe("discoverTargets", () => {
     );
   });
 
+  it("should throw CDPConnectionError on non-array response", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ error: "not targets" }), { status: 200 }),
+    );
+
+    await expect(discoverTargets(9222)).rejects.toThrow(
+      expect.objectContaining({
+        constructor: CDPConnectionError,
+        message: expect.stringMatching(/Unexpected response from CDP endpoint/),
+      }),
+    );
+  });
+
   it("should throw CDPConnectionError on non-OK HTTP status", async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response("Not Found", { status: 404 }),
