@@ -7,7 +7,7 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
-import { delay, gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak } from "../utils/delay.js";
+import { delay, gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak, simulateReadingTime } from "../utils/delay.js";
 import { humanizedScrollTo, humanizedClick } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { navigateAwayIf } from "./navigate-away.js";
@@ -356,6 +356,7 @@ export async function getPostEngagers(
     let allEngagers: RawEngager[] = [];
     const maxScrollAttempts = 20;
 
+    let previousEngagerCount = 0;
     for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
       const scraped =
         await client.evaluate<RawEngager[]>(SCRAPE_ENGAGERS_SCRIPT);
@@ -369,6 +370,15 @@ export async function getPostEngagers(
           await client.evaluate<boolean>(createScrollModalScript(modalDistance));
         if (!scrolled) break;
         await gaussianDelay(1_000, 100, 800, 1_200);
+
+        // Reading simulation: pause proportional to newly visible engager entries.
+        // Estimate ~80 chars per engager (name + headline).
+        const newEngagers = allEngagers.length - previousEngagerCount;
+        if (newEngagers > 0) {
+          await simulateReadingTime(newEngagers * 80);
+        }
+        previousEngagerCount = allEngagers.length;
+
         await maybeBreak();
       }
     }

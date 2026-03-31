@@ -21,6 +21,7 @@ vi.mock("../utils/delay.js", () => ({
   gaussianBetween: vi.fn().mockReturnValue(800),
   maybeHesitate: vi.fn().mockResolvedValue(undefined),
   maybeBreak: vi.fn().mockResolvedValue(undefined),
+  simulateReadingTime: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { discoverTargets } from "../cdp/discovery.js";
@@ -438,10 +439,12 @@ describe("getFeed", () => {
     const result = await getFeed({ cdpPort: CDP_PORT, count: 10 });
 
     expect(result.posts).toHaveLength(2);
+    // At least 1 scroll from the feed loop; confusion scrolls from retry
+    // logic may add more Input.dispatchMouseEvent calls.
     const scrollCalls = send.mock.calls.filter(
       (c) => c[0] === "Input.dispatchMouseEvent",
     );
-    expect(scrollCalls).toHaveLength(1);
+    expect(scrollCalls.length).toBeGreaterThanOrEqual(1);
   });
 
   it("throws when no LinkedIn page found", async () => {

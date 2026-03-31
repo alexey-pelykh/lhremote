@@ -7,8 +7,8 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
-import { gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak } from "../utils/delay.js";
-import { humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
+import { gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak, simulateReadingTime } from "../utils/delay.js";
+import { humanizedScrollToByIndex, retryInteraction } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import {
   type RawDomPost,
@@ -409,6 +409,13 @@ export async function searchPosts(
           1_200 * fatigueMultiplier + contentBonus,
           1_800 * fatigueMultiplier + contentBonus,
         );
+
+        // Reading simulation: pause proportional to visible content volume.
+        // Estimate ~300 chars per newly visible post (headline + snippet).
+        if (newPostCount > 0) {
+          await simulateReadingTime(newPostCount * 300);
+        }
+
         await maybeBreak();
       }
     }
@@ -443,46 +450,48 @@ export async function searchPosts(
 
         if (i > 0) await gaussianDelay(550, 125, 300, 800); // Inter-post delay
         await maybeBreak();
-        await maybeHesitate(); // Probabilistic pause before menu interaction
 
-        // Reset capture
-        await client.evaluate(`window.__capturedClipboard = null;`);
+        const url = await retryInteraction(async () => {
+          await maybeHesitate(); // Probabilistic pause before menu interaction
 
-        // Scroll the menu button into view (humanized when mouse available)
-        await humanizedScrollToByIndex(client, SEARCH_MENU_BUTTON_SELECTOR, i, mouse);
+          // Reset capture
+          await client.evaluate(`window.__capturedClipboard = null;`);
 
-        // Click the i-th menu button
-        const clicked = await client.evaluate<boolean>(`(() => {
-          const btns = document.querySelectorAll(
-            ${JSON.stringify(SEARCH_MENU_BUTTON_SELECTOR)}
-          );
-          const btn = btns[${String(i)}];
-          if (!btn) return false;
-          btn.click();
-          return true;
-        })()`);
-        if (!clicked) continue;
+          // Scroll the menu button into view (humanized when mouse available)
+          await humanizedScrollToByIndex(client, SEARCH_MENU_BUTTON_SELECTOR, i, mouse);
 
-        await gaussianDelay(700, 100, 500, 900);
+          // Click the i-th menu button
+          const clicked = await client.evaluate<boolean>(`(() => {
+            const btns = document.querySelectorAll(
+              ${JSON.stringify(SEARCH_MENU_BUTTON_SELECTOR)}
+            );
+            const btn = btns[${String(i)}];
+            if (!btn) return false;
+            btn.click();
+            return true;
+          })()`);
+          if (!clicked) return null;
 
-        // Click "Copy link to post" menu item
-        await client.evaluate(`(() => {
-          for (const el of document.querySelectorAll('[role="menuitem"]')) {
-            if (el.textContent.trim() === 'Copy link to post') {
-              el.click();
-              return;
+          await gaussianDelay(700, 100, 500, 900);
+
+          // Click "Copy link to post" menu item
+          await client.evaluate(`(() => {
+            for (const el of document.querySelectorAll('[role="menuitem"]')) {
+              if (el.textContent.trim() === 'Copy link to post') {
+                el.click();
+                return;
+              }
             }
-          }
-        })()`);
+          })()`);
 
-        await gaussianDelay(550, 75, 400, 700);
+          await gaussianDelay(550, 75, 400, 700);
 
-        // Read captured URL
-        const postUrl =
-          await client.evaluate<string | null>(`window.__capturedClipboard`);
+          // Read captured URL
+          return client.evaluate<string | null>(`window.__capturedClipboard`);
+        });
 
-        if (postUrl) {
-          post.url = postUrl.split("?")[0] ?? postUrl;
+        if (url) {
+          post.url = url.split("?")[0] ?? url;
         }
       }
     }

@@ -3,7 +3,7 @@
 
 import type { CDPClient } from "../cdp/client.js";
 import { CDPEvaluationError, CDPTimeoutError } from "../cdp/errors.js";
-import { delay, gaussianBetween, gaussianDelay } from "../utils/delay.js";
+import { delay, gaussianBetween, gaussianDelay, randomBetween } from "../utils/delay.js";
 import type { HumanizedMouse } from "./humanized-mouse.js";
 
 /** Default timeout for DOM operations (ms). */
@@ -78,25 +78,64 @@ export type TypeMethod = "type";
 /**
  * Poll the DOM until an element matching the selector appears.
  *
+ * When a {@link HumanizedMouse} is provided, tiny idle mouse movements
+ * (1–5 px) are dispatched on ~20% of poll cycles once the wait exceeds
+ * 500 ms.  This prevents the cursor from remaining perfectly still
+ * during long element waits — a detectable automation fingerprint.
+ *
  * @param client   - Connected CDP client targeting the page.
  * @param selector - CSS selector to query.
  * @param options  - Timeout and polling interval.
+ * @param mouse    - Optional humanized mouse (enables idle drift).
  * @throws {CDPTimeoutError} If the element does not appear within the timeout.
  */
 export async function waitForElement(
   client: CDPClient,
   selector: string,
   options?: WaitForElementOptions,
+  mouse?: HumanizedMouse | null,
 ): Promise<void> {
   const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
   const pollInterval = options?.pollInterval ?? DEFAULT_POLL_INTERVAL;
   const deadline = Date.now() + timeout;
+  const startTime = Date.now();
+
+  // Last known cursor position for idle drift (lazy-initialised)
+  let driftX = -1;
+  let driftY = -1;
 
   while (Date.now() < deadline) {
     const found = await client.evaluate<boolean>(
       `document.querySelector(${JSON.stringify(selector)}) !== null`,
     );
     if (found) return;
+
+    // Idle mouse drift: after 500 ms of waiting, 20% of poll cycles
+    // dispatch a tiny mouseMoved event to avoid a perfectly still cursor.
+    if (mouse?.isAvailable && Date.now() - startTime > 500 && Math.random() < 0.2) {
+      if (driftX < 0) {
+        try {
+          const pos = await mouse.position();
+          driftX = pos.x;
+          driftY = pos.y;
+        } catch {
+          // Default to viewport center when position is unavailable
+          const vh = await getViewportHeight(client);
+          driftX = 400;
+          driftY = Math.round(vh / 2);
+        }
+      }
+      const offsetX = Math.round(randomBetween(-5, 5));
+      const offsetY = Math.round(randomBetween(-5, 5));
+      driftX += offsetX;
+      driftY += offsetY;
+      await client.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: driftX,
+        y: driftY,
+      });
+    }
+
     await delay(pollInterval);
   }
 
@@ -564,11 +603,43 @@ export async function getElementCenter(
 }
 
 /**
+ * Scroll the element toward the viewport center if it sits in the outer
+ * 20% of the visible area.  This mimics a human scrolling a bit to see
+ * the target more comfortably before clicking.
+ *
+ * @internal
+ */
+async function viewportComfortZone(
+  client: CDPClient,
+  selector: string,
+  mouse?: HumanizedMouse | null,
+): Promise<void> {
+  const viewportHeight = await getViewportHeight(client);
+  const center = await getElementCenter(client, selector);
+  if (!center) return;
+
+  if (center.y < viewportHeight * 0.2 || center.y > viewportHeight * 0.8) {
+    const deltaY = center.y - viewportHeight / 2;
+    await humanizedScrollY(client, deltaY * 0.5, center.x, center.y, mouse);
+    await gaussianDelay(300, 100, 150, 600);
+  }
+}
+
+/**
  * Click an element with humanized mouse movement when available.
  *
  * When a {@link HumanizedMouse} is provided and available, the cursor
  * follows a Bezier path to the element center before clicking.  The
  * VirtualMouse dispatches `mousePressed` / `mouseReleased` via CDP.
+ *
+ * **Pre-focus hover** (60% probability, HumanizedMouse only): before
+ * clicking, the cursor first moves to a point 20–50 px from the target,
+ * pauses briefly to simulate visual scanning, then proceeds to the
+ * target — a two-phase approach that mimics how a human visually locates
+ * a button before moving to click it.
+ *
+ * **Viewport comfort zone**: if the target sits in the outer 20% of the
+ * viewport, a small scroll brings it more central before interacting.
  *
  * Falls back to the standard JS `.click()` when humanized mouse is
  * unavailable (or the element cannot be located by bounding rect).
@@ -582,10 +653,23 @@ export async function humanizedClick(
   selector: string,
   mouse?: HumanizedMouse | null,
 ): Promise<void> {
+  // Viewport comfort zone: scroll element toward center if near edges
+  await viewportComfortZone(client, selector, mouse);
+
   await gaussianDelay(25, 12, 0, 50); // Pre-click approach hesitation
   if (mouse?.isAvailable) {
     const center = await getElementCenter(client, selector);
     if (center) {
+      // Pre-focus hover: 60% of the time, approach via a nearby point first
+      if (Math.random() < 0.6) {
+        const angle = Math.random() * 2 * Math.PI;
+        const radius = randomBetween(20, 50);
+        const nearX = Math.round(center.x + Math.cos(angle) * radius);
+        const nearY = Math.round(center.y + Math.sin(angle) * radius);
+        await mouse.move(nearX, nearY);
+        await gaussianDelay(180, 60, 80, 400); // Visual scanning pause
+      }
+
       await mouse.click(center.x, center.y);
       await gaussianDelay(100, 25, 50, 150); // Post-click visual confirmation
       return;
@@ -686,4 +770,33 @@ export async function humanizedScrollY(
     deltaX: 0,
     deltaY,
   });
+}
+
+/**
+ * Retry an interaction function with escalating Gaussian-distributed
+ * delays between attempts.
+ *
+ * Wraps critical interaction sequences (click after scroll, hover after
+ * navigate) where elements may vanish due to React re-renders.  Each
+ * retry waits progressively longer — `800 * (attempt + 1)` ms mean —
+ * giving the page time to stabilise.
+ *
+ * @param fn          - The async interaction to attempt.
+ * @param maxAttempts - Maximum number of attempts (default: 2).
+ * @returns The result of the first successful attempt.
+ */
+export async function retryInteraction<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 2,
+): Promise<T> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i === maxAttempts - 1) throw e;
+      await gaussianDelay(800 * (i + 1), 300, 400, 2_000);
+    }
+  }
+  // Unreachable — the loop always returns or throws
+  throw new Error("unreachable");
 }

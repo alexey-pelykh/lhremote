@@ -122,3 +122,24 @@ export function gaussianBetween(
   const raw = gaussianRandom(mean, stdDev);
   return Math.max(min, Math.min(max, raw));
 }
+
+/**
+ * Simulate reading time proportional to content length.
+ *
+ * Models a human scanning visible content at approximately 250 words per
+ * minute (assuming ~5 characters per word).  Only a fraction of the full
+ * reading time is used (default 30%) because users skim rather than read
+ * every word.  The result is drawn from a Gaussian distribution centered
+ * on the computed reading time, clamped to `[500, 8000]` ms.
+ *
+ * @param contentLength - Approximate character count of the visible content.
+ * @param readFraction  - Fraction of full reading time to simulate (default: 0.3).
+ */
+export function simulateReadingTime(
+  contentLength: number,
+  readFraction = 0.3,
+): Promise<void> {
+  const words = contentLength / 5;
+  const readTimeMs = (words / 250) * 60_000 * readFraction;
+  return gaussianDelay(readTimeMs, readTimeMs * 0.3, 500, 8_000);
+}

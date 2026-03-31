@@ -21,6 +21,7 @@ vi.mock("../utils/delay.js", () => ({
   gaussianBetween: vi.fn().mockReturnValue(800),
   maybeHesitate: vi.fn().mockResolvedValue(undefined),
   maybeBreak: vi.fn().mockResolvedValue(undefined),
+  simulateReadingTime: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { discoverTargets } from "../cdp/discovery.js";

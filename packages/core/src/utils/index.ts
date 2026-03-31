@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 export { isCdpPort } from "./cdp-port.js";
-export { delay, randomDelay, gaussianRandom, gaussianDelay, gaussianBetween, maybeBreak } from "./delay.js";
+export { delay, randomDelay, gaussianRandom, gaussianDelay, gaussianBetween, maybeBreak, simulateReadingTime } from "./delay.js";
 export { errorMessage } from "./error-message.js";
 export { isLoopbackAddress } from "./loopback.js";
 export { SessionPacer, rhythmMultiplier } from "./session-pacer.js";
