@@ -147,6 +147,7 @@ export async function commentOnPost(
     // Brief wait for the comment to post
     await gaussianDelay(2_000, 250, 1_500, 2_500);
 
+    await gaussianDelay(1_500, 500, 700, 3_500); // Post-action dwell
     return {
       success: true as const,
       postUrl: input.postUrl,
