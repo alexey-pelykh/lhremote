@@ -495,6 +495,7 @@ export async function searchPosts(
     const hasMore = startIdx + count < allPosts.length;
     const nextCursor = hasMore ? startIdx + count : null;
 
+    await gaussianDelay(800, 300, 300, 1_800); // Post-action dwell
     return { query: input.query, posts, nextCursor };
   } finally {
     client.disconnect();

@@ -5,6 +5,7 @@ import { resolveInstancePort } from "../cdp/index.js";
 import type { PostComment, PostDetail } from "../types/post.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
+import { gaussianDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
 import { delay, parseTimestamp } from "./get-feed.js";
@@ -491,6 +492,7 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
       reactionCount: c.reactionCount,
     }));
 
+    await gaussianDelay(800, 300, 300, 1_800); // Post-action dwell
     return {
       post,
       comments,

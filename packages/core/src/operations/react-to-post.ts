@@ -140,6 +140,7 @@ export async function reactToPost(
     // Let the UI settle
     await gaussianDelay(550, 75, 400, 700);
 
+    await gaussianDelay(1_500, 500, 700, 3_500); // Post-action dwell
     return {
       success: true as const,
       postUrl: input.postUrl,

@@ -394,11 +394,11 @@ describe("getFeed", () => {
     const result = await getFeed({ cdpPort: CDP_PORT, count: 4 });
 
     expect(result.posts).toHaveLength(4);
-    // scrollFeed uses gaussianBetween (mocked to return 800)
+    // scrollFeed uses gaussianBetween (mocked to return 800) for distance, x, and y
     expect(send).toHaveBeenCalledWith("Input.dispatchMouseEvent", {
       type: "mouseWheel",
-      x: 300,
-      y: 400,
+      x: 800,
+      y: 800,
       deltaX: 0,
       deltaY: 800,
     });
