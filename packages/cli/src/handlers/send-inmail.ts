@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   sendInmail,
   type EphemeralActionResult,
@@ -62,7 +61,7 @@ export async function handleSendInmail(options: {
       rejectIfReplied: options.rejectIfReplied,
       proceedOnOutOfCredits: options.proceedOnOutOfCredits,
       keepCampaign: options.keepCampaign,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

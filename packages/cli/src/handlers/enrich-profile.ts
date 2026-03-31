@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   enrichProfile,
   type EphemeralActionResult,
@@ -49,7 +48,7 @@ export async function handleEnrichProfile(options: {
       companies: options.enrichCompanies !== undefined
         ? { shouldEnrich: options.enrichCompanies } : undefined,
       keepCampaign: options.keepCampaign,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

@@ -3,7 +3,6 @@
 
 import {
   type MessageStats,
-  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   scrapeMessagingHistory,
@@ -32,7 +31,7 @@ export async function handleScrapeMessagingHistory(options: {
     result = await scrapeMessagingHistory({
       personIds: options.personId,
       pauseOthers: options.pauseOthers,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

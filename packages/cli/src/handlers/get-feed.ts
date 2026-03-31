@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import {
-  DEFAULT_CDP_PORT,
   errorMessage,
   getFeed,
   type GetFeedOutput,
@@ -24,7 +23,7 @@ export async function handleGetFeed(
     result = await getFeed({
       count: options.count,
       cursor: options.cursor,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

@@ -3,7 +3,6 @@
 
 import {
   type Profile,
-  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   visitProfile,
@@ -36,7 +35,7 @@ export async function handleVisitProfile(options: {
       personId: options.personId,
       url: options.url,
       extractCurrentOrganizations: options.extractCurrentOrganizations,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

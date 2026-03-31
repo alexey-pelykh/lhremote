@@ -6,7 +6,6 @@ import { readFileSync } from "node:fs";
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   importPeopleFromUrls,
@@ -77,7 +76,7 @@ export async function handleImportPeopleFromUrls(
     result = await importPeopleFromUrls({
       campaignId,
       linkedInUrls,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });

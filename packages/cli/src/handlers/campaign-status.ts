@@ -4,7 +4,6 @@
 import {
   CampaignExecutionError,
   CampaignNotFoundError,
-  DEFAULT_CDP_PORT,
   errorMessage,
   InstanceNotRunningError,
   campaignStatus,
@@ -29,7 +28,7 @@ export async function handleCampaignStatus(
       campaignId,
       includeResults: options.includeResults,
       limit: options.limit,
-      cdpPort: options.cdpPort ?? DEFAULT_CDP_PORT,
+      cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
     });
