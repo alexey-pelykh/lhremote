@@ -64,7 +64,7 @@ Do **not** dismiss or ignore Copilot feedback. Every comment must be explicitly 
 - **Monorepo**: pnpm workspace with 4 packages: `core`, `mcp`, `cli`, `lhremote`
 - **Toolchain**: pnpm 9.15.4, Node 24, Turbo (cached via `.turbo/`)
 - **CI**: GitHub Actions (`ci.yml`) — `build`, `lint`, `test` on ubuntu/macos/windows matrix
-  - GH Pages docs built via pandoc on every CI run, published on push to main
+  - GH Pages docs (README + rate-limiting guide) built via pandoc on every CI run, published on push to main
   - Composite setup action: `.github/actions/setup/action.yml` (pnpm + node + playwright chromium + turbo cache)
   - Concurrency: cancel-in-progress for PRs, not for main
 - **Release**: GitHub Actions (`release.yml`) — triggered by GitHub Release publish
@@ -73,6 +73,19 @@ Do **not** dismiss or ignore Copilot feedback. Every comment must be explicitly 
 - **claude-plugin**: `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `server.json` versions must match the npm package version (set by the release tag) and be bumped together on each release
   - The release workflow does **not** auto-bump these files — after each release, open a PR to update their `"version"` fields to match the new tag
   - All three files must always show the same version string
+
+## Design Decisions
+
+Architecture Decision Records live in `docs/adr/` and explain *why* the codebase is structured the way it is:
+
+| ADR | Decision | Code Area |
+|-----|----------|-----------|
+| [001](docs/adr/001-monorepo-package-structure.md) | Monorepo package structure | `packages/` (core, mcp, cli, lhremote) |
+| [002](docs/adr/002-cdp-automation-via-electron.md) | CDP-based automation via Electron | `packages/core/src/cdp/` |
+| [003](docs/adr/003-sqlite-direct-file-access.md) | SQLite direct file access | `packages/core/src/db/` |
+| [004](docs/adr/004-three-tier-testing-strategy.md) | Three-tier testing strategy | `*.test.ts`, `*.integration.test.ts`, `packages/e2e/` |
+| [005](docs/adr/005-error-hierarchy-design.md) | Error hierarchy design | `packages/core/src/*/errors.ts` |
+| [006](docs/adr/006-operations-layer.md) | Operations layer | `packages/core/src/operations/` |
 
 ## Task Tracking
 
