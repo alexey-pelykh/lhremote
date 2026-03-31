@@ -11,7 +11,7 @@ import { COMMENT_INPUT, COMMENT_SUBMIT_BUTTON } from "../linkedin/selectors.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { BudgetExceededError } from "../services/errors.js";
 import { withDatabase } from "../services/instance-context.js";
-import { randomDelay } from "../utils/delay.js";
+import { gaussianDelay } from "../utils/delay.js";
 import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 /** Pattern matching supported LinkedIn post URL formats. */
@@ -135,7 +135,7 @@ export async function commentOnPost(
     await waitForElement(client, COMMENT_INPUT);
     await humanizedScrollTo(client, COMMENT_INPUT, mouse);
     await humanizedClick(client, COMMENT_INPUT, mouse);
-    await randomDelay(400, 700);
+    await gaussianDelay(550, 75, 400, 700);
 
     // Type comment text character-by-character
     await typeText(client, COMMENT_INPUT, input.text);
@@ -145,7 +145,7 @@ export async function commentOnPost(
     await humanizedClick(client, COMMENT_SUBMIT_BUTTON, mouse);
 
     // Brief wait for the comment to post
-    await randomDelay(1_500, 2_500);
+    await gaussianDelay(2_000, 250, 1_500, 2_500);
 
     return {
       success: true as const,

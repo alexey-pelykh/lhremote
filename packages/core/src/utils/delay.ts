@@ -38,7 +38,72 @@ export function randomBetween(min: number, max: number): number {
  */
 export function maybeHesitate(probability = 0.12): Promise<void> {
   if (Math.random() < probability) {
-    return randomDelay(500, 2_000);
+    return gaussianDelay(1_250, 375, 500, 2_000);
   }
   return Promise.resolve();
+}
+
+/**
+ * Return a normally-distributed random number using the Box-Muller transform.
+ *
+ * The result is centered on `mean` with the given `stdDev`.  Unlike
+ * uniform `Math.random()`, this produces a bell-curve distribution
+ * that more closely models human timing variance.
+ */
+export function gaussianRandom(mean: number, stdDev: number): number {
+  // Box-Muller transform: two uniform samples → one normal sample
+  let u1: number;
+  let u2: number;
+  do {
+    u1 = Math.random();
+    u2 = Math.random();
+  } while (u1 === 0); // avoid log(0)
+
+  const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+  return mean + z * stdDev;
+}
+
+/**
+ * Return a promise that resolves after a Gaussian-distributed delay.
+ *
+ * The delay is drawn from a normal distribution centered on `mean` with
+ * the given `stdDev`, then clamped to `[min, max]`.  This produces more
+ * human-like timing than uniform random — most delays cluster near the
+ * mean with occasional faster or slower outliers.
+ *
+ * @param mean   - Center of the distribution in milliseconds.
+ * @param stdDev - Standard deviation in milliseconds.
+ * @param min    - Minimum delay in milliseconds (default: 0).
+ * @param max    - Maximum delay in milliseconds (default: Infinity).
+ */
+export function gaussianDelay(
+  mean: number,
+  stdDev: number,
+  min = 0,
+  max = Infinity,
+): Promise<void> {
+  const raw = gaussianRandom(mean, stdDev);
+  const clamped = Math.max(min, Math.min(max, raw));
+  return delay(clamped);
+}
+
+/**
+ * Return a Gaussian-distributed numeric value clamped to `[min, max]`.
+ *
+ * Useful for randomising scroll distances, coordinate offsets, and other
+ * non-delay numeric values that benefit from human-like variation.
+ *
+ * @param mean   - Center of the distribution.
+ * @param stdDev - Standard deviation.
+ * @param min    - Minimum value.
+ * @param max    - Maximum value.
+ */
+export function gaussianBetween(
+  mean: number,
+  stdDev: number,
+  min: number,
+  max: number,
+): number {
+  const raw = gaussianRandom(mean, stdDev);
+  return Math.max(min, Math.min(max, raw));
 }

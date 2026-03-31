@@ -460,4 +460,4 @@ export {
 export { DEFAULT_CDP_PORT } from "./constants.js";
 
 // Utilities
-export { delay, randomDelay, errorMessage, isCdpPort, isLoopbackAddress } from "./utils/index.js";
+export { delay, randomDelay, gaussianRandom, gaussianDelay, gaussianBetween, errorMessage, isCdpPort, isLoopbackAddress } from "./utils/index.js";

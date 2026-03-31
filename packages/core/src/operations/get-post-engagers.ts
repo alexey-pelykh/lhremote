@@ -7,7 +7,7 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
-import { delay, randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
+import { delay, gaussianDelay, gaussianBetween, maybeHesitate } from "../utils/delay.js";
 import { humanizedScrollTo, humanizedClick } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { navigateAwayIf } from "./navigate-away.js";
@@ -364,11 +364,11 @@ export async function getPostEngagers(
       if (allEngagers.length >= targetCount) break;
 
       if (scroll < maxScrollAttempts) {
-        const modalDistance = Math.round(randomBetween(350, 650));
+        const modalDistance = Math.round(gaussianBetween(500, 75, 350, 650));
         const scrolled =
           await client.evaluate<boolean>(createScrollModalScript(modalDistance));
         if (!scrolled) break;
-        await randomDelay(800, 1_200);
+        await gaussianDelay(1_000, 100, 800, 1_200);
       }
     }
 
