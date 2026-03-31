@@ -133,13 +133,20 @@ export class CDPClient {
   /**
    * Evaluate a JavaScript expression via `Runtime.evaluate`.
    *
+   * **Type safety note:** The type parameter `T` is a *trust assertion*, not a
+   * runtime guarantee.  The value returned by the remote JavaScript context is
+   * cast to `T` via `as T` without any runtime validation.  Callers are
+   * responsible for validating the shape of the returned data when correctness
+   * is critical.
+   *
+   * @typeParam T - Expected return type.  Defaults to `unknown`.
    * @param expression  - JavaScript source to evaluate.
    * @param awaitPromise - Whether to await a Promise result (default `false`).
    * @param contextId - Optional execution context ID. When provided the
    *   expression runs in that context instead of the default (main world).
    *   Use this to evaluate in the Electron preload context when
    *   `nodeIntegration` is disabled in the renderer.
-   * @returns The deserialized value from the remote context.
+   * @returns The deserialized value from the remote context, cast to `T`.
    */
   async evaluate<T = unknown>(
     expression: string,
