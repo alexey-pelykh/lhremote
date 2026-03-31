@@ -20,7 +20,12 @@ lhremote lets AI assistants (Claude, etc.) control LinkedHelper through the [Mod
 - **Campaign automation** — create, configure, start, stop, and monitor campaigns with full action-chain management
 - **People import** — import LinkedIn profile URLs into campaign target lists
 - **Profile queries** — look up and search cached LinkedIn profiles from the local database
-- **Messaging** — query messaging history, check for new replies, scrape conversations from LinkedIn
+- **Messaging** — send direct messages, InMails, and connection requests; query messaging history and check for replies
+- **LinkedIn engagement** — visit profiles, endorse skills, follow/unfollow, like posts, comment, and react
+- **Feed & post intelligence** — read the LinkedIn feed, search posts, get post details, engagement stats, and engager lists
+- **Profile enrichment** — extract emails, phones, socials, and company data from LinkedIn profiles
+- **LinkedIn search** — build search URLs, resolve entity IDs, and query reference data for search filters
+- **Budget & throttle monitoring** — check daily action limits and LinkedIn throttling status
 - **Action discovery** — list available LinkedHelper action types with configuration schemas
 
 **New to lhremote?** Check out the [Getting Started guide](docs/getting-started.md) for a step-by-step walkthrough.
@@ -57,7 +62,7 @@ Add to your Claude Desktop configuration (`claude_desktop_config.json`):
 }
 ```
 
-Once configured, Claude can use all 44 tools directly. A typical workflow:
+Once configured, Claude can use all 68 tools directly. A typical workflow:
 
 1. **`find-app`** — Detect a running LinkedHelper instance (or **`launch-app`** to start one)
 2. **`list-accounts`** — See available LinkedIn accounts
@@ -77,8 +82,8 @@ The `lhremote` command provides the same functionality as the MCP server. Every 
 
 ```sh
 lhremote find-app [--json]
-lhremote launch-app [--cdp-port <port>] [--force]
-lhremote quit-app [--cdp-port <port>]
+lhremote launch-app
+lhremote quit-app
 ```
 
 ### Account & Instance
@@ -99,6 +104,7 @@ lhremote campaign-get <campaignId> [--cdp-port <port>] [--json]
 lhremote campaign-export <campaignId> [--format yaml|json] [--output <path>] [--cdp-port <port>]
 lhremote campaign-update <campaignId> [--name <name>] [--description <text>] [--clear-description] [--cdp-port <port>] [--json]
 lhremote campaign-delete <campaignId> [--cdp-port <port>] [--json]
+lhremote campaign-erase <campaignId> [--cdp-port <port>] [--json]
 lhremote campaign-start <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
 lhremote campaign-stop <campaignId> [--cdp-port <port>] [--json]
 lhremote campaign-status <campaignId> [--include-results] [--limit <n>] [--cdp-port <port>] [--json]
@@ -150,11 +156,48 @@ lhremote check-replies [--since <timestamp>] [--cdp-port <port>] [--json]
 lhremote scrape-messaging-history --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
 ```
 
+### LinkedIn Actions
+
+```sh
+lhremote visit-profile --person-id <id> | --url <url> [--extract-current-organizations] [--cdp-port <port>] [--json]
+lhremote endorse-skills --person-id <id> | --url <url> [--skill-name <name>]... [--limit <n>] [--skip-if-not-endorsable] [--keep-campaign] [--cdp-port <port>] [--json]
+lhremote enrich-profile --person-id <id> | --url <url> [--enrich-profile-info] [--enrich-phones] [--enrich-emails] [--enrich-socials] [--enrich-companies] [--keep-campaign] [--cdp-port <port>] [--json]
+lhremote follow-person --person-id <id> | --url <url> [--mode <follow|unfollow>] [--skip-if-unfollowable] [--keep-campaign] [--cdp-port <port>] [--json]
+lhremote like-person-posts --person-id <id> | --url <url> [--number-of-articles <n>] [--number-of-posts <n>] [--max-age-of-articles <days>] [--max-age-of-posts <days>] [--should-add-comment] [--message-template <json>] [--skip-if-not-liked] [--keep-campaign] [--cdp-port <port>] [--json]
+lhremote message-person --person-id <id> | --url <url> --message-template <json> [--subject-template <json>] [--reject-if-replied] [--reject-if-messaged] [--keep-campaign] [--cdp-port <port>] [--json]
+lhremote send-invite --person-id <id> | --url <url> [--message-template <json>] [--save-as-lead-sn] [--keep-campaign] [--cdp-port <port>] [--json]
+lhremote send-inmail --person-id <id> | --url <url> --message-template <json> [--subject-template <json>] [--reject-if-replied] [--proceed-on-out-of-credits] [--keep-campaign] [--cdp-port <port>] [--json]
+lhremote remove-connection --person-id <id> | --url <url> [--keep-campaign] [--cdp-port <port>] [--json]
+```
+
+### Feed & Posts
+
+```sh
+lhremote get-feed [--count <n>] [--cursor <token>] [--cdp-port <port>] [--json]
+lhremote get-post <postUrl> [--comment-count <n>] [--cdp-port <port>] [--json]
+lhremote get-post-stats <postUrl> [--cdp-port <port>] [--json]
+lhremote get-profile-activity <profile> [--count <n>] [--cursor <token>] [--cdp-port <port>] [--json]
+lhremote search-posts <query> [--count <n>] [--cursor <n>] [--cdp-port <port>] [--json]
+lhremote comment-on-post --url <url> --text <text> [--cdp-port <port>] [--json]
+lhremote react-to-post <postUrl> [--type <like|celebrate|support|love|insightful|funny>] [--cdp-port <port>] [--json]
+```
+
+### LinkedIn Search & Reference
+
+```sh
+lhremote build-url <sourceType> [--keywords <keywords>] [--current-company <id>]... [--past-company <id>]... [--geo <id>]... [--industry <id>]... [--school <id>]... [--network <code>]... [--profile-language <code>]... [--service-category <id>]... [--filter <spec>]... [--slug <slug>] [--id <id>] [--json]
+lhremote resolve-entity <entityType> <query> [--limit <n>] [--cdp-port <port>] [--json]
+lhremote list-reference-data <dataType> [--json]
+```
+
 ### Utilities
 
 ```sh
 lhremote describe-actions [--category <category>] [--type <type>] [--json]
 lhremote get-errors [--cdp-port <port>] [--json]
+lhremote dismiss-errors [--cdp-port <port>] [--json]
+lhremote get-action-budget [--cdp-port <port>] [--json]
+lhremote get-throttle-status [--cdp-port <port>] [--json]
 ```
 
 ## MCP Tools
@@ -286,6 +329,15 @@ Update a campaign's name and/or description.
 #### `campaign-delete`
 
 Delete (archive) a campaign.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `campaign-erase`
+
+Permanently erase a campaign and all related data from the database. This is irreversible — unlike `campaign-delete` (which archives), this removes all campaign data permanently.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -609,6 +661,258 @@ Scrape messaging history from LinkedIn for specified people into the local datab
 | `personIds` | number[] | Yes | — | Person IDs whose messaging history should be scraped |
 | `cdpPort` | number | No | 9222 | CDP port |
 
+### LinkedIn Actions
+
+#### `visit-profile`
+
+Visit a LinkedIn profile via LinkedHelper's VisitAndExtract action and return the extracted profile data. Deducts from the daily action budget.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personId` | number | No | — | Internal person ID (provide this or `url`) |
+| `url` | string | No | — | LinkedIn profile URL (provide this or `personId`) |
+| `extractCurrentOrganizations` | boolean | No | false | Extract current company info during visit |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `endorse-skills`
+
+Endorse skills on a LinkedIn profile via an ephemeral campaign. Deducts from the daily action budget.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personId` | number | No | — | Internal person ID (provide this or `url`) |
+| `url` | string | No | — | LinkedIn profile URL (provide this or `personId`) |
+| `skillNames` | string[] | No | — | Specific skill names to endorse (mutually exclusive with `limit`) |
+| `limit` | number | No | — | Max number of skills to endorse (mutually exclusive with `skillNames`) |
+| `skipIfNotEndorsable` | boolean | No | true | Skip if person has no endorsable skills |
+| `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `enrich-profile`
+
+Enrich a LinkedIn profile by extracting additional data (emails, phones, socials, company info) via an ephemeral campaign. Deducts from the daily action budget.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personId` | number | No | — | Internal person ID (provide this or `url`) |
+| `url` | string | No | — | LinkedIn profile URL (provide this or `personId`) |
+| `profileInfo` | object | No | — | Enrich profile info (`shouldEnrich` required) |
+| `phones` | object | No | — | Enrich phone numbers (`shouldEnrich` required) |
+| `emails` | object | No | — | Enrich email addresses (`shouldEnrich` required) |
+| `socials` | object | No | — | Enrich social profiles (`shouldEnrich` required) |
+| `companies` | object | No | — | Enrich company data (`shouldEnrich` required) |
+| `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `follow-person`
+
+Follow or unfollow a LinkedIn profile via an ephemeral campaign. Deducts from the daily action budget.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personId` | number | No | — | Internal person ID (provide this or `url`) |
+| `url` | string | No | — | LinkedIn profile URL (provide this or `personId`) |
+| `mode` | string | No | `follow` | `follow` or `unfollow` |
+| `skipIfUnfollowable` | boolean | No | true | Skip if person cannot be unfollowed |
+| `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `like-person-posts`
+
+Like and optionally comment on posts and articles by a LinkedIn profile via an ephemeral campaign. Deducts from the daily action budget.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personId` | number | No | — | Internal person ID (provide this or `url`) |
+| `url` | string | No | — | LinkedIn profile URL (provide this or `personId`) |
+| `numberOfArticles` | number | No | — | Number of articles to like |
+| `numberOfPosts` | number | No | — | Number of posts to like |
+| `maxAgeOfArticles` | number | No | — | Maximum age of articles in days |
+| `maxAgeOfPosts` | number | No | — | Maximum age of posts in days |
+| `shouldAddComment` | boolean | No | false | Also add a comment to liked posts/articles |
+| `messageTemplate` | string | No | — | Comment text template as JSON (required when `shouldAddComment` is true) |
+| `skipIfNotLiked` | boolean | No | true | Skip if nothing was liked |
+| `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `message-person`
+
+Send a direct message to a 1st-degree LinkedIn connection via an ephemeral campaign. Deducts from the daily action budget.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personId` | number | No | — | Internal person ID (provide this or `url`) |
+| `url` | string | No | — | LinkedIn profile URL (provide this or `personId`) |
+| `messageTemplate` | string | Yes | — | Message template as JSON |
+| `subjectTemplate` | string | No | — | Subject line template as JSON |
+| `rejectIfReplied` | boolean | No | false | Skip if person already replied |
+| `rejectIfMessaged` | boolean | No | false | Skip if already messaged |
+| `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `send-invite`
+
+Send a LinkedIn connection request via an ephemeral campaign. Deducts from the daily action budget.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personId` | number | No | — | Internal person ID (provide this or `url`) |
+| `url` | string | No | — | LinkedIn profile URL (provide this or `personId`) |
+| `messageTemplate` | string | No | — | Invitation message template as JSON (empty for no message) |
+| `saveAsLeadSN` | boolean | No | false | Save as lead in Sales Navigator |
+| `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `send-inmail`
+
+Send an InMail message to a LinkedIn member (no connection required) via an ephemeral campaign. Deducts from the daily action budget.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personId` | number | No | — | Internal person ID (provide this or `url`) |
+| `url` | string | No | — | LinkedIn profile URL (provide this or `personId`) |
+| `messageTemplate` | string | Yes | — | InMail body template as JSON |
+| `subjectTemplate` | string | No | — | InMail subject line template as JSON |
+| `rejectIfReplied` | boolean | No | false | Skip if person already replied |
+| `proceedOnOutOfCredits` | boolean | No | false | Continue even when InMail credits are exhausted |
+| `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `remove-connection`
+
+Remove a person from 1st-degree LinkedIn connections (unfriend) via an ephemeral campaign. Deducts from the daily action budget.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `personId` | number | No | — | Internal person ID (provide this or `url`) |
+| `url` | string | No | — | LinkedIn profile URL (provide this or `personId`) |
+| `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+### Feed & Posts
+
+#### `get-feed`
+
+Read the LinkedIn home feed. Returns structured post data with cursor-based pagination.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `count` | number | No | 10 | Number of posts per page |
+| `cursor` | string | No | — | Cursor token from a previous call for the next page |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `get-post`
+
+Get detailed data for a single LinkedIn post including its comment thread.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `postUrl` | string | Yes | — | LinkedIn post URL or URN |
+| `commentCount` | number | No | 100 | Maximum number of comments to load (0 to skip) |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `get-post-stats`
+
+Get engagement statistics for a LinkedIn post: reaction count (broken down by type), comment count, and share count.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `postUrl` | string | Yes | — | LinkedIn post URL or URN |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `get-post-engagers`
+
+List people who engaged with a LinkedIn post (reacted, etc.) with their profile info and engagement type. Supports pagination. *MCP tool only — no CLI command.*
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `postUrl` | string | Yes | — | LinkedIn post URL or URN |
+| `start` | number | No | 0 | Pagination offset |
+| `count` | number | No | 20 | Number of engagers per page |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `get-profile-activity`
+
+Get recent posts/activity from a LinkedIn profile with cursor-based pagination.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `profile` | string | Yes | — | LinkedIn profile public ID or URL |
+| `count` | number | No | 10 | Number of posts per page |
+| `cursor` | string | No | — | Cursor token from a previous call for the next page |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `search-posts`
+
+Search LinkedIn for posts by keyword or hashtag. Returns structured post data with cursor-based pagination.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `query` | string | Yes | — | Search query — keywords or hashtag |
+| `count` | number | No | 10 | Number of results per page |
+| `cursor` | number | No | — | Index-based cursor from a previous call for the next page |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `comment-on-post`
+
+Post a comment on a LinkedIn post. Checks action budget before attempting.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `postUrl` | string | Yes | — | LinkedIn post URL |
+| `text` | string | Yes | — | Comment text to post |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `react-to-post`
+
+React to a LinkedIn post with a specific reaction type.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `postUrl` | string | Yes | — | LinkedIn post URL |
+| `reactionType` | string | No | `like` | `like`, `celebrate`, `support`, `love`, `insightful`, or `funny` |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+### LinkedIn Search & Reference
+
+#### `build-linkedin-url`
+
+Build a LinkedIn URL for any supported source type. Supports SearchPage (basic search with faceted filters), SNSearchPage (Sales Navigator), and parameterised templates for company, school, group, and event pages. CLI command: `build-url`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `sourceType` | string | Yes | — | LinkedIn source type (e.g., `SearchPage`, `SNSearchPage`, `OrganizationPeople`) |
+| `keywords` | string | No | — | Search keywords |
+| `currentCompany` | string[] | No | — | Current company IDs (SearchPage) |
+| `pastCompany` | string[] | No | — | Past company IDs (SearchPage) |
+| `geoUrn` | string[] | No | — | Geographic URN IDs (SearchPage) |
+| `industry` | string[] | No | — | Industry IDs (SearchPage) |
+| `school` | string[] | No | — | School IDs (SearchPage) |
+| `network` | string[] | No | — | Connection degree codes: `F`, `S`, `O` (SearchPage) |
+| `profileLanguage` | string[] | No | — | Profile language codes (SearchPage) |
+| `serviceCategory` | string[] | No | — | Service category IDs (SearchPage) |
+| `filters` | object[] | No | — | Sales Navigator filters (SNSearchPage) — each with `type`, `values[]` |
+| `slug` | string | No | — | Company or school slug (OrganizationPeople, Alumni) |
+| `id` | string | No | — | Entity ID (Group, Event, SNListPage, etc.) |
+
+#### `resolve-linkedin-entity`
+
+Resolve human-readable names (company names, locations, schools) to LinkedIn entity IDs via typeahead endpoints. CLI command: `resolve-entity`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `query` | string | Yes | — | Search query (e.g., company name, city) |
+| `entityType` | string | Yes | — | `COMPANY`, `GEO`, or `SCHOOL` |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `list-linkedin-reference-data`
+
+List LinkedIn reference data for finite enumerations (industries, seniority levels, functions, company sizes, connection degrees, profile languages). Use this to discover valid IDs for search filters. CLI command: `list-reference-data`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `dataType` | string | Yes | — | `INDUSTRY`, `SENIORITY`, `FUNCTION`, `COMPANY_SIZE`, `CONNECTION_DEGREE`, or `PROFILE_LANGUAGE` |
+
 ### Utilities
 
 #### `describe-actions`
@@ -623,6 +927,30 @@ List available LinkedHelper action types with descriptions and configuration sch
 #### `get-errors`
 
 Query current LinkedHelper UI errors, dialogs, and blocking popups.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `dismiss-errors`
+
+Dismiss closable error popups in the LinkedHelper instance UI by clicking their close/OK buttons. Recommended after `UIBlockedError`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `get-action-budget`
+
+Get daily action budget showing limit types, thresholds, and today's usage from LH campaigns and CDP-direct actions.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `get-throttle-status`
+
+Check if LinkedIn is currently throttling the account.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
