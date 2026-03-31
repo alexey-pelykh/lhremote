@@ -4,7 +4,7 @@
 import type { ThrottleStatus } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 export type GetThrottleStatusInput = ConnectionOptions;
 
@@ -15,10 +15,7 @@ export async function getThrottleStatus(
 ): Promise<GetThrottleStatusOutput> {
   const cdpPort = input.cdpPort;
 
-  const accountId = await resolveAccount(cdpPort, {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  });
+  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withInstanceDatabase(cdpPort, accountId, async ({ instance }) => {
     return instance.evaluateUI<ThrottleStatus>(
@@ -34,9 +31,6 @@ export async function getThrottleStatus(
       })()`,
     );
   }, {
-    launcher: {
-      ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-      ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-    },
+    launcher: buildCdpOptions(input),
   });
 }

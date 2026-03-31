@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { checkStatus, errorMessage } from "@lhremote/core";
+import { buildCdpOptions, checkStatus, errorMessage } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | check-status} CLI command. */
 export async function handleCheckStatus(options: {
@@ -11,10 +11,7 @@ export async function handleCheckStatus(options: {
   json?: boolean;
 }): Promise<void> {
   try {
-    const report = await checkStatus(options.cdpPort, {
-      ...(options.cdpHost !== undefined && { host: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
-    });
+    const report = await checkStatus(options.cdpPort, buildCdpOptions(options));
 
     if (options.json) {
       process.stdout.write(JSON.stringify(report, null, 2) + "\n");

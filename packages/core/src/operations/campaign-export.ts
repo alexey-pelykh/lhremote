@@ -5,7 +5,7 @@ import { resolveAccount } from "../services/account-resolution.js";
 import { withDatabase } from "../services/instance-context.js";
 import { CampaignRepository } from "../db/index.js";
 import { serializeCampaignJson, serializeCampaignYaml } from "../formats/index.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 export interface CampaignExportInput extends ConnectionOptions {
   readonly campaignId: number;
@@ -23,10 +23,7 @@ export async function campaignExport(
 ): Promise<CampaignExportOutput> {
   const cdpPort = input.cdpPort;
 
-  const accountId = await resolveAccount(cdpPort, {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  });
+  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withDatabase(accountId, ({ db }) => {
     const campaignRepo = new CampaignRepository(db);

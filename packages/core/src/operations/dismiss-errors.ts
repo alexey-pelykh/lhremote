@@ -6,7 +6,7 @@ import { resolveAccount } from "../services/account-resolution.js";
 import { InstanceService } from "../services/instance.js";
 import { LauncherService } from "../services/launcher.js";
 import { isLoopbackAddress } from "../utils/loopback.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 /**
  * Input for the dismiss-errors operation.
@@ -37,10 +37,7 @@ export async function dismissErrors(
 ): Promise<DismissErrorsOutput> {
   const cdpPort = await resolveInstancePort(input.cdpPort, input.cdpHost);
 
-  const cdpOptions = {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  };
+  const cdpOptions = buildCdpOptions(input);
 
   const accountId = await resolveAccount(cdpPort, cdpOptions);
 

@@ -161,7 +161,7 @@ Previously imported URLs are skipped automatically, so the command is safe to ru
 Start the campaign:
 
 ```sh
-lhremote campaign-start <campaignId>
+lhremote campaign-start <campaignId> --person-ids <id1,id2,...>
 ```
 
 LinkedHelper will begin processing the target profiles according to your action chain.
@@ -251,6 +251,6 @@ Claude handles the multi-step workflows automatically, including waiting for ins
 
 ## Next steps
 
-- See the full [CLI and MCP tool reference](../) for all available commands
+- See the full [CLI and MCP tool reference](https://alexey-pelykh.com/lhremote/) for all available commands
 - Use `lhremote describe-actions` to explore action types for more advanced campaigns (messaging, endorsements, InMail, and more)
 - Run `lhremote --help` or `lhremote <command> --help` for detailed usage information
