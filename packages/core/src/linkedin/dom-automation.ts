@@ -12,11 +12,8 @@ const DEFAULT_TIMEOUT = 30_000;
 /** Default polling interval for waitForElement (ms). */
 const DEFAULT_POLL_INTERVAL = 100;
 
-/** Minimum delay between keystrokes (ms). */
-const MIN_KEYSTROKE_DELAY = 50;
-
-/** Maximum delay between keystrokes (ms). */
-const MAX_KEYSTROKE_DELAY = 150;
+/** Probability of a micro-hesitation between keystrokes. */
+const MICRO_HESITATION_PROBABILITY = 0.05;
 
 /** Physical key code info for a character, used to enrich CDP key events. */
 interface KeyCodeInfo {
@@ -271,8 +268,14 @@ export async function click(
  * Type text into a focused element character-by-character.
  *
  * The element is focused first, then each character is dispatched via
- * CDP `Input.dispatchKeyEvent` with randomised inter-keystroke delays
- * (50–150 ms) to approximate human typing cadence.
+ * CDP `Input.dispatchKeyEvent` with character-context-aware Gaussian
+ * delays to approximate human typing cadence:
+ *
+ * - **Intra-word** (letters, digits): ~65 ms mean — fast, rhythmic typing
+ * - **Word boundary** (space): ~180 ms mean — natural pause between words
+ * - **Sentence boundary** (space after `.!?`): ~350 ms mean — thinking pause
+ * - **Paragraph boundary** (newline): ~700 ms mean — composing the next thought
+ * - **Micro-hesitation** (5% per character): ~300 ms extra — brief mid-word thinking
  *
  * @param client   - Connected CDP client targeting the page.
  * @param selector - CSS selector for the input element.
@@ -302,7 +305,8 @@ export async function typeText(
   }
 
   switch (method) {
-    case "type":
+    case "type": {
+      let previousChar = "";
       for (const char of text) {
         const kc = getKeyCodeInfo(char);
         await client.send("Input.dispatchKeyEvent", {
@@ -317,9 +321,26 @@ export async function typeText(
           ...(kc && { code: kc.code, windowsVirtualKeyCode: kc.windowsVirtualKeyCode }),
         });
 
-        await gaussianDelay(100, 25, MIN_KEYSTROKE_DELAY, MAX_KEYSTROKE_DELAY);
+        // Character-aware delay
+        if (char === "\n") {
+          await gaussianDelay(700, 300, 300, 1_500);
+        } else if (char === " " && /[.!?]/.test(previousChar)) {
+          await gaussianDelay(350, 120, 150, 800);
+        } else if (char === " ") {
+          await gaussianDelay(180, 50, 100, 350);
+        } else {
+          await gaussianDelay(65, 20, 30, 120);
+        }
+
+        // Micro-hesitation (5%)
+        if (Math.random() < MICRO_HESITATION_PROBABILITY) {
+          await gaussianDelay(300, 100, 150, 600);
+        }
+
+        previousChar = char;
       }
       break;
+    }
   }
 }
 
