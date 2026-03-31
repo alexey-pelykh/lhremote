@@ -7,7 +7,7 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
-import { randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
+import { gaussianDelay, gaussianBetween, maybeHesitate } from "../utils/delay.js";
 import { humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import {
@@ -400,10 +400,12 @@ export async function searchPosts(
         // Scale delay by newly visible content volume
         const newPostCount = allPosts.length - countBeforeScroll;
         const contentBonus = Math.min(
-          newPostCount * randomBetween(200, 500),
+          newPostCount * gaussianBetween(350, 75, 200, 500),
           3_000,
         );
-        await randomDelay(
+        await gaussianDelay(
+          1_500 * fatigueMultiplier + contentBonus,
+          150 * fatigueMultiplier,
           1_200 * fatigueMultiplier + contentBonus,
           1_800 * fatigueMultiplier + contentBonus,
         );
@@ -438,7 +440,7 @@ export async function searchPosts(
         const post = allPosts[i];
         if (!post || post.url) continue;
 
-        if (i > 0) await randomDelay(300, 800); // Inter-post delay
+        if (i > 0) await gaussianDelay(550, 125, 300, 800); // Inter-post delay
         await maybeHesitate(); // Probabilistic pause before menu interaction
 
         // Reset capture
@@ -459,7 +461,7 @@ export async function searchPosts(
         })()`);
         if (!clicked) continue;
 
-        await randomDelay(500, 900);
+        await gaussianDelay(700, 100, 500, 900);
 
         // Click "Copy link to post" menu item
         await client.evaluate(`(() => {
@@ -471,7 +473,7 @@ export async function searchPosts(
           }
         })()`);
 
-        await randomDelay(400, 700);
+        await gaussianDelay(550, 75, 400, 700);
 
         // Read captured URL
         const postUrl =

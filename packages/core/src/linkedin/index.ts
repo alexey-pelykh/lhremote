@@ -11,6 +11,7 @@ export {
   scrollTo,
   typeText,
   type TypeMethod,
+  waitForDOMStable,
   waitForElement,
   type WaitForElementOptions,
 } from "./dom-automation.js";

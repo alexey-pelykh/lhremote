@@ -21,8 +21,8 @@ vi.mock("./get-feed.js", () => ({
 
 vi.mock("../utils/delay.js", () => ({
   delay: vi.fn().mockResolvedValue(undefined),
-  randomDelay: vi.fn().mockResolvedValue(undefined),
-  randomBetween: vi.fn().mockReturnValue(500),
+  gaussianDelay: vi.fn().mockResolvedValue(undefined),
+  gaussianBetween: vi.fn().mockReturnValue(500),
   maybeHesitate: vi.fn().mockResolvedValue(undefined),
 }));
 

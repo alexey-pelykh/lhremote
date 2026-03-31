@@ -3,7 +3,7 @@
 
 import type { CDPClient } from "../cdp/client.js";
 import { CDPEvaluationError, CDPTimeoutError } from "../cdp/errors.js";
-import { delay, randomDelay } from "../utils/delay.js";
+import { delay, gaussianDelay } from "../utils/delay.js";
 import type { HumanizedMouse } from "./humanized-mouse.js";
 
 /** Default timeout for DOM operations (ms). */
@@ -57,6 +57,66 @@ export async function waitForElement(
   throw new CDPTimeoutError(
     `Timed out waiting for element "${selector}" after ${timeout.toString()}ms`,
   );
+}
+
+/**
+ * Wait until the DOM stops mutating for `quietMs` milliseconds.
+ *
+ * Installs a `MutationObserver` via `Runtime.evaluate` that tracks
+ * the timestamp of the last mutation.  Polls until no mutations have
+ * occurred for the configured quiet period, then adds a "visual
+ * scanning" Gaussian delay to simulate a human pausing to read.
+ *
+ * @param client  - Connected CDP client targeting the page.
+ * @param quietMs - Milliseconds of mutation silence required (default: 500).
+ */
+export async function waitForDOMStable(
+  client: CDPClient,
+  quietMs = 500,
+): Promise<void> {
+  // Install a MutationObserver that stamps window.__lhLastMutation on every DOM change
+  await client.evaluate(
+    `(() => {
+      window.__lhLastMutation = Date.now();
+      const observer = new MutationObserver(() => {
+        window.__lhLastMutation = Date.now();
+      });
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        characterData: true,
+      });
+      window.__lhDOMObserver = observer;
+    })()`,
+  );
+
+  // Poll until the DOM has been quiet for quietMs
+  const pollInterval = 100;
+  const maxWait = 30_000;
+  const deadline = Date.now() + maxWait;
+
+  while (Date.now() < deadline) {
+    const elapsed = await client.evaluate<number>(
+      `Date.now() - (window.__lhLastMutation || 0)`,
+    );
+    if (elapsed >= quietMs) break;
+    await delay(pollInterval);
+  }
+
+  // Disconnect the observer
+  await client.evaluate(
+    `(() => {
+      if (window.__lhDOMObserver) {
+        window.__lhDOMObserver.disconnect();
+        delete window.__lhDOMObserver;
+        delete window.__lhLastMutation;
+      }
+    })()`,
+  );
+
+  // Simulate "visual scanning" — a human pausing to read the page
+  await gaussianDelay(1_200, 400, 600, 2_500);
 }
 
 /**
@@ -197,10 +257,7 @@ export async function typeText(
           key: char,
         });
 
-        const keystrokeDelay =
-          MIN_KEYSTROKE_DELAY +
-          Math.random() * (MAX_KEYSTROKE_DELAY - MIN_KEYSTROKE_DELAY);
-        await delay(keystrokeDelay);
+        await gaussianDelay(100, 25, MIN_KEYSTROKE_DELAY, MAX_KEYSTROKE_DELAY);
       }
       break;
   }
@@ -299,7 +356,7 @@ async function scrollToElementLoop(
 
     const deltaY = elementCenter - viewportCenter;
     await humanizedScrollY(client, deltaY, 300, 400, mouse);
-    await randomDelay(200, 400);
+    await gaussianDelay(300, 50, 200, 400);
   }
 
   return false;
@@ -416,18 +473,18 @@ export async function humanizedClick(
   selector: string,
   mouse?: HumanizedMouse | null,
 ): Promise<void> {
-  await randomDelay(0, 50); // Pre-click approach hesitation
+  await gaussianDelay(25, 12, 0, 50); // Pre-click approach hesitation
   if (mouse?.isAvailable) {
     const center = await getElementCenter(client, selector);
     if (center) {
       await mouse.click(center.x, center.y);
-      await randomDelay(50, 150); // Post-click visual confirmation
+      await gaussianDelay(100, 25, 50, 150); // Post-click visual confirmation
       return;
     }
   }
   // Fallback to JS click
   await click(client, selector);
-  await randomDelay(50, 150); // Post-click visual confirmation
+  await gaussianDelay(100, 25, 50, 150); // Post-click visual confirmation
 }
 
 /**
@@ -448,7 +505,7 @@ export async function humanizedHover(
   selector: string,
   mouse?: HumanizedMouse | null,
 ): Promise<void> {
-  await randomDelay(0, 50); // Pre-hover approach hesitation
+  await gaussianDelay(25, 12, 0, 50); // Pre-hover approach hesitation
   if (mouse?.isAvailable) {
     const center = await getElementCenter(client, selector);
     if (center) {

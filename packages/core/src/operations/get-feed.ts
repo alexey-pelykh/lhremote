@@ -7,7 +7,7 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { humanizedScrollY, humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
-import { delay as utilsDelay, randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
+import { delay as utilsDelay, gaussianDelay, gaussianBetween, maybeHesitate } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
 
@@ -247,7 +247,7 @@ async function capturePostUrl(
 
     if (!clicked) return null; // No menu button — structural, retrying won't help
 
-    await randomDelay(500, 900);
+    await gaussianDelay(700, 100, 500, 900);
 
     // Click "Copy link to post" menu item
     await client.evaluate(`(() => {
@@ -259,7 +259,7 @@ async function capturePostUrl(
       }
     })()`);
 
-    await randomDelay(400, 700);
+    await gaussianDelay(550, 75, 400, 700);
 
     // Read captured URL
     const postUrl =
@@ -274,7 +274,7 @@ async function capturePostUrl(
     await client.evaluate(`(() => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     })()`);
-    await randomDelay(300, 500);
+    await gaussianDelay(400, 50, 300, 500);
   }
 
   return null;
@@ -389,7 +389,7 @@ export async function scrollFeed(
   client: CDPClient,
   mouse?: HumanizedMouse | null,
 ): Promise<void> {
-  const distance = Math.round(randomBetween(600, 1_000));
+  const distance = Math.round(gaussianBetween(800, 100, 600, 1_000));
   await humanizedScrollY(client, distance, 300, 400, mouse);
 }
 
@@ -511,10 +511,12 @@ export async function getFeed(
         // Scale delay by newly visible content volume
         const newPostCount = allPosts.length - countBeforeScroll;
         const contentBonus = Math.min(
-          newPostCount * randomBetween(200, 500),
+          newPostCount * gaussianBetween(350, 75, 200, 500),
           3_000,
         );
-        await randomDelay(
+        await gaussianDelay(
+          1_500 * fatigueMultiplier + contentBonus,
+          150 * fatigueMultiplier,
           1_200 * fatigueMultiplier + contentBonus,
           1_800 * fatigueMultiplier + contentBonus,
         );
@@ -530,7 +532,7 @@ export async function getFeed(
     for (let i = 0; i < allPosts.length; i++) {
       const post = allPosts[i];
       if (!post) continue;
-      if (i > 0) await randomDelay(300, 800); // Inter-post delay
+      if (i > 0) await gaussianDelay(550, 125, 300, 800); // Inter-post delay
       const url = await capturePostUrl(client, i, mouse);
       if (url) {
         post.url = url;

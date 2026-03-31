@@ -7,7 +7,7 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
-import { randomDelay, randomBetween, maybeHesitate } from "../utils/delay.js";
+import { gaussianDelay, gaussianBetween, maybeHesitate } from "../utils/delay.js";
 import { humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import {
@@ -262,7 +262,7 @@ async function captureActivityPostUrl(
 
     if (!clicked) return null; // No menu button — structural, retrying won't help
 
-    await randomDelay(500, 900);
+    await gaussianDelay(700, 100, 500, 900);
 
     // Click "Copy link to post" menu item
     await client.evaluate(`(() => {
@@ -274,7 +274,7 @@ async function captureActivityPostUrl(
       }
     })()`);
 
-    await randomDelay(400, 700);
+    await gaussianDelay(550, 75, 400, 700);
 
     // Read captured URL
     const postUrl =
@@ -289,7 +289,7 @@ async function captureActivityPostUrl(
     await client.evaluate(`(() => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     })()`);
-    await randomDelay(300, 500);
+    await gaussianDelay(400, 50, 300, 500);
   }
 
   return null;
@@ -385,10 +385,12 @@ export async function getProfileActivity(
         // Scale delay by newly visible content volume
         const newPostCount = allPosts.length - countBeforeScroll;
         const contentBonus = Math.min(
-          newPostCount * randomBetween(200, 500),
+          newPostCount * gaussianBetween(350, 75, 200, 500),
           3_000,
         );
-        await randomDelay(
+        await gaussianDelay(
+          1_500 * fatigueMultiplier + contentBonus,
+          150 * fatigueMultiplier,
           1_200 * fatigueMultiplier + contentBonus,
           1_800 * fatigueMultiplier + contentBonus,
         );
@@ -407,7 +409,7 @@ export async function getProfileActivity(
     for (let i = 0; i < allPosts.length; i++) {
       const post = allPosts[i];
       if (!post) continue;
-      if (i > 0) await randomDelay(300, 800); // Inter-post delay
+      if (i > 0) await gaussianDelay(550, 125, 300, 800); // Inter-post delay
       const url = await captureActivityPostUrl(client, i, mouse);
       if (url) {
         post.url = url;

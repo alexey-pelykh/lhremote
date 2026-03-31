@@ -33,7 +33,7 @@ vi.mock("../linkedin/dom-automation.js", () => ({
 
 vi.mock("../utils/delay.js", () => ({
   delay: vi.fn().mockResolvedValue(undefined),
-  randomDelay: vi.fn().mockResolvedValue(undefined),
+  gaussianDelay: vi.fn().mockResolvedValue(undefined),
 }));
 
 import type { DatabaseContext } from "../services/instance-context.js";

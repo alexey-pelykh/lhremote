@@ -16,7 +16,7 @@ import {
   REACTION_TRIGGER,
   REACTIONS_MENU,
 } from "../linkedin/selectors.js";
-import { randomDelay } from "../utils/delay.js";
+import { gaussianDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 
 /**
@@ -127,7 +127,7 @@ export async function reactToPost(
 
     // Hover over the reaction trigger to expand the reactions menu
     await humanizedHover(client, REACTION_TRIGGER, mouse);
-    await randomDelay(1_200, 1_800);
+    await gaussianDelay(1_500, 150, 1_200, 1_800);
 
     // Wait for the reactions menu to appear
     await waitForElement(client, REACTIONS_MENU, { timeout: 5_000 });
@@ -138,7 +138,7 @@ export async function reactToPost(
     await humanizedClick(client, reactionSelector, mouse);
 
     // Let the UI settle
-    await randomDelay(400, 700);
+    await gaussianDelay(550, 75, 400, 700);
 
     return {
       success: true as const,
