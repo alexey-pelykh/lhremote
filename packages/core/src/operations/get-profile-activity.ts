@@ -7,7 +7,7 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
-import { gaussianDelay, gaussianBetween, maybeHesitate } from "../utils/delay.js";
+import { gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak } from "../utils/delay.js";
 import { humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import {
@@ -394,6 +394,7 @@ export async function getProfileActivity(
           1_200 * fatigueMultiplier + contentBonus,
           1_800 * fatigueMultiplier + contentBonus,
         );
+        await maybeBreak();
       }
     }
 
@@ -410,6 +411,7 @@ export async function getProfileActivity(
       const post = allPosts[i];
       if (!post) continue;
       if (i > 0) await gaussianDelay(550, 125, 300, 800); // Inter-post delay
+      await maybeBreak();
       const url = await captureActivityPostUrl(client, i, mouse);
       if (url) {
         post.url = url;
