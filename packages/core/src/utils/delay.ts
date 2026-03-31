@@ -139,7 +139,12 @@ export function simulateReadingTime(
   contentLength: number,
   readFraction = 0.3,
 ): Promise<void> {
-  const words = contentLength / 5;
-  const readTimeMs = (words / 250) * 60_000 * readFraction;
+  const safeLength =
+    Number.isFinite(contentLength) && contentLength > 0 ? contentLength : 0;
+  const safeFraction = Number.isFinite(readFraction)
+    ? Math.max(0, Math.min(1, readFraction))
+    : 0.3;
+  const words = safeLength / 5;
+  const readTimeMs = (words / 250) * 60_000 * safeFraction;
   return gaussianDelay(readTimeMs, readTimeMs * 0.3, 500, 8_000);
 }

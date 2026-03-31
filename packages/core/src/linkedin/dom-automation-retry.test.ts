@@ -2,17 +2,22 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { describe, expect, it, vi } from "vitest";
-import { retryInteraction } from "./dom-automation.js";
 
-// Speed up tests by mocking delay internals
-vi.mock("../utils/delay.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../utils/delay.js")>();
-  return {
-    ...actual,
-    delay: vi.fn().mockResolvedValue(undefined),
-    gaussianDelay: vi.fn().mockResolvedValue(undefined),
-  };
-});
+// Mock delay internals before importing the module under test so retries
+// resolve instantly (Vitest hoists vi.mock, but explicit ordering is clearer).
+vi.mock("../utils/delay.js", () => ({
+  delay: vi.fn().mockResolvedValue(undefined),
+  randomDelay: vi.fn().mockResolvedValue(undefined),
+  randomBetween: vi.fn().mockReturnValue(0),
+  gaussianRandom: vi.fn().mockReturnValue(0),
+  gaussianDelay: vi.fn().mockResolvedValue(undefined),
+  gaussianBetween: vi.fn().mockReturnValue(0),
+  maybeHesitate: vi.fn().mockResolvedValue(undefined),
+  maybeBreak: vi.fn().mockResolvedValue(undefined),
+  simulateReadingTime: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { retryInteraction } from "./dom-automation.js";
 
 describe("retryInteraction", () => {
   it("returns the result on first success", async () => {

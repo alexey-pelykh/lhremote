@@ -125,22 +125,33 @@ describe("simulateReadingTime", () => {
     expect(result).toBeUndefined();
   });
 
-  it("produces longer delays for longer content", async () => {
-    // With readFraction=0, the Gaussian mean is 0 — so it should
-    // effectively resolve at the minimum (500 ms).  Compare short vs long
-    // content to verify the function accepts different lengths.
-    const short = Date.now();
-    await simulateReadingTime(10, 0);
-    const shortElapsed = Date.now() - short;
-
-    // Both should resolve quickly since readFraction=0 → mean=0 → clamped to 500
-    expect(shortElapsed).toBeGreaterThanOrEqual(400);
-  });
-
-  it("clamps to minimum of 500 ms", async () => {
+  it("clamps to minimum of 500 ms for zero-length content", async () => {
     const start = Date.now();
     await simulateReadingTime(0);
     const elapsed = Date.now() - start;
+    expect(elapsed).toBeGreaterThanOrEqual(400);
+  });
+
+  it("clamps to minimum of 500 ms when readFraction is 0", async () => {
+    const start = Date.now();
+    await simulateReadingTime(10_000, 0);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeGreaterThanOrEqual(400);
+  });
+
+  it("sanitises non-finite contentLength to 0", async () => {
+    const start = Date.now();
+    await simulateReadingTime(NaN);
+    const elapsed = Date.now() - start;
+    // NaN contentLength → safeLength=0 → mean=0 → clamped to 500 ms minimum
+    expect(elapsed).toBeGreaterThanOrEqual(400);
+  });
+
+  it("sanitises non-finite readFraction to default", async () => {
+    const start = Date.now();
+    await simulateReadingTime(100, NaN);
+    const elapsed = Date.now() - start;
+    // NaN readFraction → safeFraction=0.3 (default) → ~720 ms mean
     expect(elapsed).toBeGreaterThanOrEqual(400);
   });
 });
