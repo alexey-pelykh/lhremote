@@ -5,7 +5,7 @@ import type { Campaign, CampaignAction } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withDatabase } from "../services/instance-context.js";
 import { CampaignRepository } from "../db/index.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 /**
  * Input for the campaign-get operation.
@@ -29,10 +29,7 @@ export async function campaignGet(
 ): Promise<CampaignGetOutput> {
   const cdpPort = input.cdpPort;
 
-  const accountId = await resolveAccount(cdpPort, {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  });
+  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withDatabase(accountId, ({ db }) => {
     const campaignRepo = new CampaignRepository(db);

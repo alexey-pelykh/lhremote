@@ -5,7 +5,7 @@ import type { ActionBudget } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withDatabase } from "../services/instance-context.js";
 import { ActionBudgetRepository } from "../db/index.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 export type GetActionBudgetInput = ConnectionOptions;
 
@@ -16,10 +16,7 @@ export async function getActionBudget(
 ): Promise<GetActionBudgetOutput> {
   const cdpPort = input.cdpPort;
 
-  const accountId = await resolveAccount(cdpPort, {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  });
+  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withDatabase(accountId, ({ db }) => {
     const repo = new ActionBudgetRepository(db);

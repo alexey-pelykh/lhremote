@@ -7,7 +7,7 @@ import { withInstanceDatabase } from "../services/instance-context.js";
 import { CollectionService } from "../services/collection.js";
 import { CollectionError } from "../services/errors.js";
 import { detectSourceType, validateSourceType } from "../services/source-type-registry.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 /**
  * Input for the collect-people operation.
@@ -71,10 +71,7 @@ export async function collectPeople(
     sourceType = detected;
   }
 
-  const accountId = await resolveAccount(cdpPort, {
-    ...(input.cdpHost !== undefined && { host: input.cdpHost }),
-    ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
-  });
+  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withInstanceDatabase(cdpPort, accountId, async ({ instance }) => {
     const collectionService = new CollectionService(instance);
