@@ -44,6 +44,21 @@ export function maybeHesitate(probability = 0.12): Promise<void> {
 }
 
 /**
+ * With the given probability (default 4%), insert a longer pause of 2–12 s.
+ *
+ * Simulates the natural micro-breaks humans take during extended browsing
+ * sessions: checking another tab, reading a notification, sipping coffee.
+ * Intended for use inside long scroll or extraction loops to break up
+ * otherwise rhythmic interaction patterns.
+ */
+export function maybeBreak(probability = 0.04): Promise<void> {
+  if (Math.random() < probability) {
+    return gaussianDelay(5_000, 2_000, 2_000, 12_000);
+  }
+  return Promise.resolve();
+}
+
+/**
  * Return a normally-distributed random number using the Box-Muller transform.
  *
  * The result is centered on `mean` with the given `stdDev`.  Unlike

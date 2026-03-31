@@ -6,6 +6,7 @@ import {
   delay,
   randomBetween,
   maybeHesitate,
+  maybeBreak,
   gaussianRandom,
   gaussianBetween,
 } from "./delay.js";
@@ -100,6 +101,19 @@ describe("maybeHesitate", () => {
   it("never pauses with probability 0", async () => {
     const start = Date.now();
     await maybeHesitate(0);
+    expect(Date.now() - start).toBeLessThan(50);
+  });
+});
+
+describe("maybeBreak", () => {
+  it("resolves to undefined", async () => {
+    const result = await maybeBreak(0);
+    expect(result).toBeUndefined();
+  });
+
+  it("never pauses with probability 0", async () => {
+    const start = Date.now();
+    await maybeBreak(0);
     expect(Date.now() - start).toBeLessThan(50);
   });
 });

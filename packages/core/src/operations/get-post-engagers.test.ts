@@ -24,6 +24,7 @@ vi.mock("../utils/delay.js", () => ({
   gaussianDelay: vi.fn().mockResolvedValue(undefined),
   gaussianBetween: vi.fn().mockReturnValue(500),
   maybeHesitate: vi.fn().mockResolvedValue(undefined),
+  maybeBreak: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../linkedin/dom-automation.js", () => ({
