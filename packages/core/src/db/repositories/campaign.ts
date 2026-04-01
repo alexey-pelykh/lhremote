@@ -496,53 +496,55 @@ export class CampaignRepository {
       db.exec("PRAGMA foreign_keys = OFF");
     }
 
-    db.exec("BEGIN");
     try {
-      // 1. Delete result children (FK: action_result_flags/messages → action_results)
-      stmts.deleteResultFlagsByCampaign.run(campaignId);
-      stmts.deleteResultMessagesByCampaign.run(campaignId);
+      db.exec("BEGIN");
+      try {
+        // 1. Delete result children (FK: action_result_flags/messages → action_results)
+        stmts.deleteResultFlagsByCampaign.run(campaignId);
+        stmts.deleteResultMessagesByCampaign.run(campaignId);
 
-      // 2. Delete results (FK: action_results → action_versions)
-      stmts.deleteResultsByCampaign.run(campaignId);
+        // 2. Delete results (FK: action_results → action_versions)
+        stmts.deleteResultsByCampaign.run(campaignId);
 
-      // 3. Delete target people (FK: action_target_people → actions)
-      stmts.deleteTargetPeopleByCampaign.run(campaignId);
+        // 3. Delete target people (FK: action_target_people → actions)
+        stmts.deleteTargetPeopleByCampaign.run(campaignId);
 
-      // 4. Delete campaign history
-      stmts.deleteCampaignHistory.run(campaignId);
+        // 4. Delete campaign history
+        stmts.deleteCampaignHistory.run(campaignId);
 
-      // 5. Delete collection_people for exclude lists
-      stmts.deleteCollectionPeopleByCampaign.run(campaignId, campaignId);
+        // 5. Delete collection_people for exclude lists
+        stmts.deleteCollectionPeopleByCampaign.run(campaignId, campaignId);
 
-      // 6. Delete campaign_versions (FK → campaigns)
-      stmts.deleteCampaignVersions.run(campaignId);
+        // 6. Delete campaign_versions (FK → campaigns)
+        stmts.deleteCampaignVersions.run(campaignId);
 
-      // 7. Delete action_versions (FK → actions)
-      stmts.deleteActionVersionsByCampaign.run(campaignId);
+        // 7. Delete action_versions (FK → actions)
+        stmts.deleteActionVersionsByCampaign.run(campaignId);
 
-      // 8. Delete actions (FK → campaigns)
-      stmts.deleteActionsByCampaign.run(campaignId);
+        // 8. Delete actions (FK → campaigns)
+        stmts.deleteActionsByCampaign.run(campaignId);
 
-      // 9. Delete action_configs (collected before transaction)
-      for (const configId of configIds) {
-        stmts.deleteActionConfig.run(configId);
+        // 9. Delete action_configs (collected before transaction)
+        for (const configId of configIds) {
+          stmts.deleteActionConfig.run(configId);
+        }
+
+        // 10. Delete exclude list versions and collections
+        for (const versionId of excludeVersionIds) {
+          stmts.deleteCollectionPeopleVersion.run(versionId);
+        }
+        for (const collectionId of excludeCollectionIds) {
+          stmts.deleteCollection.run(collectionId);
+        }
+
+        // 11. Delete the campaign itself
+        stmts.deleteCampaign.run(campaignId);
+
+        db.exec("COMMIT");
+      } catch (e) {
+        db.exec("ROLLBACK");
+        throw e;
       }
-
-      // 10. Delete exclude list versions and collections
-      for (const versionId of excludeVersionIds) {
-        stmts.deleteCollectionPeopleVersion.run(versionId);
-      }
-      for (const collectionId of excludeCollectionIds) {
-        stmts.deleteCollection.run(collectionId);
-      }
-
-      // 11. Delete the campaign itself
-      stmts.deleteCampaign.run(campaignId);
-
-      db.exec("COMMIT");
-    } catch (e) {
-      db.exec("ROLLBACK");
-      throw e;
     } finally {
       if (prevFK) {
         db.exec("PRAGMA foreign_keys = ON");
