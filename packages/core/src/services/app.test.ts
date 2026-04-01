@@ -195,7 +195,7 @@ describe("AppService", () => {
       expect(mockedSpawn).toHaveBeenCalledWith(
         "/Applications/linked-helper.app/Contents/MacOS/linked-helper",
         ["--remote-debugging-port=9222"],
-        { detached: true, stdio: "ignore" },
+        { detached: true, stdio: "ignore", env: expect.objectContaining({ ELECTRON_RUN_AS_NODE: "" }) },
       );
       expect(child.unref).toHaveBeenCalled();
     });
@@ -214,7 +214,7 @@ describe("AppService", () => {
       expect(mockedSpawn).toHaveBeenCalledWith(
         expect.any(String),
         ["--remote-debugging-port=54321"],
-        { detached: true, stdio: "ignore" },
+        { detached: true, stdio: "ignore", env: expect.objectContaining({ ELECTRON_RUN_AS_NODE: "" }) },
       );
       expect(service.cdpPort).toBe(54321);
     });

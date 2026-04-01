@@ -109,6 +109,7 @@ export class AppService {
     const child = spawn(binary, args, {
       detached: true,
       stdio: "ignore",
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "" },
     });
 
     child.unref();
