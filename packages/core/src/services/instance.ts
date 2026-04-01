@@ -254,37 +254,19 @@ export class InstanceService {
   /**
    * Navigate the LinkedIn webview to the given URL.
    *
-   * Uses `window.location.href` (via `Runtime.evaluate`) instead of
-   * CDP `Page.navigate` so that Electron's webview fires its
-   * `did-navigate` events.  LinkedHelper's `contentWindowController`
-   * relies on those events for page-type detection — without them
-   * `canCollect` always returns `false`.
-   *
-   * Enables the CDP Page domain to wait for `Page.loadEventFired`
-   * before returning, ensuring the page is fully loaded.
+   * Enables the CDP Page domain so that `Page.loadEventFired` events
+   * are delivered, navigates, and waits for the load event before
+   * returning.  This ensures the webview is on the expected page
+   * before downstream operations like `canCollect` are called.
    *
    * @throws {ServiceError} if the client is not connected.
    */
   async navigateLinkedIn(url: string): Promise<void> {
-    // Validate URL scheme — only http/https are safe to evaluate in the
-    // LinkedIn webview (mirrors CDPClient.navigate's scheme check).
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      throw new TypeError(`Unsafe URL scheme: ${parsed.protocol}`);
-    }
-
     const client = this.ensureLinkedInClient();
     await client.send("Page.enable");
     try {
       const loadPromise = client.waitForEvent("Page.loadEventFired");
-      // Navigate via window.location.href instead of Page.navigate so
-      // that Electron's webview fires its did-navigate events.
-      // LinkedHelper's contentWindowController listens for those events
-      // to detect the current page type — CDP Page.navigate bypasses
-      // them, causing canCollect to always return false.
-      await client.evaluate(
-        `void (window.location.href = ${JSON.stringify(url)})`,
-      );
+      await client.navigate(url);
       await loadPromise;
     } finally {
       await client.send("Page.disable").catch(() => {});
