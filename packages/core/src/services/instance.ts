@@ -266,6 +266,13 @@ export class InstanceService {
    * @throws {ServiceError} if the client is not connected.
    */
   async navigateLinkedIn(url: string): Promise<void> {
+    // Validate URL scheme — only http/https are safe to evaluate in the
+    // LinkedIn webview (mirrors CDPClient.navigate's scheme check).
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      throw new TypeError(`Unsafe URL scheme: ${parsed.protocol}`);
+    }
+
     const client = this.ensureLinkedInClient();
     await client.send("Page.enable");
     try {

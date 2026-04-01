@@ -418,6 +418,23 @@ describe("InstanceService", () => {
         service.navigateLinkedIn("https://www.linkedin.com/search/results/people/"),
       ).rejects.toThrow(ServiceError);
     });
+
+    it("rejects non-http/https URL schemes", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      await expect(
+        service.navigateLinkedIn("javascript:alert(1)"),
+      ).rejects.toThrow(TypeError);
+
+      await expect(
+        service.navigateLinkedIn("file:///etc/passwd"),
+      ).rejects.toThrow(TypeError);
+
+      await expect(
+        service.navigateLinkedIn("data:text/html,<h1>test</h1>"),
+      ).rejects.toThrow(TypeError);
+    });
   });
 
   describe("getInstancePopups", () => {
