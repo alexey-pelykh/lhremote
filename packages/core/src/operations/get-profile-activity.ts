@@ -457,7 +457,7 @@ export async function getProfileActivity(
     for (let i = startIdx; i < windowEnd; i++) {
       const post = allPosts[i];
       if (!post || post.url) continue;
-      if (i > 0) await gaussianDelay(550, 125, 300, 800);
+      if (i > startIdx) await gaussianDelay(550, 125, 300, 800);
       await maybeBreak();
       const url = await retryInteraction(
         () => captureActivityPostUrl(client, i, mouse),

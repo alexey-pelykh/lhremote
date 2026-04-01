@@ -389,6 +389,47 @@ describe("getProfileActivity", () => {
     expect(disconnect).toHaveBeenCalled();
   });
 
+  it("only extracts URLs for posts in the result window (no cursor)", async () => {
+    const posts = Array.from({ length: 8 }, (_, i) =>
+      rawPost({ authorName: `User ${String(i)}` }),
+    );
+    const urls = posts.map((_, i) => urnToUrl(`urn:li:share:${String(i)}`));
+    const { evaluate } = setupMocks(posts, urls);
+
+    await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "johndoe",
+      count: 3,
+    });
+
+    // Each successful extraction reads the clipboard exactly once
+    const clipboardReads = evaluate.mock.calls.filter(
+      (call) => call[0] === "window.__capturedClipboard",
+    );
+    expect(clipboardReads).toHaveLength(3);
+  });
+
+  it("only extracts URLs for cursor scan plus result window (with cursor)", async () => {
+    const posts = Array.from({ length: 15 }, (_, i) =>
+      rawPost({ authorName: `User ${String(i)}` }),
+    );
+    const urls = posts.map((_, i) => urnToUrl(`urn:li:share:${String(i)}`));
+    const { evaluate } = setupMocks(posts, urls);
+
+    await getProfileActivity({
+      cdpPort: CDP_PORT,
+      profile: "johndoe",
+      count: 5,
+      cursor: "https://www.linkedin.com/feed/update/urn:li:share:4/",
+    });
+
+    // 5 reads to find cursor (posts 0–4) + 5 reads for the window (posts 5–9)
+    const clipboardReads = evaluate.mock.calls.filter(
+      (call) => call[0] === "window.__capturedClipboard",
+    );
+    expect(clipboardReads).toHaveLength(10);
+  });
+
   it("returns empty posts array when no activity found", async () => {
     setupMocks([]);
 
