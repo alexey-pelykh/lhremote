@@ -206,6 +206,7 @@ export {
 } from "./db/index.js";
 
 export {
+  CDPClient,
   CDPConnectionError,
   CDPError,
   CDPEvaluationError,
