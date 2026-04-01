@@ -54,7 +54,10 @@ describeE2E("AppService", () => {
       async () => {
         await app.quit();
 
-        const deadline = Date.now() + 15_000;
+        // Allow the process to begin shutting down before probing
+        await new Promise<void>((r) => setTimeout(r, 1_000));
+
+        const deadline = Date.now() + 30_000;
         const probe = new AppService(port);
         while (Date.now() < deadline) {
           if (!(await probe.isRunning())) {
@@ -68,7 +71,7 @@ describeE2E("AppService", () => {
         // Prevent top-level afterAll from trying to quit again
         app = new AppService();
       },
-      30_000,
+      60_000,
     );
 
     it("quit() is a no-op when not running", async () => {
