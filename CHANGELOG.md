@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-04-01
+
+### Added
+
+- Humanization layer for all LinkedIn interactions — Gaussian delay distribution, page settling, humanized mouse movement via LH's VirtualMouse, click jitter, scroll randomization, post-action dwell, character-aware typing cadence with word/sentence boundary pauses, CDP fallback mouse path, session-level pacing with cool-down and micro-breaks, idle mouse drift, pre-focus hover, reading simulation, and humanized retries
+- Smart port resolution with direct instance connection — auto-discovers instance CDP port without manual configuration
+- Dialog dismissal on LauncherService (`dismissInstanceDialog`, `stopInstanceWithDialogDismissal`)
+- `connectUiOnly()` on InstanceService for partial-start resilience
+- `CDPClient` export from `@lhremote/core`
+
+### Changed
+
+- Feed posts now use URL as primary identifier (URN dropped)
+- Feed and post operations migrated from Voyager API interception to DOM scraping for LinkedIn SSR compatibility
+- `FeedPost.url` is now nullable with automatic retry URL extraction
+- Explicit `cdpPort` required for non-loopback host connections
+- CLI no longer defaults `cdpPort` to `DEFAULT_CDP_PORT`
+
+### Fixed
+
+- Override `ELECTRON_RUN_AS_NODE` to restore CDP connectivity on LinkedHelper v2.113.9+
+- Prevent health check infinite recursion and fix campaign runner start sequence
+- Detect wrong CDP port and classify launcher vs instance processes
+- Wire dialog-aware stop into `forceStopInstance` and crash recovery
+- Use webpack account service cache for `listAccounts` performance
+- Discover instance port before popup detection in `get-errors` and `dismiss-errors`
+- Add `Array.isArray` guard in `discoverTargets`
+- Remove dead VoyagerInterceptor code
+
 ## [0.8.0] — 2026-03-22
 
 ### Added
