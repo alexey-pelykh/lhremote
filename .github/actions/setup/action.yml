@@ -27,7 +27,7 @@ runs:
     - name: Get Playwright version
       if: inputs.skip-playwright != 'true'
       id: pw-version
-      run: echo "version=$(npx playwright-core --version)" >> "$GITHUB_OUTPUT"
+      run: echo "version=$(pnpm --filter @lhremote/core exec playwright-core --version)" >> "$GITHUB_OUTPUT"
       shell: bash
 
     - name: Resolve Playwright cache path
@@ -51,12 +51,12 @@ runs:
 
     - name: Install Playwright Chromium
       if: inputs.skip-playwright != 'true' && steps.pw-cache.outputs.cache-hit != 'true'
-      run: npx playwright-core install chromium --with-deps
+      run: pnpm --filter @lhremote/core exec playwright-core install chromium --with-deps
       shell: bash
 
     - name: Install Playwright OS deps (cache hit)
       if: inputs.skip-playwright != 'true' && steps.pw-cache.outputs.cache-hit == 'true'
-      run: npx playwright-core install-deps chromium
+      run: pnpm --filter @lhremote/core exec playwright-core install-deps chromium
       shell: bash
 
     - uses: actions/cache@v5
