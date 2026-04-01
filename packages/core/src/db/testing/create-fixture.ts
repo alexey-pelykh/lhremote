@@ -478,7 +478,8 @@ db.exec(`
     created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
     updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
     FOREIGN KEY(action_id) REFERENCES actions(id),
-    FOREIGN KEY(config_id) REFERENCES action_configs(id)
+    FOREIGN KEY(config_id) REFERENCES action_configs(id),
+    FOREIGN KEY(exclude_list_id) REFERENCES collection_people_versions(id)
   );
   CREATE INDEX action_versions_action_idx ON action_versions(action_id);
 
