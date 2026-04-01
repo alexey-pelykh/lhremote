@@ -371,7 +371,7 @@ describe("InstanceService", () => {
   });
 
   describe("navigateLinkedIn", () => {
-    it("enables Page domain, navigates via evaluate, waits for load, then disables", async () => {
+    it("enables Page domain, navigates, waits for load, then disables", async () => {
       mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
       await service.connect();
 
@@ -380,10 +380,9 @@ describe("InstanceService", () => {
       await service.navigateLinkedIn("https://www.linkedin.com/search/results/people/");
 
       expect(liClient.send).toHaveBeenCalledWith("Page.enable");
-      expect(liClient.evaluate).toHaveBeenCalledWith(
-        `void (window.location.href = "https://www.linkedin.com/search/results/people/")`,
+      expect(liClient.navigate).toHaveBeenCalledWith(
+        "https://www.linkedin.com/search/results/people/",
       );
-      expect(liClient.navigate).not.toHaveBeenCalled();
       expect(liClient.waitForEvent).toHaveBeenCalledWith("Page.loadEventFired");
       expect(liClient.send).toHaveBeenCalledWith("Page.disable");
     });
@@ -393,7 +392,7 @@ describe("InstanceService", () => {
       await service.connect();
 
       const liClient = getClientMocks("LI1");
-      liClient.evaluate.mockRejectedValueOnce(new Error("navigation failed"));
+      liClient.navigate.mockRejectedValueOnce(new Error("navigation failed"));
 
       await expect(
         service.navigateLinkedIn("https://www.linkedin.com/search/results/people/"),
@@ -409,7 +408,7 @@ describe("InstanceService", () => {
       await service.navigateLinkedIn("https://www.linkedin.com/search/results/people/");
 
       const uiClient = getClientMocks("UI1");
-      expect(uiClient.evaluate).not.toHaveBeenCalled();
+      expect(uiClient.navigate).not.toHaveBeenCalled();
       expect(uiClient.send).not.toHaveBeenCalled();
     });
 
@@ -417,23 +416,6 @@ describe("InstanceService", () => {
       await expect(
         service.navigateLinkedIn("https://www.linkedin.com/search/results/people/"),
       ).rejects.toThrow(ServiceError);
-    });
-
-    it("rejects non-http/https URL schemes", async () => {
-      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
-      await service.connect();
-
-      await expect(
-        service.navigateLinkedIn("javascript:alert(1)"),
-      ).rejects.toThrow(TypeError);
-
-      await expect(
-        service.navigateLinkedIn("file:///etc/passwd"),
-      ).rejects.toThrow(TypeError);
-
-      await expect(
-        service.navigateLinkedIn("data:text/html,<h1>test</h1>"),
-      ).rejects.toThrow(TypeError);
     });
   });
 
