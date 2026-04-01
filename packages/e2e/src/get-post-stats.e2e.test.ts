@@ -75,8 +75,15 @@ describeE2E("get-post-stats operation", () => {
       { retries: 30, delay: 2_000 },
     );
 
-    // Pre-fetch a live post URN from the feed
-    capturedPostUrl = await fetchPostUrlFromFeed(cdpPort);
+    // Pre-fetch a live post URL from the feed (retry — feed may not render immediately)
+    capturedPostUrl = await retryAsync(
+      async () => {
+        const url = await fetchPostUrlFromFeed(cdpPort);
+        if (url === undefined) throw new Error("Feed returned no posts yet");
+        return url;
+      },
+      { retries: 5, delay: 3_000 },
+    );
   }, 120_000);
 
   afterAll(async () => {
