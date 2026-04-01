@@ -483,6 +483,19 @@ export class CampaignRepository {
     const excludeVersionIds = excludeRows.map((r) => r.version_id);
     const excludeCollectionIds = [...new Set(excludeRows.map((r) => r.collection_id))];
 
+    // Disable FK enforcement during the cascading delete.  Node 24's
+    // node:sqlite enables foreign_keys by default and the real LinkedHelper
+    // database may define FK constraints that the delete order cannot
+    // satisfy (e.g. on tables we do not manage).  The code already deletes
+    // referencing rows before referenced rows, so disabling the pragma is
+    // safe.  Re-enable after the transaction completes.
+    const prevFK = (
+      db.prepare("PRAGMA foreign_keys").get() as { foreign_keys: number }
+    ).foreign_keys;
+    if (prevFK) {
+      db.exec("PRAGMA foreign_keys = OFF");
+    }
+
     db.exec("BEGIN");
     try {
       // 1. Delete result children (FK: action_result_flags/messages → action_results)
@@ -530,6 +543,10 @@ export class CampaignRepository {
     } catch (e) {
       db.exec("ROLLBACK");
       throw e;
+    } finally {
+      if (prevFK) {
+        db.exec("PRAGMA foreign_keys = ON");
+      }
     }
   }
 
