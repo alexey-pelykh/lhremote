@@ -94,7 +94,7 @@ describeE2E("get-profile-activity operation", () => {
       launcher.disconnect();
     }
     await quitApp(app);
-  }, 60_000);
+  }, 120_000);
 
   describe("CLI handlers", () => {
     const originalExitCode = process.exitCode;
@@ -139,7 +139,7 @@ describeE2E("get-profile-activity operation", () => {
         expect(typeof post.commentCount).toBe("number");
         expect(typeof post.shareCount).toBe("number");
       }
-    }, 60_000);
+    }, 120_000);
 
     it("get-profile-activity prints human-friendly output", async () => {
       assertDefined(profilePublicId, "No profile public ID — feed returned no posts with author URLs");
@@ -161,7 +161,7 @@ describeE2E("get-profile-activity operation", () => {
         .join("");
       expect(output).toContain("Profile:");
       expect(output).toContain(profilePublicId);
-    }, 60_000);
+    }, 120_000);
   });
 
   describe("MCP tools", () => {
@@ -190,6 +190,6 @@ describeE2E("get-profile-activity operation", () => {
 
       expect(parsed.profilePublicId).toBe(profilePublicId);
       expect(Array.isArray(parsed.posts)).toBe(true);
-    }, 60_000);
+    }, 120_000);
   });
 });

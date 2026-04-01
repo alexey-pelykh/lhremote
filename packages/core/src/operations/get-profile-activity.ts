@@ -430,25 +430,40 @@ export async function getProfileActivity(
       };`,
     );
 
-    for (let i = 0; i < allPosts.length; i++) {
+    // Determine result window start before URL extraction
+    let startIdx = 0;
+    if (cursorUrl) {
+      // Extract URLs to locate cursor position
+      for (let i = 0; i < allPosts.length; i++) {
+        const post = allPosts[i];
+        if (!post) continue;
+        if (i > 0) await gaussianDelay(550, 125, 300, 800);
+        await maybeBreak();
+        const url = await retryInteraction(
+          () => captureActivityPostUrl(client, i, mouse),
+        );
+        if (url) {
+          post.url = url;
+          if (url === cursorUrl) {
+            startIdx = i + 1;
+            break;
+          }
+        }
+      }
+    }
+
+    // Only extract URLs for posts in the returned window
+    const windowEnd = Math.min(startIdx + count, allPosts.length);
+    for (let i = startIdx; i < windowEnd; i++) {
       const post = allPosts[i];
-      if (!post) continue;
-      if (i > 0) await gaussianDelay(550, 125, 300, 800); // Inter-post delay
+      if (!post || post.url) continue;
+      if (i > 0) await gaussianDelay(550, 125, 300, 800);
       await maybeBreak();
       const url = await retryInteraction(
         () => captureActivityPostUrl(client, i, mouse),
       );
       if (url) {
         post.url = url;
-      }
-    }
-
-    // Slice the result window
-    let startIdx = 0;
-    if (cursorUrl) {
-      const cursorIdx = allPosts.findIndex((p) => p.url === cursorUrl);
-      if (cursorIdx >= 0) {
-        startIdx = cursorIdx + 1;
       }
     }
 
