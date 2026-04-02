@@ -38,6 +38,32 @@ const SOURCE_TYPE_PATTERNS: SourceTypePattern[] = [
 ];
 
 /**
+ * Mapping from public PascalCase source types to LinkedHelper's internal
+ * kebab-case type identifiers used by the `CollectingController` IPC methods
+ * (`canCollect`, `prepareCollecting`).
+ */
+const SOURCE_TYPE_INTERNAL: Readonly<Record<SourceType, string>> = {
+  SearchPage: "search-page",
+  MyConnections: "my-connections",
+  Alumni: "alumni",
+  OrganizationPeople: "organization-people",
+  Group: "group",
+  Event: "event",
+  LWVYPP: "lwvypp",
+  SentInvitationPage: "sent-invitation-page",
+  FollowersPage: "followers-page",
+  FollowingPage: "following-page",
+  SNSearchPage: "sn-search-page",
+  SNListPage: "sn-list-page",
+  SNOrgsPage: "sn-orgs-page",
+  SNOrgsListsPage: "sn-orgs-lists-page",
+  TSearchPage: "t-search-page",
+  TProjectPage: "t-project-page",
+  RSearchPage: "r-search-page",
+  RProjectPage: "r-project-page",
+};
+
+/**
  * Set of all valid source type strings for fast validation.
  */
 const VALID_SOURCE_TYPES: ReadonlySet<string> = new Set<string>(
@@ -69,6 +95,21 @@ export function detectSourceType(url: string): SourceType | undefined {
   }
 
   return undefined;
+}
+
+/**
+ * Convert a public {@link SourceType} to LinkedHelper's internal kebab-case
+ * identifier expected by `CollectingController` IPC methods.
+ *
+ * @param sourceType - Public PascalCase source type
+ * @returns The internal kebab-case identifier (e.g., `"search-page"`)
+ */
+export function toInternalSourceType(sourceType: SourceType): string {
+  const internal = SOURCE_TYPE_INTERNAL[sourceType];
+  if (!internal) {
+    throw new Error(`No internal type mapping for source type: ${String(sourceType)}`);
+  }
+  return internal;
 }
 
 /**

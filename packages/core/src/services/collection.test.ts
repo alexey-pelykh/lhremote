@@ -60,20 +60,21 @@ describe("CollectionService", () => {
       const stateExpr = mockEvaluateUI.mock.calls[0]?.[0] as string;
       expect(stateExpr).toContain("mainWindowService.mainWindow.state");
 
-      // 2. canCollect
+      // 2. canCollect — uses internal kebab-case type
       const canCollectExpr = mockEvaluateUI.mock.calls[1]?.[0] as string;
       expect(canCollectExpr).toContain("canCollect");
-      expect(canCollectExpr).toContain("SearchPage");
+      expect(canCollectExpr).toContain("search-page");
 
-      // 3. prepareCollecting
+      // 3. prepareCollecting — uses internal kebab-case type
       const prepareExpr = mockEvaluateUI.mock.calls[2]?.[0] as string;
       expect(prepareExpr).toContain("prepareCollecting");
-      expect(prepareExpr).toContain("SearchPage");
+      expect(prepareExpr).toContain("search-page");
       expect(prepareExpr).toContain("AutoCollectPeople");
 
-      // 4. collect
+      // 4. collect — includes campaignId
       const collectExpr = mockEvaluateUI.mock.calls[3]?.[0] as string;
       expect(collectExpr).toContain("mws.call('collect'");
+      expect(collectExpr).toContain('"campaignId":1');
     });
 
     it("passes limit, maxPages, pageSize to collect call", async () => {
@@ -120,10 +121,10 @@ describe("CollectionService", () => {
       await service.collect(ORG_PEOPLE_URL, 1);
 
       const canCollectExpr = mockEvaluateUI.mock.calls[1]?.[0] as string;
-      expect(canCollectExpr).toContain("OrganizationPeople");
+      expect(canCollectExpr).toContain("organization-people");
 
       const prepareExpr = mockEvaluateUI.mock.calls[2]?.[0] as string;
-      expect(prepareExpr).toContain("OrganizationPeople");
+      expect(prepareExpr).toContain("organization-people");
     });
 
     it("throws CollectionError for unrecognized source URL", async () => {
@@ -305,7 +306,7 @@ describe("CollectionService", () => {
   });
 
   describe("canCollect", () => {
-    it("calls canCollect IPC method via CDP", async () => {
+    it("calls canCollect IPC method via CDP with internal kebab-case type", async () => {
       mockEvaluateUI.mockResolvedValueOnce(true);
 
       const result = await service.canCollect("SearchPage");
@@ -313,7 +314,7 @@ describe("CollectionService", () => {
       expect(result).toBe(true);
       const expr = mockEvaluateUI.mock.calls[0]?.[0] as string;
       expect(expr).toContain("canCollect");
-      expect(expr).toContain("SearchPage");
+      expect(expr).toContain("search-page");
     });
 
     it("returns false when LinkedHelper reports false", async () => {

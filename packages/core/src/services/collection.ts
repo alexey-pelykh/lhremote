@@ -5,7 +5,7 @@ import type { SourceType } from "../types/index.js";
 import type { RunnerState } from "../types/index.js";
 import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
-import { detectSourceType } from "./source-type-registry.js";
+import { detectSourceType, toInternalSourceType } from "./source-type-registry.js";
 import type { InstanceService } from "./instance.js";
 import { CollectionBusyError, CollectionError } from "./errors.js";
 
@@ -64,7 +64,7 @@ export class CollectionService {
    */
   async collect(
     sourceUrl: string,
-    _campaignId: number,
+    campaignId: number,
     options?: CollectOptions,
   ): Promise<void> {
     const sourceType = detectSourceType(sourceUrl);
@@ -101,7 +101,7 @@ export class CollectionService {
     }
 
     try {
-      await this.startCollecting(options);
+      await this.startCollecting(campaignId, options);
     } catch (error) {
       if (error instanceof CollectionError) throw error;
       const message = errorMessage(error);
@@ -119,10 +119,11 @@ export class CollectionService {
    * LinkedHelper browser is currently on a matching source page.
    */
   async canCollect(sourceType: SourceType): Promise<boolean> {
+    const internalType = toInternalSourceType(sourceType);
     return this.instance.evaluateUI<boolean>(
       `(async () => {
         const mws = window.mainWindowService;
-        return await mws.call('canCollect', ${JSON.stringify(sourceType)});
+        return await mws.call('canCollect', ${JSON.stringify(internalType)});
       })()`,
     );
   }
@@ -186,11 +187,12 @@ export class CollectionService {
    * @throws {CollectionError} if the call returns `false`.
    */
   private async prepareCollecting(sourceType: SourceType): Promise<void> {
+    const internalType = toInternalSourceType(sourceType);
     const result = await this.instance.evaluateUI<boolean>(
       `(async () => {
         const mws = window.mainWindowService;
         return await mws.call('prepareCollecting', ${JSON.stringify({
-          type: sourceType,
+          type: internalType,
           actionType: "AutoCollectPeople",
         })});
       })()`,
@@ -208,8 +210,8 @@ export class CollectionService {
    *
    * @throws {CollectionError} if the call returns `false`.
    */
-  private async startCollecting(options?: CollectOptions): Promise<void> {
-    const params: Record<string, number> = {};
+  private async startCollecting(campaignId: number, options?: CollectOptions): Promise<void> {
+    const params: Record<string, number> = { campaignId };
     if (options?.limit !== undefined) params.limit = options.limit;
     if (options?.maxPages !== undefined) params.maxPages = options.maxPages;
     if (options?.pageSize !== undefined) params.pageSize = options.pageSize;
