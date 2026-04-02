@@ -30,7 +30,7 @@ export {
   type DatabaseContext,
   type InstanceDatabaseContext,
 } from "./instance-context.js";
-export { detectSourceType, validateSourceType } from "./source-type-registry.js";
+export { detectSourceType, toInternalSourceType, validateSourceType } from "./source-type-registry.js";
 export { buildBooleanExpression } from "./boolean-expression.js";
 export { buildBasicSearchUrl } from "./url-builder.js";
 export { buildSNSearchUrl } from "./sn-url-builder.js";

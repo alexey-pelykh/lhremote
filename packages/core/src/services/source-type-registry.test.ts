@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { describe, expect, it } from "vitest";
-import { detectSourceType, validateSourceType } from "./source-type-registry.js";
+import { detectSourceType, toInternalSourceType, validateSourceType } from "./source-type-registry.js";
 
 describe("detectSourceType", () => {
   describe("Free tier", () => {
@@ -149,6 +149,41 @@ describe("detectSourceType", () => {
     it("should handle raw pathnames without hostname", () => {
       expect(detectSourceType("/search/results/people/")).toBe("SearchPage");
     });
+  });
+});
+
+describe("toInternalSourceType", () => {
+  it("should convert PascalCase source types to kebab-case internal identifiers", () => {
+    expect(toInternalSourceType("SearchPage")).toBe("search-page");
+    expect(toInternalSourceType("MyConnections")).toBe("my-connections");
+    expect(toInternalSourceType("OrganizationPeople")).toBe("organization-people");
+    expect(toInternalSourceType("SentInvitationPage")).toBe("sent-invitation-page");
+  });
+
+  it("should convert single-word types to lowercase", () => {
+    expect(toInternalSourceType("Alumni")).toBe("alumni");
+    expect(toInternalSourceType("Group")).toBe("group");
+    expect(toInternalSourceType("Event")).toBe("event");
+  });
+
+  it("should convert acronym types to lowercase", () => {
+    expect(toInternalSourceType("LWVYPP")).toBe("lwvypp");
+  });
+
+  it("should convert prefixed types correctly", () => {
+    expect(toInternalSourceType("SNSearchPage")).toBe("sn-search-page");
+    expect(toInternalSourceType("SNListPage")).toBe("sn-list-page");
+    expect(toInternalSourceType("SNOrgsPage")).toBe("sn-orgs-page");
+    expect(toInternalSourceType("SNOrgsListsPage")).toBe("sn-orgs-lists-page");
+    expect(toInternalSourceType("TSearchPage")).toBe("t-search-page");
+    expect(toInternalSourceType("TProjectPage")).toBe("t-project-page");
+    expect(toInternalSourceType("RSearchPage")).toBe("r-search-page");
+    expect(toInternalSourceType("RProjectPage")).toBe("r-project-page");
+  });
+
+  it("should convert Page suffix types correctly", () => {
+    expect(toInternalSourceType("FollowersPage")).toBe("followers-page");
+    expect(toInternalSourceType("FollowingPage")).toBe("following-page");
   });
 });
 
