@@ -34,7 +34,8 @@ export async function createCollection(
 
   return withDatabase(accountId, ({ accountId: acctId, db }) => {
     const repo = new CollectionListRepository(db);
-    const collectionId = repo.createCollection(acctId, input.name);
+    const internalAccountId = repo.resolveInternalAccountId(acctId);
+    const collectionId = repo.createCollection(internalAccountId, input.name);
     return {
       success: true as const,
       collectionId,

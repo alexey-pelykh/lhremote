@@ -384,7 +384,7 @@ describe("CampaignRepository", () => {
     });
 
     it("uses the provided liAccountId for collections", () => {
-      repo.createActionExcludeLists(1, 5);
+      repo.createActionExcludeLists(1, 2);
 
       const av = db
         .prepare(
@@ -402,7 +402,7 @@ describe("CampaignRepository", () => {
         .prepare("SELECT li_account_id FROM collections WHERE id = ?")
         .get(cpv.collection_id) as { li_account_id: number };
 
-      expect(collection.li_account_id).toBe(5);
+      expect(collection.li_account_id).toBe(2);
     });
   });
 

@@ -571,12 +571,25 @@ db.exec(`
 `);
 
 db.exec(`
+  CREATE TABLE li_accounts(
+    id INTEGER PRIMARY KEY,
+    external_id INTEGER NOT NULL,
+    full_name TEXT,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    UNIQUE(external_id)
+  );
+
+  INSERT INTO li_accounts (id, external_id, full_name) VALUES (1, 1, 'Test Account');
+  INSERT INTO li_accounts (id, external_id, full_name) VALUES (2, 5, 'Test Account 2');
+
   CREATE TABLE collections(
     id INTEGER PRIMARY KEY,
     li_account_id INTEGER NOT NULL,
     name TEXT,
     created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
-    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW'))
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    FOREIGN KEY(li_account_id) REFERENCES li_accounts(id)
   );
 
   CREATE TABLE collection_people_versions(
@@ -589,6 +602,20 @@ db.exec(`
     FOREIGN KEY(collection_id) REFERENCES collections(id)
   );
   CREATE INDEX collection_people_versions_collection_idx ON collection_people_versions(collection_id);
+
+  CREATE TABLE collection_people_versions_logs(
+    id INTEGER PRIMARY KEY,
+    collection_id INTEGER NOT NULL,
+    person_id INTEGER NOT NULL,
+    collect_id INTEGER,
+    created_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    updated_at DATETIME DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')),
+    collection_people_id INTEGER NOT NULL,
+    version_id INTEGER NOT NULL,
+    status INTEGER NOT NULL,
+    FOREIGN KEY(collection_id) REFERENCES collections(id),
+    FOREIGN KEY(version_id) REFERENCES collection_people_versions(id)
+  );
 
   CREATE TABLE collection_people(
     collection_id INTEGER,
