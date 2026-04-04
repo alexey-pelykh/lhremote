@@ -31,6 +31,7 @@ function setupMocks() {
 
   vi.mocked(CollectionListRepository).mockImplementation(function () {
     return {
+      resolveInternalAccountId: vi.fn().mockReturnValue(99),
       createCollection: vi.fn().mockReturnValue(42),
     } as unknown as CollectionListRepository;
   });
@@ -66,7 +67,8 @@ describe("createCollection", () => {
     const mockResult = vi.mocked(CollectionListRepository).mock.results[0] as {
       value: InstanceType<typeof CollectionListRepository>;
     };
-    expect(mockResult.value.createCollection).toHaveBeenCalledWith(1, "Test");
+    expect(mockResult.value.resolveInternalAccountId).toHaveBeenCalledWith(1);
+    expect(mockResult.value.createCollection).toHaveBeenCalledWith(99, "Test");
   });
 
   it("opens database in write mode", async () => {

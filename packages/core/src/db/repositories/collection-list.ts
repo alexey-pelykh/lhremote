@@ -33,6 +33,9 @@ export class CollectionListRepository {
   // Write statements (prepared lazily to avoid issues with read-only mode)
   private writeStatements: {
     insertCollection: PreparedStatement;
+    insertCollectionPeopleVersion: PreparedStatement | null;
+    deleteCollectionPeopleVersionsLogs: PreparedStatement | null;
+    deleteCollectionPeopleVersions: PreparedStatement | null;
     deleteCollectionPeople: PreparedStatement;
     deleteCollection: PreparedStatement;
     insertCollectionPerson: PreparedStatement;
@@ -52,6 +55,33 @@ export class CollectionListRepository {
        GROUP BY c.id
        ORDER BY c.id`,
     );
+  }
+
+  /**
+   * Resolve the external account ID to the internal `li_accounts.id`.
+   *
+   * The external ID corresponds to the partition-level account
+   * identifier used by the launcher and database discovery.  The
+   * internal ID is what the `collections` foreign key references.
+   *
+   * @returns The internal `li_accounts.id`, or the input value if the
+   *          `li_accounts` table does not exist (test fixtures).
+   */
+  resolveInternalAccountId(externalAccountId: number): number {
+    try {
+      const row = this.client.db
+        .prepare("SELECT id FROM li_accounts WHERE external_id = ?")
+        .get(externalAccountId) as { id: number } | undefined;
+      if (row) return row.id;
+      throw new Error(
+        `No li_accounts mapping found for external account ID ${externalAccountId}`,
+      );
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message.includes("no such table")) {
+        return externalAccountId;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -80,8 +110,20 @@ export class CollectionListRepository {
    */
   createCollection(accountId: number, name: string): number {
     const stmts = this.getWriteStatements();
-    const result = stmts.insertCollection.run(accountId, name);
-    return Number(result.lastInsertRowid);
+
+    this.client.db.exec("BEGIN");
+    try {
+      const result = stmts.insertCollection.run(accountId, name);
+      const collectionId = Number(result.lastInsertRowid);
+      if (stmts.insertCollectionPeopleVersion) {
+        stmts.insertCollectionPeopleVersion.run(collectionId);
+      }
+      this.client.db.exec("COMMIT");
+      return collectionId;
+    } catch (e) {
+      this.client.db.exec("ROLLBACK");
+      throw e;
+    }
   }
 
   /**
@@ -92,9 +134,31 @@ export class CollectionListRepository {
   deleteCollection(collectionId: number): boolean {
     const stmts = this.getWriteStatements();
 
+    // Only delete named collections; exclude lists (name IS NULL) are skipped.
+    const row = this.client.db
+      .prepare("SELECT name FROM collections WHERE id = ? AND name IS NOT NULL")
+      .get(collectionId) as { name: string } | undefined;
+    if (!row) return false;
+
     this.client.db.exec("BEGIN");
     try {
       stmts.deleteCollectionPeople.run(collectionId);
+      if (stmts.deleteCollectionPeopleVersionsLogs) {
+        try {
+          stmts.deleteCollectionPeopleVersionsLogs.run(collectionId);
+        } catch (err: unknown) {
+          // FK violation expected when logs reference still-needed versions; rethrow anything else
+          if (!(err instanceof Error) || !err.message.includes("constraint")) throw err;
+        }
+      }
+      if (stmts.deleteCollectionPeopleVersions) {
+        try {
+          stmts.deleteCollectionPeopleVersions.run(collectionId);
+        } catch (err: unknown) {
+          // FK violation expected when campaign/action versions still reference these entries
+          if (!(err instanceof Error) || !err.message.includes("constraint")) throw err;
+        }
+      }
       const result = stmts.deleteCollection.run(collectionId);
       this.client.db.exec("COMMIT");
       return result.changes > 0;
@@ -196,11 +260,43 @@ export class CollectionListRepository {
 
     const { db } = this.client;
 
+    let insertCollectionPeopleVersion: PreparedStatement | null = null;
+    try {
+      insertCollectionPeopleVersion = db.prepare(
+        `INSERT INTO collection_people_versions
+           (collection_id, version_operation_status, created_at, updated_at)
+         VALUES (?, 'addToTarget', datetime('now'), datetime('now'))`,
+      );
+    } catch {
+      // Table may not exist in older schemas
+    }
+
+    let deleteCollectionPeopleVersionsLogs: PreparedStatement | null = null;
+    try {
+      deleteCollectionPeopleVersionsLogs = db.prepare(
+        `DELETE FROM collection_people_versions_logs WHERE collection_id = ?`,
+      );
+    } catch {
+      // Table may not exist in older schemas
+    }
+
+    let deleteCollectionPeopleVersions: PreparedStatement | null = null;
+    try {
+      deleteCollectionPeopleVersions = db.prepare(
+        `DELETE FROM collection_people_versions WHERE collection_id = ?`,
+      );
+    } catch {
+      // Table may not exist in older schemas
+    }
+
     this.writeStatements = {
       insertCollection: db.prepare(
         `INSERT INTO collections (li_account_id, name, created_at, updated_at)
          VALUES (?, ?, datetime('now'), datetime('now'))`,
       ),
+      insertCollectionPeopleVersion,
+      deleteCollectionPeopleVersionsLogs,
+      deleteCollectionPeopleVersions,
       deleteCollectionPeople: db.prepare(
         `DELETE FROM collection_people WHERE collection_id = ?`,
       ),
