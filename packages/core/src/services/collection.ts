@@ -16,18 +16,6 @@ const CAN_COLLECT_TIMEOUT = 10_000;
 const CAN_COLLECT_POLL_INTERVAL = 500;
 
 /**
- * Options for initiating a collection operation.
- */
-export interface CollectOptions {
-  /** Maximum number of profiles to collect. */
-  readonly limit?: number;
-  /** Maximum number of pages to process. */
-  readonly maxPages?: number;
-  /** Number of results per page. */
-  readonly pageSize?: number;
-}
-
-/**
  * Manages people collection from LinkedIn pages via CDP.
  *
  * Collection uses the dedicated `prepareCollecting` → `collect` IPC
@@ -48,8 +36,9 @@ export class CollectionService {
    * Initiate people collection from a LinkedIn source URL.
    *
    * Validates that the source URL is a recognized LinkedIn page type,
-   * ensures the instance is idle, then calls `canCollect` →
-   * `prepareCollecting` → `collect` via CDP.
+   * ensures the instance is idle, navigates to the URL, verifies the
+   * page is recognized, then drives the LinkedHelper state machine
+   * through its Redux saga to start collection.
    *
    * Returns immediately after initiating collection — the actual
    * collection runs asynchronously in LinkedHelper. Poll the runner
@@ -65,7 +54,7 @@ export class CollectionService {
   async collect(
     sourceUrl: string,
     campaignId: number,
-    options?: CollectOptions,
+    actionId: number,
   ): Promise<void> {
     const sourceType = detectSourceType(sourceUrl);
     if (!sourceType) {
@@ -90,18 +79,7 @@ export class CollectionService {
     await this.assertCanCollect(sourceType);
 
     try {
-      await this.prepareCollecting(sourceType);
-    } catch (error) {
-      if (error instanceof CollectionError) throw error;
-      const message = errorMessage(error);
-      throw new CollectionError(
-        `Failed to prepare collection for ${sourceType}: ${message}`,
-        { cause: error },
-      );
-    }
-
-    try {
-      await this.startCollecting(campaignId, options);
+      await this.startCollecting(sourceType, campaignId, actionId);
     } catch (error) {
       if (error instanceof CollectionError) throw error;
       const message = errorMessage(error);
@@ -181,52 +159,44 @@ export class CollectionService {
   }
 
   /**
-   * Call `prepareCollecting` to transition the state machine from
-   * `idle` to `preparing-collecting`.
+   * Call `collect` on the main process with the correct two-argument
+   * signature discovered from LinkedHelper's renderer source:
+   *
+   * ```
+   * mainWindowService.call("collect", sourceType, {
+   *   campaignId, actionId, target, withoutScraping
+   * })
+   * ```
+   *
+   * The main process `collect` method expects the source type as the
+   * first argument and a config object as the second. The config must
+   * include `actionId` (the campaign action to collect into) and
+   * `target` (the collection target type).
    *
    * @throws {CollectionError} if the call returns `false`.
    */
-  private async prepareCollecting(sourceType: SourceType): Promise<void> {
+  private async startCollecting(
+    sourceType: SourceType,
+    campaignId: number,
+    actionId: number,
+  ): Promise<void> {
     const internalType = toInternalSourceType(sourceType);
-    const result = await this.instance.evaluateUI<boolean>(
-      `(async () => {
+    const config: Record<string, unknown> = {
+      campaignId,
+      actionId,
+      target: "target",
+    };
+
+    // Fire-and-forget: the collect IPC method blocks until collection
+    // finishes (which can take minutes). We start it without awaiting
+    // the result — callers poll getRunnerState() for progress.
+    await this.instance.evaluateUI<boolean>(
+      `(() => {
         const mws = window.mainWindowService;
-        return await mws.call('prepareCollecting', ${JSON.stringify({
-          type: internalType,
-          actionType: "AutoCollectPeople",
-        })});
+        mws.call('collect', ${JSON.stringify(internalType)}, ${JSON.stringify(config)});
+        return true;
       })()`,
+      false,
     );
-
-    if (!result) {
-      throw new CollectionError(
-        `prepareCollecting returned false for ${sourceType} — state machine did not transition`,
-      );
-    }
-  }
-
-  /**
-   * Call `collect` to start the actual collection process.
-   *
-   * @throws {CollectionError} if the call returns `false`.
-   */
-  private async startCollecting(campaignId: number, options?: CollectOptions): Promise<void> {
-    const params: Record<string, number> = { campaignId };
-    if (options?.limit !== undefined) params.limit = options.limit;
-    if (options?.maxPages !== undefined) params.maxPages = options.maxPages;
-    if (options?.pageSize !== undefined) params.pageSize = options.pageSize;
-
-    const result = await this.instance.evaluateUI<boolean>(
-      `(async () => {
-        const mws = window.mainWindowService;
-        return await mws.call('collect', ${JSON.stringify(params)});
-      })()`,
-    );
-
-    if (!result) {
-      throw new CollectionError(
-        "collect returned false — state machine was not in collecting state",
-      );
-    }
   }
 }
