@@ -13,6 +13,7 @@ import {
 import {
   handleCampaignCreate,
   handleCampaignDelete,
+  handleCampaignErase,
   handleCampaignGet,
   handleCampaignMoveNext,
   handleCampaignRetry,
@@ -26,6 +27,7 @@ import {
 import {
   registerCampaignCreate,
   registerCampaignDelete,
+  registerCampaignErase,
   registerCampaignGet,
   registerCampaignMoveNext,
   registerCampaignRetry,
@@ -99,19 +101,22 @@ describeE2E("Campaign execution and monitoring", () => {
     let firstActionId: number | undefined;
 
     afterAll(async () => {
-      // Cleanup: stop and archive the test campaign if it was created
+      // Cleanup: stop and permanently erase the test campaign
       if (campaignId !== undefined) {
+        const previousExitCode = process.exitCode;
         try {
+          process.exitCode = undefined;
           vi.spyOn(process.stdout, "write").mockReturnValue(true);
           try {
             await handleCampaignStop(campaignId, { cdpPort: port });
           } catch {
             // Already stopped — that's fine
           }
-          await handleCampaignDelete(campaignId, { cdpPort: port });
+          await handleCampaignErase(campaignId, { cdpPort: port });
         } catch {
           // Best-effort cleanup
         } finally {
+          process.exitCode = previousExitCode;
           vi.restoreAllMocks();
         }
       }
@@ -385,9 +390,6 @@ describeE2E("Campaign execution and monitoring", () => {
       expect(parsed.success).toBe(true);
       expect(parsed.campaignId).toBe(campaignId);
       expect(parsed.action).toBe("archived");
-
-      // Prevent afterAll cleanup from trying again
-      campaignId = undefined;
     }, 30_000);
   });
 
@@ -403,18 +405,18 @@ describeE2E("Campaign execution and monitoring", () => {
     let firstActionId: number | undefined;
 
     afterAll(async () => {
-      // Cleanup: stop and archive the test campaign if it was created
+      // Cleanup: stop and permanently erase the test campaign
       if (campaignId !== undefined) {
         const { server, getHandler } = createMockServer();
         registerCampaignStop(server);
-        registerCampaignDelete(server);
+        registerCampaignErase(server);
         try {
           try {
             await getHandler("campaign-stop")({ campaignId, cdpPort: port });
           } catch {
             // Already stopped — that's fine
           }
-          await getHandler("campaign-delete")({ campaignId, cdpPort: port });
+          await getHandler("campaign-erase")({ campaignId, cdpPort: port });
         } catch {
           // Best-effort cleanup
         }
@@ -714,9 +716,6 @@ describeE2E("Campaign execution and monitoring", () => {
       expect(parsed.success).toBe(true);
       expect(parsed.campaignId).toBe(campaignId);
       expect(parsed.action).toBe("archived");
-
-      // Prevent afterAll cleanup from trying again
-      campaignId = undefined;
     }, 30_000);
   });
 });

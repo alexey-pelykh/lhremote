@@ -515,7 +515,20 @@ export class CampaignRepository {
         // 5. Delete collection_people for exclude lists
         stmts.deleteCollectionPeopleByCampaign.run(campaignId, campaignId);
 
-        // 6. Delete campaign_versions (FK → campaigns)
+        // 6a. Delete campaign_version_actions (FK → campaign_versions)
+        //     This table exists only in real LH databases, not in test schemas.
+        try {
+          db.prepare(
+            `DELETE FROM campaign_version_actions
+             WHERE version_id IN (
+               SELECT id FROM campaign_versions WHERE campaign_id = ?
+             )`,
+          ).run(campaignId);
+        } catch {
+          // Table may not exist — safe to ignore
+        }
+
+        // 6b. Delete campaign_versions (FK → campaigns)
         stmts.deleteCampaignVersions.run(campaignId);
 
         // 7. Delete action_versions (FK → actions)

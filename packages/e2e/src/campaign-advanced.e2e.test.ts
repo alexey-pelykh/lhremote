@@ -11,41 +11,33 @@ import {
 
 // CLI handlers
 import {
-  handleCampaignAddAction,
   handleCampaignCreate,
-  handleCampaignDelete,
   handleCampaignErase,
   handleCampaignGet,
-  handleCampaignRemoveAction,
-  handleCampaignReorderActions,
+  handleCampaignUpdateAction,
 } from "@lhremote/cli/handlers";
 
 // MCP tool registration
 import {
-  registerCampaignAddAction,
   registerCampaignCreate,
-  registerCampaignDelete,
   registerCampaignErase,
   registerCampaignGet,
-  registerCampaignRemoveAction,
-  registerCampaignReorderActions,
+  registerCampaignUpdateAction,
 } from "@lhremote/mcp/tools";
 import { createMockServer } from "@lhremote/mcp/testing";
 
 /**
- * Campaign config with two actions so the LH instance tracks them in its
- * campaign version (required for reorder operations).
+ * Campaign config with one action so we have an action to update.
  */
 const TEST_CAMPAIGN_YAML = `
 version: "1"
-name: E2E Action Management Campaign
-description: Created by E2E campaign action management tests
+name: E2E Campaign Advanced
+description: Created by E2E campaign advanced tests
 actions:
   - type: VisitAndExtract
-  - type: InvitePerson
 `.trimStart();
 
-describeE2E("Campaign action management", () => {
+describeE2E("Campaign advanced operations", () => {
   let app: AppService;
   let port: number;
   let accountId: number;
@@ -55,7 +47,7 @@ describeE2E("Campaign action management", () => {
     app = launched.app;
     port = launched.port;
 
-    // Start an account instance — required by remove/reorder operations
+    // Start an account instance — required by campaign operations
     accountId = await resolveAccountId(port);
 
     const launcher = new LauncherService(port);
@@ -88,15 +80,11 @@ describeE2E("Campaign action management", () => {
     /** Campaign ID created during the test — used across sequential steps. */
     let campaignId: number | undefined;
 
-    /** Action IDs from the two actions created via YAML (instance-tracked). */
-    let firstActionId: number | undefined;
-    let secondActionId: number | undefined;
-
-    /** Action ID added via campaign-add-action (DB-only). */
-    let addedActionId: number | undefined;
+    /** Action ID from the action created via YAML. */
+    let actionId: number | undefined;
 
     afterAll(async () => {
-      // Cleanup: permanently erase the test campaign
+      // Cleanup: permanently erase the test campaign if it was not already erased
       if (campaignId !== undefined) {
         const previousExitCode = process.exitCode;
         try {
@@ -121,7 +109,7 @@ describeE2E("Campaign action management", () => {
       vi.restoreAllMocks();
     });
 
-    it("campaign-create creates a test campaign with two actions", async () => {
+    it("campaign-create creates a test campaign with one action", async () => {
       const stdoutSpy = vi
         .spyOn(process.stdout, "write")
         .mockReturnValue(true);
@@ -147,11 +135,11 @@ describeE2E("Campaign action management", () => {
       expect(parsed.id).toBeGreaterThan(0);
       campaignId = parsed.id;
 
-      expect(parsed.name).toBe("E2E Action Management Campaign");
+      expect(parsed.name).toBe("E2E Campaign Advanced");
       expect(parsed.state).toBe("paused");
     }, 30_000);
 
-    it("campaign-get retrieves actions created with the campaign", async () => {
+    it("campaign-get retrieves the action created with the campaign", async () => {
       assertDefined(campaignId, "campaign-create must run first");
 
       const stdoutSpy = vi
@@ -172,28 +160,24 @@ describeE2E("Campaign action management", () => {
       };
 
       expect(parsed.id).toBe(campaignId);
-      expect(parsed.actions.length).toBeGreaterThanOrEqual(2);
+      expect(parsed.actions.length).toBeGreaterThanOrEqual(1);
 
-      // Capture the action IDs from the campaign creation
       const visitAction = parsed.actions.find((a) => a.config.actionType === "VisitAndExtract");
-      const connectAction = parsed.actions.find((a) => a.config.actionType === "InvitePerson");
       assertDefined(visitAction, "VisitAndExtract action not found");
-      assertDefined(connectAction, "InvitePerson action not found");
 
-      firstActionId = visitAction.id;
-      secondActionId = connectAction.id;
+      actionId = visitAction.id;
     }, 30_000);
 
-    it("campaign-add-action adds a third action", async () => {
+    it("campaign-update-action updates the action name", async () => {
       assertDefined(campaignId, "campaign-create must run first");
+      assertDefined(actionId, "campaign-get must run first");
 
       const stdoutSpy = vi
         .spyOn(process.stdout, "write")
         .mockReturnValue(true);
 
-      await handleCampaignAddAction(campaignId, {
-        name: "E2E Added Action",
-        actionType: "VisitAndExtract",
+      await handleCampaignUpdateAction(campaignId, actionId, {
+        name: "Updated Visit Action",
         cdpPort: port,
         json: true,
       });
@@ -208,29 +192,24 @@ describeE2E("Campaign action management", () => {
         id: number;
         campaignId: number;
         name: string;
-        config: { actionType: string };
       };
 
-      expect(parsed.id).toBeGreaterThan(0);
-      addedActionId = parsed.id;
-
+      expect(parsed.id).toBe(actionId);
       expect(parsed.campaignId).toBe(campaignId);
-      expect(parsed.name).toBe("E2E Added Action");
-      expect(parsed.config.actionType).toBe("VisitAndExtract");
+      expect(parsed.name).toBe("Updated Visit Action");
     }, 30_000);
 
-    it("campaign-reorder-actions swaps the two initial actions", async () => {
+    it("campaign-update-action updates coolDown and maxResults", async () => {
       assertDefined(campaignId, "campaign-create must run first");
-      assertDefined(firstActionId, "campaign-get must run first");
-      assertDefined(secondActionId, "campaign-get must run first");
+      assertDefined(actionId, "campaign-get must run first");
 
       const stdoutSpy = vi
         .spyOn(process.stdout, "write")
         .mockReturnValue(true);
 
-      // Reorder: put secondActionId before firstActionId
-      await handleCampaignReorderActions(campaignId, {
-        actionIds: `${String(secondActionId)},${String(firstActionId)}`,
+      await handleCampaignUpdateAction(campaignId, actionId, {
+        coolDown: 5000,
+        maxResults: 10,
         cdpPort: port,
         json: true,
       });
@@ -242,34 +221,26 @@ describeE2E("Campaign action management", () => {
         .map((call) => String(call[0]))
         .join("");
       const parsed = JSON.parse(output) as {
-        success: boolean;
-        campaignId: number;
-        actions: { id: number; name: string; config: { actionType: string } }[];
+        id: number;
+        config: {
+          coolDown: number;
+          maxActionResultsPerIteration: number;
+        };
       };
 
-      expect(parsed.success).toBe(true);
-      expect(parsed.campaignId).toBe(campaignId);
-
-      // Verify the response contains both actions (DB returns ORDER BY id,
-      // not chain order, so we only check presence — not position)
-      expect(parsed.actions.length).toBeGreaterThanOrEqual(2);
-      const actionIds = parsed.actions.map((a) => a.id);
-      expect(actionIds).toContain(firstActionId);
-      expect(actionIds).toContain(secondActionId);
+      expect(parsed.id).toBe(actionId);
+      expect(parsed.config.coolDown).toBe(5000);
+      expect(parsed.config.maxActionResultsPerIteration).toBe(10);
     }, 30_000);
 
-    it("campaign-remove-action removes the added action", async () => {
+    it("campaign-erase permanently deletes the campaign", async () => {
       assertDefined(campaignId, "campaign-create must run first");
-      assertDefined(addedActionId, "campaign-add-action must run first");
 
       const stdoutSpy = vi
         .spyOn(process.stdout, "write")
         .mockReturnValue(true);
 
-      await handleCampaignRemoveAction(campaignId, addedActionId, {
-        cdpPort: port,
-        json: true,
-      });
+      await handleCampaignErase(campaignId, { cdpPort: port, json: true });
 
       expect(process.exitCode).toBeUndefined();
       expect(stdoutSpy).toHaveBeenCalled();
@@ -280,39 +251,13 @@ describeE2E("Campaign action management", () => {
       const parsed = JSON.parse(output) as {
         success: boolean;
         campaignId: number;
-        removedActionId: number;
       };
 
       expect(parsed.success).toBe(true);
       expect(parsed.campaignId).toBe(campaignId);
-      expect(parsed.removedActionId).toBe(addedActionId);
-    }, 30_000);
 
-    it("campaign-delete archives the test campaign", async () => {
-      assertDefined(campaignId, "campaign-create must run first");
-
-      const stdoutSpy = vi
-        .spyOn(process.stdout, "write")
-        .mockReturnValue(true);
-
-      await handleCampaignDelete(campaignId, { cdpPort: port, json: true });
-
-      expect(process.exitCode).toBeUndefined();
-      expect(stdoutSpy).toHaveBeenCalled();
-
-      const output = stdoutSpy.mock.calls
-        .map((call) => String(call[0]))
-        .join("");
-      const parsed = JSON.parse(output) as {
-        success: boolean;
-        campaignId: number;
-        action: string;
-      };
-
-      expect(parsed.success).toBe(true);
-      expect(parsed.campaignId).toBe(campaignId);
-      expect(parsed.action).toBe("archived");
-
+      // Prevent afterAll cleanup from trying again
+      campaignId = undefined;
     }, 30_000);
   });
 
@@ -324,15 +269,11 @@ describeE2E("Campaign action management", () => {
     /** Campaign ID created during the test — used across sequential steps. */
     let campaignId: number | undefined;
 
-    /** Action IDs from the two actions created via YAML (instance-tracked). */
-    let firstActionId: number | undefined;
-    let secondActionId: number | undefined;
-
-    /** Action ID added via campaign-add-action (DB-only). */
-    let addedActionId: number | undefined;
+    /** Action ID from the action created via YAML. */
+    let actionId: number | undefined;
 
     afterAll(async () => {
-      // Cleanup: permanently erase the test campaign
+      // Cleanup: permanently erase the test campaign if it was not already erased
       if (campaignId !== undefined) {
         const { server, getHandler } = createMockServer();
         registerCampaignErase(server);
@@ -344,7 +285,7 @@ describeE2E("Campaign action management", () => {
       }
     });
 
-    it("campaign-create tool creates a test campaign with two actions", async () => {
+    it("campaign-create tool creates a test campaign with one action", async () => {
       const { server, getHandler } = createMockServer();
       registerCampaignCreate(server);
 
@@ -372,11 +313,11 @@ describeE2E("Campaign action management", () => {
       expect(parsed.id).toBeGreaterThan(0);
       campaignId = parsed.id;
 
-      expect(parsed.name).toBe("E2E Action Management Campaign");
+      expect(parsed.name).toBe("E2E Campaign Advanced");
       expect(parsed.state).toBe("paused");
     }, 30_000);
 
-    it("campaign-get tool retrieves actions created with the campaign", async () => {
+    it("campaign-get tool retrieves the action created with the campaign", async () => {
       assertDefined(campaignId, "campaign-create must run first");
 
       const { server, getHandler } = createMockServer();
@@ -402,29 +343,26 @@ describeE2E("Campaign action management", () => {
       };
 
       expect(parsed.id).toBe(campaignId);
-      expect(parsed.actions.length).toBeGreaterThanOrEqual(2);
+      expect(parsed.actions.length).toBeGreaterThanOrEqual(1);
 
-      // Capture the action IDs from the campaign creation
       const visitAction = parsed.actions.find((a) => a.config.actionType === "VisitAndExtract");
-      const connectAction = parsed.actions.find((a) => a.config.actionType === "InvitePerson");
       assertDefined(visitAction, "VisitAndExtract action not found");
-      assertDefined(connectAction, "InvitePerson action not found");
 
-      firstActionId = visitAction.id;
-      secondActionId = connectAction.id;
+      actionId = visitAction.id;
     }, 30_000);
 
-    it("campaign-add-action tool adds a third action", async () => {
+    it("campaign-update-action tool updates the action name", async () => {
       assertDefined(campaignId, "campaign-create must run first");
+      assertDefined(actionId, "campaign-get must run first");
 
       const { server, getHandler } = createMockServer();
-      registerCampaignAddAction(server);
+      registerCampaignUpdateAction(server);
 
-      const handler = getHandler("campaign-add-action");
+      const handler = getHandler("campaign-update-action");
       const result = (await handler({
         campaignId,
-        name: "E2E Added Action",
-        actionType: "VisitAndExtract",
+        actionId,
+        name: "Updated Visit Action",
         cdpPort: port,
       })) as {
         isError?: boolean;
@@ -440,29 +378,26 @@ describeE2E("Campaign action management", () => {
         id: number;
         campaignId: number;
         name: string;
-        config: { actionType: string };
       };
 
-      expect(parsed.id).toBeGreaterThan(0);
-      addedActionId = parsed.id;
-
+      expect(parsed.id).toBe(actionId);
       expect(parsed.campaignId).toBe(campaignId);
-      expect(parsed.name).toBe("E2E Added Action");
-      expect(parsed.config.actionType).toBe("VisitAndExtract");
+      expect(parsed.name).toBe("Updated Visit Action");
     }, 30_000);
 
-    it("campaign-reorder-actions tool swaps the two initial actions", async () => {
+    it("campaign-update-action tool updates coolDown and maxResults", async () => {
       assertDefined(campaignId, "campaign-create must run first");
-      assertDefined(firstActionId, "campaign-get must run first");
-      assertDefined(secondActionId, "campaign-get must run first");
+      assertDefined(actionId, "campaign-get must run first");
 
       const { server, getHandler } = createMockServer();
-      registerCampaignReorderActions(server);
+      registerCampaignUpdateAction(server);
 
-      const handler = getHandler("campaign-reorder-actions");
+      const handler = getHandler("campaign-update-action");
       const result = (await handler({
         campaignId,
-        actionIds: [secondActionId, firstActionId],
+        actionId,
+        coolDown: 5000,
+        maxActionResultsPerIteration: 10,
         cdpPort: port,
       })) as {
         isError?: boolean;
@@ -475,62 +410,25 @@ describeE2E("Campaign action management", () => {
       const parsed = JSON.parse(
         (result.content[0] as { text: string }).text,
       ) as {
-        success: boolean;
-        campaignId: number;
-        actions: { id: number; name: string; config: { actionType: string } }[];
+        id: number;
+        config: {
+          coolDown: number;
+          maxActionResultsPerIteration: number;
+        };
       };
 
-      expect(parsed.success).toBe(true);
-      expect(parsed.campaignId).toBe(campaignId);
-
-      // Verify the response contains both actions (DB returns ORDER BY id,
-      // not chain order, so we only check presence — not position)
-      expect(parsed.actions.length).toBeGreaterThanOrEqual(2);
-      const actionIds = parsed.actions.map((a) => a.id);
-      expect(actionIds).toContain(firstActionId);
-      expect(actionIds).toContain(secondActionId);
+      expect(parsed.id).toBe(actionId);
+      expect(parsed.config.coolDown).toBe(5000);
+      expect(parsed.config.maxActionResultsPerIteration).toBe(10);
     }, 30_000);
 
-    it("campaign-remove-action tool removes the added action", async () => {
-      assertDefined(campaignId, "campaign-create must run first");
-      assertDefined(addedActionId, "campaign-add-action must run first");
-
-      const { server, getHandler } = createMockServer();
-      registerCampaignRemoveAction(server);
-
-      const handler = getHandler("campaign-remove-action");
-      const result = (await handler({
-        campaignId,
-        actionId: addedActionId,
-        cdpPort: port,
-      })) as {
-        isError?: boolean;
-        content: { type: string; text: string }[];
-      };
-
-      expect(result.isError).toBeUndefined();
-      expect(result.content).toHaveLength(1);
-
-      const parsed = JSON.parse(
-        (result.content[0] as { text: string }).text,
-      ) as {
-        success: boolean;
-        campaignId: number;
-        removedActionId: number;
-      };
-
-      expect(parsed.success).toBe(true);
-      expect(parsed.campaignId).toBe(campaignId);
-      expect(parsed.removedActionId).toBe(addedActionId);
-    }, 30_000);
-
-    it("campaign-delete tool archives the test campaign", async () => {
+    it("campaign-erase tool permanently deletes the campaign", async () => {
       assertDefined(campaignId, "campaign-create must run first");
 
       const { server, getHandler } = createMockServer();
-      registerCampaignDelete(server);
+      registerCampaignErase(server);
 
-      const handler = getHandler("campaign-delete");
+      const handler = getHandler("campaign-erase");
       const result = (await handler({
         campaignId,
         cdpPort: port,
@@ -547,12 +445,13 @@ describeE2E("Campaign action management", () => {
       ) as {
         success: boolean;
         campaignId: number;
-        action: string;
       };
 
       expect(parsed.success).toBe(true);
       expect(parsed.campaignId).toBe(campaignId);
-      expect(parsed.action).toBe("archived");
+
+      // Prevent afterAll cleanup from trying again
+      campaignId = undefined;
     }, 30_000);
   });
 });
