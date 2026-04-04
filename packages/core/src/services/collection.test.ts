@@ -46,15 +46,14 @@ describe("CollectionService", () => {
       mockEvaluateUI
         .mockResolvedValueOnce("idle")  // getRunnerState
         .mockResolvedValueOnce(true)    // canCollect
-        .mockResolvedValueOnce(true)    // prepareCollecting
         .mockResolvedValueOnce(true);   // collect
 
-      await service.collect(SEARCH_URL, 1);
+      await service.collect(SEARCH_URL, 1, 10);
 
       // Navigation via LinkedIn webview
       expect(mockNavigateLinkedIn).toHaveBeenCalledWith(SEARCH_URL);
 
-      expect(mockEvaluateUI).toHaveBeenCalledTimes(4);
+      expect(mockEvaluateUI).toHaveBeenCalledTimes(3);
 
       // 1. Runner state check
       const stateExpr = mockEvaluateUI.mock.calls[0]?.[0] as string;
@@ -65,71 +64,45 @@ describe("CollectionService", () => {
       expect(canCollectExpr).toContain("canCollect");
       expect(canCollectExpr).toContain("search-page");
 
-      // 3. prepareCollecting — uses internal kebab-case type
-      const prepareExpr = mockEvaluateUI.mock.calls[2]?.[0] as string;
-      expect(prepareExpr).toContain("prepareCollecting");
-      expect(prepareExpr).toContain("search-page");
-      expect(prepareExpr).toContain("AutoCollectPeople");
-
-      // 4. collect — includes campaignId
-      const collectExpr = mockEvaluateUI.mock.calls[3]?.[0] as string;
+      // 3. collect — uses internal kebab-case type as first arg, config as second
+      const collectExpr = mockEvaluateUI.mock.calls[2]?.[0] as string;
       expect(collectExpr).toContain("mws.call('collect'");
+      expect(collectExpr).toContain("search-page");
       expect(collectExpr).toContain('"campaignId":1');
+      expect(collectExpr).toContain('"actionId":10');
     });
 
-    it("passes limit, maxPages, pageSize to collect call", async () => {
+    it("passes actionId and target in collect config", async () => {
       mockEvaluateUI
         .mockResolvedValueOnce("idle")
         .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(true)
         .mockResolvedValueOnce(true);
 
-      await service.collect(SEARCH_URL, 1, {
-        limit: 100,
-        maxPages: 5,
-        pageSize: 25,
-      });
+      await service.collect(SEARCH_URL, 1, 10);
 
-      const collectExpr = mockEvaluateUI.mock.calls[3]?.[0] as string;
-      expect(collectExpr).toContain('"limit":100');
-      expect(collectExpr).toContain('"maxPages":5');
-      expect(collectExpr).toContain('"pageSize":25');
-    });
-
-    it("omits undefined options from collect call", async () => {
-      mockEvaluateUI
-        .mockResolvedValueOnce("idle")
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(true);
-
-      await service.collect(SEARCH_URL, 1, { limit: 50 });
-
-      const collectExpr = mockEvaluateUI.mock.calls[3]?.[0] as string;
-      expect(collectExpr).toContain('"limit":50');
-      expect(collectExpr).not.toContain("maxPages");
-      expect(collectExpr).not.toContain("pageSize");
+      const collectExpr = mockEvaluateUI.mock.calls[2]?.[0] as string;
+      expect(collectExpr).toContain('"actionId":10');
+      expect(collectExpr).toContain('"target":"target"');
     });
 
     it("detects OrganizationPeople source type from company URL", async () => {
       mockEvaluateUI
         .mockResolvedValueOnce("idle")
         .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(true)
         .mockResolvedValueOnce(true);
 
-      await service.collect(ORG_PEOPLE_URL, 1);
+      await service.collect(ORG_PEOPLE_URL, 1, 10);
 
       const canCollectExpr = mockEvaluateUI.mock.calls[1]?.[0] as string;
       expect(canCollectExpr).toContain("organization-people");
 
-      const prepareExpr = mockEvaluateUI.mock.calls[2]?.[0] as string;
-      expect(prepareExpr).toContain("organization-people");
+      const collectExpr = mockEvaluateUI.mock.calls[2]?.[0] as string;
+      expect(collectExpr).toContain("organization-people");
     });
 
     it("throws CollectionError for unrecognized source URL", async () => {
       const error = await service
-        .collect("https://www.linkedin.com/feed/", 1)
+        .collect("https://www.linkedin.com/feed/", 1, 10)
         .catch((e: unknown) => e);
 
       expect(error).toBeInstanceOf(CollectionError);
@@ -143,7 +116,7 @@ describe("CollectionService", () => {
       mockEvaluateUI.mockResolvedValueOnce("campaigns");
 
       await expect(
-        service.collect(SEARCH_URL, 1),
+        service.collect(SEARCH_URL, 1, 10),
       ).rejects.toThrow(CollectionBusyError);
 
       // Only the runner state check should be made
@@ -154,7 +127,7 @@ describe("CollectionService", () => {
       mockEvaluateUI.mockResolvedValueOnce("campaigns");
 
       try {
-        await service.collect(SEARCH_URL, 1);
+        await service.collect(SEARCH_URL, 1, 10);
         expect.unreachable("should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(CollectionBusyError);
@@ -177,18 +150,16 @@ describe("CollectionService", () => {
           .mockResolvedValueOnce(false)     // canCollect attempt 1
           .mockResolvedValueOnce(false)     // canCollect attempt 2
           .mockResolvedValueOnce(true)      // canCollect attempt 3 — success
-          .mockResolvedValueOnce(true)      // prepareCollecting
           .mockResolvedValueOnce(true);     // collect
 
-        const promise = service.collect(SEARCH_URL, 1);
+        const promise = service.collect(SEARCH_URL, 1, 10);
         await vi.advanceTimersByTimeAsync(2000);
         await promise;
 
         // canCollect was called 3 times before success
         const canCollectCalls = mockEvaluateUI.mock.calls.filter(
           (call) =>
-            (call[0] as string).includes("canCollect") &&
-            !(call[0] as string).includes("prepareCollecting"),
+            (call[0] as string).includes("canCollect"),
         );
         expect(canCollectCalls).toHaveLength(3);
       });
@@ -197,18 +168,16 @@ describe("CollectionService", () => {
         mockEvaluateUI
           .mockResolvedValueOnce("idle")   // getRunnerState
           .mockResolvedValueOnce(true)      // canCollect — immediate success
-          .mockResolvedValueOnce(true)      // prepareCollecting
           .mockResolvedValueOnce(true);     // collect
 
-        const promise = service.collect(SEARCH_URL, 1);
+        const promise = service.collect(SEARCH_URL, 1, 10);
         await vi.advanceTimersByTimeAsync(0);
         await promise;
 
         // Only 1 canCollect call — no polling needed
         const canCollectCalls = mockEvaluateUI.mock.calls.filter(
           (call) =>
-            (call[0] as string).includes("canCollect") &&
-            !(call[0] as string).includes("prepareCollecting"),
+            (call[0] as string).includes("canCollect"),
         );
         expect(canCollectCalls).toHaveLength(1);
       });
@@ -219,7 +188,7 @@ describe("CollectionService", () => {
           .mockResolvedValue(false);        // canCollect always returns false
 
         // Attach catch before advancing timers to avoid unhandled rejection
-        const errorPromise = service.collect(SEARCH_URL, 1).catch((e: unknown) => e);
+        const errorPromise = service.collect(SEARCH_URL, 1, 10).catch((e: unknown) => e);
         await vi.advanceTimersByTimeAsync(11_000);
 
         const error = await errorPromise;
@@ -236,7 +205,7 @@ describe("CollectionService", () => {
       mockEvaluateUI.mockResolvedValueOnce("idle"); // getRunnerState
       mockNavigateLinkedIn.mockRejectedValueOnce(new Error("Page.navigate timeout"));
 
-      const error = await service.collect(SEARCH_URL, 1).catch((e: unknown) => e);
+      const error = await service.collect(SEARCH_URL, 1, 10).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CollectionError);
       expect((error as CollectionError).message).toContain("Failed to navigate to source URL");
       expect((error as CollectionError).cause).toBeInstanceOf(Error);
@@ -245,63 +214,16 @@ describe("CollectionService", () => {
       expect(mockEvaluateUI).toHaveBeenCalledTimes(1);
     });
 
-    it("throws CollectionError when prepareCollecting returns false", async () => {
-      mockEvaluateUI
-        .mockResolvedValueOnce("idle")
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(false); // prepareCollecting returns false
-
-      await expect(
-        service.collect(SEARCH_URL, 1),
-      ).rejects.toThrow(CollectionError);
-    });
-
-    it("throws CollectionError when collect returns false", async () => {
-      mockEvaluateUI
-        .mockResolvedValueOnce("idle")
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(false); // collect returns false
-
-      await expect(
-        service.collect(SEARCH_URL, 1),
-      ).rejects.toThrow(CollectionError);
-    });
-
-    it("wraps CDP errors in CollectionError for prepareCollecting", async () => {
-      mockEvaluateUI
-        .mockResolvedValueOnce("idle")
-        .mockResolvedValueOnce(true)
-        .mockRejectedValueOnce(new Error("CDP timeout"));
-
-      const error = await service.collect(SEARCH_URL, 1).catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(CollectionError);
-      expect((error as CollectionError).message).toContain("Failed to prepare collection");
-      expect((error as CollectionError).cause).toBeInstanceOf(Error);
-    });
-
     it("wraps CDP errors in CollectionError for collect", async () => {
       mockEvaluateUI
         .mockResolvedValueOnce("idle")
         .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(true)
         .mockRejectedValueOnce(new Error("CDP timeout"));
 
-      const error = await service.collect(SEARCH_URL, 1).catch((e: unknown) => e);
+      const error = await service.collect(SEARCH_URL, 1, 10).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CollectionError);
       expect((error as CollectionError).message).toContain("Failed to start collection");
       expect((error as CollectionError).cause).toBeInstanceOf(Error);
-    });
-
-    it("does not wrap CollectionError from prepareCollecting", async () => {
-      mockEvaluateUI
-        .mockResolvedValueOnce("idle")
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(false); // triggers CollectionError inside prepareCollecting
-
-      const error = await service.collect(SEARCH_URL, 1).catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(CollectionError);
-      expect((error as CollectionError).message).toContain("prepareCollecting returned false");
     });
   });
 

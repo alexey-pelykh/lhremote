@@ -6,6 +6,7 @@ import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { CollectionService } from "../services/collection.js";
 import { CollectionError } from "../services/errors.js";
+import { CampaignRepository } from "../db/index.js";
 import { detectSourceType, validateSourceType } from "../services/source-type-registry.js";
 import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
@@ -73,13 +74,26 @@ export async function collectPeople(
 
   const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
-  return withInstanceDatabase(cdpPort, accountId, async ({ instance }) => {
+  return withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
+    // Look up the first action in the campaign — the collect IPC call
+    // requires an actionId to associate collected people with.
+    const campaignRepo = new CampaignRepository(db);
+    const actions = campaignRepo.getCampaignActions(input.campaignId);
+    if (actions.length === 0) {
+      throw new CollectionError(
+        `Campaign ${String(input.campaignId)} has no actions — cannot collect people`,
+      );
+    }
+    const firstAction = actions[0];
+    if (!firstAction) {
+      throw new CollectionError(
+        `Campaign ${String(input.campaignId)} has no actions — cannot collect people`,
+      );
+    }
+    const actionId = firstAction.id;
+
     const collectionService = new CollectionService(instance);
-    await collectionService.collect(input.sourceUrl, input.campaignId, {
-      ...(input.limit !== undefined && { limit: input.limit }),
-      ...(input.maxPages !== undefined && { maxPages: input.maxPages }),
-      ...(input.pageSize !== undefined && { pageSize: input.pageSize }),
-    });
+    await collectionService.collect(input.sourceUrl, input.campaignId, actionId);
 
     return {
       success: true as const,

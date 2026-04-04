@@ -15,11 +15,16 @@ vi.mock("../services/collection.js", () => ({
   CollectionService: vi.fn(),
 }));
 
+vi.mock("../db/index.js", () => ({
+  CampaignRepository: vi.fn(),
+}));
+
 import type { InstanceDatabaseContext } from "../services/instance-context.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { CollectionService } from "../services/collection.js";
 import { CollectionError } from "../services/errors.js";
+import { CampaignRepository } from "../db/index.js";
 import { collectPeople } from "./collect-people.js";
 
 function setupMocks() {
@@ -38,6 +43,12 @@ function setupMocks() {
     return {
       collect: vi.fn().mockResolvedValue(undefined),
     } as unknown as CollectionService;
+  });
+
+  vi.mocked(CampaignRepository).mockImplementation(function () {
+    return {
+      getCampaignActions: vi.fn().mockReturnValue([{ id: 10, campaignId: 42, name: "VisitAndExtract" }]),
+    } as unknown as CampaignRepository;
   });
 }
 
@@ -100,7 +111,7 @@ describe("collectPeople", () => {
     ).rejects.toThrow(CollectionError);
   });
 
-  it("passes collection options to CollectionService.collect", async () => {
+  it("passes campaignId and actionId to CollectionService.collect", async () => {
     const mockCollect = vi.fn().mockResolvedValue(undefined);
     vi.mocked(resolveAccount).mockResolvedValue(1);
     vi.mocked(withInstanceDatabase).mockImplementation(
@@ -114,20 +125,22 @@ describe("collectPeople", () => {
     vi.mocked(CollectionService).mockImplementation(function () {
       return { collect: mockCollect } as unknown as CollectionService;
     });
+    vi.mocked(CampaignRepository).mockImplementation(function () {
+      return {
+        getCampaignActions: vi.fn().mockReturnValue([{ id: 10, campaignId: 42, name: "VisitAndExtract" }]),
+      } as unknown as CampaignRepository;
+    });
 
     await collectPeople({
       sourceUrl: "https://www.linkedin.com/search/results/people/",
       campaignId: 42,
-      limit: 100,
-      maxPages: 5,
-      pageSize: 25,
       cdpPort: 9222,
     });
 
     expect(mockCollect).toHaveBeenCalledWith(
       "https://www.linkedin.com/search/results/people/",
       42,
-      { limit: 100, maxPages: 5, pageSize: 25 },
+      10,
     );
   });
 
@@ -197,6 +210,11 @@ describe("collectPeople", () => {
           db: {},
         } as unknown as InstanceDatabaseContext),
     );
+    vi.mocked(CampaignRepository).mockImplementation(function () {
+      return {
+        getCampaignActions: vi.fn().mockReturnValue([{ id: 10, campaignId: 42, name: "VisitAndExtract" }]),
+      } as unknown as CampaignRepository;
+    });
     vi.mocked(CollectionService).mockImplementation(function () {
       return {
         collect: vi.fn().mockRejectedValue(
