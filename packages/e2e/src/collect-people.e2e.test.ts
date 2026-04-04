@@ -13,6 +13,7 @@ import {
 import {
   handleCampaignCreate,
   handleCampaignDelete,
+  handleCampaignErase,
   handleCampaignListPeople,
   handleCampaignStatus,
   handleCollectPeople,
@@ -22,6 +23,7 @@ import {
 import {
   registerCampaignCreate,
   registerCampaignDelete,
+  registerCampaignErase,
   registerCampaignListPeople,
   registerCollectPeople,
 } from "@lhremote/mcp/tools";
@@ -157,13 +159,13 @@ describeE2E("collect-people operation", () => {
     let campaignId: number | undefined;
 
     afterAll(async () => {
-      // Cleanup: archive the test campaign if it was created but not deleted
+      // Cleanup: permanently erase the test campaign
       if (campaignId !== undefined) {
         const previousExitCode = process.exitCode;
         try {
           process.exitCode = undefined;
           vi.spyOn(process.stdout, "write").mockReturnValue(true);
-          await handleCampaignDelete(campaignId, { cdpPort: port });
+          await handleCampaignErase(campaignId, { cdpPort: port });
         } catch {
           // Best-effort cleanup
         } finally {
@@ -314,9 +316,6 @@ describeE2E("collect-people operation", () => {
       expect(parsed.success).toBe(true);
       expect(parsed.campaignId).toBe(campaignId);
       expect(parsed.action).toBe("archived");
-
-      // Prevent afterAll cleanup from trying again
-      campaignId = undefined;
     }, 30_000);
   });
 
@@ -329,12 +328,12 @@ describeE2E("collect-people operation", () => {
     let campaignId: number | undefined;
 
     afterAll(async () => {
-      // Cleanup: archive the test campaign if it was created but not deleted
+      // Cleanup: permanently erase the test campaign
       if (campaignId !== undefined) {
         const { server, getHandler } = createMockServer();
-        registerCampaignDelete(server);
+        registerCampaignErase(server);
         try {
-          await getHandler("campaign-delete")({ campaignId, cdpPort: port });
+          await getHandler("campaign-erase")({ campaignId, cdpPort: port });
         } catch {
           // Best-effort cleanup
         }
@@ -485,9 +484,6 @@ describeE2E("collect-people operation", () => {
       expect(parsed.success).toBe(true);
       expect(parsed.campaignId).toBe(campaignId);
       expect(parsed.action).toBe("archived");
-
-      // Prevent afterAll cleanup from trying again
-      campaignId = undefined;
     }, 30_000);
   });
 });
