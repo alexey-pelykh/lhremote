@@ -489,6 +489,10 @@ export class CampaignService {
    * Returns the IDs of campaigns that were unpaused and are now paused,
    * so the caller can restore them later via {@link unpauseCampaigns}.
    */
+  async pauseAll(): Promise<number[]> {
+    return this.pauseAllExcept(-1);
+  }
+
   async pauseAllExcept(excludeCampaignId: number): Promise<number[]> {
     const campaigns = this.campaignRepo.listCampaigns();
     const paused: number[] = [];
