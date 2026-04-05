@@ -6,8 +6,20 @@ import { resolve } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { describeE2E, launchApp, quitApp } from "../testing/e2e-helpers.js";
-import { AppService } from "./app.js";
+import {
+  describeE2E,
+  forceStopInstance,
+  getE2EPersonId,
+  launchApp,
+  quitApp,
+  resolveAccountId,
+  retryAsync,
+} from "@lhremote/core/testing";
+import {
+  type AppService,
+  LauncherService,
+  startInstanceWithRecovery,
+} from "@lhremote/core";
 
 /**
  * Whether the `claude` CLI is available on the system PATH.
@@ -24,7 +36,7 @@ const claudeAvailable = (() => {
 /** Absolute path to the compiled MCP server entry point. */
 const mcpServerPath = resolve(
   import.meta.dirname,
-  "../../../mcp/dist/index.js",
+  "../../mcp/dist/index.js",
 );
 
 interface ClaudeJsonResult {
@@ -73,20 +85,36 @@ function runClaude(prompt: string, timeoutMs = 60_000): ClaudeJsonResult {
 }
 
 describeE2E("MCP tools via Claude CLI", () => {
-  // Second gate: skip everything if `claude` CLI is not installed
   const skipClaude = !claudeAvailable;
 
-  // Shared state across all tests
   let app: AppService;
+  let port: number;
+  let accountId: number;
 
   beforeAll(async () => {
     const launched = await launchApp();
     app = launched.app;
-  }, 60_000);
+    port = launched.port;
+    accountId = await resolveAccountId(port);
+
+    const launcher = new LauncherService(port);
+    await retryAsync(() => launcher.connect(), { retries: 3, delay: 1_000 });
+    await startInstanceWithRecovery(launcher, accountId, port);
+    launcher.disconnect();
+  }, 120_000);
 
   afterAll(async () => {
+    const launcher = new LauncherService(port);
+    try {
+      await launcher.connect();
+      await forceStopInstance(launcher, accountId, port);
+    } catch {
+      /* Best-effort */
+    } finally {
+      launcher.disconnect();
+    }
     await quitApp(app);
-  }, 30_000);
+  }, 60_000);
 
   describe.skipIf(skipClaude)("claude -p integration", () => {
     it(
@@ -99,7 +127,6 @@ describeE2E("MCP tools via Claude CLI", () => {
 
         expect(result.is_error).toBe(false);
         expect(result.num_turns).toBeGreaterThanOrEqual(2);
-        // The response should mention account data
         expect(result.result).toBeTruthy();
       },
       120_000,
@@ -115,7 +142,6 @@ describeE2E("MCP tools via Claude CLI", () => {
 
         expect(result.is_error).toBe(false);
         expect(result.num_turns).toBeGreaterThanOrEqual(2);
-        // The response should contain status information
         expect(result.result).toMatch(/launcher|reachable|instances|database/i);
       },
       120_000,
@@ -131,7 +157,6 @@ describeE2E("MCP tools via Claude CLI", () => {
 
         expect(result.is_error).toBe(false);
         expect(result.num_turns).toBeGreaterThanOrEqual(2);
-        // The response should contain profile fields
         expect(result.result).toMatch(/firstName|positions|skills/i);
       },
       120_000,
@@ -147,7 +172,6 @@ describeE2E("MCP tools via Claude CLI", () => {
 
         expect(result.is_error).toBe(false);
         expect(result.num_turns).toBeGreaterThanOrEqual(2);
-        // The response should contain conversation data
         expect(result.result).toMatch(/conversations|chatId|participants|messages/i);
       },
       120_000,
@@ -156,23 +180,16 @@ describeE2E("MCP tools via Claude CLI", () => {
     it(
       "scrape-messaging-history scrapes and returns stats",
       () => {
-        const personIdRaw = process.env.LHREMOTE_E2E_PERSON_ID;
-        expect(personIdRaw, "LHREMOTE_E2E_PERSON_ID must be set").toBeTruthy();
-        const personId = Number.parseInt(personIdRaw as string, 10);
-        expect(
-          Number.isInteger(personId) && personId > 0,
-          "LHREMOTE_E2E_PERSON_ID must be a positive integer",
-        ).toBe(true);
+        const personId = getE2EPersonId();
 
         const result = runClaude(
-          `Use the scrape-messaging-history tool with personIds [${personId}] to scrape messaging history. ` +
+          `Use the scrape-messaging-history tool with personIds [${String(personId)}] to scrape messaging history. ` +
           "Report the raw JSON from the tool response, nothing else.",
           300_000,
         );
 
         expect(result.is_error).toBe(false);
         expect(result.num_turns).toBeGreaterThanOrEqual(2);
-        // The response should contain scrape results with stats
         expect(result.result).toMatch(/ScrapeMessagingHistory|totalChats|totalMessages|stats/i);
       },
       360_000,
@@ -181,23 +198,16 @@ describeE2E("MCP tools via Claude CLI", () => {
     it(
       "check-replies checks for new replies and returns results",
       () => {
-        const personIdRaw = process.env.LHREMOTE_E2E_PERSON_ID;
-        expect(personIdRaw, "LHREMOTE_E2E_PERSON_ID must be set").toBeTruthy();
-        const personId = Number.parseInt(personIdRaw as string, 10);
-        expect(
-          Number.isInteger(personId) && personId > 0,
-          "LHREMOTE_E2E_PERSON_ID must be a positive integer",
-        ).toBe(true);
+        const personId = getE2EPersonId();
 
         const result = runClaude(
-          `Use the check-replies tool with personIds [${personId}] to check for new message replies. ` +
+          `Use the check-replies tool with personIds [${String(personId)}] to check for new message replies. ` +
           "Report the raw JSON from the tool response, nothing else.",
           180_000,
         );
 
         expect(result.is_error).toBe(false);
         expect(result.num_turns).toBeGreaterThanOrEqual(2);
-        // The response should contain reply check results
         expect(result.result).toMatch(/newMessages|totalNew|checkedAt/i);
       },
       240_000,
