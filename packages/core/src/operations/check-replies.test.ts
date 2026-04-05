@@ -62,9 +62,8 @@ const mockCampaignService = {
     runnerState: "idle",
     actionCounts: [{ queued: 0, processed: 0, successful: 2, failed: 0 }],
   }),
-  getRunnerState: vi.fn().mockResolvedValue("idle"),
+  pauseAll: vi.fn().mockResolvedValue([]),
   stopRunnerAndWaitForIdle: vi.fn().mockResolvedValue(undefined),
-  startRunner: vi.fn().mockResolvedValue(undefined),
   stop: vi.fn().mockResolvedValue(undefined),
   hardDelete: vi.fn(),
 };
@@ -320,41 +319,6 @@ describe("checkReplies", () => {
     await expect(
       checkReplies({ personIds: [100], cdpPort: 9222 }),
     ).rejects.toThrow("instance not running");
-  });
-
-  it("restores runner when it was active before execution", async () => {
-    setupMocks();
-    mockCampaignService.getRunnerState.mockResolvedValueOnce("campaigns");
-
-    await checkReplies({
-      personIds: [100, 200],
-      cdpPort: 9222,
-    });
-
-    expect(mockCampaignService.startRunner).toHaveBeenCalled();
-  });
-
-  it("does not restore runner when it was idle before execution", async () => {
-    setupMocks();
-
-    await checkReplies({
-      personIds: [100, 200],
-      cdpPort: 9222,
-    });
-
-    expect(mockCampaignService.startRunner).not.toHaveBeenCalled();
-  });
-
-  it("restores runner when stopRunnerAndWaitForIdle fails and runner was active", async () => {
-    setupMocks();
-    mockCampaignService.getRunnerState.mockResolvedValueOnce("campaigns");
-    mockCampaignService.stopRunnerAndWaitForIdle.mockRejectedValueOnce(new Error("timeout"));
-
-    await expect(
-      checkReplies({ personIds: [100, 200], cdpPort: 9222 }),
-    ).rejects.toThrow("timeout");
-
-    expect(mockCampaignService.startRunner).toHaveBeenCalled();
   });
 
   it("propagates MessageRepository errors", async () => {

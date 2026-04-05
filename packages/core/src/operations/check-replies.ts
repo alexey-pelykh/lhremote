@@ -62,12 +62,13 @@ export async function checkReplies(
       linkedInUrls.push(`https://www.linkedin.com/in/${publicId.externalId}`);
     }
 
-    let runnerWasActive = false;
     let campaign: { id: number } | undefined;
     let pausedCampaignIds: number[] = [];
     try {
-      // Capture runner state and stop if active to avoid SQLite lock contention
-      runnerWasActive = (await campaignService.getRunnerState()) !== "idle";
+      // Pause all campaigns so the runner has nothing left to pick up —
+      // otherwise stopRunnerAndWaitForIdle can time out because the
+      // runner keeps starting new actions from active campaigns.
+      pausedCampaignIds = await campaignService.pauseAll();
       await campaignService.stopRunnerAndWaitForIdle();
       // Create ephemeral campaign with CheckForReplies action
       campaign = await campaignService.create({
@@ -84,11 +85,6 @@ export async function checkReplies(
           },
         }],
       });
-
-      // Pause other campaigns if requested (restore in finally)
-      if (input.pauseOthers) {
-        pausedCampaignIds = await campaignService.pauseAllExcept(campaign.id);
-      }
 
       // Import target persons into campaign
       await campaignService.importPeopleFromUrls(campaign.id, linkedInUrls);
@@ -145,9 +141,9 @@ export async function checkReplies(
       if (pausedCampaignIds.length > 0) {
         try { await campaignService.unpauseCampaigns(pausedCampaignIds); } catch (e) { console.warn("Best-effort unpauseCampaigns failed:", errorMessage(e)); }
       }
-      if (runnerWasActive) {
-        try { await campaignService.startRunner(); } catch (e) { console.warn("Best-effort startRunner failed:", errorMessage(e)); }
-      }
+      // Runner is intentionally left stopped — restarting it immediately
+      // races with the next operation's pauseAll/stopRunner sequence and
+      // the runner may pick up a LinkedIn action before it can be stopped.
     }
   }, { instanceTimeout: CAMPAIGN_TIMEOUT, db: { readOnly: false } });
 }
