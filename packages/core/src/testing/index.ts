@@ -6,6 +6,7 @@ export {
   describeE2E,
   forceStopInstance,
   getE2EPersonId,
+  getE2EPostUrl,
   launchApp,
   type LaunchedApp,
   quitApp,

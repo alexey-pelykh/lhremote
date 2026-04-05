@@ -84,6 +84,7 @@ describe("executeEphemeralAction", () => {
       9222,
       1,
       expect.any(Function),
+      { db: { readOnly: false } },
     );
     expect(mockExecute).toHaveBeenCalledWith("Follow", 42, undefined, {});
     expect(result).toBe(MOCK_RESULT);

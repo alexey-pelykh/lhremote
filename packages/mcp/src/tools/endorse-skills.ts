@@ -42,14 +42,14 @@ export function registerEndorseSkills(server: McpServer): void {
         .describe("Archive the ephemeral campaign instead of deleting it"),
       ...cdpConnectionSchema,
     },
-    async ({ personId, url, skillNames, limit, skipIfNotEndorsable, keepCampaign, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personId, url, skillNames, limit, skipIfNotEndorsable, keepCampaign, cdpPort, cdpHost, allowRemote, accountId }) => {
       if ((personId == null) === (url == null)) {
         return mcpError("Exactly one of personId or url must be provided.");
       }
 
       try {
         const result = await endorseSkills({
-          personId, url, skillNames, limit, skipIfNotEndorsable, keepCampaign, cdpPort, cdpHost, allowRemote,
+          personId, url, skillNames, limit, skipIfNotEndorsable, keepCampaign, cdpPort, cdpHost, allowRemote, accountId,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

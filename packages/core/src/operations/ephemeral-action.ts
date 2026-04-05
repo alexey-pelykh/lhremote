@@ -45,5 +45,5 @@ export async function executeEphemeralAction(
     return ephemeral.execute(actionType, target, actionSettings, {
       ...(input.keepCampaign !== undefined && { keepCampaign: input.keepCampaign }),
     });
-  });
+  }, { db: { readOnly: false } });
 }

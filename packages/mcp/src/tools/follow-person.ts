@@ -36,14 +36,14 @@ export function registerFollowPerson(server: McpServer): void {
         .describe("Archive the ephemeral campaign instead of deleting it"),
       ...cdpConnectionSchema,
     },
-    async ({ personId, url, mode, skipIfUnfollowable, keepCampaign, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personId, url, mode, skipIfUnfollowable, keepCampaign, cdpPort, cdpHost, allowRemote, accountId }) => {
       if ((personId == null) === (url == null)) {
         return mcpError("Exactly one of personId or url must be provided.");
       }
 
       try {
         const result = await followPerson({
-          personId, url, mode, skipIfUnfollowable, keepCampaign, cdpPort, cdpHost, allowRemote,
+          personId, url, mode, skipIfUnfollowable, keepCampaign, cdpPort, cdpHost, allowRemote, accountId,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

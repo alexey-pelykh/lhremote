@@ -17,6 +17,7 @@ export async function handleVisitProfile(options: {
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
+  accountId?: number;
   json?: boolean;
 }): Promise<void> {
   if ((options.personId == null) === (options.url == null)) {
@@ -38,6 +39,7 @@ export async function handleVisitProfile(options: {
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      accountId: options.accountId,
     });
   } catch (error) {
     if (error instanceof InstanceNotRunningError) {

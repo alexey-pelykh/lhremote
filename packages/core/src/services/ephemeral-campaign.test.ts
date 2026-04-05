@@ -131,6 +131,7 @@ describe("EphemeralCampaignService", () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     mockEvaluateUI.mockResolvedValue(undefined);
+    mockListCampaigns.mockReturnValue([]);
 
     const instance = new InstanceService(9223);
     service = new EphemeralCampaignService(instance, {} as never);

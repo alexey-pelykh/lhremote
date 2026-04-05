@@ -11,7 +11,7 @@ import { ProfileRepository } from "../db/index.js";
 import { delay } from "../utils/delay.js";
 import type { InstanceService } from "./instance.js";
 import { CampaignService } from "./campaign.js";
-import { CampaignExecutionError, CampaignTimeoutError } from "./errors.js";
+import { CampaignExecutionError, CampaignTimeoutError, UIBlockedError } from "./errors.js";
 
 /** Default timeout for ephemeral action execution (5 minutes). */
 const DEFAULT_TIMEOUT = 300_000;
@@ -32,10 +32,12 @@ const CAMPAIGN_NAME_PREFIX = "[ephemeral]";
  * if `keepCampaign: true`).
  */
 export class EphemeralCampaignService {
+  private readonly instance: InstanceService;
   private readonly campaignService: CampaignService;
   private readonly profileRepo: ProfileRepository;
 
   constructor(instance: InstanceService, db: DatabaseClient) {
+    this.instance = instance;
     this.campaignService = new CampaignService(instance, db);
     this.profileRepo = new ProfileRepository(db);
   }
@@ -80,11 +82,15 @@ export class EphemeralCampaignService {
       ],
     });
 
+    // Step 3: Pause all other campaigns so the runner is free for us
+    const previouslyActive = await this.dismissAndRetry(
+      () => this.campaignService.pauseAllExcept(campaign.id),
+    );
+
     try {
-      // Step 3: Import target person
-      const importResult = await this.campaignService.importPeopleFromUrls(
-        campaign.id,
-        [resolved.linkedInUrl],
+      // Step 4: Import target person
+      const importResult = await this.dismissAndRetry(
+        () => this.campaignService.importPeopleFromUrls(campaign.id, [resolved.linkedInUrl]),
       );
 
       if (importResult.successful === 0 && importResult.alreadyInQueue === 0 && importResult.alreadyProcessed === 0) {
@@ -97,18 +103,20 @@ export class EphemeralCampaignService {
       // Resolve person ID if not yet known (URL-based target)
       const personId = resolved.personId ?? this.resolvePersonIdFromUrl(resolved.linkedInUrl);
 
-      // Step 4: Start campaign
-      await this.campaignService.start(campaign.id, []);
+      // Step 5: Start campaign
+      await this.dismissAndRetry(() => this.campaignService.start(campaign.id, []));
 
-      // Step 5: Poll for completion
+      // Step 6: Poll for completion
       await this.pollForCompletion(campaign.id, timeout, pollInterval);
 
-      // Step 6: Get results
-      const runResult = await this.campaignService.getResults(campaign.id);
+      // Step 7: Get results
+      const runResult = await this.dismissAndRetry(
+        () => this.campaignService.getResults(campaign.id),
+      );
       const results = runResult.results;
       const success = results.some((r) => r.result > 0);
 
-      // Step 7: Cleanup
+      // Step 8: Cleanup
       await this.cleanup(campaign.id, keepCampaign);
 
       return {
@@ -120,6 +128,9 @@ export class EphemeralCampaignService {
     } catch (error) {
       await this.cleanup(campaign.id, keepCampaign);
       throw error;
+    } finally {
+      // Restore previously active campaigns
+      await this.campaignService.unpauseCampaigns(previouslyActive);
     }
   }
 
@@ -204,7 +215,22 @@ export class EphemeralCampaignService {
     const deadline = Date.now() + timeout;
 
     while (Date.now() < deadline) {
-      const status = await this.campaignService.getStatus(campaignId);
+      let status;
+      try {
+        status = await this.campaignService.getStatus(campaignId);
+      } catch (error) {
+        if (error instanceof UIBlockedError) {
+          // Action may have produced a popup (e.g. "no endorsable skills").
+          // Dismiss and continue polling — the campaign may still complete.
+          await this.instance.dismissInstancePopups().catch(() => {});
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) break;
+          await delay(Math.min(pollInterval, remaining));
+          continue;
+        }
+        throw error;
+      }
+
       const counts = status.actionCounts[0];
 
       // Action complete when at least one person is successful or failed
@@ -226,6 +252,26 @@ export class EphemeralCampaignService {
       `Ephemeral action did not complete within ${String(timeout)}ms`,
       campaignId,
     );
+  }
+
+  /**
+   * Run an async operation, automatically dismissing UI popups on
+   * {@link UIBlockedError} and retrying up to 3 times.
+   */
+  private async dismissAndRetry<T>(fn: () => Promise<T>): Promise<T> {
+    const maxAttempts = 3;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (error instanceof UIBlockedError && attempt < maxAttempts) {
+          await this.instance.dismissInstancePopups().catch(() => {});
+          await delay(1_000);
+          continue;
+        }
+        throw error;
+      }
+    }
   }
 
   /**
