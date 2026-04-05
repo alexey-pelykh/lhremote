@@ -8,7 +8,6 @@ import {
   resolveLauncherPort,
   startInstanceWithRecovery,
 } from "@lhremote/core";
-import { z } from "zod";
 import { buildCdpOptions, cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#start-instance | start-instance} MCP tool. */
@@ -17,14 +16,6 @@ export function registerStartInstance(server: McpServer): void {
     "start-instance",
     "Start a LinkedHelper instance for a LinkedIn account. Required before campaign or query operations.",
     {
-      accountId: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .describe(
-          "Account ID (omit to auto-select if single account)",
-        ),
       ...cdpConnectionSchema,
     },
     async ({ accountId, cdpPort, cdpHost, allowRemote }) => {

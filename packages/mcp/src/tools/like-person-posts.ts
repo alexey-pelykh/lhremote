@@ -64,7 +64,7 @@ export function registerLikePersonPosts(server: McpServer): void {
         .describe("Archive the ephemeral campaign instead of deleting it"),
       ...cdpConnectionSchema,
     },
-    async ({ personId, url, numberOfArticles, numberOfPosts, maxAgeOfArticles, maxAgeOfPosts, shouldAddComment, messageTemplate, skipIfNotLiked, keepCampaign, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personId, url, numberOfArticles, numberOfPosts, maxAgeOfArticles, maxAgeOfPosts, shouldAddComment, messageTemplate, skipIfNotLiked, keepCampaign, cdpPort, cdpHost, allowRemote, accountId }) => {
       if ((personId == null) === (url == null)) {
         return mcpError("Exactly one of personId or url must be provided.");
       }
@@ -82,7 +82,7 @@ export function registerLikePersonPosts(server: McpServer): void {
         const result = await likePersonPosts({
           personId, url, numberOfArticles, numberOfPosts, maxAgeOfArticles, maxAgeOfPosts,
           shouldAddComment, messageTemplate: parsedMessageTemplate, skipIfNotLiked,
-          keepCampaign, cdpPort, cdpHost, allowRemote,
+          keepCampaign, cdpPort, cdpHost, allowRemote, accountId,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

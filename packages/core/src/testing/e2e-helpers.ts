@@ -203,6 +203,20 @@ export function getE2EPersonId(): number {
 }
 
 /**
+ * Read the `LHREMOTE_E2E_POST_URL` environment variable.
+ *
+ * Returns a LinkedIn post URL used for post-based E2E tests
+ * (react-to-post, comment-on-post).
+ *
+ * @throws if `LHREMOTE_E2E_POST_URL` is not set or is empty.
+ */
+export function getE2EPostUrl(): string {
+  const url = process.env.LHREMOTE_E2E_POST_URL;
+  if (!url) throw new Error("LHREMOTE_E2E_POST_URL must be set");
+  return url;
+}
+
+/**
  * Connect to the launcher, list accounts, and return the first account ID.
  *
  * Fails the test if no accounts are configured in LinkedHelper.

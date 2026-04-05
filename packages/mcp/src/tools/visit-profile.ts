@@ -34,7 +34,7 @@ export function registerVisitProfile(server: McpServer): void {
         ),
       ...cdpConnectionSchema,
     },
-    async ({ personId, url, extractCurrentOrganizations, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personId, url, extractCurrentOrganizations, cdpPort, cdpHost, allowRemote, accountId }) => {
       if ((personId == null) === (url == null)) {
         return mcpError(
           "Exactly one of personId or url must be provided.",
@@ -42,7 +42,7 @@ export function registerVisitProfile(server: McpServer): void {
       }
 
       try {
-        const result = await visitProfile({ personId, url, extractCurrentOrganizations, cdpPort, cdpHost, allowRemote });
+        const result = await visitProfile({ personId, url, extractCurrentOrganizations, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to visit profile");

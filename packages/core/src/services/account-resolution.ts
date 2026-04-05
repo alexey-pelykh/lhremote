@@ -45,8 +45,12 @@ export class AccountResolutionError extends ServiceError {
  */
 export async function resolveAccount(
   cdpPort?: number,
-  options?: { host?: string; allowRemote?: boolean },
+  options?: { host?: string; allowRemote?: boolean; accountId?: number },
 ): Promise<number> {
+  if (options?.accountId !== undefined) {
+    return options.accountId;
+  }
+
   let port: number;
   try {
     port = await resolveLauncherPort(cdpPort, options?.host);

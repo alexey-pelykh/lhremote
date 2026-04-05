@@ -38,6 +38,12 @@ export const cdpConnectionSchema = {
     .boolean()
     .optional()
     .describe("SECURITY: Allow non-loopback CDP connections. Enables remote code execution on target host. Only use if network path is secured."),
+  accountId: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Explicit account ID. Bypasses automatic account resolution (required when multiple accounts are configured)."),
 };
 
 // Re-export from core so existing MCP tool files keep working.

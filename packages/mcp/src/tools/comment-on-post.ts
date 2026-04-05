@@ -22,9 +22,9 @@ export function registerCommentOnPost(server: McpServer): void {
         .describe("Comment text to post on the LinkedIn post"),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, text, cdpPort, cdpHost, allowRemote }) => {
+    async ({ postUrl, text, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await commentOnPost({ postUrl, text, cdpPort, cdpHost, allowRemote });
+        const result = await commentOnPost({ postUrl, text, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to comment on post");

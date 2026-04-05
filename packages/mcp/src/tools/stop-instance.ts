@@ -7,7 +7,6 @@ import {
   LauncherService,
   resolveLauncherPort,
 } from "@lhremote/core";
-import { z } from "zod";
 import { buildCdpOptions, cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
 /** Register the {@link https://github.com/alexey-pelykh/lhremote#stop-instance | stop-instance} MCP tool. */
@@ -16,14 +15,6 @@ export function registerStopInstance(server: McpServer): void {
     "stop-instance",
     "Stop a running LinkedHelper instance",
     {
-      accountId: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .describe(
-          "Account ID (omit to stop the only running instance)",
-        ),
       ...cdpConnectionSchema,
     },
     async ({ accountId, cdpPort, cdpHost, allowRemote }) => {

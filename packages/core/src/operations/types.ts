@@ -18,6 +18,7 @@ export interface ConnectionOptions {
   readonly cdpPort?: number | undefined;
   readonly cdpHost?: string | undefined;
   readonly allowRemote?: boolean | undefined;
+  readonly accountId?: number | undefined;
   readonly pacer?: SessionPacer | undefined;
 }
 
@@ -31,9 +32,11 @@ export interface ConnectionOptions {
 export function buildCdpOptions(input: {
   cdpHost?: string | undefined;
   allowRemote?: boolean | undefined;
-}): { host?: string; allowRemote?: boolean } {
+  accountId?: number | undefined;
+}): { host?: string; allowRemote?: boolean; accountId?: number } {
   return {
     ...(input.cdpHost !== undefined && { host: input.cdpHost }),
     ...(input.allowRemote !== undefined && { allowRemote: input.allowRemote }),
+    ...(input.accountId !== undefined && { accountId: input.accountId }),
   };
 }
