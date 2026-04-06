@@ -14,7 +14,6 @@ import {
   REACTION_LOVE,
   REACTION_SUPPORT,
   REACTION_TRIGGER,
-  REACTIONS_MENU,
 } from "../linkedin/selectors.js";
 import { gaussianDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
@@ -38,7 +37,7 @@ export type ReactionType =
   | "insightful"
   | "funny";
 
-/** Map from reaction type to its CSS selector in the reactions menu. */
+/** Map from reaction type to its selector in the reactions popup. */
 const REACTION_SELECTORS: Readonly<Record<ReactionType, string>> = {
   like: REACTION_LIKE,
   celebrate: REACTION_CELEBRATE,
@@ -125,14 +124,11 @@ export async function reactToPost(
     // Wait for the reaction trigger button to appear
     await waitForElement(client, REACTION_TRIGGER, undefined, mouse);
 
-    // Hover over the reaction trigger to expand the reactions menu
+    // Hover over the reaction trigger to expand the reactions popup
     await humanizedHover(client, REACTION_TRIGGER, mouse);
     await gaussianDelay(1_500, 150, 1_200, 1_800);
 
-    // Wait for the reactions menu to appear
-    await waitForElement(client, REACTIONS_MENU, { timeout: 5_000 }, mouse);
-
-    // Click the specific reaction button
+    // Wait for the specific reaction button to appear in the popup
     const reactionSelector = REACTION_SELECTORS[reactionType];
     await waitForElement(client, reactionSelector, { timeout: 5_000 }, mouse);
     await humanizedClick(client, reactionSelector, mouse);

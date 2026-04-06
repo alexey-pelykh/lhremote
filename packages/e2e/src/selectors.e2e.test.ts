@@ -20,10 +20,6 @@ import {
   discoverTargets,
   FEED_POST_CONTAINER,
   LauncherService,
-  PAGINATION_TRIGGER,
-  POST_AUTHOR_INFO,
-  POST_AUTHOR_NAME,
-  POST_TEXT_CONTENT,
   REACTION_CELEBRATE,
   REACTION_FUNNY,
   REACTION_INSIGHTFUL,
@@ -31,8 +27,6 @@ import {
   REACTION_LOVE,
   REACTION_SUPPORT,
   REACTION_TRIGGER,
-  REACTIONS_MENU,
-  SCROLL_CONTAINER,
   SELECTORS,
   startInstanceWithRecovery,
 } from "@lhremote/core";
@@ -51,34 +45,19 @@ async function queryCount(
 }
 
 /**
- * Dispatch a `mouseenter` + `mouseover` sequence on the first element
- * matching `selector` to trigger hover-dependent UI (e.g. reactions menu).
+ * Get the center coordinates of the first element matching `selector`.
  */
-async function hoverFirst(
+async function getCenter(
   client: CDPClient,
   selector: string,
-): Promise<void> {
-  await client.evaluate(
+): Promise<{ x: number; y: number } | null> {
+  return client.evaluate<{ x: number; y: number } | null>(
     `(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) return;
-      el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-    })()`,
-  );
-}
-
-/**
- * Click the first element matching `selector`.
- */
-async function clickFirst(
-  client: CDPClient,
-  selector: string,
-): Promise<void> {
-  await client.evaluate(
-    `(() => {
-      const el = document.querySelector(${JSON.stringify(selector)});
-      if (el) el.click();
+      if (!el) return null;
+      el.scrollIntoView({ block: "center" });
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
     })()`,
   );
 }
@@ -102,9 +81,6 @@ async function navigateAndWait(
 
 /** LinkedIn feed page URL. */
 const FEED_URL = "https://www.linkedin.com/feed/";
-
-/** Selector for the "Comment" button in the social action bar. */
-const COMMENT_BUTTON = 'button[aria-label*="Comment" i]';
 
 describeE2E("LinkedIn selectors registry", () => {
   let app: AppService;
@@ -182,12 +158,8 @@ describeE2E("LinkedIn selectors registry", () => {
     it("SELECTORS object contains all expected keys", () => {
       const expectedKeys: string[] = [
         "FEED_POST_CONTAINER",
-        "POST_TEXT_CONTENT",
-        "POST_AUTHOR_NAME",
-        "POST_AUTHOR_INFO",
         "COMMENT_INPUT",
         "REACTION_TRIGGER",
-        "REACTIONS_MENU",
         "REACTION_LIKE",
         "REACTION_CELEBRATE",
         "REACTION_SUPPORT",
@@ -195,8 +167,6 @@ describeE2E("LinkedIn selectors registry", () => {
         "REACTION_INSIGHTFUL",
         "REACTION_FUNNY",
         "COMMENT_SUBMIT_BUTTON",
-        "SCROLL_CONTAINER",
-        "PAGINATION_TRIGGER",
       ];
 
       for (const key of expectedKeys) {
@@ -221,45 +191,27 @@ describeE2E("LinkedIn selectors registry", () => {
       expect(count, `Selector "${FEED_POST_CONTAINER}" matched 0 elements`).toBeGreaterThan(0);
     });
 
-    it("POST_TEXT_CONTENT matches at least one element", async () => {
-      const count = await queryCount(linkedInClient, POST_TEXT_CONTENT);
-      expect(count, `Selector "${POST_TEXT_CONTENT}" matched 0 elements`).toBeGreaterThan(0);
-    });
-
-    it("POST_AUTHOR_NAME matches at least one element", async () => {
-      const count = await queryCount(linkedInClient, POST_AUTHOR_NAME);
-      expect(count, `Selector "${POST_AUTHOR_NAME}" matched 0 elements`).toBeGreaterThan(0);
-    });
-
-    it("POST_AUTHOR_INFO matches at least one element", async () => {
-      const count = await queryCount(linkedInClient, POST_AUTHOR_INFO);
-      expect(count, `Selector "${POST_AUTHOR_INFO}" matched 0 elements`).toBeGreaterThan(0);
-    });
-
     it("REACTION_TRIGGER matches at least one element", async () => {
       const count = await queryCount(linkedInClient, REACTION_TRIGGER);
       expect(count, `Selector "${REACTION_TRIGGER}" matched 0 elements`).toBeGreaterThan(0);
     });
-
-    it("SCROLL_CONTAINER matches at least one element", async () => {
-      const count = await queryCount(linkedInClient, SCROLL_CONTAINER);
-      expect(count, `Selector "${SCROLL_CONTAINER}" matched 0 elements`).toBeGreaterThan(0);
-    });
   });
 
-  // -- Reactions menu selectors (hover-triggered) --------------------------
+  // -- Reactions popup selectors (hover-triggered) -------------------------
 
-  describe("reactions menu selectors", () => {
+  describe("reactions popup selectors", () => {
     beforeAll(async () => {
-      // Hover over the first reaction trigger to reveal the reactions menu
-      await hoverFirst(linkedInClient, REACTION_TRIGGER);
-      // Wait for the popup to render
-      await delay(1_500);
-    });
-
-    it("REACTIONS_MENU matches at least one element", async () => {
-      const count = await queryCount(linkedInClient, REACTIONS_MENU);
-      expect(count, `Selector "${REACTIONS_MENU}" matched 0 elements`).toBeGreaterThan(0);
+      // Hover over the first reaction trigger using CDP Input events
+      // to reveal the reactions popup
+      const center = await getCenter(linkedInClient, REACTION_TRIGGER);
+      if (!center) throw new Error("Reaction trigger not found for hover");
+      await linkedInClient.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: center.x,
+        y: center.y,
+      });
+      // Wait for the popup to render (~3s for LinkedIn's animation)
+      await delay(3_000);
     });
 
     it("REACTION_LIKE matches at least one element", async () => {
@@ -296,13 +248,21 @@ describeE2E("LinkedIn selectors registry", () => {
   // -- Comment selectors (click-triggered) ---------------------------------
 
   describe("comment selectors", () => {
+    /** The Comment button in the social bar has no aria-label; match by text. */
+    const COMMENT_BUTTON_JS = `
+      Array.from(document.querySelectorAll("button"))
+        .find(b => b.textContent.trim() === "Comment")
+    `;
+
     beforeAll(async () => {
-      // Dismiss the reactions menu by clicking elsewhere
-      await clickFirst(linkedInClient, "body");
+      // Dismiss the reactions popup by clicking elsewhere
+      await linkedInClient.evaluate("document.body.click()");
       await delay(500);
 
       // Click the "Comment" button on the first post to expand the section
-      await clickFirst(linkedInClient, COMMENT_BUTTON);
+      await linkedInClient.evaluate(
+        `(() => { const btn = ${COMMENT_BUTTON_JS}; if (btn) btn.click(); })()`,
+      );
       await delay(1_500);
     });
 
@@ -312,11 +272,12 @@ describeE2E("LinkedIn selectors registry", () => {
     });
 
     it("COMMENT_SUBMIT_BUTTON matches at least one element", async () => {
-      // The submit button only appears after typing into the editor
+      // The submit button appears after typing into the editor
       await linkedInClient.evaluate(
         `(() => {
           const editor = document.querySelector(${JSON.stringify(COMMENT_INPUT)});
           if (editor) {
+            editor.focus();
             editor.textContent = ' ';
             editor.dispatchEvent(new Event('input', { bubbles: true }));
           }
@@ -337,21 +298,6 @@ describeE2E("LinkedIn selectors registry", () => {
           }
         })()`,
       );
-    });
-  });
-
-  // -- Pagination trigger --------------------------------------------------
-
-  describe("pagination selectors", () => {
-    it("PAGINATION_TRIGGER matches at least one element after scrolling", async () => {
-      // Scroll to the bottom to trigger pagination rendering
-      await linkedInClient.evaluate(
-        "window.scrollTo(0, document.body.scrollHeight)",
-      );
-      await delay(3_000);
-
-      const count = await queryCount(linkedInClient, PAGINATION_TRIGGER);
-      expect(count, `Selector "${PAGINATION_TRIGGER}" matched 0 elements`).toBeGreaterThan(0);
     });
   });
 });

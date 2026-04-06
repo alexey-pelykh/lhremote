@@ -244,10 +244,12 @@ export async function scrollTo(
 }
 
 /**
- * Trigger a hover on an element by dispatching `mouseenter` + `mouseover`.
+ * Trigger a hover on an element via CDP `Input.dispatchMouseEvent`.
  *
- * This is used to reveal hover-dependent UI such as the LinkedIn
- * reactions menu popup.
+ * Computes the element's center coordinates and dispatches a single
+ * `mouseMoved` event through the CDP Input domain.  This is required
+ * to reveal hover-dependent UI such as the LinkedIn reactions popup,
+ * which does not respond to synthetic JS `mouseenter`/`mouseover`.
  *
  * @param client   - Connected CDP client targeting the page.
  * @param selector - CSS selector for the element to hover.
@@ -257,29 +259,26 @@ export async function hover(
   client: CDPClient,
   selector: string,
 ): Promise<void> {
-  const hovered = await client.evaluate<boolean>(
+  const center = await client.evaluate<{ x: number; y: number } | null>(
     `(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) return false;
+      if (!el) return null;
       const r = el.getBoundingClientRect();
-      const cx = Math.round(r.x + r.width / 2);
-      const cy = Math.round(r.y + r.height / 2);
-      const opts = {
-        bubbles: true, clientX: cx, clientY: cy,
-        screenX: cx + window.screenX, screenY: cy + window.screenY,
-        button: 0, buttons: 0,
-      };
-      el.dispatchEvent(new MouseEvent('mouseenter', opts));
-      el.dispatchEvent(new MouseEvent('mouseover', opts));
-      return true;
+      return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
     })()`,
   );
 
-  if (!hovered) {
+  if (!center) {
     throw new CDPEvaluationError(
       `Element "${selector}" not found for hover`,
     );
   }
+
+  await client.send("Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x: center.x,
+    y: center.y,
+  });
 }
 
 /**
@@ -731,10 +730,11 @@ export async function humanizedClick(
  * Hover over an element with humanized mouse movement when available.
  *
  * When a {@link HumanizedMouse} is provided, the cursor physically
- * moves to the element center — which is more realistic than
- * dispatching synthetic `mouseenter` / `mouseover` JS events.
+ * moves to the element center via Bézier-path movement with jitter,
+ * which is more realistic than a single CDP `mouseMoved` event.
  *
- * Falls back to synthetic JS events when unavailable.
+ * Falls back to {@link hover} (single CDP `Input.dispatchMouseEvent`)
+ * when unavailable.
  *
  * @param client - Connected CDP client targeting the LinkedIn page.
  * @param selector - CSS selector for the element to hover.
@@ -753,7 +753,7 @@ export async function humanizedHover(
       return;
     }
   }
-  // Fallback to JS hover
+  // Fallback to CDP hover
   await hover(client, selector);
 }
 
