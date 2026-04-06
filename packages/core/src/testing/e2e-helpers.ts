@@ -284,7 +284,7 @@ export function installErrorDetection(getCdpPort: () => number): void {
     } catch {
       baselineCaptured = false;
     }
-  });
+  }, 30_000);
 
   afterEach(async () => {
     if (!baselineCaptured) return;
@@ -312,7 +312,7 @@ export function installErrorDetection(getCdpPort: () => number): void {
       newErrors,
       `LH logged ${String(newErrors.length)} error(s) during test: ${JSON.stringify(newErrors)}`,
     ).toHaveLength(0);
-  });
+  }, 30_000);
 }
 
 function popupKey(popup: InstancePopup): string {
