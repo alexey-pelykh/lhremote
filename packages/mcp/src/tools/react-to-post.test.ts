@@ -18,6 +18,7 @@ const MOCK_RESULT = {
   postUrl:
     "https://www.linkedin.com/feed/update/urn:li:activity:123/",
   reactionType: "like" as const,
+  alreadyReacted: false as const,
 };
 
 describe("registerReactToPost", () => {

@@ -52,6 +52,56 @@ export const REACTION_TYPES: readonly ReactionType[] = Object.keys(
   REACTION_SELECTORS,
 ) as ReactionType[];
 
+/** Map from display name (as it appears in aria-labels) to reaction type. */
+const REACTION_NAME_MAP: Readonly<Record<string, ReactionType>> = {
+  like: "like",
+  celebrate: "celebrate",
+  support: "support",
+  love: "love",
+  insightful: "insightful",
+  funny: "funny",
+};
+
+/**
+ * Detect the current reaction state of the post by inspecting the
+ * reaction trigger button's `aria-label`.
+ *
+ * - **Post page** (Ember): `"Unreact Like"`, `"Unreact Celebrate"`, etc.
+ * - **Feed page** (React): `"Reaction button state: no reaction"` when
+ *   unreacted; specific state name otherwise.
+ *
+ * @returns The current reaction type, or `null` if not reacted.
+ */
+async function detectCurrentReaction(
+  client: CDPClient,
+): Promise<ReactionType | null> {
+  const label = await client.evaluate<string | null>(
+    `(() => {
+      const el = document.querySelector(${JSON.stringify(REACTION_TRIGGER)});
+      return el ? el.getAttribute('aria-label') : null;
+    })()`,
+  );
+
+  if (!label) return null;
+
+  // Post page: "Unreact Like", "Unreact Celebrate", etc.
+  const unreactMatch = /^Unreact\s+(\w+)/i.exec(label);
+  if (unreactMatch?.[1]) {
+    return REACTION_NAME_MAP[unreactMatch[1].toLowerCase()] ?? null;
+  }
+
+  // Feed page: "Reaction button state: no reaction" → unreacted
+  if (/no reaction/i.test(label)) return null;
+
+  // Feed page reacted: "Reaction button state: Like", etc.
+  const stateMatch = /Reaction button state:\s*(\w+)/i.exec(label);
+  if (stateMatch?.[1]) {
+    return REACTION_NAME_MAP[stateMatch[1].toLowerCase()] ?? null;
+  }
+
+  return null;
+}
+
 export interface ReactToPostInput extends ConnectionOptions {
   /** LinkedIn post URL (any format accepted by the LinkedIn WebView). */
   readonly postUrl: string;
@@ -65,6 +115,8 @@ export interface ReactToPostOutput {
   readonly success: true;
   readonly postUrl: string;
   readonly reactionType: ReactionType;
+  /** Whether the post was already reacted with the requested type (no-op). */
+  readonly alreadyReacted: boolean;
 }
 
 /**
@@ -124,6 +176,26 @@ export async function reactToPost(
     // Wait for the reaction trigger button to appear
     await waitForElement(client, REACTION_TRIGGER, undefined, mouse);
 
+    // Detect existing reaction state from the trigger's aria-label
+    const currentReaction = await detectCurrentReaction(client);
+
+    if (currentReaction === reactionType) {
+      // Already reacted with the requested type — no-op
+      await gaussianDelay(1_500, 500, 700, 3_500); // Post-action dwell
+      return {
+        success: true as const,
+        postUrl: input.postUrl,
+        reactionType,
+        alreadyReacted: true,
+      };
+    }
+
+    if (currentReaction !== null) {
+      // Reacted with a different type — click trigger to unreact first
+      await humanizedClick(client, REACTION_TRIGGER, mouse);
+      await gaussianDelay(1_500, 300, 800, 2_500);
+    }
+
     // Hover over the reaction trigger to expand the reactions popup
     await humanizedHover(client, REACTION_TRIGGER, mouse);
     await gaussianDelay(1_500, 150, 1_200, 1_800);
@@ -141,6 +213,7 @@ export async function reactToPost(
       success: true as const,
       postUrl: input.postUrl,
       reactionType,
+      alreadyReacted: false,
     };
   } finally {
     client.disconnect();

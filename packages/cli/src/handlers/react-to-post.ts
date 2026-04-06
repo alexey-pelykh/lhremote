@@ -37,6 +37,11 @@ export async function handleReactToPost(
 
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else if (result.alreadyReacted) {
+    process.stdout.write(
+      `Already reacted to post with "${result.reactionType}" (no change)\n` +
+        `  Post: ${result.postUrl}\n`,
+    );
   } else {
     process.stdout.write(
       `Reacted to post with "${result.reactionType}"\n` +
