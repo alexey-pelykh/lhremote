@@ -9,7 +9,8 @@ import { killInstanceProcesses } from "../cdp/instance-discovery.js";
 import { getErrors } from "../operations/get-errors.js";
 import { LauncherService } from "../services/launcher.js";
 import { waitForInstanceShutdown } from "../services/instance-lifecycle.js";
-import type { Account } from "../types/index.js";
+import type { Account, InstancePopup } from "../types/index.js";
+import type { GetErrorsOutput } from "../operations/get-errors.js";
 import { delay } from "../utils/delay.js";
 
 const linkedHelperAvailable = (() => {
@@ -270,34 +271,41 @@ export async function forceStopInstance(
  * rather than failing the test.
  */
 export function installErrorDetection(getCdpPort: () => number): void {
-  let issueCountBefore = 0;
-  let popupCountBefore = 0;
+  let baselineIssueIds = new Set<string>();
+  let baselinePopupKeys = new Set<string>();
+  let baselineCaptured = false;
 
   beforeEach(async () => {
     try {
       const result = await getErrors({ cdpPort: getCdpPort() });
-      issueCountBefore = result.issues.length;
-      popupCountBefore = result.instancePopups.length;
+      baselineIssueIds = new Set(result.issues.map((i) => i.id));
+      baselinePopupKeys = new Set(result.instancePopups.map(popupKey));
+      baselineCaptured = true;
     } catch {
-      issueCountBefore = 0;
-      popupCountBefore = 0;
+      baselineCaptured = false;
     }
   });
 
   afterEach(async () => {
-    let result;
+    if (!baselineCaptured) return;
+
+    let result: GetErrorsOutput;
     try {
       result = await getErrors({ cdpPort: getCdpPort() });
     } catch {
       // Swallow connectivity errors — don't fail tests because of the check itself
       return;
     }
-    const newIssues = result.issues.slice(issueCountBefore);
-    const newPopups = result.instancePopups.slice(popupCountBefore);
+    const newIssues = result.issues.filter((i) => !baselineIssueIds.has(i.id));
+    const newPopups = result.instancePopups.filter((p) => !baselinePopupKeys.has(popupKey(p)));
     const newErrors = [...newIssues, ...newPopups];
     expect(
       newErrors,
       `LH logged ${String(newErrors.length)} error(s) during test: ${JSON.stringify(newErrors)}`,
     ).toHaveLength(0);
   });
+}
+
+function popupKey(popup: InstancePopup): string {
+  return `${popup.title}\n${popup.description ?? ""}`;
 }
