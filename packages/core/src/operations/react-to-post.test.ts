@@ -152,7 +152,7 @@ describe("reactToPost", () => {
 
     expect(humanizedHover).toHaveBeenCalledWith(
       mockClient,
-      'button[aria-label^="Reaction button state"]',
+      'button[aria-label^="Reaction button state"], button.react-button__trigger',
       undefined,
     );
   });
@@ -168,7 +168,7 @@ describe("reactToPost", () => {
 
     expect(humanizedClick).toHaveBeenCalledWith(
       mockClient,
-      'button[aria-label="Funny"]',
+      'button[aria-label="Funny"], button[aria-label="React Funny"]',
       undefined,
     );
   });
