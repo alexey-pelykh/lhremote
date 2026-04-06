@@ -8,69 +8,69 @@
  * interaction (feed reading, commenting, reacting).  When LinkedIn
  * changes their DOM structure, integration tests identify broken
  * selectors by name.
+ *
+ * **Note:** LinkedIn migrated to CSS modules with hashed class names
+ * in early 2026.  All selectors now use stable attributes
+ * (`aria-label`, `role`, `data-testid`) instead of class names.
  */
 
 // ── Feed post containers ──────────────────────────────────────────
 
-/** Individual feed post wrapper. */
-export const FEED_POST_CONTAINER = "div.feed-shared-update-v2";
-
-/** Text content within a feed post. */
-export const POST_TEXT_CONTENT = ".feed-shared-update-v2__description";
-
-// ── Author info ───────────────────────────────────────────────────
-
-/** Post author's display name. */
-export const POST_AUTHOR_NAME = ".update-components-actor__title";
-
-/** Post author's headline / description line. */
-export const POST_AUTHOR_INFO = ".update-components-actor__description";
+/** Individual feed post wrapper (listitem inside the main feed). */
+export const FEED_POST_CONTAINER = '[data-testid="mainFeed"] [role="listitem"]';
 
 // ── Comment input fields ──────────────────────────────────────────
 
-/** Rich-text editor for writing comments (Quill-based). */
-export const COMMENT_INPUT = ".comments-comment-texteditor .ql-editor";
+/** Rich-text editor for writing comments (ProseMirror / TipTap). */
+export const COMMENT_INPUT =
+  'div[role="textbox"][aria-label="Text editor for creating comment"]';
 
 // ── Reaction buttons ──────────────────────────────────────────────
 
-/** Main reaction trigger button (Like / React). */
-export const REACTION_TRIGGER = "button.react-button__trigger";
+/**
+ * Main reaction trigger button (Like / React).
+ *
+ * The `aria-label` starts with "Reaction button state:" followed by
+ * the current state, e.g. "no reaction" or "Like".
+ */
+export const REACTION_TRIGGER =
+  'button[aria-label^="Reaction button state"]';
 
-/** Reactions popup menu container (appears on hover). */
-export const REACTIONS_MENU = ".reactions-menu";
+/**
+ * Like reaction button (appears after hovering {@link REACTION_TRIGGER}).
+ *
+ * The reactions popup has no container element — individual buttons
+ * appear directly in the DOM after a ~3 s CDP-level hover on the
+ * trigger.  Synthetic JS `mouseenter`/`mouseover` events do **not**
+ * trigger the popup; use `Input.dispatchMouseEvent` instead.
+ */
+export const REACTION_LIKE = 'button[aria-label="Like"]';
 
-/** Like reaction button inside the reactions menu. */
-export const REACTION_LIKE = '.reactions-menu button[aria-label="React Like"]';
+/** Celebrate reaction button (appears after hovering trigger). */
+export const REACTION_CELEBRATE = 'button[aria-label="Celebrate"]';
 
-/** Celebrate reaction button inside the reactions menu. */
-export const REACTION_CELEBRATE = '.reactions-menu button[aria-label="React Celebrate"]';
+/** Support reaction button (appears after hovering trigger). */
+export const REACTION_SUPPORT = 'button[aria-label="Support"]';
 
-/** Support reaction button inside the reactions menu. */
-export const REACTION_SUPPORT = '.reactions-menu button[aria-label="React Support"]';
+/** Love reaction button (appears after hovering trigger). */
+export const REACTION_LOVE = 'button[aria-label="Love"]';
 
-/** Love reaction button inside the reactions menu. */
-export const REACTION_LOVE = '.reactions-menu button[aria-label="React Love"]';
+/** Insightful reaction button (appears after hovering trigger). */
+export const REACTION_INSIGHTFUL = 'button[aria-label="Insightful"]';
 
-/** Insightful reaction button inside the reactions menu. */
-export const REACTION_INSIGHTFUL = '.reactions-menu button[aria-label="React Insightful"]';
-
-/** Funny reaction button inside the reactions menu. */
-export const REACTION_FUNNY = '.reactions-menu button[aria-label="React Funny"]';
+/** Funny reaction button (appears after hovering trigger). */
+export const REACTION_FUNNY = 'button[aria-label="Funny"]';
 
 // ── Send / submit buttons ─────────────────────────────────────────
 
-/** Submit button for the comment form. */
-export const COMMENT_SUBMIT_BUTTON = 'button[class*="comments-comment-box__submit-button"]';
-
-// ── Scroll containers ─────────────────────────────────────────────
-
-/** Main scrollable feed container. */
-export const SCROLL_CONTAINER = ".scaffold-finite-scroll";
-
-// ── Pagination triggers ───────────────────────────────────────────
-
-/** "Show more" / load-more button for feed pagination. */
-export const PAGINATION_TRIGGER = ".scaffold-finite-scroll__load-button";
+/**
+ * Submit button for the comment form.
+ *
+ * LinkedIn renders at most one comment form at a time, so the broad
+ * `button[type="submit"]` selector is safe in practice.  The button
+ * starts `disabled` and becomes enabled after typing into the editor.
+ */
+export const COMMENT_SUBMIT_BUTTON = 'button[type="submit"]';
 
 /**
  * Aggregated registry of all selectors, keyed by name.
@@ -80,12 +80,8 @@ export const PAGINATION_TRIGGER = ".scaffold-finite-scroll__load-button";
  */
 export const SELECTORS = {
   FEED_POST_CONTAINER,
-  POST_TEXT_CONTENT,
-  POST_AUTHOR_NAME,
-  POST_AUTHOR_INFO,
   COMMENT_INPUT,
   REACTION_TRIGGER,
-  REACTIONS_MENU,
   REACTION_LIKE,
   REACTION_CELEBRATE,
   REACTION_SUPPORT,
@@ -93,8 +89,6 @@ export const SELECTORS = {
   REACTION_INSIGHTFUL,
   REACTION_FUNNY,
   COMMENT_SUBMIT_BUTTON,
-  SCROLL_CONTAINER,
-  PAGINATION_TRIGGER,
 } as const;
 
 /** Union of all selector names in the registry. */

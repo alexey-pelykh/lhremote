@@ -11,7 +11,7 @@
     },
     "test:e2e": {
       "dependsOn": ["build", "^test:e2e"],
-      "passThroughEnv": ["LHREMOTE_E2E_PERSON_ID"],
+      "passThroughEnv": ["LHREMOTE_E2E_PERSON_ID", "LHREMOTE_E2E_POST_URL"],
       "cache": false
     },
     "lint": {
