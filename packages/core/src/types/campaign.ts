@@ -193,7 +193,13 @@ export interface CampaignActionConfig {
 /**
  * Runner state of the LinkedHelper main window.
  */
-export type RunnerState = "idle" | "campaigns" | "stopping-campaigns";
+export type RunnerState =
+  | "idle"
+  | "initializing"
+  | "campaigns"
+  | "stopping-campaigns"
+  | "preparing-collecting"
+  | "collecting";
 
 /**
  * People counts for a campaign action by processing state.
