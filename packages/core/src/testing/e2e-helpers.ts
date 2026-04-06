@@ -263,12 +263,14 @@ export async function forceStopInstance(
  * introduces new LinkedHelper errors (issues or instance popups).
  *
  * Call once inside a `describe` block that runs against a live
- * LinkedHelper instance.  The {@link getCdpPort} callback is evaluated
+ * LinkedHelper instance.  The `getCdpPort` callback is evaluated
  * lazily so the port can be assigned in `beforeAll`.
  *
  * Error detection is best-effort: if {@link getErrors} itself fails
  * (e.g. instance not reachable), the hooks silently skip the check
  * rather than failing the test.
+ *
+ * @param getCdpPort Returns the current CDP port when the hooks run.
  */
 export function installErrorDetection(getCdpPort: () => number): void {
   let baselineIssueIds = new Set<string>();
