@@ -386,7 +386,7 @@ describe("CampaignService", () => {
       expect(stopExpr).toContain("campaignController.stop()");
     });
 
-    it("throws CampaignTimeoutError when runner does not reach idle", async () => {
+    it("throws CampaignTimeoutError with state and campaign context when runner does not reach idle", async () => {
       mockEvaluateUI.mockResolvedValue("campaigns"); // always busy
 
       const promise = service.start(1, [42]);
@@ -397,6 +397,8 @@ describe("CampaignService", () => {
 
       const error = await caughtPromise;
       expect(error).toBeInstanceOf(CampaignTimeoutError);
+      expect((error as CampaignTimeoutError).message).toContain("for campaign 1");
+      expect((error as CampaignTimeoutError).message).toContain("last observed state: campaigns");
     });
 
     it("throws CampaignExecutionError when start() returns false", async () => {
