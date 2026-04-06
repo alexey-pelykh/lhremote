@@ -297,11 +297,16 @@ export function installErrorDetection(getCdpPort: () => number): void {
       return;
     }
     const newIssues = result.issues.filter((i) => !baselineIssueIds.has(i.id));
-    const currentPopupCounts = countByKey(result.instancePopups);
-    const newPopups = result.instancePopups.filter((p) => {
-      const key = popupKey(p);
-      return (currentPopupCounts.get(key) ?? 0) > (baselinePopupCounts.get(key) ?? 0);
-    });
+    const newPopups: InstancePopup[] = [];
+    const consumed = new Map<string, number>();
+    for (const popup of result.instancePopups) {
+      const key = popupKey(popup);
+      const seen = consumed.get(key) ?? 0;
+      if (seen >= (baselinePopupCounts.get(key) ?? 0)) {
+        newPopups.push(popup);
+      }
+      consumed.set(key, seen + 1);
+    }
     const newErrors = [...newIssues, ...newPopups];
     expect(
       newErrors,
