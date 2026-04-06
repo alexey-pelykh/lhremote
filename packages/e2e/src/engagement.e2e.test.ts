@@ -163,7 +163,7 @@ describeE2E("engagement operations", () => {
           content: { type: string; text: string }[];
         };
 
-        expect(result.isError).toBeUndefined();
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
         expect(result.content).toHaveLength(1);
 
         const parsed = JSON.parse(
@@ -220,7 +220,7 @@ describeE2E("engagement operations", () => {
           content: { type: string; text: string }[];
         };
 
-        expect(result.isError).toBeUndefined();
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
         expect(result.content).toHaveLength(1);
 
         const parsed = JSON.parse(
@@ -275,7 +275,7 @@ describeE2E("engagement operations", () => {
           content: { type: string; text: string }[];
         };
 
-        expect(result.isError).toBeUndefined();
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
         expect(result.content).toHaveLength(1);
 
         const parsed = JSON.parse(
@@ -341,7 +341,7 @@ describeE2E("engagement operations", () => {
           content: { type: string; text: string }[];
         };
 
-        expect(result.isError).toBeUndefined();
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
         expect(result.content).toHaveLength(1);
 
         const parsed = JSON.parse(
@@ -401,7 +401,7 @@ describeE2E("engagement operations", () => {
           content: { type: string; text: string }[];
         };
 
-        expect(result.isError).toBeUndefined();
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
         expect(result.content).toHaveLength(1);
 
         const parsed = JSON.parse(
@@ -469,7 +469,7 @@ describeE2E("engagement operations", () => {
           content: { type: string; text: string }[];
         };
 
-        expect(result.isError).toBeUndefined();
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
         expect(result.content).toHaveLength(1);
 
         const parsed = JSON.parse(
