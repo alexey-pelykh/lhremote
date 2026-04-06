@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { describe, expect } from "vitest";
+import { afterEach, beforeEach, describe, expect } from "vitest";
 import { AppService, type AppServiceOptions } from "../services/app.js";
 import { AppNotFoundError } from "../services/errors.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { killInstanceProcesses } from "../cdp/instance-discovery.js";
+import { getErrors } from "../operations/get-errors.js";
 import { LauncherService } from "../services/launcher.js";
 import { waitForInstanceShutdown } from "../services/instance-lifecycle.js";
 import type { Account } from "../types/index.js";
@@ -254,4 +255,49 @@ export async function forceStopInstance(
   }
 
   await killInstanceProcesses(launcherPort);
+}
+
+/**
+ * Install `beforeEach`/`afterEach` hooks that fail a test when it
+ * introduces new LinkedHelper errors (issues or instance popups).
+ *
+ * Call once inside a `describe` block that runs against a live
+ * LinkedHelper instance.  The {@link getCdpPort} callback is evaluated
+ * lazily so the port can be assigned in `beforeAll`.
+ *
+ * Error detection is best-effort: if {@link getErrors} itself fails
+ * (e.g. instance not reachable), the hooks silently skip the check
+ * rather than failing the test.
+ */
+export function installErrorDetection(getCdpPort: () => number): void {
+  let issueCountBefore = 0;
+  let popupCountBefore = 0;
+
+  beforeEach(async () => {
+    try {
+      const result = await getErrors({ cdpPort: getCdpPort() });
+      issueCountBefore = result.issues.length;
+      popupCountBefore = result.instancePopups.length;
+    } catch {
+      issueCountBefore = 0;
+      popupCountBefore = 0;
+    }
+  });
+
+  afterEach(async () => {
+    let result;
+    try {
+      result = await getErrors({ cdpPort: getCdpPort() });
+    } catch {
+      // Swallow connectivity errors — don't fail tests because of the check itself
+      return;
+    }
+    const newIssues = result.issues.slice(issueCountBefore);
+    const newPopups = result.instancePopups.slice(popupCountBefore);
+    const newErrors = [...newIssues, ...newPopups];
+    expect(
+      newErrors,
+      `LH logged ${String(newErrors.length)} error(s) during test: ${JSON.stringify(newErrors)}`,
+    ).toHaveLength(0);
+  });
 }

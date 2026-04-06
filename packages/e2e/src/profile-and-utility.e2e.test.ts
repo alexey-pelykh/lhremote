@@ -6,6 +6,7 @@ import {
   describeE2E,
   forceStopInstance,
   getE2EPersonId,
+  installErrorDetection,
   launchApp,
   quitApp,
   resolveAccountId,
@@ -423,6 +424,8 @@ describeE2E("profile enrichment and utilities", () => {
       }
       await quitApp(app);
     }, 60_000);
+
+    installErrorDetection(() => port);
 
     // ── enrich-profile ──────────────────────────────────────────────
 
