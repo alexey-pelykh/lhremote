@@ -455,7 +455,14 @@ export class CampaignService {
   async stopRunnerAndWaitForIdle(campaignId?: number): Promise<void> {
     const state = await this.getRunnerState();
     if (state === "idle") return;
-    await this.stopRunner();
+    try {
+      await this.stopRunner();
+    } catch (error) {
+      if (campaignId !== undefined && error instanceof CampaignExecutionError && error.campaignId === undefined) {
+        throw new CampaignExecutionError(error.message, campaignId, { cause: error.cause });
+      }
+      throw error;
+    }
     await this.waitForIdle(campaignId);
   }
 
@@ -712,7 +719,7 @@ export class CampaignService {
       ? ` for campaign ${String(campaignId)}`
       : "";
     const stateInfo = lastState !== undefined
-      ? ` (last observed state: ${JSON.stringify(lastState)})`
+      ? ` (last observed state: ${lastState})`
       : "";
     throw new CampaignTimeoutError(
       `Campaign runner did not reach idle state within ${String(IDLE_WAIT_TIMEOUT)}ms${context}${stateInfo}`,
