@@ -272,14 +272,14 @@ export async function forceStopInstance(
  */
 export function installErrorDetection(getCdpPort: () => number): void {
   let baselineIssueIds = new Set<string>();
-  let baselinePopupKeys = new Set<string>();
+  let baselinePopupCounts = new Map<string, number>();
   let baselineCaptured = false;
 
   beforeEach(async () => {
     try {
       const result = await getErrors({ cdpPort: getCdpPort() });
       baselineIssueIds = new Set(result.issues.map((i) => i.id));
-      baselinePopupKeys = new Set(result.instancePopups.map(popupKey));
+      baselinePopupCounts = countByKey(result.instancePopups);
       baselineCaptured = true;
     } catch {
       baselineCaptured = false;
@@ -297,7 +297,11 @@ export function installErrorDetection(getCdpPort: () => number): void {
       return;
     }
     const newIssues = result.issues.filter((i) => !baselineIssueIds.has(i.id));
-    const newPopups = result.instancePopups.filter((p) => !baselinePopupKeys.has(popupKey(p)));
+    const currentPopupCounts = countByKey(result.instancePopups);
+    const newPopups = result.instancePopups.filter((p) => {
+      const key = popupKey(p);
+      return (currentPopupCounts.get(key) ?? 0) > (baselinePopupCounts.get(key) ?? 0);
+    });
     const newErrors = [...newIssues, ...newPopups];
     expect(
       newErrors,
@@ -307,5 +311,14 @@ export function installErrorDetection(getCdpPort: () => number): void {
 }
 
 function popupKey(popup: InstancePopup): string {
-  return `${popup.title}\n${popup.description ?? ""}`;
+  return `${popup.title}\n${popup.description ?? ""}\n${String(popup.closable)}`;
+}
+
+function countByKey(popups: readonly InstancePopup[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const popup of popups) {
+    const key = popupKey(popup);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }
