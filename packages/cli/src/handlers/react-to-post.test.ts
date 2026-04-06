@@ -17,6 +17,7 @@ const MOCK_RESULT: ReactToPostOutput = {
   postUrl:
     "https://www.linkedin.com/feed/update/urn:li:activity:123/",
   reactionType: "like",
+  alreadyReacted: false,
 };
 
 describe("handleReactToPost", () => {
@@ -66,6 +67,23 @@ describe("handleReactToPost", () => {
     expect(output).toContain(
       "https://www.linkedin.com/feed/update/urn:li:activity:123/",
     );
+  });
+
+  it("prints already-reacted output when alreadyReacted is true", async () => {
+    vi.mocked(reactToPost).mockResolvedValue({
+      ...MOCK_RESULT,
+      alreadyReacted: true,
+    });
+
+    await handleReactToPost(
+      "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      {},
+    );
+
+    expect(process.exitCode).toBeUndefined();
+    const output = getStdout(stdoutSpy);
+    expect(output).toContain('Already reacted to post with "like"');
+    expect(output).toContain("no change");
   });
 
   it("sets exitCode on error", async () => {

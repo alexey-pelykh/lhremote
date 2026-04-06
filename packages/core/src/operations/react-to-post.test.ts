@@ -32,6 +32,7 @@ import { reactToPost, REACTION_TYPES } from "./react-to-post.js";
 const mockClient = {
   connect: vi.fn().mockResolvedValue(undefined),
   navigate: vi.fn().mockResolvedValue(undefined),
+  evaluate: vi.fn().mockResolvedValue(null),
   disconnect: vi.fn(),
 };
 
@@ -111,6 +112,7 @@ describe("reactToPost", () => {
     });
 
     expect(result.reactionType).toBe("like");
+    expect(result.alreadyReacted).toBe(false);
   });
 
   it("returns success with provided reaction type", async () => {
@@ -126,7 +128,61 @@ describe("reactToPost", () => {
       success: true,
       postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
       reactionType: "celebrate",
+      alreadyReacted: false,
     });
+  });
+
+  it("returns alreadyReacted when same reaction is active (post page)", async () => {
+    setupMocks();
+    // Simulate post page: trigger has "Unreact Like" aria-label
+    mockClient.evaluate.mockResolvedValueOnce("Unreact Like");
+
+    const result = await reactToPost({
+      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      reactionType: "like",
+      cdpPort: 9222,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.reactionType).toBe("like");
+    expect(result.alreadyReacted).toBe(true);
+    // Should NOT hover or click reaction buttons
+    expect(humanizedHover).not.toHaveBeenCalled();
+  });
+
+  it("returns alreadyReacted when same reaction is active (feed page)", async () => {
+    setupMocks();
+    // Simulate feed page: trigger has "Reaction button state: Like"
+    mockClient.evaluate.mockResolvedValueOnce("Reaction button state: Like");
+
+    const result = await reactToPost({
+      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      reactionType: "like",
+      cdpPort: 9222,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.alreadyReacted).toBe(true);
+    expect(humanizedHover).not.toHaveBeenCalled();
+  });
+
+  it("unreacts first when a different reaction is active", async () => {
+    setupMocks();
+    // Simulate post page: trigger has "Unreact Celebrate"
+    mockClient.evaluate.mockResolvedValueOnce("Unreact Celebrate");
+
+    const result = await reactToPost({
+      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      reactionType: "like",
+      cdpPort: 9222,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.reactionType).toBe("like");
+    expect(result.alreadyReacted).toBe(false);
+    // Should click trigger to unreact, then hover to open popup
+    expect(humanizedClick).toHaveBeenCalledTimes(2);
+    expect(humanizedHover).toHaveBeenCalled();
   });
 
   it("navigates to the post URL", async () => {
