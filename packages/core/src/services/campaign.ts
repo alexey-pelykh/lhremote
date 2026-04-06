@@ -452,11 +452,11 @@ export class CampaignService {
    * Useful before DB-write operations that would conflict with the
    * runner's own SQLite writes.
    */
-  async stopRunnerAndWaitForIdle(): Promise<void> {
+  async stopRunnerAndWaitForIdle(campaignId?: number): Promise<void> {
     const state = await this.getRunnerState();
     if (state === "idle") return;
     await this.stopRunner();
-    await this.waitForIdle();
+    await this.waitForIdle(campaignId);
   }
 
   /**
@@ -542,8 +542,9 @@ export class CampaignService {
    * Start campaign execution for the specified persons.
    *
    * Performs the full start sequence:
-   * 1. Reset specified persons for re-run (three-table reset)
-   * 2. Wait for the campaign runner to reach idle state
+   * 1. Stop the runner if it is not idle (avoids DB conflicts and
+   *    ensures a clean state before starting)
+   * 2. Reset specified persons for re-run (three-table reset)
    * 3. Unpause the campaign
    * 4. Start the campaign runner
    *
@@ -554,13 +555,14 @@ export class CampaignService {
   async start(campaignId: number, personIds: number[]): Promise<void> {
     const campaign = this.campaignRepo.getCampaign(campaignId);
 
-    // Step 1: Reset persons for re-run
+    // Step 1: Stop runner if not idle (avoids DB conflicts with resetForRerun
+    // and ensures a clean state for the new campaign execution)
+    await this.stopRunnerAndWaitForIdle(campaignId);
+
+    // Step 2: Reset persons for re-run
     if (personIds.length > 0) {
       this.statisticsRepo.resetForRerun(campaignId, personIds);
     }
-
-    // Step 2: Wait for idle
-    await this.waitForIdle(campaignId);
 
     // Step 3: Unpause
     try {
@@ -694,10 +696,12 @@ export class CampaignService {
    */
   private async waitForIdle(campaignId?: number): Promise<void> {
     const deadline = Date.now() + IDLE_WAIT_TIMEOUT;
+    let lastState: RunnerState | undefined;
 
     while (Date.now() < deadline) {
       const state = await this.getRunnerState();
       if (state === "idle") return;
+      lastState = state;
 
       const remaining = deadline - Date.now();
       if (remaining <= 0) break;
@@ -707,8 +711,11 @@ export class CampaignService {
     const context = campaignId !== undefined
       ? ` for campaign ${String(campaignId)}`
       : "";
+    const stateInfo = lastState !== undefined
+      ? ` (last observed state: ${JSON.stringify(lastState)})`
+      : "";
     throw new CampaignTimeoutError(
-      `Campaign runner did not reach idle state within ${String(IDLE_WAIT_TIMEOUT)}ms${context}`,
+      `Campaign runner did not reach idle state within ${String(IDLE_WAIT_TIMEOUT)}ms${context}${stateInfo}`,
       campaignId,
     );
   }

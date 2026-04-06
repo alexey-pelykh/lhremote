@@ -324,10 +324,10 @@ describe("CampaignService", () => {
       mockGetCampaign.mockReturnValue(MOCK_CAMPAIGN);
     });
 
-    it("performs full start sequence: reset, wait idle, unpause, start", async () => {
+    it("performs full start sequence: stop-and-wait-idle, reset, unpause, start", async () => {
       // Runner is idle, unpause succeeds, start returns true
       mockEvaluateUI
-        .mockResolvedValueOnce("idle")   // getRunnerState
+        .mockResolvedValueOnce("idle")   // getRunnerState (stopRunnerAndWaitForIdle)
         .mockResolvedValueOnce(undefined) // unpause
         .mockResolvedValueOnce(true);     // start
 
@@ -335,11 +335,11 @@ describe("CampaignService", () => {
       await vi.advanceTimersByTimeAsync(100);
       await promise;
 
-      // Step 1: Reset
-      expect(mockResetForRerun).toHaveBeenCalledWith(1, [42]);
-
-      // Step 2: Checked idle
+      // Step 1: Checked idle (already idle, skipped stop)
       expect(mockEvaluateUI).toHaveBeenCalledTimes(3);
+
+      // Step 2: Reset (after idle confirmed)
+      expect(mockResetForRerun).toHaveBeenCalledWith(1, [42]);
 
       // Step 3: Unpause
       const unpauseExpr = mockEvaluateUI.mock.calls[1]?.[0] as string;
@@ -364,11 +364,12 @@ describe("CampaignService", () => {
       expect(mockResetForRerun).not.toHaveBeenCalled();
     });
 
-    it("waits for idle when runner is busy", async () => {
+    it("stops runner and waits for idle when runner is busy", async () => {
       mockEvaluateUI
-        .mockResolvedValueOnce("campaigns")        // first poll: busy
-        .mockResolvedValueOnce("stopping-campaigns") // second poll: stopping
-        .mockResolvedValueOnce("idle")              // third poll: idle
+        .mockResolvedValueOnce("campaigns")        // getRunnerState (stopRunnerAndWaitForIdle check)
+        .mockResolvedValueOnce(undefined)           // stopRunner (campaignController.stop())
+        .mockResolvedValueOnce("stopping-campaigns") // getRunnerState (waitForIdle poll 1)
+        .mockResolvedValueOnce("idle")              // getRunnerState (waitForIdle poll 2)
         .mockResolvedValueOnce(undefined)           // unpause
         .mockResolvedValueOnce(true);               // start
 
@@ -377,8 +378,12 @@ describe("CampaignService", () => {
       await vi.advanceTimersByTimeAsync(3000);
       await promise;
 
-      // Should have polled at least 3 times before proceeding
-      expect(mockEvaluateUI.mock.calls.length).toBeGreaterThanOrEqual(5);
+      // Should have called: getRunnerState, stop, 2x getRunnerState, unpause, start
+      expect(mockEvaluateUI.mock.calls.length).toBeGreaterThanOrEqual(6);
+
+      // Verify stop was called
+      const stopExpr = mockEvaluateUI.mock.calls[1]?.[0] as string;
+      expect(stopExpr).toContain("campaignController.stop()");
     });
 
     it("throws CampaignTimeoutError when runner does not reach idle", async () => {
