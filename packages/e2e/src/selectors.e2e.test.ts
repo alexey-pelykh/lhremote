@@ -55,7 +55,7 @@ async function getCenter(
     `(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return null;
-      el.scrollIntoView({ block: "center" });
+      el.scrollIntoView({ block: "center", behavior: "instant" });
       const r = el.getBoundingClientRect();
       return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
     })()`,
