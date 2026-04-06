@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { assertDefined, describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
+import { assertDefined, describeE2E, forceStopInstance, installErrorDetection, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
 import {
   type AppService,
   LauncherService,
@@ -69,6 +69,8 @@ describeE2E("Campaign advanced operations", () => {
     }
     await quitApp(app);
   }, 60_000);
+
+  installErrorDetection(() => port);
 
   // -----------------------------------------------------------------------
   // CLI handlers

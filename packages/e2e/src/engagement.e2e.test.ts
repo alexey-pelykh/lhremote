@@ -7,6 +7,7 @@ import {
   forceStopInstance,
   getE2EPersonId,
   getE2EPostUrl,
+  installErrorDetection,
   launchApp,
   quitApp,
   resolveAccountId,
@@ -104,6 +105,8 @@ describeE2E("engagement operations", () => {
   beforeEach(async () => {
     await dismissErrors({ cdpPort, accountId }).catch(() => {});
   }, 30_000);
+
+  installErrorDetection(() => port);
 
   afterAll(async () => {
     const launcher = new LauncherService(port);

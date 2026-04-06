@@ -7,6 +7,7 @@ export {
   forceStopInstance,
   getE2EPersonId,
   getE2EPostUrl,
+  installErrorDetection,
   launchApp,
   type LaunchedApp,
   quitApp,
