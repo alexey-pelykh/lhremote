@@ -53,7 +53,7 @@ export const REACTION_TYPES: readonly ReactionType[] = Object.keys(
 ) as ReactionType[];
 
 /** Map from display name (as it appears in aria-labels) to reaction type. */
-const REACTION_NAME_MAP: Readonly<Record<string, ReactionType>> = {
+const REACTION_NAME_MAP: Readonly<Partial<Record<string, ReactionType>>> = {
   like: "like",
   celebrate: "celebrate",
   support: "support",
@@ -122,12 +122,19 @@ export interface ReactToPostOutput {
 /**
  * React to a LinkedIn post with a specified reaction type.
  *
- * Navigates to the post URL in the LinkedIn WebView, hovers over the
- * reaction trigger to expand the reaction picker, and clicks the
- * requested reaction button.
+ * Navigates to the post URL in the LinkedIn WebView and inspects the
+ * reaction trigger's `aria-label` to detect the current reaction state:
+ *
+ * - **Not reacted**: hovers the trigger to expand the reaction picker,
+ *   then clicks the requested reaction button.
+ * - **Already reacted with the same type**: returns immediately as a
+ *   no-op (`alreadyReacted: true`).
+ * - **Already reacted with a different type**: clicks the trigger to
+ *   remove the existing reaction, then applies the requested one.
  *
  * @param input - Post URL, reaction type, and CDP connection parameters.
- * @returns Confirmation of the reaction applied.
+ * @returns Confirmation of the reaction applied, including whether the
+ *   post was already reacted with the requested type.
  */
 export async function reactToPost(
   input: ReactToPostInput,
