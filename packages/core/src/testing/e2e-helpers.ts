@@ -275,6 +275,7 @@ export async function forceStopInstance(
 export function installErrorDetection(getCdpPort: () => number): void {
   let baselineIssueIds = new Set<string>();
   let baselinePopupCounts = new Map<string, number>();
+  let baselineHadLauncherPopup = false;
   let baselineCaptured = false;
 
   beforeEach(async () => {
@@ -282,6 +283,7 @@ export function installErrorDetection(getCdpPort: () => number): void {
       const result = await getErrors({ cdpPort: getCdpPort() });
       baselineIssueIds = new Set(result.issues.map((i) => i.id));
       baselinePopupCounts = countByKey(result.instancePopups);
+      baselineHadLauncherPopup = result.popup !== null;
       baselineCaptured = true;
     } catch {
       baselineCaptured = false;
@@ -309,7 +311,10 @@ export function installErrorDetection(getCdpPort: () => number): void {
       }
       consumed.set(key, seen + 1);
     }
-    const newErrors = [...newIssues, ...newPopups];
+    const newErrors: unknown[] = [...newIssues, ...newPopups];
+    if (!baselineHadLauncherPopup && result.popup !== null) {
+      newErrors.push({ type: "launcher-popup", ...result.popup });
+    }
     expect(
       newErrors,
       `LH logged ${String(newErrors.length)} error(s) during test: ${JSON.stringify(newErrors)}`,
