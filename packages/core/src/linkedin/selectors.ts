@@ -33,10 +33,11 @@ export const FEED_POST_CONTAINER = '[data-testid="mainFeed"] [role="listitem"]';
  *
  * - Feed page: ProseMirror/TipTap `div[role="textbox"]` with
  *   `aria-label="Text editor for creating comment"`.
- * - Post page: Quill `.ql-editor` with
+ * - Post page: Quill editor with `role="textbox"` and
  *   `aria-label="Text editor for creating content"`.
  *
- * The selector matches both by using the common prefix.
+ * Both variants share `role="textbox"` and the `aria-label` prefix
+ * "Text editor for creating", so a single selector covers both.
  */
 export const COMMENT_INPUT =
   '[role="textbox"][aria-label^="Text editor for creating"]';
