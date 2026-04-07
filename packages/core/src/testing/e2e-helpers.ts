@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect } from "vitest";
 import { AppService, type AppServiceOptions } from "../services/app.js";
-import { AppNotFoundError } from "../services/errors.js";
+import { AppNotFoundError, LinkedHelperUnreachableError } from "../services/errors.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { killInstanceProcesses } from "../cdp/instance-discovery.js";
 import { getErrors } from "../operations/get-errors.js";
@@ -41,6 +41,53 @@ export interface LaunchedApp {
   port: number;
 }
 
+/** Maximum time to wait for stale LH processes to exit before retrying launch (ms). */
+const STALE_PROCESS_TIMEOUT = 15_000;
+
+/** Interval between stale-process liveness checks (ms). */
+const STALE_PROCESS_POLL_INTERVAL = 500;
+
+/**
+ * Attempt `app.launch()`, recovering from stale processes left by a prior
+ * test suite.
+ *
+ * When sequential E2E suites run back-to-back, the previous suite's
+ * `afterAll` sends SIGTERM but the OS may not have reaped the process
+ * by the time the next suite's `beforeAll` calls `launchApp()`.
+ * `AppService.launch()` discovers the lingering (but non-connectable)
+ * process and throws {@link LinkedHelperUnreachableError}.
+ *
+ * This helper catches that error, waits up to
+ * {@link STALE_PROCESS_TIMEOUT} for the reported PIDs to exit while polling
+ * at {@link STALE_PROCESS_POLL_INTERVAL}, then retries the launch once.
+ * If the timeout expires first, the retry still proceeds even if some PIDs
+ * remain alive.
+ */
+async function launchWithStaleProcessRecovery(app: AppService): Promise<void> {
+  try {
+    await app.launch();
+  } catch (error) {
+    if (!(error instanceof LinkedHelperUnreachableError)) throw error;
+
+    const pids = error.processes.map((p) => p.pid);
+    const deadline = Date.now() + STALE_PROCESS_TIMEOUT;
+    while (Date.now() < deadline) {
+      const alive = pids.filter((pid) => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      if (alive.length === 0) break;
+      await delay(STALE_PROCESS_POLL_INTERVAL);
+    }
+
+    await app.launch();
+  }
+}
+
 /**
  * Launch LinkedHelper and wait for the launcher to become fully ready.
  *
@@ -59,7 +106,7 @@ export async function launchApp(options?: {
   const timeout = options?.timeout ?? 30_000;
   const app = new AppService(undefined, options?.appOptions);
 
-  await app.launch();
+  await launchWithStaleProcessRecovery(app);
 
   const port = app.cdpPort;
   const deadline = Date.now() + timeout;
