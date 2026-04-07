@@ -138,10 +138,12 @@ describeE2E("engagement operations", () => {
 
       it("visit-profile --json returns profile data", async () => {
         const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
         await handleVisitProfile({ personId, cdpPort, accountId, json: true });
 
-        expect(process.exitCode).toBeUndefined();
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
         expect(stdoutSpy).toHaveBeenCalled();
 
         const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
@@ -198,10 +200,12 @@ describeE2E("engagement operations", () => {
 
       it("follow-person --json returns action result", async () => {
         const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
         await handleFollowPerson({ personId, cdpPort, accountId, json: true });
 
-        expect(process.exitCode).toBeUndefined();
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
         expect(stdoutSpy).toHaveBeenCalled();
 
         const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
@@ -253,10 +257,12 @@ describeE2E("engagement operations", () => {
 
       it("endorse-skills --json returns action result", async () => {
         const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
         await handleEndorseSkills({ personId, cdpPort, accountId, json: true });
 
-        expect(process.exitCode).toBeUndefined();
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
         expect(stdoutSpy).toHaveBeenCalled();
 
         const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
@@ -308,6 +314,7 @@ describeE2E("engagement operations", () => {
 
       it("like-person-posts --json returns action result", async () => {
         const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
         await handleLikePersonPosts({
           personId,
@@ -317,7 +324,8 @@ describeE2E("engagement operations", () => {
           json: true,
         });
 
-        expect(process.exitCode).toBeUndefined();
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
         expect(stdoutSpy).toHaveBeenCalled();
 
         const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
@@ -374,10 +382,12 @@ describeE2E("engagement operations", () => {
 
       it("react-to-post --json returns reaction result", async () => {
         const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
         await handleReactToPost(postUrl, { cdpPort, json: true });
 
-        expect(process.exitCode).toBeUndefined();
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
         expect(stdoutSpy).toHaveBeenCalled();
 
         const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
@@ -435,6 +445,7 @@ describeE2E("engagement operations", () => {
 
       it("comment-on-post --json returns comment result", async () => {
         const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
         await handleCommentOnPost({
           url: postUrl,
@@ -444,7 +455,8 @@ describeE2E("engagement operations", () => {
           json: true,
         });
 
-        expect(process.exitCode).toBeUndefined();
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
         expect(stdoutSpy).toHaveBeenCalled();
 
         const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
