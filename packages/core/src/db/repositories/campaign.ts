@@ -142,6 +142,7 @@ export class CampaignRepository {
     deleteTargetPeopleByCampaign: PreparedStatement;
     deleteCampaignHistory: PreparedStatement;
     deleteCollectionPeopleByCampaign: PreparedStatement;
+    deleteCollectionPeopleVersionsLogsByCollection: PreparedStatement | null;
     deleteCampaignVersions: PreparedStatement;
     selectExcludeListInfo: PreparedStatement;
     deleteActionVersionsByCampaign: PreparedStatement;
@@ -515,6 +516,18 @@ export class CampaignRepository {
         // 5. Delete collection_people for exclude lists
         stmts.deleteCollectionPeopleByCampaign.run(campaignId, campaignId);
 
+        // 5b. Delete collection_people_versions_logs for exclude lists.
+        //     Triggers on collection_people may have created log entries
+        //     during step 5 or earlier add/remove operations.  These must
+        //     be cleaned up before the referenced versions are deleted
+        //     (step 10) to prevent orphaned rows whose IDs may be reused
+        //     by future campaigns, causing UNIQUE constraint violations.
+        if (stmts.deleteCollectionPeopleVersionsLogsByCollection) {
+          for (const collectionId of excludeCollectionIds) {
+            stmts.deleteCollectionPeopleVersionsLogsByCollection.run(collectionId);
+          }
+        }
+
         // 6a. Delete campaign_version_actions (FK → campaign_versions)
         //     This table exists only in real LH databases, not in test schemas.
         try {
@@ -669,6 +682,16 @@ export class CampaignRepository {
            )
          )`,
       ),
+      deleteCollectionPeopleVersionsLogsByCollection: (() => {
+        try {
+          return db.prepare(
+            `DELETE FROM collection_people_versions_logs WHERE collection_id = ?`,
+          );
+        } catch {
+          // Table may not exist in older schemas
+          return null;
+        }
+      })(),
       deleteCampaignVersions: db.prepare(
         `DELETE FROM campaign_versions WHERE campaign_id = ?`,
       ),

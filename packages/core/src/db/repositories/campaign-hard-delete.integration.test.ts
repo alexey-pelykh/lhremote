@@ -64,6 +64,9 @@ describe("CampaignRepository.deleteCampaign (integration)", () => {
     );
     expect(excludeListCount).toBeGreaterThan(0);
 
+    // Version logs pre-condition (simulates trigger-created rows)
+    expect(countRows("collection_people_versions_logs", "collection_id IN (1, 2)", [])).toBeGreaterThan(0);
+
     // Perform the hard delete (with FK constraints enforced)
     repo.deleteCampaign(1);
 
@@ -82,7 +85,12 @@ describe("CampaignRepository.deleteCampaign (integration)", () => {
     // (config ID 1 belonged to campaign 1's action)
     expect(countRows("action_configs", "id = ?", [1])).toBe(0);
 
-    // Verify exclude list chain is cleaned up
+    // Verify exclude list chain is cleaned up (including version logs)
+    expect(countRows(
+      "collection_people_versions_logs",
+      "collection_id IN (1, 2)",
+      [],
+    )).toBe(0);
     expect(countRows(
       "collection_people_versions",
       "id IN (1, 2)",

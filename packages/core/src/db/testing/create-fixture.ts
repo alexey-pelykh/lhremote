@@ -613,6 +613,7 @@ db.exec(`
     collection_people_id INTEGER NOT NULL,
     version_id INTEGER NOT NULL,
     status INTEGER NOT NULL,
+    UNIQUE(collection_people_id, version_id, status),
     FOREIGN KEY(collection_id) REFERENCES collections(id),
     FOREIGN KEY(version_id) REFERENCES collection_people_versions(id)
   );
@@ -767,6 +768,11 @@ db.exec(`
 
   INSERT INTO collection_people (collection_id, person_id)
   VALUES (1, 2);
+
+  INSERT INTO collection_people_versions_logs
+    (id, collection_id, person_id, collection_people_id, version_id, status, created_at, updated_at)
+  VALUES
+    (1, 1, 2, 1, 1, 1, '${NOW}', '${NOW}');
 `);
 
 // Campaign 5: campaign-level + action-level exclude list chains
