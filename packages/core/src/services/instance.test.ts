@@ -509,6 +509,135 @@ describe("InstanceService", () => {
     });
   });
 
+  describe("reloadUI", () => {
+    it("enables Page domain, reloads, waits for load, then disables", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+
+      await service.reloadUI();
+
+      expect(uiClient.send).toHaveBeenCalledWith("Page.enable");
+      expect(uiClient.send).toHaveBeenCalledWith("Page.reload");
+      expect(uiClient.waitForEvent).toHaveBeenCalledWith("Page.loadEventFired");
+      expect(uiClient.send).toHaveBeenCalledWith("Page.disable");
+    });
+
+    it("disables Page domain even when reload fails", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.waitForEvent.mockRejectedValueOnce(new Error("load timeout"));
+
+      await expect(service.reloadUI()).rejects.toThrow("load timeout");
+
+      expect(uiClient.send).toHaveBeenCalledWith("Page.disable");
+    });
+
+    it("throws ServiceError when not connected", async () => {
+      await expect(service.reloadUI()).rejects.toThrow(ServiceError);
+    });
+
+    it("does not use the LinkedIn client", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      await service.reloadUI();
+
+      const liClient = getClientMocks("LI1");
+      expect(liClient.send).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("dismissInstancePopups", () => {
+    it("returns dismissed count from CDP evaluation", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce({ dismissed: 2, nonDismissable: 0 });
+
+      const result = await service.dismissInstancePopups();
+
+      expect(result).toEqual({ dismissed: 2, nonDismissable: 0 });
+      expect(uiClient.evaluate).toHaveBeenCalledTimes(1);
+      const call = uiClient.evaluate.mock.calls[0];
+      expect(call?.[1]).toBe(false);
+    });
+
+    it("script includes button click path", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce({ dismissed: 0, nonDismissable: 0 });
+
+      await service.dismissInstancePopups();
+
+      const script = uiClient.evaluate.mock.calls[0]?.[0] as string;
+      expect(script).toContain("button.click()");
+    });
+
+    it("script includes force-removal path for non-closable popups", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce({ dismissed: 0, nonDismissable: 0 });
+
+      await service.dismissInstancePopups();
+
+      const script = uiClient.evaluate.mock.calls[0]?.[0] as string;
+      expect(script).toContain("container.remove()");
+      expect(script).toContain("dialog.remove()");
+    });
+
+    it("returns zero when no popups present", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce({ dismissed: 0, nonDismissable: 0 });
+
+      const result = await service.dismissInstancePopups();
+
+      expect(result).toEqual({ dismissed: 0, nonDismissable: 0 });
+    });
+
+    it("throws ServiceError when not connected", async () => {
+      await expect(service.dismissInstancePopups()).rejects.toThrow(ServiceError);
+    });
+
+    it("script includes visibility check", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce({ dismissed: 0, nonDismissable: 0 });
+
+      await service.dismissInstancePopups();
+
+      const script = uiClient.evaluate.mock.calls[0]?.[0] as string;
+      expect(script).toContain("isVisible(container)");
+      expect(script).toContain("isVisible(dialog)");
+    });
+
+    it("evaluates on the UI client only", async () => {
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      const uiClient = getClientMocks("UI1");
+      uiClient.evaluate.mockResolvedValueOnce({ dismissed: 0, nonDismissable: 0 });
+
+      await service.dismissInstancePopups();
+
+      const liClient = getClientMocks("LI1");
+      expect(liClient.evaluate).not.toHaveBeenCalled();
+    });
+  });
+
   describe("evaluateUI", () => {
     it("evaluates expression on the UI client only", async () => {
       mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
