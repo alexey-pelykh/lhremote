@@ -35,6 +35,7 @@ describe("dismissErrors", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -55,6 +56,8 @@ describe("dismissErrors", () => {
       connectUiOnly: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn(),
       dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 0, nonDismissable: 0 }),
+      getInstancePopups: vi.fn().mockResolvedValue([]),
+      reloadUI: vi.fn().mockResolvedValue(undefined),
     };
     vi.mocked(InstanceService).mockImplementation(function () {
       return mockInstance as unknown as InstanceService;
@@ -84,6 +87,8 @@ describe("dismissErrors", () => {
       connectUiOnly: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn(),
       dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 2, nonDismissable: 0 }),
+      getInstancePopups: vi.fn().mockResolvedValue([]),
+      reloadUI: vi.fn().mockResolvedValue(undefined),
     };
     vi.mocked(InstanceService).mockImplementation(function () {
       return mockInstance as unknown as InstanceService;
@@ -114,7 +119,9 @@ describe("dismissErrors", () => {
     const mockInstance = {
       connectUiOnly: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn(),
-      dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 0, nonDismissable: 1 }),
+      dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 0, nonDismissable: 0 }),
+      getInstancePopups: vi.fn().mockResolvedValue([]),
+      reloadUI: vi.fn().mockResolvedValue(undefined),
     };
     vi.mocked(InstanceService).mockImplementation(function () {
       return mockInstance as unknown as InstanceService;
@@ -123,7 +130,78 @@ describe("dismissErrors", () => {
     const result = await dismissErrors({ cdpPort: 9222 });
 
     expect(result.dismissed).toBe(0);
-    expect(result.nonDismissable).toBe(2);
+    expect(result.nonDismissable).toBe(1);
+  });
+
+  it("reloads UI when popups survive dismissal", async () => {
+    vi.useFakeTimers();
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(discoverInstancePort).mockResolvedValue(9223);
+
+    const mockLauncher = {
+      connect: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn(),
+      dismissPopup: vi.fn().mockResolvedValue(false),
+      getPopupState: vi.fn().mockResolvedValue(null),
+    };
+    vi.mocked(LauncherService).mockImplementation(function () {
+      return mockLauncher as unknown as LauncherService;
+    });
+
+    const mockInstance = {
+      connectUiOnly: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn(),
+      dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 1, nonDismissable: 0 }),
+      getInstancePopups: vi.fn().mockResolvedValue([
+        { title: "Error", description: "Persistent popup", closable: false },
+      ]),
+      reloadUI: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(InstanceService).mockImplementation(function () {
+      return mockInstance as unknown as InstanceService;
+    });
+
+    const promise = dismissErrors({ cdpPort: 9222 });
+    await vi.advanceTimersByTimeAsync(300);
+    const result = await promise;
+
+    expect(mockInstance.getInstancePopups).toHaveBeenCalledOnce();
+    expect(mockInstance.reloadUI).toHaveBeenCalledOnce();
+    expect(result.dismissed).toBe(1);
+  });
+
+  it("skips reload when no popups survive dismissal", async () => {
+    vi.useFakeTimers();
+    vi.mocked(resolveAccount).mockResolvedValue(1);
+    vi.mocked(discoverInstancePort).mockResolvedValue(9223);
+
+    const mockLauncher = {
+      connect: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn(),
+      dismissPopup: vi.fn().mockResolvedValue(true),
+    };
+    vi.mocked(LauncherService).mockImplementation(function () {
+      return mockLauncher as unknown as LauncherService;
+    });
+
+    const mockInstance = {
+      connectUiOnly: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn(),
+      dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 2, nonDismissable: 0 }),
+      getInstancePopups: vi.fn().mockResolvedValue([]),
+      reloadUI: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(InstanceService).mockImplementation(function () {
+      return mockInstance as unknown as InstanceService;
+    });
+
+    const promise = dismissErrors({ cdpPort: 9222 });
+    await vi.advanceTimersByTimeAsync(300);
+    const result = await promise;
+
+    expect(mockInstance.getInstancePopups).toHaveBeenCalledOnce();
+    expect(mockInstance.reloadUI).not.toHaveBeenCalled();
+    expect(result.dismissed).toBe(3);
   });
 
   it("passes connection options to resolveAccount", async () => {
@@ -143,6 +221,8 @@ describe("dismissErrors", () => {
       connectUiOnly: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn(),
       dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 0, nonDismissable: 0 }),
+      getInstancePopups: vi.fn().mockResolvedValue([]),
+      reloadUI: vi.fn().mockResolvedValue(undefined),
     };
     vi.mocked(InstanceService).mockImplementation(function () {
       return mockInstance as unknown as InstanceService;
@@ -178,6 +258,8 @@ describe("dismissErrors", () => {
       connectUiOnly: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn(),
       dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 1, nonDismissable: 0 }),
+      getInstancePopups: vi.fn().mockResolvedValue([]),
+      reloadUI: vi.fn().mockResolvedValue(undefined),
     };
     vi.mocked(InstanceService).mockImplementation(function () {
       return mockInstance as unknown as InstanceService;
@@ -206,6 +288,8 @@ describe("dismissErrors", () => {
       connectUiOnly: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn(),
       dismissInstancePopups: vi.fn().mockResolvedValue({ dismissed: 0, nonDismissable: 0 }),
+      getInstancePopups: vi.fn().mockResolvedValue([]),
+      reloadUI: vi.fn().mockResolvedValue(undefined),
     };
     vi.mocked(InstanceService).mockImplementation(function () {
       return mockInstance as unknown as InstanceService;

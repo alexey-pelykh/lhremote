@@ -343,21 +343,34 @@ export class InstanceService {
   }
 
   /**
-   * Dismiss closable popups in the instance UI by clicking their buttons.
+   * Dismiss popups in the instance UI.
    *
-   * @returns The number of popups that were dismissed.
+   * Closable popups (those with buttons) are dismissed by clicking their
+   * button.  Non-closable popups are force-removed from the DOM so they
+   * no longer block subsequent UI operations.
+   *
+   * @returns An object with `dismissed` — the total number of popups removed
+   *          (both button-clicked and force-removed) — and `nonDismissable`
+   *          (always `0` since non-closable popups are now force-removed).
    */
   async dismissInstancePopups(): Promise<{ dismissed: number; nonDismissable: number }> {
     return this.evaluateUI<{ dismissed: number; nonDismissable: number }>(
       `(() => {
         let dismissed = 0;
-        let nonDismissable = 0;
         const seen = new WeakSet();
+
+        function isVisible(el) {
+          const style = getComputedStyle(el);
+          const opacity = Number.parseFloat(style.opacity);
+          if (style.display === 'none' || style.visibility === 'hidden' || (!Number.isNaN(opacity) && opacity <= 0)) return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        }
 
         // Strategy 1: class-based selectors for known popup components
         for (const header of document.querySelectorAll('[class*="Popup_Header_"], [class*="ErrorAndAlert_Title_"]')) {
           const container = header.closest('[class*="Popup_Container_"], [class*="Popup_Wrapper_"], [class*="Popup_Popup_"], [class*="ErrorAndAlert_"]') || header.parentElement;
-          if (!container || seen.has(container)) continue;
+          if (!container || seen.has(container) || !isVisible(container)) continue;
           seen.add(container);
           const controls = container.querySelector('[class*="Popup_Controls_"], [class*="Popup_Buttons_"], [class*="Popup_Footer_"]');
           const button = controls?.querySelector('button');
@@ -365,27 +378,50 @@ export class InstanceService {
             button.click();
             dismissed++;
           } else {
-            nonDismissable++;
+            container.remove();
+            dismissed++;
           }
         }
 
         // Strategy 2: role-based fallback for dialogs not caught above
         for (const dialog of document.querySelectorAll('[role="dialog"]')) {
-          if (seen.has(dialog)) continue;
+          if (seen.has(dialog) || !isVisible(dialog)) continue;
           seen.add(dialog);
           const button = dialog.querySelector('button');
           if (button) {
             button.click();
             dismissed++;
           } else {
-            nonDismissable++;
+            dialog.remove();
+            dismissed++;
           }
         }
 
-        return { dismissed, nonDismissable };
+        return { dismissed, nonDismissable: 0 };
       })()`,
       false,
     );
+  }
+
+  /**
+   * Reload the instance UI page via CDP.
+   *
+   * This is a heavy-handed recovery mechanism: it restarts the React app,
+   * clearing all cached error state (including popups that survive DOM
+   * removal because React re-renders them from internal state).
+   *
+   * Waits for the page `load` event before resolving.
+   */
+  async reloadUI(): Promise<void> {
+    const client = this.ensureUiClient();
+    await client.send("Page.enable");
+    try {
+      const loadPromise = client.waitForEvent("Page.loadEventFired");
+      await client.send("Page.reload");
+      await loadPromise;
+    } finally {
+      await client.send("Page.disable").catch(() => {});
+    }
   }
 
   /**
