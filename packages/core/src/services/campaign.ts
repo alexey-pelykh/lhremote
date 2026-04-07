@@ -453,16 +453,28 @@ export class CampaignService {
    * runner's own SQLite writes.
    */
   async stopRunnerAndWaitForIdle(campaignId?: number): Promise<void> {
-    const state = await this.getRunnerState();
+    let state = await this.getRunnerState();
     if (state === "idle") return;
-    try {
-      await this.stopRunner();
-    } catch (error) {
-      if (campaignId !== undefined && error instanceof CampaignExecutionError && error.campaignId === undefined) {
-        throw new CampaignExecutionError(error.message, campaignId, { cause: error.cause });
-      }
-      throw error;
+    if (state === "stopping-campaigns") {
+      // Runner is in stopping-campaigns and may be stuck — force a restart
+      // cycle to break out of that state, then re-stop cleanly.
+      try { await this.startRunner(); } catch { /* best-effort */ }
+      state = await this.getRunnerState();
+      if (state === "idle") return;
     }
+    if (state !== "stopping-campaigns") {
+      try {
+        await this.stopRunner();
+      } catch (error) {
+        if (campaignId !== undefined && error instanceof CampaignExecutionError && error.campaignId === undefined) {
+          throw new CampaignExecutionError(error.message, campaignId, { cause: error.cause });
+        }
+        throw error;
+      }
+    }
+    // If still in stopping-campaigns after recovery attempt, waitForIdle is
+    // the fallback — re-issuing stopRunner() on a stopping runner is known
+    // to not help and may worsen the stuck state.
     await this.waitForIdle(campaignId);
   }
 
@@ -633,10 +645,14 @@ export class CampaignService {
         })()`,
       );
 
-      // Stop the global runner
+      // Stop the global runner. Skip if already idle or stopping — calling
+      // stop on an idle/stopping runner can leave it stuck.
       await this.instance.evaluateUI(
         `(function() {
-          window.mainWindowService.mainWindow.campaignController.stop();
+          const s = window.mainWindowService.mainWindow.state;
+          if (s !== "idle" && s !== "stopping-campaigns") {
+            window.mainWindowService.mainWindow.campaignController.stop();
+          }
         })()`,
         false,
       );
