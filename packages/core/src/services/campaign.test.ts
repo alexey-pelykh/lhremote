@@ -386,6 +386,39 @@ describe("CampaignService", () => {
       expect(stopExpr).toContain("campaignController.stop()");
     });
 
+    it("force-restarts runner stuck in stopping-campaigns before re-stopping", async () => {
+      mockEvaluateUI
+        .mockResolvedValueOnce("stopping-campaigns") // getRunnerState (initial check)
+        .mockResolvedValueOnce(undefined)            // startRunner (force restart)
+        .mockResolvedValueOnce("campaigns")          // getRunnerState (re-check after restart)
+        .mockResolvedValueOnce(undefined)            // stopRunner (clean stop)
+        .mockResolvedValueOnce("idle")               // getRunnerState (waitForIdle poll 1)
+        .mockResolvedValueOnce(undefined)            // unpause
+        .mockResolvedValueOnce(true);                // start
+
+      const promise = service.start(1, [42]);
+      await vi.advanceTimersByTimeAsync(3000);
+      await promise;
+
+      expect(mockEvaluateUI.mock.calls.length).toBeGreaterThanOrEqual(7);
+
+      // Call 1: getRunnerState → stopping-campaigns
+      const stateExpr = mockEvaluateUI.mock.calls[0]?.[0] as string;
+      expect(stateExpr).toContain("state");
+
+      // Call 2: startRunner (force restart to break stuck state)
+      const startExpr = mockEvaluateUI.mock.calls[1]?.[0] as string;
+      expect(startExpr).toContain("campaignController.start()");
+
+      // Call 3: getRunnerState re-check after restart
+      const recheckExpr = mockEvaluateUI.mock.calls[2]?.[0] as string;
+      expect(recheckExpr).toContain("state");
+
+      // Call 4: stopRunner (clean stop)
+      const stopExpr = mockEvaluateUI.mock.calls[3]?.[0] as string;
+      expect(stopExpr).toContain("campaignController.stop()");
+    });
+
     it("throws CampaignTimeoutError with state and campaign context when runner does not reach idle", async () => {
       mockEvaluateUI.mockResolvedValue("campaigns"); // always busy
 
@@ -427,20 +460,26 @@ describe("CampaignService", () => {
   });
 
   describe("stop", () => {
-    it("pauses campaign and stops runner", async () => {
+    it("pauses campaign and conditionally stops runner", async () => {
       mockGetCampaign.mockReturnValue(MOCK_CAMPAIGN);
       mockEvaluateUI
         .mockResolvedValueOnce(undefined) // pause
-        .mockResolvedValueOnce(undefined); // stop
+        .mockResolvedValueOnce(undefined); // atomic state-check + stop
 
       await service.stop(1);
 
       expect(mockEvaluateUI).toHaveBeenCalledTimes(2);
+
+      // First call: pause the campaign
       const pauseExpr = mockEvaluateUI.mock.calls[0]?.[0] as string;
       expect(pauseExpr).toContain("setCampaignPaused");
       expect(pauseExpr).toContain("true");
 
+      // Second call: atomic state-check + conditional stop
       const stopExpr = mockEvaluateUI.mock.calls[1]?.[0] as string;
+      expect(stopExpr).toContain("state");
+      expect(stopExpr).toContain("idle");
+      expect(stopExpr).toContain("stopping-campaigns");
       expect(stopExpr).toContain("campaignController.stop()");
     });
 
