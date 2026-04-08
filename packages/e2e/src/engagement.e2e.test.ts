@@ -382,7 +382,7 @@ describeE2E("engagement operations", () => {
         vi.restoreAllMocks();
       });
 
-      it("react-to-post --json returns reaction result", async () => {
+      it("react-to-post --json returns reaction result (like)", async () => {
         const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
         const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
@@ -399,10 +399,33 @@ describeE2E("engagement operations", () => {
         expect(parsed.postUrl).toBe(postUrl);
         expect(typeof parsed.reactionType).toBe("string");
       }, 120_000);
+
+      it("react-to-post --json with insightful reaction uses popup", async () => {
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleReactToPost(postUrl, {
+          cdpPort,
+          type: "insightful",
+          json: true,
+        });
+
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
+        const parsed = JSON.parse(output) as ReactToPostOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.reactionType).toBe("insightful");
+        expect(parsed.alreadyReacted).toBe(false);
+      }, 120_000);
     });
 
     describe("MCP tools", () => {
-      it("react-to-post tool returns valid JSON", async () => {
+      it("react-to-post tool returns valid JSON (like)", async () => {
         const { server, getHandler } = createMockServer();
         registerReactToPost(server);
 
@@ -426,6 +449,33 @@ describeE2E("engagement operations", () => {
         expect(parsed.success).toBe(true);
         expect(parsed.postUrl).toBe(postUrl);
         expect(parsed.reactionType).toBe("like");
+      }, 120_000);
+
+      it("react-to-post tool with insightful reaction uses popup", async () => {
+        const { server, getHandler } = createMockServer();
+        registerReactToPost(server);
+
+        const handler = getHandler("react-to-post");
+        const result = (await handler({
+          postUrl,
+          reactionType: "insightful",
+          cdpPort,
+        })) as {
+          isError?: boolean;
+          content: { type: string; text: string }[];
+        };
+
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
+        expect(result.content).toHaveLength(1);
+
+        const parsed = JSON.parse(
+          (result.content[0] as { text: string }).text,
+        ) as ReactToPostOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.reactionType).toBe("insightful");
+        expect(parsed.alreadyReacted).toBe(false);
       }, 120_000);
     });
   });
