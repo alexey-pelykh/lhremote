@@ -7,6 +7,7 @@ export {
   startInstanceWithRecovery,
   waitForInstancePort,
   waitForInstanceShutdown,
+  waitForInstanceTargets,
   type StartInstanceOutcome,
 } from "./instance-lifecycle.js";
 export { LauncherService } from "./launcher.js";
