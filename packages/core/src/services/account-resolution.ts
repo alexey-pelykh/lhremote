@@ -6,7 +6,6 @@ import { discoverAllDatabases } from "../db/index.js";
 import type { Account } from "../types/index.js";
 import {
   LinkedHelperNotRunningError,
-  LinkedHelperUnreachableError,
   ServiceError,
   WrongPortError,
 } from "./errors.js";
@@ -19,11 +18,13 @@ import { LauncherService } from "./launcher.js";
 export class AccountResolutionError extends ServiceError {
   readonly reason: "no-accounts" | "multiple-accounts";
 
-  constructor(reason: "no-accounts" | "multiple-accounts") {
+  constructor(reason: "no-accounts" | "multiple-accounts", accountIds?: number[]) {
     const message =
       reason === "no-accounts"
         ? "No accounts found."
-        : "Multiple accounts found. Cannot determine which instance to use.";
+        : accountIds && accountIds.length > 0
+          ? `Multiple accounts found (${accountIds.join(", ")}). Specify accountId to select one.`
+          : "Multiple accounts found. Cannot determine which instance to use.";
     super(message);
     this.name = "AccountResolutionError";
     this.reason = reason;
@@ -55,13 +56,15 @@ export async function resolveAccount(
   try {
     port = await resolveLauncherPort(cdpPort, options?.host);
   } catch (error: unknown) {
-    // When cdpPort was omitted and the launcher is unreachable or not
-    // running, fall back to database-based resolution instead of
-    // propagating the error (the "instance-only" scenario).
+    // When cdpPort was omitted and no LinkedHelper process exists,
+    // fall back to database-based resolution (the "offline" scenario).
+    // LinkedHelperUnreachableError is NOT caught here: it means a
+    // process exists but CDP failed transiently — propagating it
+    // surfaces the real problem instead of masking it behind a
+    // misleading "multiple accounts" error from stale databases.
     if (
       cdpPort === undefined &&
-      (error instanceof LinkedHelperUnreachableError ||
-        error instanceof LinkedHelperNotRunningError)
+      error instanceof LinkedHelperNotRunningError
     ) {
       return resolveAccountFromDatabases();
     }
@@ -115,7 +118,7 @@ function resolveAccountFromDatabases(): number {
     throw new AccountResolutionError("no-accounts");
   }
   if (databases.size > 1) {
-    throw new AccountResolutionError("multiple-accounts");
+    throw new AccountResolutionError("multiple-accounts", [...databases.keys()]);
   }
   // databases.size === 1 is guaranteed by the guards above
   const accountId = databases.keys().next().value as number;
