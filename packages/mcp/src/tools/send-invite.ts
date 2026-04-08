@@ -34,9 +34,15 @@ export function registerSendInvite(server: McpServer): void {
         .boolean()
         .optional()
         .describe("Archive the ephemeral campaign instead of deleting it"),
+      timeout: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Maximum time to wait for action completion in milliseconds (default: 5 min)"),
       ...cdpConnectionSchema,
     },
-    async ({ personId, url, messageTemplate, saveAsLeadSN, keepCampaign, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personId, url, messageTemplate, saveAsLeadSN, keepCampaign, timeout, cdpPort, cdpHost, allowRemote, accountId }) => {
       if ((personId == null) === (url == null)) {
         return mcpError("Exactly one of personId or url must be provided.");
       }
@@ -53,7 +59,7 @@ export function registerSendInvite(server: McpServer): void {
       try {
         const result = await sendInvite({
           personId, url, messageTemplate: parsedMessageTemplate, saveAsLeadSN,
-          keepCampaign, cdpPort, cdpHost, allowRemote,
+          keepCampaign, timeout, cdpPort, cdpHost, allowRemote, accountId,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

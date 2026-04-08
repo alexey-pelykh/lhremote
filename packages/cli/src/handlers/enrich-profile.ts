@@ -19,6 +19,7 @@ export async function handleEnrichProfile(options: {
   enrichSocials?: boolean;
   enrichCompanies?: boolean;
   keepCampaign?: boolean;
+  timeout?: number;
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
@@ -48,6 +49,7 @@ export async function handleEnrichProfile(options: {
       companies: options.enrichCompanies !== undefined
         ? { shouldEnrich: options.enrichCompanies } : undefined,
       keepCampaign: options.keepCampaign,
+      timeout: options.timeout,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,

@@ -18,6 +18,7 @@ export async function handleMessagePerson(options: {
   rejectIfReplied?: boolean;
   rejectIfMessaged?: boolean;
   keepCampaign?: boolean;
+  timeout?: number;
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
@@ -61,6 +62,7 @@ export async function handleMessagePerson(options: {
       rejectIfReplied: options.rejectIfReplied,
       rejectIfMessaged: options.rejectIfMessaged,
       keepCampaign: options.keepCampaign,
+      timeout: options.timeout,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,

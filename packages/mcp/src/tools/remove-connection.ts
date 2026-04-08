@@ -26,16 +26,22 @@ export function registerRemoveConnection(server: McpServer): void {
         .boolean()
         .optional()
         .describe("Archive the ephemeral campaign instead of deleting it"),
+      timeout: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Maximum time to wait for action completion in milliseconds (default: 5 min)"),
       ...cdpConnectionSchema,
     },
-    async ({ personId, url, keepCampaign, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personId, url, keepCampaign, timeout, cdpPort, cdpHost, allowRemote, accountId }) => {
       if ((personId == null) === (url == null)) {
         return mcpError("Exactly one of personId or url must be provided.");
       }
 
       try {
         const result = await removeConnection({
-          personId, url, keepCampaign, cdpPort, cdpHost, allowRemote,
+          personId, url, keepCampaign, timeout, cdpPort, cdpHost, allowRemote, accountId,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

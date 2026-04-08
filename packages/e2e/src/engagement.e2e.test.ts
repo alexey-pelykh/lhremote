@@ -319,6 +319,7 @@ describeE2E("engagement operations", () => {
         await handleLikePersonPosts({
           personId,
           numberOfPosts: 1,
+          timeout: 90_000,
           cdpPort,
           accountId,
           json: true,
@@ -345,6 +346,7 @@ describeE2E("engagement operations", () => {
         const result = (await handler({
           personId,
           numberOfPosts: 1,
+          timeout: 90_000,
           cdpPort,
           accountId,
         })) as {

@@ -47,9 +47,15 @@ export function registerEnrichProfile(server: McpServer): void {
         .boolean()
         .optional()
         .describe("Archive the ephemeral campaign instead of deleting it"),
+      timeout: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Maximum time to wait for action completion in milliseconds (default: 5 min)"),
       ...cdpConnectionSchema,
     },
-    async ({ personId, url, profileInfo, phones, emails, socials, companies, keepCampaign, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personId, url, profileInfo, phones, emails, socials, companies, keepCampaign, timeout, cdpPort, cdpHost, allowRemote, accountId }) => {
       if ((personId == null) === (url == null)) {
         return mcpError("Exactly one of personId or url must be provided.");
       }
@@ -57,7 +63,7 @@ export function registerEnrichProfile(server: McpServer): void {
       try {
         const result = await enrichProfile({
           personId, url, profileInfo, phones, emails, socials, companies,
-          keepCampaign, cdpPort, cdpHost, allowRemote,
+          keepCampaign, timeout, cdpPort, cdpHost, allowRemote, accountId,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

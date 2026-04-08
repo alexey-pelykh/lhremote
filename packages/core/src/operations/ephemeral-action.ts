@@ -17,6 +17,7 @@ export interface EphemeralActionInput extends ConnectionOptions {
   readonly personId?: number | undefined;
   readonly url?: string | undefined;
   readonly keepCampaign?: boolean | undefined;
+  readonly timeout?: number | undefined;
 }
 
 /**
@@ -44,6 +45,7 @@ export async function executeEphemeralAction(
     const ephemeral = new EphemeralCampaignService(instance, db);
     return ephemeral.execute(actionType, target, actionSettings, {
       ...(input.keepCampaign !== undefined && { keepCampaign: input.keepCampaign }),
+      ...(input.timeout !== undefined && { timeout: input.timeout }),
     });
   }, { db: { readOnly: false } });
 }

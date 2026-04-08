@@ -18,6 +18,7 @@ export async function handleSendInmail(options: {
   rejectIfReplied?: boolean;
   proceedOnOutOfCredits?: boolean;
   keepCampaign?: boolean;
+  timeout?: number;
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
@@ -61,6 +62,7 @@ export async function handleSendInmail(options: {
       rejectIfReplied: options.rejectIfReplied,
       proceedOnOutOfCredits: options.proceedOnOutOfCredits,
       keepCampaign: options.keepCampaign,
+      timeout: options.timeout,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
