@@ -13,6 +13,7 @@ vi.mock("../cdp/discovery.js", () => ({
 
 vi.mock("../linkedin/dom-automation.js", () => ({
   waitForElement: vi.fn(),
+  waitForDOMStable: vi.fn().mockResolvedValue(undefined),
   hover: vi.fn(),
   click: vi.fn(),
   humanizedHover: vi.fn(),

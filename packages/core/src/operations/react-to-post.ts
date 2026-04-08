@@ -4,7 +4,7 @@
 import { resolveInstancePort } from "../cdp/index.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { humanizedClick, humanizedHover, retryInteraction, waitForElement } from "../linkedin/dom-automation.js";
+import { humanizedClick, humanizedHover, retryInteraction, waitForDOMStable, waitForElement } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import {
   REACTION_CELEBRATE,
@@ -200,7 +200,10 @@ export async function reactToPost(
     if (currentReaction !== null) {
       // Reacted with a different type — click trigger to unreact first
       await humanizedClick(client, REACTION_TRIGGER, mouse);
-      await gaussianDelay(1_500, 300, 800, 2_500);
+      // Wait for DOM to settle after unreacting — the trigger element
+      // gets replaced and its aria-label changes, so hovering too early
+      // can target a stale position or miss the new element entirely.
+      await waitForDOMStable(client, 300);
     }
 
     // Hover the trigger to expand the reactions popup, then wait for
@@ -215,7 +218,7 @@ export async function reactToPost(
     const reactionSelector = REACTION_SELECTORS[reactionType];
     await retryInteraction(async () => {
       await humanizedHover(client, REACTION_TRIGGER, mouse);
-      await gaussianDelay(1_500, 150, 1_200, 1_800);
+      await gaussianDelay(2_000, 300, 1_500, 3_000);
       await waitForElement(client, reactionSelector, { timeout: 10_000 });
     }, 3);
     await humanizedClick(client, reactionSelector, mouse);
