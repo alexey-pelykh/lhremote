@@ -41,9 +41,15 @@ export function registerSendInmail(server: McpServer): void {
         .boolean()
         .optional()
         .describe("Archive the ephemeral campaign instead of deleting it"),
+      timeout: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Maximum time to wait for action completion in milliseconds (default: 5 min)"),
       ...cdpConnectionSchema,
     },
-    async ({ personId, url, messageTemplate, subjectTemplate, rejectIfReplied, proceedOnOutOfCredits, keepCampaign, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personId, url, messageTemplate, subjectTemplate, rejectIfReplied, proceedOnOutOfCredits, keepCampaign, timeout, cdpPort, cdpHost, allowRemote, accountId }) => {
       if ((personId == null) === (url == null)) {
         return mcpError("Exactly one of personId or url must be provided.");
       }
@@ -67,7 +73,7 @@ export function registerSendInmail(server: McpServer): void {
       try {
         const result = await sendInmail({
           personId, url, messageTemplate: parsedMessageTemplate, subjectTemplate: parsedSubjectTemplate,
-          rejectIfReplied, proceedOnOutOfCredits, keepCampaign, cdpPort, cdpHost, allowRemote,
+          rejectIfReplied, proceedOnOutOfCredits, keepCampaign, timeout, cdpPort, cdpHost, allowRemote, accountId,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

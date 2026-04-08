@@ -17,6 +17,7 @@ export async function handleEndorseSkills(options: {
   limit?: number;
   skipIfNotEndorsable?: boolean;
   keepCampaign?: boolean;
+  timeout?: number;
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
@@ -40,6 +41,7 @@ export async function handleEndorseSkills(options: {
       limit: options.limit,
       skipIfNotEndorsable: options.skipIfNotEndorsable,
       keepCampaign: options.keepCampaign,
+      timeout: options.timeout,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,

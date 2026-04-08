@@ -16,6 +16,7 @@ export async function handleFollowPerson(options: {
   mode?: "follow" | "unfollow";
   skipIfUnfollowable?: boolean;
   keepCampaign?: boolean;
+  timeout?: number;
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
@@ -39,6 +40,7 @@ export async function handleFollowPerson(options: {
       mode: options.mode,
       skipIfUnfollowable: options.skipIfUnfollowable,
       keepCampaign: options.keepCampaign,
+      timeout: options.timeout,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,

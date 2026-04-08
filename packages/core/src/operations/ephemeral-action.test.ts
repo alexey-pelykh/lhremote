@@ -145,6 +145,31 @@ describe("executeEphemeralAction", () => {
     expect(mockExecute).toHaveBeenCalledWith("Follow", 42, undefined, {});
   });
 
+  it("forwards timeout option when provided", async () => {
+    setupMocks();
+
+    await executeEphemeralAction("Follow", {
+      personId: 42,
+      cdpPort: 9222,
+      timeout: 60_000,
+    });
+
+    expect(mockExecute).toHaveBeenCalledWith("Follow", 42, undefined, {
+      timeout: 60_000,
+    });
+  });
+
+  it("omits timeout from options when undefined", async () => {
+    setupMocks();
+
+    await executeEphemeralAction("Follow", {
+      personId: 42,
+      cdpPort: 9222,
+    });
+
+    expect(mockExecute).toHaveBeenCalledWith("Follow", 42, undefined, {});
+  });
+
   it("passes connection options to resolveAccount", async () => {
     setupMocks();
 

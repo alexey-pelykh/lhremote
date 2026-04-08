@@ -21,6 +21,7 @@ export async function handleLikePersonPosts(options: {
   messageTemplate?: string;
   skipIfNotLiked?: boolean;
   keepCampaign?: boolean;
+  timeout?: number;
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
@@ -59,6 +60,7 @@ export async function handleLikePersonPosts(options: {
       messageTemplate: parsedMessageTemplate,
       skipIfNotLiked: options.skipIfNotLiked,
       keepCampaign: options.keepCampaign,
+      timeout: options.timeout,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,

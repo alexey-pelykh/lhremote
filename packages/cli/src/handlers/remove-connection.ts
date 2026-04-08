@@ -14,6 +14,7 @@ export async function handleRemoveConnection(options: {
   personId?: number;
   url?: string;
   keepCampaign?: boolean;
+  timeout?: number;
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
@@ -33,6 +34,7 @@ export async function handleRemoveConnection(options: {
       personId: options.personId,
       url: options.url,
       keepCampaign: options.keepCampaign,
+      timeout: options.timeout,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
