@@ -27,7 +27,7 @@ vi.mock("../utils/delay.js", () => ({
 
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { waitForElement, humanizedHover, humanizedClick } from "../linkedin/dom-automation.js";
+import { waitForElement, humanizedHover, humanizedClick, retryInteraction } from "../linkedin/dom-automation.js";
 import { reactToPost, REACTION_TYPES } from "./react-to-post.js";
 
 const mockClient = {
@@ -211,6 +211,26 @@ describe("reactToPost", () => {
       mockClient,
       'button[aria-label^="Reaction button state"], button.react-button__trigger',
       undefined,
+    );
+  });
+
+  it("wraps popup wait in retryInteraction without mouse to prevent drift", async () => {
+    setupMocks();
+
+    await reactToPost({
+      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      reactionType: "insightful",
+      cdpPort: 9222,
+    });
+
+    // retryInteraction should be called to wrap the hover+wait sequence
+    expect(retryInteraction).toHaveBeenCalledWith(expect.any(Function), 3);
+
+    // waitForElement should be called with timeout 10_000 and WITHOUT mouse
+    expect(waitForElement).toHaveBeenCalledWith(
+      mockClient,
+      'button[aria-label="Insightful"], button[aria-label="React Insightful"]',
+      { timeout: 10_000 },
     );
   });
 
