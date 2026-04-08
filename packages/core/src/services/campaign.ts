@@ -27,6 +27,12 @@ const IDLE_WAIT_TIMEOUT = 60_000;
 /** Interval between idle state polls (ms). */
 const IDLE_POLL_INTERVAL = 1_000;
 
+/** Maximum time for stopping-campaigns recovery after startRunner() (ms). */
+const STOPPING_RECOVERY_TIMEOUT = 10_000;
+
+/** Maximum time to wait for idle after stop() issues a stop command (ms). */
+const STOP_IDLE_TIMEOUT = 15_000;
+
 /** LinkedHelper people processing states for action count queries. */
 const PEOPLE_STATE = {
   QUEUED: 1,
@@ -459,7 +465,13 @@ export class CampaignService {
       // Runner is in stopping-campaigns and may be stuck — force a restart
       // cycle to break out of that state, then re-stop cleanly.
       try { await this.startRunner(); } catch { /* best-effort */ }
-      state = await this.getRunnerState();
+      // Poll for up to STOPPING_RECOVERY_TIMEOUT waiting for state to leave stopping-campaigns
+      const recoveryDeadline = Date.now() + STOPPING_RECOVERY_TIMEOUT;
+      while (Date.now() < recoveryDeadline) {
+        await delay(IDLE_POLL_INTERVAL);
+        state = await this.getRunnerState();
+        if (state !== "stopping-campaigns") break;
+      }
       if (state === "idle") return;
     }
     if (state !== "stopping-campaigns") {
@@ -630,8 +642,10 @@ export class CampaignService {
    * Stop campaign execution.
    *
    * Pauses the specific campaign and stops the global runner.
+   * Waits for the runner to reach idle before returning.
    *
    * @throws {CampaignNotFoundError} if the campaign does not exist.
+   * @throws {CampaignTimeoutError} if the runner does not reach idle within the timeout.
    */
   async stop(campaignId: number): Promise<void> {
     const campaign = this.campaignRepo.getCampaign(campaignId);
@@ -656,7 +670,15 @@ export class CampaignService {
         })()`,
         false,
       );
+
+      // Wait for the runner to settle into idle before returning, so
+      // callers don't encounter a lingering stopping-campaigns state.
+      const state = await this.getRunnerState();
+      if (state !== "idle") {
+        await this.waitForIdle(campaignId, STOP_IDLE_TIMEOUT);
+      }
     } catch (error) {
+      if (error instanceof CampaignTimeoutError) throw error;
       if (error instanceof CampaignExecutionError) throw error;
       const message = errorMessage(error);
       throw new CampaignExecutionError(
@@ -717,8 +739,8 @@ export class CampaignService {
   /**
    * Wait for the campaign runner to reach idle state.
    */
-  private async waitForIdle(campaignId?: number): Promise<void> {
-    const deadline = Date.now() + IDLE_WAIT_TIMEOUT;
+  private async waitForIdle(campaignId?: number, timeout: number = IDLE_WAIT_TIMEOUT): Promise<void> {
+    const deadline = Date.now() + timeout;
     let lastState: RunnerState | undefined;
 
     while (Date.now() < deadline) {
@@ -738,7 +760,7 @@ export class CampaignService {
       ? ` (last observed state: ${lastState})`
       : "";
     throw new CampaignTimeoutError(
-      `Campaign runner did not reach idle state within ${String(IDLE_WAIT_TIMEOUT)}ms${context}${stateInfo}`,
+      `Campaign runner did not reach idle state within ${String(timeout)}ms${context}${stateInfo}`,
       campaignId,
     );
   }

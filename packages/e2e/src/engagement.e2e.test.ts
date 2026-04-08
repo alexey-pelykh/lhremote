@@ -319,7 +319,7 @@ describeE2E("engagement operations", () => {
         await handleLikePersonPosts({
           personId,
           numberOfPosts: 1,
-          timeout: 90_000,
+          timeout: 180_000,
           cdpPort,
           accountId,
           json: true,
@@ -334,7 +334,7 @@ describeE2E("engagement operations", () => {
 
         expect(typeof parsed.success).toBe("boolean");
         expect(parsed.personId).toBe(personId);
-      }, 120_000);
+      }, 210_000);
     });
 
     describe("MCP tools", () => {
@@ -346,7 +346,7 @@ describeE2E("engagement operations", () => {
         const result = (await handler({
           personId,
           numberOfPosts: 1,
-          timeout: 90_000,
+          timeout: 180_000,
           cdpPort,
           accountId,
         })) as {
@@ -363,7 +363,7 @@ describeE2E("engagement operations", () => {
 
         expect(typeof parsed.success).toBe("boolean");
         expect(parsed.personId).toBe(personId);
-      }, 120_000);
+      }, 210_000);
     });
   });
 

@@ -168,13 +168,17 @@ describe("EphemeralCampaignService", () => {
       .mockResolvedValueOnce(false)    // isPaused
       .mockResolvedValueOnce({ queued: 0, processed: 0, successful: 1, failed: 0 }); // actionCounts
 
-    // results
+    // results: getResults calls getActionPeopleCounts via CDP
     mockGetResults.mockReturnValue([MOCK_RESULT]);
+    mockEvaluateUI.mockResolvedValueOnce(
+      { queued: 0, processed: 0, successful: 1, failed: 0 },
+    ); // getActionPeopleCounts (getResults)
 
-    // stop: pause + stop runner
+    // stop: pause + stop runner + state check
     mockEvaluateUI
       .mockResolvedValueOnce(undefined) // pause
-      .mockResolvedValueOnce(undefined); // stop runner
+      .mockResolvedValueOnce(undefined) // stop runner
+      .mockResolvedValueOnce("idle");   // getRunnerState (idle → skip waitForIdle)
 
     // hardDelete is sync (db only)
   }
@@ -268,6 +272,12 @@ describe("EphemeralCampaignService", () => {
         total: { addToTarget: { successful: 0, alreadyInQueue: 0, alreadyProcessed: 0, failed: 1 } },
       });
 
+      // cleanup stop: pause + stop runner + state check
+      mockEvaluateUI
+        .mockResolvedValueOnce(undefined) // pause
+        .mockResolvedValueOnce(undefined) // stop runner
+        .mockResolvedValueOnce("idle");   // getRunnerState (idle → skip waitForIdle)
+
       await expect(
         service.execute("MessageToPerson", 42),
       ).rejects.toThrow(CampaignExecutionError);
@@ -311,7 +321,8 @@ describe("EphemeralCampaignService", () => {
       const promise = service.execute("MessageToPerson", 42, undefined, { timeout: 5_000 });
       const caughtPromise = promise.catch((e: unknown) => e);
 
-      await vi.advanceTimersByTimeAsync(10_000);
+      // Advance enough for execute timeout (5s) + cleanup waitForIdle (15s)
+      await vi.advanceTimersByTimeAsync(30_000);
       const error = await caughtPromise;
 
       expect(error).toBeInstanceOf(CampaignTimeoutError);
@@ -364,14 +375,18 @@ describe("EphemeralCampaignService", () => {
         .mockResolvedValueOnce(false)
         .mockResolvedValueOnce({ queued: 0, processed: 0, successful: 0, failed: 1 });
 
-      // results
+      // results: getResults calls getActionPeopleCounts via CDP
       const failedResult = { ...MOCK_RESULT, result: -1 };
       mockGetResults.mockReturnValue([failedResult]);
+      mockEvaluateUI.mockResolvedValueOnce(
+        { queued: 0, processed: 0, successful: 0, failed: 1 },
+      ); // getActionPeopleCounts (getResults)
 
-      // stop
+      // stop: pause + stop runner + state check
       mockEvaluateUI
         .mockResolvedValueOnce(undefined)
-        .mockResolvedValueOnce(undefined);
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce("idle");
 
       const promise = service.execute("MessageToPerson", 42);
       await vi.advanceTimersByTimeAsync(10_000);
@@ -408,13 +423,17 @@ describe("EphemeralCampaignService", () => {
         .mockResolvedValueOnce(false)
         .mockResolvedValueOnce({ queued: 0, processed: 0, successful: 0, failed: 0 });
 
-      // results (empty — person was processed but no result recorded)
+      // results: getResults calls getActionPeopleCounts via CDP
       mockGetResults.mockReturnValue([]);
+      mockEvaluateUI.mockResolvedValueOnce(
+        { queued: 0, processed: 0, successful: 0, failed: 0 },
+      ); // getActionPeopleCounts (getResults)
 
-      // stop
+      // stop: pause + stop runner + state check
       mockEvaluateUI
         .mockResolvedValueOnce(undefined)
-        .mockResolvedValueOnce(undefined);
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce("idle");
 
       const promise = service.execute("MessageToPerson", 42);
       await vi.advanceTimersByTimeAsync(10_000);
