@@ -145,6 +145,7 @@ export {
   type StatusReport,
   waitForInstancePort,
   waitForInstanceShutdown,
+  waitForInstanceTargets,
   withDatabase,
   withInstanceDatabase,
   NodeIntegrationUnavailableError,

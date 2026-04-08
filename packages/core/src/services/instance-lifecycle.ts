@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { discoverInstancePort } from "../cdp/index.js";
+import { CDPConnectionError, discoverInstancePort, discoverTargets } from "../cdp/index.js";
+import type { CdpTarget } from "../types/cdp.js";
 import { delay } from "../utils/delay.js";
 import { StartInstanceError } from "./errors.js";
 import { InstanceService } from "./instance.js";
@@ -20,6 +21,18 @@ const PORT_SHUTDOWN_TIMEOUT = 15_000;
 
 /** Interval between port discovery attempts (ms). */
 const PORT_DISCOVERY_INTERVAL = 1_000;
+
+/**
+ * Maximum time to wait for both CDP targets (LinkedIn webview + UI) to appear (ms).
+ *
+ * After the CDP port is available, the instance still needs time to create
+ * both the LinkedIn webview and the UI target. This timeout mirrors
+ * {@link InstanceService.connect}'s `CONNECT_TIMEOUT`.
+ */
+const TARGET_DISCOVERY_TIMEOUT = 30_000;
+
+/** Interval between target discovery attempts (ms). */
+const TARGET_DISCOVERY_INTERVAL = 1_000;
 
 /** Delay after crash recovery stop before retrying start (ms). */
 const CRASH_RECOVERY_DELAY = 2_000;
@@ -54,6 +67,11 @@ export async function startInstanceWithRecovery(
     ) {
       const existingPort = await discoverInstancePort(launcherPort);
       if (existingPort !== null) {
+        const targetsReady = await waitForInstanceTargets(existingPort);
+        if (!targetsReady) {
+          await checkForStartupPopups(existingPort, accountId);
+          return { status: "timeout" };
+        }
         await checkForStartupPopups(existingPort, accountId);
         return { status: "already_running", port: existingPort };
       }
@@ -69,6 +87,14 @@ export async function startInstanceWithRecovery(
 
   const port = await waitForInstancePort(launcherPort);
   if (port === null) {
+    return { status: "timeout" };
+  }
+
+  const targetsReady = await waitForInstanceTargets(port);
+  if (!targetsReady) {
+    // Check for popups before returning a generic timeout — an error popup
+    // is more actionable than "failed to initialize within timeout".
+    await checkForStartupPopups(port, accountId);
     return { status: "timeout" };
   }
 
@@ -117,6 +143,47 @@ export async function waitForInstanceShutdown(
     }
     await delay(PORT_DISCOVERY_INTERVAL);
   }
+}
+
+/**
+ * Poll until both CDP targets (LinkedIn webview and instance UI) are
+ * discoverable on the given port, or timeout.
+ *
+ * The CDP port may respond to `/json/list` before the instance has
+ * created both targets.  This function bridges the gap between
+ * "process is alive" and "instance is fully initialized".
+ */
+export async function waitForInstanceTargets(
+  port: number,
+): Promise<boolean> {
+  const deadline = Date.now() + TARGET_DISCOVERY_TIMEOUT;
+
+  while (Date.now() < deadline) {
+    try {
+      const targets = await discoverTargets(port);
+      const hasLinkedIn = targets.some(isLinkedInTarget);
+      const hasUI = targets.some(isUiTarget);
+      if (hasLinkedIn && hasUI) {
+        return true;
+      }
+    } catch (error) {
+      if (!(error instanceof CDPConnectionError)) {
+        throw error;
+      }
+      // CDP endpoint not ready yet — retry
+    }
+    await delay(TARGET_DISCOVERY_INTERVAL);
+  }
+
+  return false;
+}
+
+function isLinkedInTarget(target: CdpTarget): boolean {
+  return target.type === "page" && target.url.includes("linkedin.com");
+}
+
+function isUiTarget(target: CdpTarget): boolean {
+  return target.type === "page" && target.url.includes("index.html");
 }
 
 /**
