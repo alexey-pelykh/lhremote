@@ -19,6 +19,7 @@ import {
   discoverTargets,
   dismissErrors,
   LauncherService,
+  reactToPost,
   startInstanceWithRecovery,
 } from "@lhremote/core";
 import type {
@@ -397,10 +398,16 @@ describeE2E("engagement operations", () => {
 
         expect(parsed.success).toBe(true);
         expect(parsed.postUrl).toBe(postUrl);
-        expect(typeof parsed.reactionType).toBe("string");
+        expect(parsed.reactionType).toBe("like");
+        expect(typeof parsed.alreadyReacted).toBe("boolean");
       }, 120_000);
 
       it("react-to-post --json with insightful reaction uses popup", async () => {
+        // Ensure post is in "like" state so the insightful reaction
+        // exercises the unreact-then-react popup path regardless of
+        // leftover state from previous test runs.
+        await reactToPost({ postUrl, reactionType: "like", cdpPort });
+
         const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
         const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
@@ -452,6 +459,11 @@ describeE2E("engagement operations", () => {
       }, 120_000);
 
       it("react-to-post tool with insightful reaction uses popup", async () => {
+        // Ensure post is in "like" state so the insightful reaction
+        // exercises the unreact-then-react popup path regardless of
+        // leftover state from previous test runs.
+        await reactToPost({ postUrl, reactionType: "like", cdpPort });
+
         const { server, getHandler } = createMockServer();
         registerReactToPost(server);
 
