@@ -464,11 +464,12 @@ describe("CampaignService", () => {
       mockGetCampaign.mockReturnValue(MOCK_CAMPAIGN);
       mockEvaluateUI
         .mockResolvedValueOnce(undefined) // pause
-        .mockResolvedValueOnce(undefined); // atomic state-check + stop
+        .mockResolvedValueOnce(undefined) // atomic state-check + stop
+        .mockResolvedValueOnce("idle"); // getRunnerState (idle → skip waitForIdle)
 
       await service.stop(1);
 
-      expect(mockEvaluateUI).toHaveBeenCalledTimes(2);
+      expect(mockEvaluateUI).toHaveBeenCalledTimes(3);
 
       // First call: pause the campaign
       const pauseExpr = mockEvaluateUI.mock.calls[0]?.[0] as string;
