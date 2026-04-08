@@ -4,7 +4,7 @@
 import { resolveInstancePort } from "../cdp/index.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { humanizedClick, humanizedHover, waitForElement } from "../linkedin/dom-automation.js";
+import { humanizedClick, humanizedHover, retryInteraction, waitForElement } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import {
   REACTION_CELEBRATE,
@@ -203,13 +203,21 @@ export async function reactToPost(
       await gaussianDelay(1_500, 300, 800, 2_500);
     }
 
-    // Hover over the reaction trigger to expand the reactions popup
-    await humanizedHover(client, REACTION_TRIGGER, mouse);
-    await gaussianDelay(1_500, 150, 1_200, 1_800);
-
-    // Wait for the specific reaction button to appear in the popup
+    // Hover the trigger to expand the reactions popup, then wait for
+    // the requested reaction button.  Wrapped in retryInteraction
+    // because the popup may not appear on the first hover attempt
+    // (Ember post page can be sluggish).
+    //
+    // IMPORTANT: waitForElement is called WITHOUT the mouse parameter
+    // to disable idle cursor drift during the poll loop.  Drift moves
+    // the cursor off the trigger, which collapses the hover popup
+    // before the reaction button can appear.
     const reactionSelector = REACTION_SELECTORS[reactionType];
-    await waitForElement(client, reactionSelector, { timeout: 5_000 }, mouse);
+    await retryInteraction(async () => {
+      await humanizedHover(client, REACTION_TRIGGER, mouse);
+      await gaussianDelay(1_500, 150, 1_200, 1_800);
+      await waitForElement(client, reactionSelector, { timeout: 10_000 });
+    }, 3);
     await humanizedClick(client, reactionSelector, mouse);
 
     // Let the UI settle
