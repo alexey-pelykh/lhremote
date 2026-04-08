@@ -17,6 +17,7 @@ vi.mock("../linkedin/dom-automation.js", () => ({
   click: vi.fn(),
   humanizedHover: vi.fn(),
   humanizedClick: vi.fn(),
+  retryInteraction: vi.fn().mockImplementation((fn: () => Promise<unknown>) => fn()),
 }));
 
 vi.mock("../utils/delay.js", () => ({
