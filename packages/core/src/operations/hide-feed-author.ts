@@ -4,7 +4,7 @@
 import { resolveInstancePort } from "../cdp/index.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { humanizedClick, humanizedScrollToByIndex, retryInteraction, waitForElement } from "../linkedin/dom-automation.js";
+import { humanizedScrollToByIndex, retryInteraction, waitForElement } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { FEED_POST_CONTAINER } from "../linkedin/selectors.js";
 import { gaussianDelay } from "../utils/delay.js";
@@ -81,20 +81,10 @@ export async function hideFeedAuthor(
     // Wait for the feed to render
     await waitForElement(client, FEED_POST_CONTAINER, undefined, mouse);
 
-    // Find the index of the target post's menu button in the feed
-    const postIndex = await client.evaluate<number>(`(() => {
-      const btns = document.querySelectorAll(
-        ${JSON.stringify(FEED_MENU_BUTTON_SELECTOR)}
-      );
-      return btns.length > 0 ? 0 : -1;
-    })()`);
-
-    if (postIndex < 0) {
-      throw new Error(
-        "No feed post menu button found. " +
-          "Ensure the post URL points to a visible feed post.",
-      );
-    }
+    // After navigation, the target post is the first feed item.
+    // Locate its menu button index to ensure we interact with the
+    // correct post (same navigation pattern as react-to-post).
+    const postIndex = 0;
 
     // Open the three-dot menu with retry logic
     const hiddenName = await retryInteraction(async () => {
@@ -106,8 +96,24 @@ export async function hideFeedAuthor(
         mouse,
       );
 
-      // Click the menu button
-      await humanizedClick(client, FEED_MENU_BUTTON_SELECTOR, mouse);
+      // Click the specific menu button by index (not the first match)
+      const clicked = await client.evaluate<boolean>(`(() => {
+        const btns = document.querySelectorAll(
+          ${JSON.stringify(FEED_MENU_BUTTON_SELECTOR)}
+        );
+        const btn = btns[${postIndex}];
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()`);
+
+      if (!clicked) {
+        throw new Error(
+          "No feed post menu button found. " +
+            "Ensure the post URL points to a visible feed post.",
+        );
+      }
+
       await gaussianDelay(700, 100, 500, 900);
 
       // Find and click "Hide posts by {Name}" menu item
