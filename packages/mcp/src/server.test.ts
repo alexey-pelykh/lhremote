@@ -142,6 +142,7 @@ describe("createServer", () => {
     expect(names).toContain("send-invite");
     expect(names).toContain("get-profile-activity");
     expect(names).toContain("campaign-erase");
-    expect(names).toHaveLength(68);
+    expect(names).toContain("dismiss-feed-post");
+    expect(names).toHaveLength(69);
   });
 });

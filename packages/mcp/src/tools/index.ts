@@ -44,6 +44,7 @@ import { registerCheckReplies } from "./check-replies.js";
 import { registerCheckStatus } from "./check-status.js";
 import { registerDismissErrors } from "./dismiss-errors.js";
 import { registerDescribeActions } from "./describe-actions.js";
+import { registerDismissFeedPost } from "./dismiss-feed-post.js";
 import { registerFindApp } from "./find-app.js";
 import { registerGetActionBudget } from "./get-action-budget.js";
 import { registerGetPost } from "./get-post.js";
@@ -109,6 +110,7 @@ export {
   registerCampaignUpdate,
   registerCreateCollection,
   registerDeleteCollection,
+  registerDismissFeedPost,
   registerDismissErrors,
   registerCheckReplies,
   registerCheckStatus,
@@ -191,6 +193,7 @@ export function registerAllTools(server: McpServer): void {
   registerSearchPosts(server);
   registerCreateCollection(server);
   registerDeleteCollection(server);
+  registerDismissFeedPost(server);
   registerDismissErrors(server);
   registerCheckReplies(server);
   registerCheckStatus(server);

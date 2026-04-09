@@ -203,6 +203,11 @@ export {
   type CommentOnPostInput,
   type CommentOnPostOutput,
 } from "./comment-on-post.js";
+export {
+  dismissFeedPost,
+  type DismissFeedPostInput,
+  type DismissFeedPostOutput,
+} from "./dismiss-feed-post.js";
 
 // Post detail
 export {
