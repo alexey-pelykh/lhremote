@@ -5,6 +5,7 @@ import type { CDPClient } from "../cdp/client.js";
 import { CDPEvaluationError, CDPTimeoutError } from "../cdp/errors.js";
 import { delay, gaussianBetween, gaussianDelay, randomBetween } from "../utils/delay.js";
 import type { HumanizedMouse } from "./humanized-mouse.js";
+import { MENTION_OPTION, MENTION_TYPEAHEAD } from "./selectors.js";
 
 /** Default timeout for DOM operations (ms). */
 const DEFAULT_TIMEOUT = 30_000;
@@ -821,4 +822,200 @@ export async function retryInteraction<T>(
   }
   // Unreachable — the loop always returns or throws
   throw new Error("unreachable");
+}
+
+// ---------------------------------------------------------------------------
+// Mention-aware text input
+// ---------------------------------------------------------------------------
+
+/** A mention to resolve via LinkedIn's typeahead during typing. */
+export interface MentionEntry {
+  /** Display name to type and match in the typeahead (e.g. "John Doe"). */
+  readonly name: string;
+}
+
+/**
+ * Dispatch a single key event (keyDown + keyUp) for a named key.
+ *
+ * Unlike the character-by-character loop in {@link typeText}, this is used
+ * for control keys (ArrowDown, Enter, Escape) that don't produce text.
+ */
+async function dispatchKey(
+  client: CDPClient,
+  key: string,
+  code: string,
+  windowsVirtualKeyCode: number,
+): Promise<void> {
+  await client.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key,
+    code,
+    windowsVirtualKeyCode,
+  });
+  await client.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key,
+    code,
+    windowsVirtualKeyCode,
+  });
+}
+
+/**
+ * Type text into the comment editor, resolving `@Name` tokens as LinkedIn
+ * mentions via the typeahead autocomplete.
+ *
+ * For each mention in the `mentions` array, the text is scanned for a
+ * literal `@Name` token (where `Name` matches {@link MentionEntry.name}).
+ * When found, the function:
+ *
+ * 1. Types the text before the mention normally.
+ * 2. Types `@` to trigger the typeahead popup.
+ * 3. Types the mention name to filter results.
+ * 4. Waits for a matching option and selects it via ArrowDown + Enter.
+ * 5. Continues typing the remaining text.
+ *
+ * If `mentions` is empty or `undefined`, this falls through to plain
+ * {@link typeText}.
+ *
+ * @param client   - Connected CDP client targeting the page.
+ * @param selector - CSS selector for the comment input element.
+ * @param text     - Full comment text (may contain `@Name` tokens).
+ * @param mentions - Mention entries to resolve via typeahead.
+ * @throws {CDPTimeoutError} If the typeahead popup does not appear.
+ * @throws {CDPEvaluationError} If no matching option is found in the typeahead.
+ */
+export async function typeTextWithMentions(
+  client: CDPClient,
+  selector: string,
+  text: string,
+  mentions: readonly MentionEntry[],
+): Promise<void> {
+  if (mentions.length === 0) {
+    await typeText(client, selector, text);
+    return;
+  }
+
+  // Build mention positions with a single left-to-right scan so we only match
+  // whole `@Name` tokens, avoid substring matches (for example `@Al` inside
+  // `@Alex`), and never create overlapping positions.
+  const mentionPositions: Array<{ start: number; end: number; name: string }> = [];
+  const mentionCandidates = Array.from(
+    new Map(mentions.map((mention) => [mention.name, { name: mention.name, token: `@${mention.name}` }])).values(),
+  ).sort((a, b) => b.token.length - a.token.length);
+  const MENTION_BOUNDARY_RE = /[\p{L}\p{N}_-]/u;
+  const isMentionBoundary = (char: string | undefined): boolean =>
+    char === undefined || !MENTION_BOUNDARY_RE.test(char);
+
+  for (let index = 0; index < text.length; ) {
+    if (text[index] !== "@" || !isMentionBoundary(text[index - 1])) {
+      index += 1;
+      continue;
+    }
+
+    let matched = false;
+    for (const candidate of mentionCandidates) {
+      if (!text.startsWith(candidate.token, index)) {
+        continue;
+      }
+
+      const end = index + candidate.token.length;
+      if (!isMentionBoundary(text[end])) {
+        continue;
+      }
+
+      mentionPositions.push({ start: index, end, name: candidate.name });
+      index = end;
+      matched = true;
+      break;
+    }
+
+    if (!matched) {
+      index += 1;
+    }
+  }
+
+  if (mentionPositions.length === 0) {
+    // No @Name tokens found in text — type as plain text
+    await typeText(client, selector, text);
+    return;
+  }
+
+  // Type text in segments, resolving mentions in between
+  let cursor = 0;
+  for (const mention of mentionPositions) {
+    // Type the plain text before this mention
+    if (mention.start > cursor) {
+      await typeText(client, selector, text.slice(cursor, mention.start));
+    } else if (cursor === 0) {
+      // Mention at the very start — ensure focus
+      const focused = await client.evaluate<boolean>(
+        `(() => {
+          const el = document.querySelector(${JSON.stringify(selector)});
+          if (!el) return false;
+          el.focus();
+          return true;
+        })()`,
+      );
+      if (!focused) {
+        throw new CDPEvaluationError(
+          `Element "${selector}" not found for typeTextWithMentions`,
+        );
+      }
+    }
+
+    // Type @ to trigger the typeahead
+    await typeText(client, selector, "@");
+    await gaussianDelay(300, 50, 200, 500);
+
+    // Wait for the typeahead popup to appear
+    await waitForElement(client, MENTION_TYPEAHEAD, { timeout: 10_000 });
+
+    // Type the mention name to filter results
+    await typeText(client, selector, mention.name);
+    await gaussianDelay(500, 100, 300, 800);
+
+    // Wait for filtered results to settle
+    await waitForElement(client, MENTION_OPTION, { timeout: 10_000 });
+
+    // Find a matching option by text content
+    const matchIndex = await client.evaluate<number>(
+      `(() => {
+        const options = document.querySelectorAll(${JSON.stringify(MENTION_OPTION)});
+        const target = ${JSON.stringify(mention.name)}.toLowerCase();
+        for (let i = 0; i < options.length; i++) {
+          const text = (options[i].textContent || '').trim().toLowerCase();
+          if (text.includes(target)) return i;
+        }
+        return -1;
+      })()`,
+    );
+
+    if (matchIndex === -1) {
+      // Dismiss the typeahead and throw
+      await dispatchKey(client, "Escape", "Escape", 27);
+      throw new CDPEvaluationError(
+        `Mention "${mention.name}" not found in typeahead results. ` +
+          "The person may not be in your LinkedIn network.",
+      );
+    }
+
+    // Navigate to the matching option with ArrowDown and select with Enter
+    for (let i = 0; i <= matchIndex; i++) {
+      await dispatchKey(client, "ArrowDown", "ArrowDown", 40);
+      await gaussianDelay(80, 20, 40, 150);
+    }
+    await gaussianDelay(200, 50, 100, 350);
+    await dispatchKey(client, "Enter", "Enter", 13);
+
+    // Wait for the mention to be inserted and typeahead to close
+    await gaussianDelay(500, 100, 300, 800);
+
+    cursor = mention.end;
+  }
+
+  // Type any remaining text after the last mention
+  if (cursor < text.length) {
+    const remaining = text.slice(cursor);
+    await typeText(client, selector, remaining);
+  }
 }

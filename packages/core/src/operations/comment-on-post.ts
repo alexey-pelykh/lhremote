@@ -5,7 +5,8 @@ import { resolveInstancePort } from "../cdp/index.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { ActionBudgetRepository } from "../db/index.js";
-import { waitForElement, humanizedScrollTo, humanizedClick, typeText } from "../linkedin/dom-automation.js";
+import { waitForElement, humanizedScrollTo, humanizedClick, typeText, typeTextWithMentions } from "../linkedin/dom-automation.js";
+import type { MentionEntry } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { COMMENT_INPUT, COMMENT_REPLY_BUTTON, COMMENT_SUBMIT_BUTTON } from "../linkedin/selectors.js";
 import { resolveAccount } from "../services/account-resolution.js";
@@ -39,6 +40,13 @@ export interface CommentOnPostInput extends ConnectionOptions {
    * `urn:li:comment:(activity:1234567890,9876543210)`).
    */
   readonly parentCommentUrn?: string | undefined;
+  /**
+   * People to @mention in the comment.  Each entry's `name` must
+   * appear as a literal `@Name` token in {@link text}.  During typing,
+   * each `@Name` triggers LinkedIn's mention autocomplete and selects
+   * the matching profile.
+   */
+  readonly mentions?: readonly MentionEntry[] | undefined;
   /** Optional humanized mouse for natural cursor movement and clicks. */
   readonly mouse?: HumanizedMouse | null | undefined;
 }
@@ -151,6 +159,7 @@ export async function commentOnPost(
 
     const mouse = input.mouse;
     const parentUrn = input.parentCommentUrn;
+    const mentions = input.mentions ?? [];
 
     if (parentUrn) {
       // --- Reply to a specific comment ---
@@ -171,7 +180,11 @@ export async function commentOnPost(
       await waitForElement(client, `${COMMENT_INPUT}:focus`, undefined, mouse);
       await gaussianDelay(350, 50, 250, 500);
 
-      await typeText(client, `${COMMENT_INPUT}:focus`, input.text);
+      if (mentions.length > 0) {
+        await typeTextWithMentions(client, `${COMMENT_INPUT}:focus`, input.text, mentions);
+      } else {
+        await typeText(client, `${COMMENT_INPUT}:focus`, input.text);
+      }
     } else {
       // --- Top-level comment ---
       await waitForElement(client, COMMENT_INPUT, undefined, mouse);
@@ -179,7 +192,11 @@ export async function commentOnPost(
       await humanizedClick(client, COMMENT_INPUT, mouse);
       await gaussianDelay(550, 75, 400, 700);
 
-      await typeText(client, COMMENT_INPUT, input.text);
+      if (mentions.length > 0) {
+        await typeTextWithMentions(client, COMMENT_INPUT, input.text, mentions);
+      } else {
+        await typeText(client, COMMENT_INPUT, input.text);
+      }
     }
 
     // Wait for submit button and click

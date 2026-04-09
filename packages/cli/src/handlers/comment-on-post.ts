@@ -6,6 +6,7 @@ import {
   errorMessage,
   commentOnPost,
   type CommentOnPostOutput,
+  type MentionEntry,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#comment-on-post | comment-on-post} CLI command. */
@@ -13,6 +14,7 @@ export async function handleCommentOnPost(options: {
   url: string;
   text: string;
   parentCommentUrn?: string;
+  mentions?: string;
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
@@ -23,12 +25,45 @@ export async function handleCommentOnPost(options: {
     options.parentCommentUrn ? "Posting reply...\n" : "Posting comment...\n",
   );
 
+  let parsedMentions: MentionEntry[] | undefined;
+  if (options.mentions) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(options.mentions);
+    } catch {
+      process.stderr.write(
+        'Invalid --mentions JSON. Expected array of {name} objects (e.g. \'[{"name":"John Doe"}]\')\n',
+      );
+      process.exitCode = 1;
+      return;
+    }
+    if (
+      !Array.isArray(parsed) ||
+      !parsed.every(
+        (item: unknown) =>
+          typeof item === "object" &&
+          item !== null &&
+          "name" in item &&
+          typeof (item as { name: unknown }).name === "string" &&
+          (item as { name: string }).name.length > 0,
+      )
+    ) {
+      process.stderr.write(
+        'Invalid --mentions structure. Expected array of {name} objects with non-empty string names (e.g. \'[{"name":"John Doe"}]\')\n',
+      );
+      process.exitCode = 1;
+      return;
+    }
+    parsedMentions = parsed as MentionEntry[];
+  }
+
   let result: CommentOnPostOutput;
   try {
     result = await commentOnPost({
       postUrl: options.url,
       text: options.text,
       parentCommentUrn: options.parentCommentUrn,
+      mentions: parsedMentions,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,

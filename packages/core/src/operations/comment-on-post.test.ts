@@ -29,6 +29,7 @@ vi.mock("../linkedin/dom-automation.js", () => ({
   click: vi.fn(),
   humanizedClick: vi.fn(),
   typeText: vi.fn(),
+  typeTextWithMentions: vi.fn(),
 }));
 
 vi.mock("../utils/delay.js", () => ({
@@ -42,7 +43,7 @@ import { withDatabase } from "../services/instance-context.js";
 import { ActionBudgetRepository } from "../db/index.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
-import { waitForElement, humanizedScrollTo, humanizedClick, typeText } from "../linkedin/dom-automation.js";
+import { waitForElement, humanizedScrollTo, humanizedClick, typeText, typeTextWithMentions } from "../linkedin/dom-automation.js";
 import type { ActionBudgetEntry } from "../types/action-budget.js";
 import { BudgetExceededError } from "../services/errors.js";
 import { commentOnPost } from "./comment-on-post.js";
@@ -99,6 +100,7 @@ function setupMocks(budgetEntries: ActionBudgetEntry[] = [
   vi.mocked(humanizedScrollTo).mockResolvedValue(undefined);
   vi.mocked(humanizedClick).mockResolvedValue(undefined);
   vi.mocked(typeText).mockResolvedValue(undefined);
+  vi.mocked(typeTextWithMentions).mockResolvedValue(undefined);
 
   return mockClient;
 }
@@ -367,5 +369,72 @@ describe("commentOnPost", () => {
     });
 
     expect(result.parentCommentUrn).toBeNull();
+  });
+
+  it("uses typeTextWithMentions when mentions are provided", async () => {
+    setupMocks();
+
+    await commentOnPost({
+      postUrl: MOCK_POST_URL,
+      text: "Hello @John Doe!",
+      mentions: [{ name: "John Doe" }],
+      cdpPort: MOCK_CDP_PORT,
+    });
+
+    expect(typeTextWithMentions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      "Hello @John Doe!",
+      [{ name: "John Doe" }],
+    );
+    expect(typeText).not.toHaveBeenCalled();
+  });
+
+  it("uses typeText when mentions array is empty", async () => {
+    setupMocks();
+
+    await commentOnPost({
+      postUrl: MOCK_POST_URL,
+      text: "No mentions here",
+      mentions: [],
+      cdpPort: MOCK_CDP_PORT,
+    });
+
+    expect(typeText).toHaveBeenCalled();
+    expect(typeTextWithMentions).not.toHaveBeenCalled();
+  });
+
+  it("uses typeText when mentions is undefined", async () => {
+    setupMocks();
+
+    await commentOnPost({
+      postUrl: MOCK_POST_URL,
+      text: "No mentions here",
+      cdpPort: MOCK_CDP_PORT,
+    });
+
+    expect(typeText).toHaveBeenCalled();
+    expect(typeTextWithMentions).not.toHaveBeenCalled();
+  });
+
+  it("uses typeTextWithMentions for reply with mentions", async () => {
+    setupMocks();
+    const parentUrn = "urn:li:comment:(activity:123,999)";
+
+    await commentOnPost({
+      postUrl: MOCK_POST_URL,
+      text: "@Jane Smith thanks!",
+      mentions: [{ name: "Jane Smith" }],
+      parentCommentUrn: parentUrn,
+      cdpPort: MOCK_CDP_PORT,
+    });
+
+    expect(typeTextWithMentions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining(":focus"),
+      "@Jane Smith thanks!",
+      [{ name: "Jane Smith" }],
+    );
+    expect(typeText).not.toHaveBeenCalled();
   });
 });
