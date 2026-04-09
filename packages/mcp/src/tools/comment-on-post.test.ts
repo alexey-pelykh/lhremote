@@ -18,6 +18,7 @@ const MOCK_RESULT = {
   postUrl:
     "https://www.linkedin.com/feed/update/urn:li:activity:123/",
   commentText: "Great post!",
+  parentCommentUrn: null as string | null,
 };
 
 describe("registerCommentOnPost", () => {
@@ -58,6 +59,25 @@ describe("registerCommentOnPost", () => {
     expect(result).toEqual({
       content: [{ type: "text", text: JSON.stringify(MOCK_RESULT, null, 2) }],
     });
+  });
+
+  it("passes parentCommentUrn to core operation", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCommentOnPost(server);
+    const replyResult = { ...MOCK_RESULT, parentCommentUrn: "urn:li:comment:(activity:123,456)" };
+    vi.mocked(commentOnPost).mockResolvedValue(replyResult);
+
+    const handler = getHandler("comment-on-post");
+    await handler({
+      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      text: "Great post!",
+      parentCommentUrn: "urn:li:comment:(activity:123,456)",
+      cdpPort: 9222,
+    });
+
+    expect(commentOnPost).toHaveBeenCalledWith(
+      expect.objectContaining({ parentCommentUrn: "urn:li:comment:(activity:123,456)" }),
+    );
   });
 
   it("returns error on failure", async () => {

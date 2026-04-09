@@ -5,6 +5,7 @@ export {
   assertDefined,
   describeE2E,
   forceStopInstance,
+  getE2ECommentUrn,
   getE2EPersonId,
   getE2EPostUrl,
   installErrorDetection,

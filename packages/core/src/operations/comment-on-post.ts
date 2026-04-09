@@ -7,7 +7,7 @@ import { discoverTargets } from "../cdp/discovery.js";
 import { ActionBudgetRepository } from "../db/index.js";
 import { waitForElement, humanizedScrollTo, humanizedClick, typeText } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
-import { COMMENT_INPUT, COMMENT_SUBMIT_BUTTON } from "../linkedin/selectors.js";
+import { COMMENT_INPUT, COMMENT_REPLY_BUTTON, COMMENT_SUBMIT_BUTTON } from "../linkedin/selectors.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { BudgetExceededError } from "../services/errors.js";
 import { withDatabase } from "../services/instance-context.js";
@@ -17,6 +17,9 @@ import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 /** Pattern matching supported LinkedIn post URL formats. */
 const LINKEDIN_POST_URL_RE =
   /linkedin\.com\/(?:feed\/update\/urn:li:\w+:\d+|posts\/[^/]+)/;
+
+/** Pattern matching a LinkedIn comment URN (e.g. `urn:li:comment:(activity:123,456)`). */
+const COMMENT_URN_RE = /^urn:li:comment:\(\w+:\d+,\d+\)$/;
 
 /** Limit type ID for PostComment in the LinkedHelper budget system. */
 const POST_COMMENT_LIMIT_TYPE_ID = 19;
@@ -29,6 +32,13 @@ export interface CommentOnPostInput extends ConnectionOptions {
   readonly postUrl: string;
   /** Comment text to post. */
   readonly text: string;
+  /**
+   * When provided, the comment is posted as a reply to the specified
+   * comment instead of as a top-level comment.  The URN comes from
+   * the `commentUrn` field in `get-post` output (e.g.
+   * `urn:li:comment:(activity:1234567890,9876543210)`).
+   */
+  readonly parentCommentUrn?: string | undefined;
   /** Optional humanized mouse for natural cursor movement and clicks. */
   readonly mouse?: HumanizedMouse | null | undefined;
 }
@@ -40,6 +50,8 @@ export interface CommentOnPostOutput {
   readonly success: true;
   readonly postUrl: string;
   readonly commentText: string;
+  /** The parent comment URN when this was posted as a reply, or `null` for top-level comments. */
+  readonly parentCommentUrn: string | null;
 }
 
 /**
@@ -73,6 +85,14 @@ export async function commentOnPost(
       `Invalid LinkedIn post URL: ${input.postUrl}. ` +
         "Expected a URL like https://www.linkedin.com/feed/update/urn:li:activity:... " +
         "or https://www.linkedin.com/posts/...",
+    );
+  }
+
+  // Validate comment URN format when provided
+  if (input.parentCommentUrn !== undefined && !COMMENT_URN_RE.test(input.parentCommentUrn)) {
+    throw new Error(
+      `Invalid comment URN: ${input.parentCommentUrn}. ` +
+        "Expected format: urn:li:comment:(activity:1234567890,9876543210)",
     );
   }
 
@@ -130,15 +150,37 @@ export async function commentOnPost(
     }
 
     const mouse = input.mouse;
+    const parentUrn = input.parentCommentUrn;
 
-    // Wait for the comment input and interact
-    await waitForElement(client, COMMENT_INPUT, undefined, mouse);
-    await humanizedScrollTo(client, COMMENT_INPUT, mouse);
-    await humanizedClick(client, COMMENT_INPUT, mouse);
-    await gaussianDelay(550, 75, 400, 700);
+    if (parentUrn) {
+      // --- Reply to a specific comment ---
+      // Find the target comment article by its data-id attribute
+      const commentSelector = `article[data-id="${parentUrn}"]`;
+      await waitForElement(client, commentSelector, undefined, mouse);
+      await humanizedScrollTo(client, commentSelector, mouse);
 
-    // Type comment text character-by-character
-    await typeText(client, COMMENT_INPUT, input.text);
+      // Click the Reply button within that comment
+      const replySelector = `${commentSelector} ${COMMENT_REPLY_BUTTON}`;
+      await waitForElement(client, replySelector, undefined, mouse);
+      await humanizedClick(client, replySelector, mouse);
+      await gaussianDelay(550, 75, 400, 700);
+
+      // After clicking Reply, LinkedIn focuses the reply editor.
+      // Wait for a focused COMMENT_INPUT to avoid matching the
+      // pre-existing top-level comment input.
+      await waitForElement(client, `${COMMENT_INPUT}:focus`, undefined, mouse);
+      await gaussianDelay(350, 50, 250, 500);
+
+      await typeText(client, `${COMMENT_INPUT}:focus`, input.text);
+    } else {
+      // --- Top-level comment ---
+      await waitForElement(client, COMMENT_INPUT, undefined, mouse);
+      await humanizedScrollTo(client, COMMENT_INPUT, mouse);
+      await humanizedClick(client, COMMENT_INPUT, mouse);
+      await gaussianDelay(550, 75, 400, 700);
+
+      await typeText(client, COMMENT_INPUT, input.text);
+    }
 
     // Wait for submit button and click
     await waitForElement(client, COMMENT_SUBMIT_BUTTON, undefined, mouse);
@@ -152,6 +194,7 @@ export async function commentOnPost(
       success: true as const,
       postUrl: input.postUrl,
       commentText: input.text,
+      parentCommentUrn: parentUrn ?? null,
     };
   } finally {
     client.disconnect();

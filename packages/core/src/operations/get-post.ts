@@ -57,6 +57,7 @@ interface RawPostDetail {
 }
 
 interface RawComment {
+  commentUrn: string | null;
   authorName: string;
   authorHeadline: string | null;
   authorPublicId: string | null;
@@ -274,6 +275,9 @@ const SCRAPE_COMMENTS_SCRIPT = `(() => {
     // Skip if no meaningful content
     if (!text && !authorName) continue;
 
+    // --- Comment URN ---
+    const commentUrn = article.getAttribute('data-id') || null;
+
     // --- Timestamp ---
     let createdAt = null;
     const timeEl = article.querySelector('time');
@@ -291,6 +295,7 @@ const SCRAPE_COMMENTS_SCRIPT = `(() => {
     }
 
     comments.push({
+      commentUrn,
       authorName,
       authorHeadline,
       authorPublicId,
@@ -483,7 +488,7 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
     const limited = maxComments > 0 ? allRaw.slice(0, maxComments) : [];
 
     const comments: PostComment[] = limited.map((c) => ({
-      commentUrn: null,
+      commentUrn: c.commentUrn,
       authorName: c.authorName,
       authorHeadline: c.authorHeadline,
       authorPublicId: c.authorPublicId,

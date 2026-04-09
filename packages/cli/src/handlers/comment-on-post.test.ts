@@ -21,6 +21,7 @@ const MOCK_RESULT: CommentOnPostOutput = {
   postUrl:
     "https://www.linkedin.com/feed/update/urn:li:activity:123/",
   commentText: "Great post!",
+  parentCommentUrn: null,
 };
 
 describe("handleCommentOnPost", () => {
@@ -102,5 +103,28 @@ describe("handleCommentOnPost", () => {
 
     expect(process.exitCode).toBe(1);
     expect(getStderr(stderrSpy)).toContain("connection refused");
+  });
+
+  it("prints reply-specific output when parentCommentUrn is set", async () => {
+    const replyResult: CommentOnPostOutput = {
+      success: true,
+      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      commentText: "Nice reply!",
+      parentCommentUrn: "urn:li:comment:(activity:123,456)",
+    };
+    vi.mocked(commentOnPost).mockResolvedValue(replyResult);
+
+    await handleCommentOnPost({
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      text: "Nice reply!",
+      parentCommentUrn: "urn:li:comment:(activity:123,456)",
+    });
+
+    expect(process.exitCode).toBeUndefined();
+    const stderr = getStderr(stderrSpy);
+    expect(stderr).toContain("Posting reply...");
+    const stdout = getStdout(stdoutSpy);
+    expect(stdout).toContain("Reply posted on");
+    expect(stdout).toContain("In reply to: urn:li:comment:(activity:123,456)");
   });
 });

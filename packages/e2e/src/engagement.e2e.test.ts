@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import {
   describeE2E,
   forceStopInstance,
+  getE2ECommentUrn,
   getE2EPersonId,
   getE2EPostUrl,
   installErrorDetection,
@@ -57,10 +58,12 @@ describeE2E("engagement operations", () => {
   let cdpPort: number;
   let personId: number;
   let postUrl: string;
+  let commentUrn: string;
 
   beforeAll(async () => {
     personId = getE2EPersonId();
     postUrl = getE2EPostUrl();
+    commentUrn = getE2ECommentUrn();
 
     const launched = await launchApp();
     app = launched.app;
@@ -558,6 +561,62 @@ describeE2E("engagement operations", () => {
         expect(parsed.success).toBe(true);
         expect(parsed.postUrl).toBe(postUrl);
         expect(parsed.commentText).toBe("E2E test comment");
+      }, 120_000);
+    });
+
+    describe("reply to comment", () => {
+      it("replies to a specific comment via parentCommentUrn (CLI)", async () => {
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleCommentOnPost({
+          url: postUrl,
+          text: "E2E reply test",
+          parentCommentUrn: commentUrn,
+          cdpPort,
+          accountId,
+          json: true,
+        });
+
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
+
+        const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
+        const parsed = JSON.parse(output) as CommentOnPostOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.parentCommentUrn).toBe(commentUrn);
+        expect(parsed.commentText).toBe("E2E reply test");
+
+        vi.restoreAllMocks();
+      }, 120_000);
+
+      it("replies to a specific comment via parentCommentUrn (MCP)", async () => {
+        const { server, getHandler } = createMockServer();
+        registerCommentOnPost(server);
+
+        const handler = getHandler("comment-on-post");
+        const result = (await handler({
+          postUrl,
+          text: "E2E reply test via MCP",
+          parentCommentUrn: commentUrn,
+          cdpPort,
+          accountId,
+        })) as {
+          isError?: boolean;
+          content: { type: string; text: string }[];
+        };
+
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
+        expect(result.content).toHaveLength(1);
+
+        const parsed = JSON.parse(
+          (result.content[0] as { text: string }).text,
+        ) as CommentOnPostOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.parentCommentUrn).toBe(commentUrn);
+        expect(parsed.commentText).toBe("E2E reply test via MCP");
       }, 120_000);
     });
   });

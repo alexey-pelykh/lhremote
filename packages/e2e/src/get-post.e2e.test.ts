@@ -136,6 +136,13 @@ describeE2E("get-post operation", () => {
       expect(typeof parsed.post.shareCount).toBe("number");
       expect(Array.isArray(parsed.comments)).toBe(true);
       expect(parsed.commentsPaging).toHaveProperty("total");
+
+      // Verify commentUrn extraction (was previously hardcoded to null)
+      if (parsed.comments.length > 0) {
+        const firstComment = parsed.comments[0];
+        expect(firstComment.commentUrn).not.toBeNull();
+        expect(firstComment.commentUrn).toMatch(/^urn:li:comment:\(/);
+      }
     }, 60_000);
 
     it("get-post prints human-friendly output", async () => {
