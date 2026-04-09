@@ -279,6 +279,11 @@ export {
   type ReactToPostOutput,
   type ReactionType,
 } from "./react-to-post.js";
+export {
+  unfollowFromFeed,
+  type UnfollowFromFeedInput,
+  type UnfollowFromFeedOutput,
+} from "./unfollow-from-feed.js";
 
 // Individual actions (ephemeral campaign)
 export {
