@@ -206,6 +206,7 @@ describe("commentOnPost", () => {
     expect(result.success).toBe(true);
     expect(result.postUrl).toBe(MOCK_POST_URL);
     expect(result.commentText).toBe("Great post!");
+    expect(result.parentCommentUrn).toBeNull();
   });
 
   it("proceeds when PostComment has no daily limit (unlimited)", async () => {
@@ -308,5 +309,63 @@ describe("commentOnPost", () => {
       host: "localhost",
       allowRemote: true,
     });
+  });
+
+  it("clicks Reply button when parentCommentUrn is provided", async () => {
+    setupMocks();
+    const parentUrn = "urn:li:comment:(activity:123,999)";
+
+    const result = await commentOnPost({
+      postUrl: MOCK_POST_URL,
+      text: "Reply text",
+      parentCommentUrn: parentUrn,
+      cdpPort: MOCK_CDP_PORT,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.parentCommentUrn).toBe(parentUrn);
+
+    // Reply flow: waitForElement called for comment article, reply button, focused input, submit button
+    expect(waitForElement).toHaveBeenCalledTimes(4);
+
+    // First call: wait for the target comment article
+    const firstSelector = vi.mocked(waitForElement).mock.calls[0]?.[1];
+    expect(firstSelector).toContain(`article[data-id="${parentUrn}"]`);
+
+    // Second call: wait for reply button within the article
+    const secondSelector = vi.mocked(waitForElement).mock.calls[1]?.[1];
+    expect(secondSelector).toContain('button[aria-label^="Reply to "]');
+
+    // Third call: wait for focused comment input (not the global one)
+    const thirdSelector = vi.mocked(waitForElement).mock.calls[2]?.[1];
+    expect(thirdSelector).toContain(":focus");
+
+    // scrollTo called for the comment article (not the top-level input)
+    expect(humanizedScrollTo).toHaveBeenCalledTimes(1);
+    const scrollSelector = vi.mocked(humanizedScrollTo).mock.calls[0]?.[1];
+    expect(scrollSelector).toContain(`article[data-id="${parentUrn}"]`);
+  });
+
+  it("rejects invalid parentCommentUrn format", async () => {
+    await expect(
+      commentOnPost({
+        postUrl: MOCK_POST_URL,
+        text: "hello",
+        parentCommentUrn: "not-a-valid-urn",
+        cdpPort: MOCK_CDP_PORT,
+      }),
+    ).rejects.toThrow("Invalid comment URN");
+  });
+
+  it("returns parentCommentUrn as null for top-level comments", async () => {
+    setupMocks();
+
+    const result = await commentOnPost({
+      postUrl: MOCK_POST_URL,
+      text: "Top level",
+      cdpPort: MOCK_CDP_PORT,
+    });
+
+    expect(result.parentCommentUrn).toBeNull();
   });
 });

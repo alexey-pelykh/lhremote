@@ -266,6 +266,20 @@ export function getE2EPostUrl(): string {
 }
 
 /**
+ * Read the `LHREMOTE_E2E_COMMENT_URN` environment variable.
+ *
+ * Returns a comment URN on the E2E test post, used for reply-to-comment
+ * E2E tests (e.g. `urn:li:comment:(activity:123,456)`).
+ *
+ * @throws if `LHREMOTE_E2E_COMMENT_URN` is not set or is empty.
+ */
+export function getE2ECommentUrn(): string {
+  const urn = process.env.LHREMOTE_E2E_COMMENT_URN;
+  if (!urn) throw new Error("LHREMOTE_E2E_COMMENT_URN must be set");
+  return urn;
+}
+
+/**
  * Connect to the launcher, list accounts, and return the first account ID.
  *
  * Fails the test if no accounts are configured in LinkedHelper.

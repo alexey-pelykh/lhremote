@@ -20,11 +20,19 @@ export function registerCommentOnPost(server: McpServer): void {
       text: z
         .string()
         .describe("Comment text to post on the LinkedIn post"),
+      parentCommentUrn: z
+        .string()
+        .optional()
+        .describe(
+          "When provided, posts the comment as a reply to this specific comment " +
+            "instead of as a top-level comment. Use the commentUrn value from get-post output " +
+            '(e.g. "urn:li:comment:(activity:1234567890,9876543210)")',
+        ),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, text, cdpPort, cdpHost, allowRemote, accountId }) => {
+    async ({ postUrl, text, parentCommentUrn, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await commentOnPost({ postUrl, text, cdpPort, cdpHost, allowRemote, accountId });
+        const result = await commentOnPost({ postUrl, text, parentCommentUrn, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to comment on post");

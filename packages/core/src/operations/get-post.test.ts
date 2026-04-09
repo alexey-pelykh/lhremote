@@ -51,6 +51,7 @@ describe("getPost", () => {
 
   const DEFAULT_COMMENTS = [
     {
+      commentUrn: "urn:li:comment:(activity:1234567890,111111111)",
       authorName: "Alice Smith",
       authorHeadline: "Product Manager",
       authorPublicId: "alices",
@@ -171,7 +172,7 @@ describe("getPost", () => {
 
     expect(result.comments).toHaveLength(1);
     expect(result.comments[0]).toMatchObject({
-      commentUrn: null,
+      commentUrn: "urn:li:comment:(activity:1234567890,111111111)",
       authorName: "Alice Smith",
       authorHeadline: "Product Manager",
       authorPublicId: "alices",
@@ -183,8 +184,8 @@ describe("getPost", () => {
   it("returns paging metadata from visible comments", async () => {
     setupMocks({
       comments: [
-        { authorName: "A", text: "c1", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
-        { authorName: "B", text: "c2", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
+        { commentUrn: null, authorName: "A", text: "c1", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
+        { commentUrn: null, authorName: "B", text: "c2", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
       ],
     });
 
@@ -292,9 +293,9 @@ describe("getPost", () => {
       articleCount: 2,
       loadMoreClicked: [true, true, false],
       comments: [
-        { authorName: "A", text: "c1", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
-        { authorName: "B", text: "c2", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
-        { authorName: "C", text: "c3", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
+        { commentUrn: null, authorName: "A", text: "c1", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
+        { commentUrn: null, authorName: "B", text: "c2", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
+        { commentUrn: null, authorName: "C", text: "c3", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
       ],
     });
 
@@ -321,9 +322,9 @@ describe("getPost", () => {
   it("limits comments to commentCount", async () => {
     setupMocks({
       comments: [
-        { authorName: "A", text: "c1", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
-        { authorName: "B", text: "c2", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
-        { authorName: "C", text: "c3", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
+        { commentUrn: null, authorName: "A", text: "c1", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
+        { commentUrn: null, authorName: "B", text: "c2", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
+        { commentUrn: null, authorName: "C", text: "c3", authorPublicId: null, authorHeadline: null, createdAt: null, reactionCount: 0 },
       ],
     });
 

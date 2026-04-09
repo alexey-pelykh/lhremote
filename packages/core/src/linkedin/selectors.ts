@@ -89,6 +89,18 @@ export const REACTION_INSIGHTFUL =
 export const REACTION_FUNNY =
   'button[aria-label="Funny"], button[aria-label="React Funny"]';
 
+// ── Comment reply ────────────────────────────────────────────────
+
+/**
+ * Reply button inside a comment `article`.
+ *
+ * Each comment on the post detail page has a Reply button whose
+ * `aria-label` follows the pattern "Reply to {name}'s comment".
+ * The button uses the BEM class
+ * `comments-comment-social-bar__reply-action-button--cr`.
+ */
+export const COMMENT_REPLY_BUTTON = 'button[aria-label^="Reply to "]';
+
 // ── Send / submit buttons ─────────────────────────────────────────
 
 /**
@@ -110,6 +122,7 @@ export const COMMENT_SUBMIT_BUTTON =
 export const SELECTORS = {
   FEED_POST_CONTAINER,
   COMMENT_INPUT,
+  COMMENT_REPLY_BUTTON,
   REACTION_TRIGGER,
   REACTION_LIKE,
   REACTION_CELEBRATE,

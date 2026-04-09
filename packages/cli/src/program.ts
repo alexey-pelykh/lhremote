@@ -697,6 +697,7 @@ export function createProgram(): Command {
     .description("Post a comment on a LinkedIn post")
     .requiredOption("--url <url>", "LinkedIn post URL")
     .requiredOption("--text <text>", "Comment text to post")
+    .option("--parent-comment-urn <urn>", "Reply to a specific comment instead of posting top-level (use commentUrn from get-post)")
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
