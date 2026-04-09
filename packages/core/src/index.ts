@@ -303,6 +303,9 @@ export {
   commentOnPost,
   type CommentOnPostInput,
   type CommentOnPostOutput,
+  dismissFeedPost,
+  type DismissFeedPostInput,
+  type DismissFeedPostOutput,
   // Feed
   getFeed,
   type GetFeedInput,

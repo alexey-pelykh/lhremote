@@ -32,6 +32,7 @@ import {
   handleCampaignUpdateAction,
   handleCreateCollection,
   handleDeleteCollection,
+  handleDismissFeedPost,
   handleDismissErrors,
   handleImportPeopleFromCollection,
   handleImportPeopleFromUrls,
@@ -736,6 +737,16 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleGetFeed);
+
+  program
+    .command("dismiss-feed-post")
+    .description('Dismiss a post from the LinkedIn feed by clicking "Not interested"')
+    .argument("<postUrl>", "LinkedIn post URL")
+    .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleDismissFeedPost);
 
   program
     .command("react-to-post")
