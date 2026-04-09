@@ -6,13 +6,12 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { humanizedClick, humanizedScrollTo, retryInteraction, waitForElement } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
-import { gaussianDelay } from "../utils/delay.js";
-import { maybeHesitate } from "../utils/delay.js";
+import { gaussianDelay, maybeHesitate } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 
 /** CSS selector for the post's three-dot control menu button. */
 const POST_MENU_BUTTON_SELECTOR =
-  'button[aria-label^="Open control menu"]';
+  'button[aria-label^="Open control menu for post"]';
 
 export interface UnfollowFromFeedInput extends ConnectionOptions {
   /** LinkedIn post URL identifying a visible feed post. */
