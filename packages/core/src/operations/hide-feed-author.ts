@@ -32,11 +32,14 @@ export interface HideFeedAuthorOutput {
 }
 
 /**
- * Hide posts by a feed author via the three-dot menu on a feed post.
+ * Hide posts by a person via the three-dot menu on a feed post.
  *
- * Navigates to the LinkedIn feed, locates the post matching
- * {@link HideFeedAuthorInput.postUrl}, opens its three-dot menu, and
- * clicks the "Hide posts by {Name}" menu item.
+ * Navigates to the post URL in the LinkedIn WebView — LinkedIn
+ * renders it as the first feed item — then opens the three-dot
+ * menu and clicks the "Hide posts by {Name}" menu item.
+ *
+ * **Note:** The name in the menu may differ from the post's
+ * original author (e.g. when the post is a repost).
  *
  * @param input - Post URL and CDP connection parameters.
  * @returns Confirmation including the name extracted from the menu item.
@@ -121,8 +124,10 @@ export async function hideFeedAuthor(
         for (const el of document.querySelectorAll('[role="menuitem"]')) {
           const text = el.textContent.trim();
           if (text.startsWith(${JSON.stringify(HIDE_POSTS_PREFIX)})) {
+            const name = text.slice(${HIDE_POSTS_PREFIX.length}).trim();
+            if (!name) return null;
             el.click();
-            return text.slice(${HIDE_POSTS_PREFIX.length});
+            return name;
           }
         }
         return null;
