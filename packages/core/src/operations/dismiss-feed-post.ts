@@ -31,9 +31,8 @@ export interface DismissFeedPostOutput {
  * Open the three-dot menu for a feed post at the given index, click
  * "Copy link to post", and return the captured URL (query params stripped).
  *
- * Returns `null` when the menu button doesn't exist or the clipboard
- * capture fails after up to 3 attempts (matching the retry behaviour of
- * the identical helper in `get-feed.ts`).
+ * Returns `null` when the menu button doesn't exist or when clipboard
+ * capture fails after up to 3 attempts.
  */
 async function capturePostUrl(
   client: CDPClient,
@@ -136,6 +135,14 @@ async function clickNotInterested(
     }
     return false;
   })()`);
+
+  if (!dismissed) {
+    // Dismiss the open menu to avoid leaving the UI in a modal state
+    await client.evaluate(`(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    })()`);
+    await gaussianDelay(300, 75, 200, 500);
+  }
 
   return dismissed;
 }
