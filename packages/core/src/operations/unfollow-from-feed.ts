@@ -91,7 +91,7 @@ export async function unfollowFromFeed(
       // the name from the text.
       const name = await client.evaluate<string | null>(`(() => {
         for (const el of document.querySelectorAll('[role="menuitem"]')) {
-          const text = el.textContent.trim();
+          const text = el.textContent?.trim() ?? '';
           if (text.startsWith('Unfollow ')) {
             el.click();
             return text.slice('Unfollow '.length);
