@@ -101,6 +101,27 @@ export const REACTION_FUNNY =
  */
 export const COMMENT_REPLY_BUTTON = 'button[aria-label^="Reply to "]';
 
+// ── Mention autocomplete ─────────────────────────────────────────
+
+/**
+ * Mention typeahead popup (appears after typing `@` in the comment editor).
+ *
+ * LinkedIn's Quill editor triggers a typeahead dropdown whose listbox
+ * is rendered inside a `.editor-typeahead-fetch` wrapper.  The listbox
+ * itself uses `role="listbox"` with class `basic-typeahead__triggered-content`.
+ */
+export const MENTION_TYPEAHEAD =
+  '.editor-typeahead-fetch .basic-typeahead__triggered-content[role="listbox"]';
+
+/**
+ * Individual mention option inside the typeahead popup.
+ *
+ * Each option has `role="option"` and toggles `aria-selected` on
+ * keyboard navigation (ArrowDown / ArrowUp).
+ */
+export const MENTION_OPTION =
+  '.basic-typeahead__selectable.editor-typeahead__typeahead-item[role="option"]';
+
 // ── Send / submit buttons ─────────────────────────────────────────
 
 /**
@@ -123,6 +144,8 @@ export const SELECTORS = {
   FEED_POST_CONTAINER,
   COMMENT_INPUT,
   COMMENT_REPLY_BUTTON,
+  MENTION_TYPEAHEAD,
+  MENTION_OPTION,
   REACTION_TRIGGER,
   REACTION_LIKE,
   REACTION_CELEBRATE,

@@ -105,6 +105,60 @@ describe("handleCommentOnPost", () => {
     expect(getStderr(stderrSpy)).toContain("connection refused");
   });
 
+  it("forwards valid mentions JSON to commentOnPost", async () => {
+    vi.mocked(commentOnPost).mockResolvedValue(MOCK_RESULT);
+
+    await handleCommentOnPost({
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      text: "Hello @John Doe!",
+      mentions: '[{"name":"John Doe"}]',
+      json: true,
+    });
+
+    expect(process.exitCode).toBeUndefined();
+    expect(commentOnPost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mentions: [{ name: "John Doe" }],
+      }),
+    );
+  });
+
+  it("rejects invalid mentions JSON", async () => {
+    await handleCommentOnPost({
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      text: "hello",
+      mentions: "not-json",
+    });
+
+    expect(process.exitCode).toBe(1);
+    expect(getStderr(stderrSpy)).toContain("Invalid --mentions JSON");
+    expect(commentOnPost).not.toHaveBeenCalled();
+  });
+
+  it("rejects mentions with missing name property", async () => {
+    await handleCommentOnPost({
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      text: "hello",
+      mentions: '[{"foo":"bar"}]',
+    });
+
+    expect(process.exitCode).toBe(1);
+    expect(getStderr(stderrSpy)).toContain("Invalid --mentions structure");
+    expect(commentOnPost).not.toHaveBeenCalled();
+  });
+
+  it("rejects mentions with empty name string", async () => {
+    await handleCommentOnPost({
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      text: "hello",
+      mentions: '[{"name":""}]',
+    });
+
+    expect(process.exitCode).toBe(1);
+    expect(getStderr(stderrSpy)).toContain("Invalid --mentions structure");
+    expect(commentOnPost).not.toHaveBeenCalled();
+  });
+
   it("prints reply-specific output when parentCommentUrn is set", async () => {
     const replyResult: CommentOnPostOutput = {
       success: true,

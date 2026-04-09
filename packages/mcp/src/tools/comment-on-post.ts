@@ -28,11 +28,25 @@ export function registerCommentOnPost(server: McpServer): void {
             "instead of as a top-level comment. Use the commentUrn value from get-post output " +
             '(e.g. "urn:li:comment:(activity:1234567890,9876543210)")',
         ),
+      mentions: z
+        .array(
+          z.object({
+            name: z
+              .string()
+              .describe("Display name to @mention (must appear as @Name in text)"),
+          }),
+        )
+        .optional()
+        .describe(
+          "People to @mention in the comment. Each entry's name must appear as a " +
+            'literal @Name in the text (e.g. text "@John Doe hello" with mentions [{name: "John Doe"}]). ' +
+            "During typing, each @Name triggers LinkedIn's mention autocomplete.",
+        ),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, text, parentCommentUrn, cdpPort, cdpHost, allowRemote, accountId }) => {
+    async ({ postUrl, text, parentCommentUrn, mentions, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await commentOnPost({ postUrl, text, parentCommentUrn, cdpPort, cdpHost, allowRemote, accountId });
+        const result = await commentOnPost({ postUrl, text, parentCommentUrn, mentions, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to comment on post");
