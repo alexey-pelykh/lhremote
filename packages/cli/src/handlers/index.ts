@@ -46,6 +46,7 @@ export { handleFindApp } from "./find-app.js";
 export { handleGetActionBudget } from "./get-action-budget.js";
 export { handleGetErrors } from "./get-errors.js";
 export { handleGetFeed } from "./get-feed.js";
+export { handleHideFeedAuthor } from "./hide-feed-author.js";
 export { handleGetPost } from "./get-post.js";
 export { handleGetPostStats } from "./get-post-stats.js";
 export { handleGetProfileActivity } from "./get-profile-activity.js";

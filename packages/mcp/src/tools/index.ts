@@ -51,6 +51,7 @@ import { registerGetPost } from "./get-post.js";
 import { registerGetPostEngagers } from "./get-post-engagers.js";
 import { registerGetPostStats } from "./get-post-stats.js";
 import { registerGetFeed } from "./get-feed.js";
+import { registerHideFeedAuthor } from "./hide-feed-author.js";
 import { registerGetProfileActivity } from "./get-profile-activity.js";
 import { registerGetErrors } from "./get-errors.js";
 import { registerGetThrottleStatus } from "./get-throttle-status.js";
@@ -119,6 +120,7 @@ export {
   registerFindApp,
   registerGetActionBudget,
   registerGetFeed,
+  registerHideFeedAuthor,
   registerGetPost,
   registerGetPostEngagers,
   registerGetPostStats,
@@ -175,6 +177,7 @@ export function registerAllTools(server: McpServer): void {
   registerFindApp(server);
   registerGetActionBudget(server);
   registerGetFeed(server);
+  registerHideFeedAuthor(server);
   registerGetPost(server);
   registerGetPostEngagers(server);
   registerGetPostStats(server);

@@ -243,6 +243,11 @@ export {
   type GetFeedInput,
   type GetFeedOutput,
 } from "./get-feed.js";
+export {
+  hideFeedAuthor,
+  type HideFeedAuthorInput,
+  type HideFeedAuthorOutput,
+} from "./hide-feed-author.js";
 
 // Profile activity
 export {
