@@ -10,12 +10,12 @@ import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 export function registerHideFeedAuthor(server: McpServer): void {
   server.tool(
     "hide-feed-author",
-    "Click 'Hide posts by {Name}' in a feed post's three-dot menu to stop seeing posts from that author.",
+    "Click 'Hide posts by {Name}' in a feed post's three-dot menu. The hidden person may differ from the original author (e.g. reposter).",
     {
       postUrl: z
         .string()
         .describe(
-          "LinkedIn post URL identifying the feed post whose author to hide",
+          "LinkedIn post URL identifying the feed post whose 'Hide posts by' action to invoke",
         ),
       ...cdpConnectionSchema,
     },
