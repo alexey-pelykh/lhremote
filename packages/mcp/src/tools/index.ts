@@ -71,6 +71,7 @@ import { registerQueryProfiles } from "./query-profiles.js";
 import { registerQueryProfilesBulk } from "./query-profiles-bulk.js";
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
 import { registerSearchPosts } from "./search-posts.js";
+import { registerUnfollowFromFeed } from "./unfollow-from-feed.js";
 import { registerVisitProfile } from "./visit-profile.js";
 
 export {
@@ -142,6 +143,7 @@ export {
   registerSearchPosts,
   registerStartInstance,
   registerStopInstance,
+  registerUnfollowFromFeed,
   registerVisitProfile,
 };
 
@@ -215,4 +217,5 @@ export function registerAllTools(server: McpServer): void {
   registerRemoveConnection(server);
   registerSendInmail(server);
   registerSendInvite(server);
+  registerUnfollowFromFeed(server);
 }

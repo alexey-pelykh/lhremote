@@ -103,7 +103,8 @@ describe("createProgram", () => {
     expect(commandNames).toContain("enrich-profile");
     expect(commandNames).toContain("campaign-erase");
     expect(commandNames).toContain("dismiss-feed-post");
-    expect(commandNames).toHaveLength(68);
+    expect(commandNames).toContain("unfollow-from-feed");
+    expect(commandNames).toHaveLength(69);
   });
 
   describe("launch-app", () => {

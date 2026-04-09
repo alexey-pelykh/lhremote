@@ -391,6 +391,9 @@ export {
   type ReactToPostInput,
   type ReactToPostOutput,
   type ReactionType,
+  unfollowFromFeed,
+  type UnfollowFromFeedInput,
+  type UnfollowFromFeedOutput,
   // Individual actions (ephemeral campaign)
   type EphemeralActionInput,
   messagePerson,

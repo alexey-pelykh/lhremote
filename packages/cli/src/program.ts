@@ -74,6 +74,7 @@ import {
   handleReactToPost,
   handleStartInstance,
   handleStopInstance,
+  handleUnfollowFromFeed,
 } from "./handlers/index.js";
 
 const require = createRequire(import.meta.url);
@@ -762,6 +763,16 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleReactToPost);
+
+  program
+    .command("unfollow-from-feed")
+    .description("Unfollow the author of a post via its feed three-dot menu")
+    .argument("<postUrl>", "LinkedIn post URL")
+    .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleUnfollowFromFeed);
 
   program
     .command("get-profile-activity")
