@@ -310,6 +310,9 @@ export {
   getFeed,
   type GetFeedInput,
   type GetFeedOutput,
+  hideFeedAuthor,
+  type HideFeedAuthorInput,
+  type HideFeedAuthorOutput,
   // Post detail
   getPost,
   type GetPostInput,

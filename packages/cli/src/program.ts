@@ -54,6 +54,7 @@ import {
   handleGetActionBudget,
   handleGetErrors,
   handleGetFeed,
+  handleHideFeedAuthor,
   handleGetPost,
   handleGetPostStats,
   handleGetProfileActivity,
@@ -773,6 +774,16 @@ export function createProgram(): Command {
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleUnfollowFromFeed);
+
+  program
+    .command("hide-feed-author")
+    .description("Click 'Hide posts by {Name}' in a feed post's three-dot menu")
+    .argument("<postUrl>", "LinkedIn post URL")
+    .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleHideFeedAuthor);
 
   program
     .command("get-profile-activity")
