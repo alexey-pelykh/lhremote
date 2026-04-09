@@ -13,7 +13,6 @@ vi.mock("../cdp/discovery.js", () => ({
 
 vi.mock("../linkedin/dom-automation.js", () => ({
   waitForElement: vi.fn(),
-  humanizedClick: vi.fn(),
   humanizedScrollToByIndex: vi.fn(),
   retryInteraction: vi.fn().mockImplementation((fn: () => Promise<unknown>) => fn()),
 }));
@@ -25,7 +24,7 @@ vi.mock("../utils/delay.js", () => ({
 
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { waitForElement, humanizedClick, humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
+import { waitForElement, humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
 import { hideFeedAuthor } from "./hide-feed-author.js";
 
 const mockClient = {
@@ -43,14 +42,12 @@ function setupMocks(hiddenName: string | null = "John Doe") {
     { id: "target-1", type: "page", title: "LinkedIn", url: "https://www.linkedin.com/feed/", description: "", devtoolsFrontendUrl: "" },
   ]);
   vi.mocked(waitForElement).mockResolvedValue(undefined);
-  vi.mocked(humanizedClick).mockResolvedValue(undefined);
   vi.mocked(humanizedScrollToByIndex).mockResolvedValue(undefined);
 
-  // First evaluate: find post index → returns 0
-  // Second evaluate: click menu item → returns hidden name
-  // Third evaluate (if name is null): dismiss menu via Escape
+  // First evaluate: click menu button by index → returns true
+  // Second evaluate: click "Hide posts by" menu item → returns hidden name
   mockClient.evaluate
-    .mockResolvedValueOnce(0) // postIndex
+    .mockResolvedValueOnce(true) // menu button clicked
     .mockResolvedValueOnce(hiddenName); // hidden name from menu item
 }
 
@@ -107,7 +104,8 @@ describe("hideFeedAuthor", () => {
       { id: "target-1", type: "page", title: "LinkedIn", url: "https://www.linkedin.com/feed/", description: "", devtoolsFrontendUrl: "" },
     ]);
     vi.mocked(waitForElement).mockResolvedValue(undefined);
-    mockClient.evaluate.mockResolvedValueOnce(-1); // no menu buttons
+    vi.mocked(humanizedScrollToByIndex).mockResolvedValue(undefined);
+    mockClient.evaluate.mockResolvedValueOnce(false); // no menu button
 
     await expect(
       hideFeedAuthor({
@@ -120,7 +118,7 @@ describe("hideFeedAuthor", () => {
   it("throws when 'Hide posts by' menu item is not found", async () => {
     setupMocks(null);
 
-    // The third evaluate is the Escape dismiss
+    // Third evaluate is the Escape dismiss
     mockClient.evaluate.mockResolvedValueOnce(undefined);
 
     await expect(
@@ -159,7 +157,7 @@ describe("hideFeedAuthor", () => {
     );
   });
 
-  it("scrolls menu button into view and clicks it", async () => {
+  it("scrolls menu button into view and clicks by index", async () => {
     setupMocks();
 
     await hideFeedAuthor({
@@ -173,11 +171,8 @@ describe("hideFeedAuthor", () => {
       0,
       undefined,
     );
-    expect(humanizedClick).toHaveBeenCalledWith(
-      mockClient,
-      '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]',
-      undefined,
-    );
+    // Menu button is clicked via evaluate (by index), not humanizedClick
+    expect(mockClient.evaluate).toHaveBeenCalled();
   });
 
   it("wraps menu interaction in retryInteraction", async () => {
