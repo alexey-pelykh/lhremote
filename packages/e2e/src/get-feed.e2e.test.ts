@@ -157,5 +157,47 @@ describeE2E("get-feed operation", () => {
       expect(post).toHaveProperty("url");
       expect(typeof post.reactionCount).toBe("number");
     }, 60_000);
+
+    it("get-feed tool paginates with cursor", async () => {
+      const { server, getHandler } = createMockServer();
+      registerGetFeed(server);
+      const handler = getHandler("get-feed");
+
+      // Page 1: request 2 posts
+      const page1 = (await handler({ count: 2, cdpPort })) as {
+        isError?: boolean;
+        content: { type: string; text: string }[];
+      };
+      expect(page1.isError, `MCP tool error: ${page1.content?.[0]?.text}`).toBeUndefined();
+      expect(page1.content).toHaveLength(1);
+      const parsed1 = JSON.parse(
+        (page1.content[0] as { text: string }).text,
+      ) as GetFeedOutput;
+
+      expect(parsed1.posts.length).toBe(2);
+      expect(parsed1.nextCursor).toEqual(expect.any(String));
+
+      // Page 2: use cursor from page 1
+      const page2 = (await handler({ count: 2, cursor: parsed1.nextCursor, cdpPort })) as {
+        isError?: boolean;
+        content: { type: string; text: string }[];
+      };
+      expect(page2.isError, `MCP tool error: ${page2.content?.[0]?.text}`).toBeUndefined();
+      expect(page2.content).toHaveLength(1);
+      const parsed2 = JSON.parse(
+        (page2.content[0] as { text: string }).text,
+      ) as GetFeedOutput;
+
+      expect(parsed2.posts.length).toBeGreaterThan(0);
+
+      // Page 2 URLs should differ from page 1 (filter nulls from failed URL extraction)
+      const page1Urls = new Set(parsed1.posts.map((p) => p.url).filter((u) => u !== null));
+      const page2Urls = parsed2.posts.map((p) => p.url).filter((u) => u !== null);
+      expect(page1Urls.size).toBeGreaterThan(0);
+      expect(page2Urls.length).toBeGreaterThan(0);
+      for (const url of page2Urls) {
+        expect(page1Urls.has(url)).toBe(false);
+      }
+    }, 120_000);
   });
 });
