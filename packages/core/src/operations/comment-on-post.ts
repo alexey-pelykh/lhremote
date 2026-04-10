@@ -49,6 +49,8 @@ export interface CommentOnPostInput extends ConnectionOptions {
   readonly mentions?: readonly MentionEntry[] | undefined;
   /** Optional humanized mouse for natural cursor movement and clicks. */
   readonly mouse?: HumanizedMouse | null | undefined;
+  /** When true, prepare the comment but do not click submit. */
+  readonly dryRun?: boolean | undefined;
 }
 
 /**
@@ -60,6 +62,7 @@ export interface CommentOnPostOutput {
   readonly commentText: string;
   /** The parent comment URN when this was posted as a reply, or `null` for top-level comments. */
   readonly parentCommentUrn: string | null;
+  readonly dryRun: boolean;
 }
 
 /**
@@ -160,6 +163,7 @@ export async function commentOnPost(
     const mouse = input.mouse;
     const parentUrn = input.parentCommentUrn;
     const mentions = input.mentions ?? [];
+    const dryRun = input.dryRun ?? false;
 
     if (parentUrn) {
       // --- Reply to a specific comment ---
@@ -180,10 +184,12 @@ export async function commentOnPost(
       await waitForElement(client, `${COMMENT_INPUT}:focus`, undefined, mouse);
       await gaussianDelay(350, 50, 250, 500);
 
-      if (mentions.length > 0) {
-        await typeTextWithMentions(client, `${COMMENT_INPUT}:focus`, input.text, mentions);
-      } else {
-        await typeText(client, `${COMMENT_INPUT}:focus`, input.text);
+      if (!dryRun) {
+        if (mentions.length > 0) {
+          await typeTextWithMentions(client, `${COMMENT_INPUT}:focus`, input.text, mentions);
+        } else {
+          await typeText(client, `${COMMENT_INPUT}:focus`, input.text);
+        }
       }
     } else {
       // --- Top-level comment ---
@@ -192,19 +198,23 @@ export async function commentOnPost(
       await humanizedClick(client, COMMENT_INPUT, mouse);
       await gaussianDelay(550, 75, 400, 700);
 
-      if (mentions.length > 0) {
-        await typeTextWithMentions(client, COMMENT_INPUT, input.text, mentions);
-      } else {
-        await typeText(client, COMMENT_INPUT, input.text);
+      if (!dryRun) {
+        if (mentions.length > 0) {
+          await typeTextWithMentions(client, COMMENT_INPUT, input.text, mentions);
+        } else {
+          await typeText(client, COMMENT_INPUT, input.text);
+        }
       }
     }
 
-    // Wait for submit button and click
-    await waitForElement(client, COMMENT_SUBMIT_BUTTON, undefined, mouse);
-    await humanizedClick(client, COMMENT_SUBMIT_BUTTON, mouse);
+    if (!dryRun) {
+      // Wait for submit button and click
+      await waitForElement(client, COMMENT_SUBMIT_BUTTON, undefined, mouse);
+      await humanizedClick(client, COMMENT_SUBMIT_BUTTON, mouse);
 
-    // Brief wait for the comment to post
-    await gaussianDelay(2_000, 250, 1_500, 2_500);
+      // Brief wait for the comment to post
+      await gaussianDelay(2_000, 250, 1_500, 2_500);
+    }
 
     await gaussianDelay(1_500, 500, 700, 3_500); // Post-action dwell
     return {
@@ -212,6 +222,7 @@ export async function commentOnPost(
       postUrl: input.postUrl,
       commentText: input.text,
       parentCommentUrn: parentUrn ?? null,
+      dryRun,
     };
   } finally {
     client.disconnect();

@@ -19,6 +19,7 @@ const MOCK_RESULT = {
     "https://www.linkedin.com/feed/update/urn:li:activity:123/",
   commentText: "Great post!",
   parentCommentUrn: null as string | null,
+  dryRun: false,
 };
 
 describe("registerCommentOnPost", () => {
@@ -77,6 +78,24 @@ describe("registerCommentOnPost", () => {
 
     expect(commentOnPost).toHaveBeenCalledWith(
       expect.objectContaining({ parentCommentUrn: "urn:li:comment:(activity:123,456)" }),
+    );
+  });
+
+  it("passes dryRun to core operation", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCommentOnPost(server);
+    vi.mocked(commentOnPost).mockResolvedValue({ ...MOCK_RESULT, dryRun: true });
+
+    const handler = getHandler("comment-on-post");
+    await handler({
+      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      text: "Great post!",
+      dryRun: true,
+      cdpPort: 9222,
+    });
+
+    expect(commentOnPost).toHaveBeenCalledWith(
+      expect.objectContaining({ dryRun: true }),
     );
   });
 

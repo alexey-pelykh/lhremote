@@ -22,6 +22,7 @@ const MOCK_RESULT: CommentOnPostOutput = {
     "https://www.linkedin.com/feed/update/urn:li:activity:123/",
   commentText: "Great post!",
   parentCommentUrn: null,
+  dryRun: false,
 };
 
 describe("handleCommentOnPost", () => {
@@ -159,12 +160,90 @@ describe("handleCommentOnPost", () => {
     expect(commentOnPost).not.toHaveBeenCalled();
   });
 
+  it("prints [dry-run] prefix for top-level comment", async () => {
+    vi.mocked(commentOnPost).mockResolvedValue({
+      ...MOCK_RESULT,
+      dryRun: true,
+    });
+
+    await handleCommentOnPost({
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      text: "Great post!",
+      dryRun: true,
+    });
+
+    expect(process.exitCode).toBeUndefined();
+    const stdout = getStdout(stdoutSpy);
+    expect(stdout).toContain("[dry-run]");
+    expect(stdout).toContain("Would post comment on");
+    expect(stdout).toContain("Great post!");
+  });
+
+  it("prints [dry-run] prefix for reply", async () => {
+    vi.mocked(commentOnPost).mockResolvedValue({
+      ...MOCK_RESULT,
+      commentText: "Nice reply!",
+      parentCommentUrn: "urn:li:comment:(activity:123,456)",
+      dryRun: true,
+    });
+
+    await handleCommentOnPost({
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      text: "Nice reply!",
+      parentCommentUrn: "urn:li:comment:(activity:123,456)",
+      dryRun: true,
+    });
+
+    expect(process.exitCode).toBeUndefined();
+    const stdout = getStdout(stdoutSpy);
+    expect(stdout).toContain("[dry-run]");
+    expect(stdout).toContain("Would post reply on");
+    expect(stdout).toContain("In reply to: urn:li:comment:(activity:123,456)");
+  });
+
+  it("outputs JSON with dryRun field when --json --dry-run", async () => {
+    vi.mocked(commentOnPost).mockResolvedValue({
+      ...MOCK_RESULT,
+      dryRun: true,
+    });
+
+    await handleCommentOnPost({
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      text: "Great post!",
+      dryRun: true,
+      json: true,
+    });
+
+    expect(process.exitCode).toBeUndefined();
+    const output = JSON.parse(getStdout(stdoutSpy));
+    expect(output.dryRun).toBe(true);
+    expect(output.success).toBe(true);
+  });
+
+  it("passes dryRun to commentOnPost", async () => {
+    vi.mocked(commentOnPost).mockResolvedValue({
+      ...MOCK_RESULT,
+      dryRun: true,
+    });
+
+    await handleCommentOnPost({
+      url: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      text: "Great post!",
+      dryRun: true,
+    });
+
+    expect(commentOnPost).toHaveBeenCalledWith(
+      expect.objectContaining({ dryRun: true }),
+    );
+  });
+
   it("prints reply-specific output when parentCommentUrn is set", async () => {
     const replyResult: CommentOnPostOutput = {
       success: true,
       postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
       commentText: "Nice reply!",
       parentCommentUrn: "urn:li:comment:(activity:123,456)",
+      dryRun: false,
     };
     vi.mocked(commentOnPost).mockResolvedValue(replyResult);
 

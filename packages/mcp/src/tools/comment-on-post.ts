@@ -42,11 +42,16 @@ export function registerCommentOnPost(server: McpServer): void {
             'literal @Name in the text (e.g. text "@John Doe hello" with mentions [{name: "John Doe"}]). ' +
             "During typing, each @Name triggers LinkedIn's mention autocomplete.",
         ),
+      dryRun: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("When true, prepare the comment but do not click submit"),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, text, parentCommentUrn, mentions, cdpPort, cdpHost, allowRemote, accountId }) => {
+    async ({ postUrl, text, parentCommentUrn, mentions, dryRun, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await commentOnPost({ postUrl, text, parentCommentUrn, mentions, cdpPort, cdpHost, allowRemote, accountId });
+        const result = await commentOnPost({ postUrl, text, parentCommentUrn, mentions, dryRun, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to comment on post");
