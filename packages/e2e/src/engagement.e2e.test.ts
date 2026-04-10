@@ -564,6 +564,93 @@ describeE2E("engagement operations", () => {
       }, 120_000);
     });
 
+    describe("dry-run", () => {
+      const originalExitCode = process.exitCode;
+
+      beforeEach(() => {
+        process.exitCode = undefined;
+      });
+
+      afterEach(() => {
+        process.exitCode = originalExitCode;
+        vi.restoreAllMocks();
+      });
+
+      it("comment-on-post --json --dry-run reports dry-run result", async () => {
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleCommentOnPost({
+          url: postUrl,
+          text: "E2E dry-run comment",
+          cdpPort,
+          accountId,
+          dryRun: true,
+          json: true,
+        });
+
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
+        const parsed = JSON.parse(output) as CommentOnPostOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.commentText).toBe("E2E dry-run comment");
+        expect(parsed.dryRun).toBe(true);
+      }, 120_000);
+
+      it("comment-on-post --dry-run (human-friendly) includes [dry-run] prefix", async () => {
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleCommentOnPost({
+          url: postUrl,
+          text: "E2E dry-run comment",
+          cdpPort,
+          accountId,
+          dryRun: true,
+        });
+
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
+
+        const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
+        expect(output).toContain("[dry-run]");
+      }, 120_000);
+
+      it("comment-on-post MCP tool returns valid dry-run JSON", async () => {
+        const { server, getHandler } = createMockServer();
+        registerCommentOnPost(server);
+
+        const handler = getHandler("comment-on-post");
+        const result = (await handler({
+          postUrl,
+          text: "E2E dry-run comment via MCP",
+          cdpPort,
+          accountId,
+          dryRun: true,
+        })) as {
+          isError?: boolean;
+          content: { type: string; text: string }[];
+        };
+
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
+        expect(result.content).toHaveLength(1);
+
+        const parsed = JSON.parse(
+          (result.content[0] as { text: string }).text,
+        ) as CommentOnPostOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.commentText).toBe("E2E dry-run comment via MCP");
+        expect(parsed.dryRun).toBe(true);
+      }, 120_000);
+    });
+
     describe("reply to comment", () => {
       it("replies to a specific comment via parentCommentUrn (CLI)", async () => {
         const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);

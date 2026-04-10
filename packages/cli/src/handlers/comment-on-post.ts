@@ -19,6 +19,7 @@ export async function handleCommentOnPost(options: {
   cdpHost?: string;
   allowRemote?: boolean;
   accountId?: number;
+  dryRun?: boolean;
   json?: boolean;
 }): Promise<void> {
   process.stderr.write(
@@ -68,6 +69,7 @@ export async function handleCommentOnPost(options: {
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
       accountId: options.accountId,
+      dryRun: options.dryRun,
     });
   } catch (error) {
     if (error instanceof BudgetExceededError) {
@@ -84,6 +86,19 @@ export async function handleCommentOnPost(options: {
 
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else if (result.dryRun) {
+    if (result.parentCommentUrn) {
+      process.stdout.write(
+        `[dry-run] Would post reply on ${result.postUrl}\n` +
+          `In reply to: ${result.parentCommentUrn}\n` +
+          `Text: ${result.commentText}\n`,
+      );
+    } else {
+      process.stdout.write(
+        `[dry-run] Would post comment on ${result.postUrl}\n` +
+          `Text: ${result.commentText}\n`,
+      );
+    }
   } else {
     if (result.parentCommentUrn) {
       process.stdout.write(`Reply posted on ${result.postUrl}\n`);

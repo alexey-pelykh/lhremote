@@ -705,6 +705,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--dry-run", "Prepare the comment but do not click submit")
     .option("--json", "Output as JSON")
     .action(handleCommentOnPost);
 
