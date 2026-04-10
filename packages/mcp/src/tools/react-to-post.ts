@@ -24,9 +24,10 @@ export function registerReactToPost(server: McpServer): void {
         .describe(
           "Reaction type to apply (default: like). Options: like, celebrate, support, love, insightful, funny",
         ),
+      dryRun: z.boolean().optional().default(false).describe("When true, detect current reaction state without clicking"),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, reactionType, cdpPort, cdpHost, allowRemote }) => {
+    async ({ postUrl, reactionType, dryRun, cdpPort, cdpHost, allowRemote }) => {
       try {
         const result = await reactToPost({
           postUrl,
@@ -34,6 +35,7 @@ export function registerReactToPost(server: McpServer): void {
           cdpPort,
           cdpHost,
           allowRemote,
+          dryRun,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
