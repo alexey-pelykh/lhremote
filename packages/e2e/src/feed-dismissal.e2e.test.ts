@@ -5,7 +5,6 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import {
   describeE2E,
   forceStopInstance,
-  getE2EPostUrl,
   installErrorDetection,
   launchApp,
   quitApp,
@@ -34,11 +33,8 @@ describeE2E("feed dismissal operations", () => {
   let port: number;
   let accountId: number;
   let cdpPort: number;
-  let postUrl: string;
 
   beforeAll(async () => {
-    postUrl = getE2EPostUrl();
-
     const launched = await launchApp();
     app = launched.app;
     port = launched.port;
@@ -114,11 +110,11 @@ describeE2E("feed dismissal operations", () => {
         vi.restoreAllMocks();
       });
 
-      it("dismiss-feed-post --json dismisses post from feed", async () => {
+      it("dismiss-feed-post --json --dry-run reports dry-run result", async () => {
         const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
         const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
-        await handleDismissFeedPost(postUrl, { cdpPort, json: true });
+        await handleDismissFeedPost(0, { cdpPort, json: true, dryRun: true });
 
         const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
         expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
@@ -128,19 +124,34 @@ describeE2E("feed dismissal operations", () => {
         const parsed = JSON.parse(output) as DismissFeedPostOutput;
 
         expect(parsed.success).toBe(true);
-        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.feedIndex).toBe(0);
+        expect(parsed.dryRun).toBe(true);
+      }, 120_000);
+
+      it("dismiss-feed-post --dry-run (human-friendly) includes [dry-run] prefix", async () => {
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleDismissFeedPost(0, { cdpPort, dryRun: true });
+
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
+
+        const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
+        expect(output).toContain("[dry-run]");
       }, 120_000);
     });
 
     describe("MCP tools", () => {
-      it("dismiss-feed-post tool returns valid JSON", async () => {
+      it("dismiss-feed-post tool returns valid dry-run JSON", async () => {
         const { server, getHandler } = createMockServer();
         registerDismissFeedPost(server);
 
         const handler = getHandler("dismiss-feed-post");
         const result = (await handler({
-          postUrl,
+          feedIndex: 0,
           cdpPort,
+          dryRun: true,
         })) as {
           isError?: boolean;
           content: { type: string; text: string }[];
@@ -154,7 +165,8 @@ describeE2E("feed dismissal operations", () => {
         ) as DismissFeedPostOutput;
 
         expect(parsed.success).toBe(true);
-        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.feedIndex).toBe(0);
+        expect(parsed.dryRun).toBe(true);
       }, 120_000);
     });
   });

@@ -743,10 +743,11 @@ export function createProgram(): Command {
   program
     .command("dismiss-feed-post")
     .description('Dismiss a post from the LinkedIn feed by clicking "Not interested"')
-    .argument("<postUrl>", "LinkedIn post URL")
+    .argument("<feedIndex>", "Zero-based index of the post in the visible feed", parseNonNegativeInt)
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--dry-run", "Locate the menu item without clicking it")
     .option("--json", "Output as JSON")
     .action(handleDismissFeedPost);
 
@@ -768,20 +769,22 @@ export function createProgram(): Command {
   program
     .command("unfollow-from-feed")
     .description("Unfollow the author of a post via its feed three-dot menu")
-    .argument("<postUrl>", "LinkedIn post URL")
+    .argument("<feedIndex>", "Zero-based index of the post in the visible feed", parseNonNegativeInt)
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--dry-run", "Locate the menu item without clicking it")
     .option("--json", "Output as JSON")
     .action(handleUnfollowFromFeed);
 
   program
     .command("hide-feed-author")
     .description("Click 'Hide posts by {Name}' in a feed post's three-dot menu")
-    .argument("<postUrl>", "LinkedIn post URL")
+    .argument("<feedIndex>", "Zero-based index of the post in the visible feed", parseNonNegativeInt)
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--dry-run", "Locate the menu item without clicking it")
     .option("--json", "Output as JSON")
     .action(handleHideFeedAuthor);
 

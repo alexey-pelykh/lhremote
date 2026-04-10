@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it } from "vitest";
 import {
   describeE2E,
   forceStopInstance,
-  getE2EPostUrl,
   installErrorDetection,
   launchApp,
   quitApp,
@@ -16,14 +15,10 @@ import {
   type AppService,
   discoverInstancePort,
   discoverTargets,
-  dismissErrors,
+  type HideFeedAuthorOutput,
   LauncherService,
   startInstanceWithRecovery,
-  type HideFeedAuthorOutput,
 } from "@lhremote/core";
-
-// CLI handlers
-import { handleHideFeedAuthor } from "@lhremote/cli/handlers";
 
 // MCP tool registrations
 import { registerHideFeedAuthor } from "@lhremote/mcp/tools";
@@ -34,11 +29,8 @@ describeE2E("hide-feed-author", () => {
   let port: number;
   let accountId: number;
   let cdpPort: number;
-  let postUrl: string;
 
   beforeAll(async () => {
-    postUrl = getE2EPostUrl();
-
     const launched = await launchApp();
     app = launched.app;
     port = launched.port;
@@ -53,7 +45,6 @@ describeE2E("hide-feed-author", () => {
       launcher.disconnect();
     }
 
-    // Discover the instance's dynamic CDP port
     const instancePort = await retryAsync(
       async () => {
         const p = await discoverInstancePort(port);
@@ -64,7 +55,6 @@ describeE2E("hide-feed-author", () => {
     );
     cdpPort = instancePort;
 
-    // Wait for the LinkedIn WebView to become available
     await retryAsync(
       async () => {
         const targets = await discoverTargets(cdpPort);
@@ -78,11 +68,6 @@ describeE2E("hide-feed-author", () => {
       { retries: 30, delay: 2_000 },
     );
   }, 120_000);
-
-  // Dismiss any leftover error popups before each test to prevent cascade failures
-  beforeEach(async () => {
-    await dismissErrors({ cdpPort, accountId }).catch(() => {});
-  }, 30_000);
 
   installErrorDetection(() => port);
 
@@ -99,63 +84,44 @@ describeE2E("hide-feed-author", () => {
     await quitApp(app);
   }, 60_000);
 
-  describe("CLI handlers", () => {
-    const originalExitCode = process.exitCode;
+  it("hide-feed-author dryRun finds a non-own post and verifies menu item", async () => {
+    const { server, getHandler } = createMockServer();
+    registerHideFeedAuthor(server);
+    const handler = getHandler("hide-feed-author");
 
-    beforeEach(() => {
-      process.exitCode = undefined;
-    });
+    const MAX_INDEX = 5;
+    let found = false;
 
-    afterEach(() => {
-      process.exitCode = originalExitCode;
-      vi.restoreAllMocks();
-    });
-
-    it("hide-feed-author --json returns hidden name", async () => {
-      const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
-      const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
-
-      await handleHideFeedAuthor(postUrl, { cdpPort, json: true });
-
-      const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
-      expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
-      expect(stdoutSpy).toHaveBeenCalled();
-
-      const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
-      const parsed = JSON.parse(output) as HideFeedAuthorOutput;
-
-      expect(parsed.success).toBe(true);
-      expect(parsed.postUrl).toBe(postUrl);
-      expect(typeof parsed.hiddenName).toBe("string");
-      expect(parsed.hiddenName.length).toBeGreaterThan(0);
-    }, 120_000);
-  });
-
-  describe("MCP tools", () => {
-    it("hide-feed-author tool returns valid JSON", async () => {
-      const { server, getHandler } = createMockServer();
-      registerHideFeedAuthor(server);
-
-      const handler = getHandler("hide-feed-author");
+    for (let i = 0; i < MAX_INDEX; i++) {
       const result = (await handler({
-        postUrl,
+        feedIndex: i,
         cdpPort,
+        dryRun: true,
       })) as {
         isError?: boolean;
         content: { type: string; text: string }[];
       };
 
-      expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
       expect(result.content).toHaveLength(1);
+      const text = (result.content[0] as { text: string }).text;
 
-      const parsed = JSON.parse(
-        (result.content[0] as { text: string }).text,
-      ) as HideFeedAuthorOutput;
+      if (result.isError) {
+        // This post doesn't have "Hide posts by" (own post, etc.) — try next
+        console.log(`[info] Feed index ${i}: no Hide posts by — ${text.slice(0, 120)}`);
+        continue;
+      }
 
+      const parsed = JSON.parse(text) as HideFeedAuthorOutput;
       expect(parsed.success).toBe(true);
-      expect(parsed.postUrl).toBe(postUrl);
+      expect(parsed.feedIndex).toBe(i);
+      expect(parsed.dryRun).toBe(true);
       expect(typeof parsed.hiddenName).toBe("string");
       expect(parsed.hiddenName.length).toBeGreaterThan(0);
-    }, 120_000);
-  });
+      console.log(`[info] Feed index ${i}: Hide posts by "${parsed.hiddenName}" available`);
+      found = true;
+      break;
+    }
+
+    expect(found, `No feed post in indices 0–${MAX_INDEX - 1} has a "Hide posts by" menu item`).toBe(true);
+  }, 180_000);
 });

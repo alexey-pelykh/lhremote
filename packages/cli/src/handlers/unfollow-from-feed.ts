@@ -9,21 +9,23 @@ import {
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#unfollow-from-feed | unfollow-from-feed} CLI command. */
 export async function handleUnfollowFromFeed(
-  postUrl: string,
+  feedIndex: number,
   options: {
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    dryRun?: boolean;
     json?: boolean;
   },
 ): Promise<void> {
   let result: UnfollowFromFeedOutput;
   try {
     result = await unfollowFromFeed({
-      postUrl,
+      feedIndex,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      dryRun: options.dryRun,
     });
   } catch (error) {
     const message = errorMessage(error);
@@ -34,10 +36,15 @@ export async function handleUnfollowFromFeed(
 
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else if (result.dryRun) {
+    process.stdout.write(
+      `[dry-run] Would unfollow "${result.unfollowedName}" from feed\n` +
+        `  Feed index: ${result.feedIndex}\n`,
+    );
   } else {
     process.stdout.write(
       `Unfollowed "${result.unfollowedName}" from feed\n` +
-        `  Post: ${result.postUrl}\n`,
+        `  Feed index: ${result.feedIndex}\n`,
     );
   }
 }

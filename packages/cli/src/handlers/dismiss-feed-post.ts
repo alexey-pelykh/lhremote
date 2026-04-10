@@ -9,21 +9,23 @@ import {
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#dismiss-feed-post | dismiss-feed-post} CLI command. */
 export async function handleDismissFeedPost(
-  postUrl: string,
+  feedIndex: number,
   options: {
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    dryRun?: boolean;
     json?: boolean;
   },
 ): Promise<void> {
   let result: DismissFeedPostOutput;
   try {
     result = await dismissFeedPost({
-      postUrl,
+      feedIndex,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      dryRun: options.dryRun,
     });
   } catch (error) {
     const message = errorMessage(error);
@@ -34,9 +36,13 @@ export async function handleDismissFeedPost(
 
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else if (result.dryRun) {
+    process.stdout.write(
+      `[dry-run] Would dismiss post from feed\n  Feed index: ${result.feedIndex}\n`,
+    );
   } else {
     process.stdout.write(
-      `Dismissed post from feed\n  Post: ${result.postUrl}\n`,
+      `Dismissed post from feed\n  Feed index: ${result.feedIndex}\n`,
     );
   }
 }

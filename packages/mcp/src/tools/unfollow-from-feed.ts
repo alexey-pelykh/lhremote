@@ -10,22 +10,20 @@ import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 export function registerUnfollowFromFeed(server: McpServer): void {
   server.tool(
     "unfollow-from-feed",
-    "Unfollow the author of a LinkedIn post via its feed three-dot menu. Navigates to the post and clicks the 'Unfollow {Name}' menu item.",
+    "Unfollow the author of a LinkedIn feed post via its three-dot menu. Operates on the home feed by position index (pair with get-feed to identify posts).",
     {
-      postUrl: z
-        .string()
-        .describe(
-          "LinkedIn post URL (e.g. https://www.linkedin.com/feed/update/urn:li:activity:1234567890/)",
-        ),
+      feedIndex: z.number().int().min(0).describe("Zero-based index of the post in the visible LinkedIn feed (pair with get-feed to identify posts)"),
+      dryRun: z.boolean().optional().default(false).describe("When true, locate the menu item but do not click it"),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, cdpPort, cdpHost, allowRemote }) => {
+    async ({ feedIndex, dryRun, cdpPort, cdpHost, allowRemote }) => {
       try {
         const result = await unfollowFromFeed({
-          postUrl,
+          feedIndex,
           cdpPort,
           cdpHost,
           allowRemote,
+          dryRun,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
