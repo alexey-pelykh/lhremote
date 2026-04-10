@@ -46,7 +46,7 @@ export function registerCommentOnPost(server: McpServer): void {
         .boolean()
         .optional()
         .default(false)
-        .describe("When true, prepare the comment but do not click submit"),
+        .describe("When true, validate the comment input and submit button are present, but skip typing and submitting"),
       ...cdpConnectionSchema,
     },
     async ({ postUrl, text, parentCommentUrn, mentions, dryRun, cdpPort, cdpHost, allowRemote, accountId }) => {

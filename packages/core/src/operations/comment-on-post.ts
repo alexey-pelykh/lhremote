@@ -49,7 +49,7 @@ export interface CommentOnPostInput extends ConnectionOptions {
   readonly mentions?: readonly MentionEntry[] | undefined;
   /** Optional humanized mouse for natural cursor movement and clicks. */
   readonly mouse?: HumanizedMouse | null | undefined;
-  /** When true, prepare the comment but do not click submit. */
+  /** When true, validate the comment flow but skip typing and clicking submit. */
   readonly dryRun?: boolean | undefined;
 }
 
