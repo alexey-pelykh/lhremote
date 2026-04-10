@@ -10,7 +10,7 @@ import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 export function registerCommentOnPost(server: McpServer): void {
   server.tool(
     "comment-on-post",
-    "Post a comment on a LinkedIn post. Navigate to the post, type the comment text character-by-character for human-like behaviour, and submit. Checks action budget before attempting — fails if PostComment limit is reached.",
+    "Post a comment on a LinkedIn post. Navigate to the post, type the comment text character-by-character for human-like behaviour, and submit. When dryRun is true, validates comment input and submit button are present but skips typing and submitting. Checks action budget before attempting — fails if PostComment limit is reached.",
     {
       postUrl: z
         .string()
