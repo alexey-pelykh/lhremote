@@ -6,12 +6,12 @@
     "url": "https://github.com/alexey-pelykh/lhremote",
     "source": "github"
   },
-  "version": "0.12.0",
+  "version": "0.13.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "lhremote",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "transport": {
         "type": "stdio"
       },
