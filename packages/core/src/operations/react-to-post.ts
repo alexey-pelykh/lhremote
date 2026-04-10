@@ -119,7 +119,7 @@ export interface ReactToPostOutput {
   readonly reactionType: ReactionType;
   /** Whether the post was already reacted with the requested type (no-op). */
   readonly alreadyReacted: boolean;
-  /** The reaction currently applied to the post (null if none). */
+  /** The reaction detected on the post before acting (null if none). */
   readonly currentReaction: ReactionType | null;
   readonly dryRun: boolean;
 }
@@ -205,20 +205,7 @@ export async function reactToPost(
       };
     }
 
-    if (dryRun) {
-      // Dry-run: detected state without mutating — return early
-      await gaussianDelay(1_500, 500, 700, 3_500); // Post-action dwell
-      return {
-        success: true as const,
-        postUrl: input.postUrl,
-        reactionType,
-        alreadyReacted: false,
-        currentReaction,
-        dryRun,
-      };
-    }
-
-    if (currentReaction !== null) {
+    if (!dryRun && currentReaction !== null) {
       // Reacted with a different type — click trigger to unreact first
       await humanizedClick(client, REACTION_TRIGGER, mouse);
       // Wait for DOM to settle after unreacting — the trigger element
@@ -242,10 +229,13 @@ export async function reactToPost(
       await gaussianDelay(2_000, 300, 1_500, 3_000);
       await waitForElement(client, reactionSelector, { timeout: 10_000 });
     }, 3);
-    await humanizedClick(client, reactionSelector, mouse);
 
-    // Let the UI settle
-    await gaussianDelay(550, 75, 400, 700);
+    if (!dryRun) {
+      await humanizedClick(client, reactionSelector, mouse);
+
+      // Let the UI settle
+      await gaussianDelay(550, 75, 400, 700);
+    }
 
     await gaussianDelay(1_500, 500, 700, 3_500); // Post-action dwell
     return {

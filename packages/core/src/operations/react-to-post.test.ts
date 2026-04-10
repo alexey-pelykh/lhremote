@@ -189,7 +189,7 @@ describe("reactToPost", () => {
     expect(humanizedHover).toHaveBeenCalled();
   });
 
-  it("returns dryRun: true without clicking when dryRun is set", async () => {
+  it("returns dryRun: true and hovers popup but skips click", async () => {
     setupMocks();
 
     const result = await reactToPost({
@@ -203,8 +203,8 @@ describe("reactToPost", () => {
     expect(result.dryRun).toBe(true);
     expect(result.alreadyReacted).toBe(false);
     expect(result.currentReaction).toBeNull();
-    // Should NOT hover or click reaction buttons
-    expect(humanizedHover).not.toHaveBeenCalled();
+    // Should hover to validate popup opens, but NOT click
+    expect(humanizedHover).toHaveBeenCalled();
     expect(humanizedClick).not.toHaveBeenCalled();
   });
 
@@ -223,8 +223,9 @@ describe("reactToPost", () => {
     expect(result.dryRun).toBe(true);
     expect(result.alreadyReacted).toBe(false);
     expect(result.currentReaction).toBe("celebrate");
-    // Should NOT click to unreact or click the new reaction
+    // Should NOT click to unreact, but should hover to validate popup
     expect(humanizedClick).not.toHaveBeenCalled();
+    expect(humanizedHover).toHaveBeenCalled();
   });
 
   it("returns alreadyReacted with dryRun when same reaction is active", async () => {
