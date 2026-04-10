@@ -137,6 +137,10 @@ export interface ReactToPostOutput {
  * - **Already reacted with a different type**: clicks the trigger to
  *   remove the existing reaction, then applies the requested one.
  *
+ * When `dryRun` is `true`, the operation navigates to the post, detects
+ * the current reaction state, and validates that the reaction popup opens,
+ * but skips the final reaction click.
+ *
  * @param input - Post URL, reaction type, and CDP connection parameters.
  * @returns Confirmation of the reaction applied, including whether the
  *   post was already reacted with the requested type.
