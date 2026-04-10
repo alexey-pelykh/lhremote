@@ -31,7 +31,7 @@ jobs:
       - run: pnpm test ${{ matrix.os == 'ubuntu-latest' && '-- -- --coverage' || '' }}
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && env.CODECOV_TOKEN != ''
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
@@ -51,7 +51,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Set up GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - uses: ./.github/actions/setup
         with:
@@ -99,8 +99,8 @@ jobs:
 
     steps:
       - name: Set up GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Publish GitHub Pages
         id: publish-github-pages
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
