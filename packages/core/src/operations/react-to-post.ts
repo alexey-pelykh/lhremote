@@ -109,6 +109,8 @@ export interface ReactToPostInput extends ConnectionOptions {
   readonly reactionType?: ReactionType | undefined;
   /** Optional humanized mouse for natural cursor movement and clicks. */
   readonly mouse?: HumanizedMouse | null | undefined;
+  /** When true, detect the reaction state but do not click. */
+  readonly dryRun?: boolean | undefined;
 }
 
 export interface ReactToPostOutput {
@@ -117,6 +119,9 @@ export interface ReactToPostOutput {
   readonly reactionType: ReactionType;
   /** Whether the post was already reacted with the requested type (no-op). */
   readonly alreadyReacted: boolean;
+  /** The reaction currently applied to the post (null if none). */
+  readonly currentReaction: ReactionType | null;
+  readonly dryRun: boolean;
 }
 
 /**
@@ -143,6 +148,7 @@ export async function reactToPost(
   const cdpHost = input.cdpHost ?? "127.0.0.1";
   const allowRemote = input.allowRemote ?? false;
   const reactionType = input.reactionType ?? "like";
+  const dryRun = input.dryRun ?? false;
 
   if (!REACTION_TYPES.includes(reactionType)) {
     throw new Error(
@@ -194,6 +200,21 @@ export async function reactToPost(
         postUrl: input.postUrl,
         reactionType,
         alreadyReacted: true,
+        currentReaction,
+        dryRun,
+      };
+    }
+
+    if (dryRun) {
+      // Dry-run: detected state without mutating — return early
+      await gaussianDelay(1_500, 500, 700, 3_500); // Post-action dwell
+      return {
+        success: true as const,
+        postUrl: input.postUrl,
+        reactionType,
+        alreadyReacted: false,
+        currentReaction,
+        dryRun,
       };
     }
 
@@ -232,6 +253,8 @@ export async function reactToPost(
       postUrl: input.postUrl,
       reactionType,
       alreadyReacted: false,
+      currentReaction,
+      dryRun,
     };
   } finally {
     client.disconnect();

@@ -18,6 +18,8 @@ const MOCK_RESULT: ReactToPostOutput = {
     "https://www.linkedin.com/feed/update/urn:li:activity:123/",
   reactionType: "like",
   alreadyReacted: false,
+  currentReaction: null,
+  dryRun: false,
 };
 
 describe("handleReactToPost", () => {
@@ -84,6 +86,42 @@ describe("handleReactToPost", () => {
     const output = getStdout(stdoutSpy);
     expect(output).toContain('Already reacted to post with "like"');
     expect(output).toContain("no change");
+  });
+
+  it("prints [dry-run] prefix in human-readable mode", async () => {
+    vi.mocked(reactToPost).mockResolvedValue({
+      ...MOCK_RESULT,
+      dryRun: true,
+    });
+
+    await handleReactToPost(
+      "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      { dryRun: true },
+    );
+
+    expect(process.exitCode).toBeUndefined();
+    const output = getStdout(stdoutSpy);
+    expect(output).toContain("[dry-run]");
+    expect(output).toContain('Would react to post with "like"');
+  });
+
+  it("prints [dry-run] already-reacted output", async () => {
+    vi.mocked(reactToPost).mockResolvedValue({
+      ...MOCK_RESULT,
+      alreadyReacted: true,
+      currentReaction: "like",
+      dryRun: true,
+    });
+
+    await handleReactToPost(
+      "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      { dryRun: true },
+    );
+
+    expect(process.exitCode).toBeUndefined();
+    const output = getStdout(stdoutSpy);
+    expect(output).toContain("[dry-run]");
+    expect(output).toContain('Already reacted to post with "like"');
   });
 
   it("sets exitCode on error", async () => {

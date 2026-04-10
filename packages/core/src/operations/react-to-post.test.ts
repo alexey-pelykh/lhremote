@@ -131,6 +131,8 @@ describe("reactToPost", () => {
       postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
       reactionType: "celebrate",
       alreadyReacted: false,
+      currentReaction: null,
+      dryRun: false,
     });
   });
 
@@ -185,6 +187,61 @@ describe("reactToPost", () => {
     // Should click trigger to unreact, then hover to open popup
     expect(humanizedClick).toHaveBeenCalledTimes(2);
     expect(humanizedHover).toHaveBeenCalled();
+  });
+
+  it("returns dryRun: true without clicking when dryRun is set", async () => {
+    setupMocks();
+
+    const result = await reactToPost({
+      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      reactionType: "like",
+      cdpPort: 9222,
+      dryRun: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.dryRun).toBe(true);
+    expect(result.alreadyReacted).toBe(false);
+    expect(result.currentReaction).toBeNull();
+    // Should NOT hover or click reaction buttons
+    expect(humanizedHover).not.toHaveBeenCalled();
+    expect(humanizedClick).not.toHaveBeenCalled();
+  });
+
+  it("returns dryRun with currentReaction when a different reaction is active", async () => {
+    setupMocks();
+    mockClient.evaluate.mockResolvedValueOnce("Unreact Celebrate");
+
+    const result = await reactToPost({
+      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      reactionType: "like",
+      cdpPort: 9222,
+      dryRun: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.dryRun).toBe(true);
+    expect(result.alreadyReacted).toBe(false);
+    expect(result.currentReaction).toBe("celebrate");
+    // Should NOT click to unreact or click the new reaction
+    expect(humanizedClick).not.toHaveBeenCalled();
+  });
+
+  it("returns alreadyReacted with dryRun when same reaction is active", async () => {
+    setupMocks();
+    mockClient.evaluate.mockResolvedValueOnce("Unreact Like");
+
+    const result = await reactToPost({
+      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      reactionType: "like",
+      cdpPort: 9222,
+      dryRun: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.dryRun).toBe(true);
+    expect(result.alreadyReacted).toBe(true);
+    expect(result.currentReaction).toBe("like");
   });
 
   it("navigates to the post URL", async () => {
