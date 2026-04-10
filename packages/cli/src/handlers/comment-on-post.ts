@@ -22,8 +22,11 @@ export async function handleCommentOnPost(options: {
   dryRun?: boolean;
   json?: boolean;
 }): Promise<void> {
+  const dryTag = options.dryRun ? "[dry-run] " : "";
   process.stderr.write(
-    options.parentCommentUrn ? "Posting reply...\n" : "Posting comment...\n",
+    options.parentCommentUrn
+      ? `${dryTag}Posting reply...\n`
+      : `${dryTag}Posting comment...\n`,
   );
 
   let parsedMentions: MentionEntry[] | undefined;

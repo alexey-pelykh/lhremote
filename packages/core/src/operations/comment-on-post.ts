@@ -72,6 +72,10 @@ export interface CommentOnPostOutput {
  * input via selectors, types the comment text character-by-character
  * for human-like behaviour, and clicks submit.
  *
+ * When {@link CommentOnPostInput.dryRun | dryRun} is `true`, the
+ * operation validates that the comment input and submit button are
+ * present but skips typing and clicking submit.
+ *
  * Checks the action budget before attempting the comment and fails
  * with a {@link BudgetExceededError} if the PostComment limit has
  * been reached.
@@ -207,9 +211,10 @@ export async function commentOnPost(
       }
     }
 
+    // Wait for submit button to validate the submit flow would work
+    await waitForElement(client, COMMENT_SUBMIT_BUTTON, undefined, mouse);
+
     if (!dryRun) {
-      // Wait for submit button and click
-      await waitForElement(client, COMMENT_SUBMIT_BUTTON, undefined, mouse);
       await humanizedClick(client, COMMENT_SUBMIT_BUTTON, mouse);
 
       // Brief wait for the comment to post
