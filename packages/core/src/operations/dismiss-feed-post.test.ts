@@ -35,8 +35,6 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { dismissFeedPost } from "./dismiss-feed-post.js";
 
-const TARGET_URL = "https://www.linkedin.com/feed/update/urn:li:activity:123/";
-
 const mockClient = {
   connect: vi.fn().mockResolvedValue(undefined),
   navigate: vi.fn().mockResolvedValue(undefined),
@@ -54,29 +52,14 @@ function setupMocks() {
 }
 
 /**
- * Configure mockClient.evaluate to simulate a feed with one post whose URL
- * matches `targetUrl`, and whose menu contains "Not interested".
+ * Configure mockClient.evaluate to simulate a feed with one post whose
+ * menu contains "Not interested".
  */
-function setupFeedWithPost(targetUrl: string) {
+function setupFeedWithNotInterested() {
   mockClient.evaluate.mockImplementation((script: string) => {
-    // Clipboard interceptor install
-    if (typeof script === "string" && script.includes("__capturedClipboard")) {
-      if (script.includes("writeText")) return Promise.resolve(undefined);
-      if (script.includes("= null")) return Promise.resolve(undefined);
-      // Read captured clipboard
-      return Promise.resolve(targetUrl);
-    }
-    // Post count query
-    if (typeof script === "string" && script.includes(".length")) {
-      return Promise.resolve(1);
-    }
     // Menu button click
     if (typeof script === "string" && script.includes("btn.click()")) {
       return Promise.resolve(true);
-    }
-    // "Copy link to post" click
-    if (typeof script === "string" && script.includes("Copy link to post")) {
-      return Promise.resolve(undefined);
     }
     // "Not interested" click
     if (typeof script === "string" && script.includes("Not interested")) {
@@ -102,7 +85,7 @@ describe("dismissFeedPost", () => {
   it("throws on non-loopback host without allowRemote", async () => {
     await expect(
       dismissFeedPost({
-        postUrl: TARGET_URL,
+        feedIndex: 0,
         cdpPort: 9222,
         cdpHost: "192.168.1.100",
       }),
@@ -111,10 +94,10 @@ describe("dismissFeedPost", () => {
 
   it("allows non-loopback host with allowRemote", async () => {
     setupMocks();
-    setupFeedWithPost(TARGET_URL);
+    setupFeedWithNotInterested();
 
     const result = await dismissFeedPost({
-      postUrl: TARGET_URL,
+      feedIndex: 0,
       cdpPort: 9222,
       cdpHost: "192.168.1.100",
       allowRemote: true,
@@ -130,7 +113,7 @@ describe("dismissFeedPost", () => {
 
     await expect(
       dismissFeedPost({
-        postUrl: TARGET_URL,
+        feedIndex: 0,
         cdpPort: 9222,
       }),
     ).rejects.toThrow("No LinkedIn page found");
@@ -138,28 +121,24 @@ describe("dismissFeedPost", () => {
 
   it("returns success when post is found and dismissed", async () => {
     setupMocks();
-    setupFeedWithPost(TARGET_URL);
+    setupFeedWithNotInterested();
 
     const result = await dismissFeedPost({
-      postUrl: TARGET_URL,
+      feedIndex: 0,
       cdpPort: 9222,
     });
 
     expect(result).toEqual({
       success: true,
-      postUrl: TARGET_URL,
+      feedIndex: 0,
+      dryRun: false,
     });
   });
 
   it("throws when Not interested is not in the menu", async () => {
     setupMocks();
     mockClient.evaluate.mockImplementation((script: string) => {
-      if (typeof script === "string" && script.includes("writeText")) return Promise.resolve(undefined);
-      if (typeof script === "string" && script.includes("= null")) return Promise.resolve(undefined);
-      if (typeof script === "string" && script.includes("__capturedClipboard") && !script.includes("=")) return Promise.resolve(TARGET_URL);
-      if (typeof script === "string" && script.includes(".length")) return Promise.resolve(1);
       if (typeof script === "string" && script.includes("btn.click()")) return Promise.resolve(true);
-      if (typeof script === "string" && script.includes("Copy link to post")) return Promise.resolve(undefined);
       if (typeof script === "string" && script.includes("Not interested")) return Promise.resolve(false);
       if (typeof script === "string" && script.includes("Escape")) return Promise.resolve(undefined);
       return Promise.resolve(null);
@@ -167,27 +146,10 @@ describe("dismissFeedPost", () => {
 
     await expect(
       dismissFeedPost({
-        postUrl: TARGET_URL,
+        feedIndex: 0,
         cdpPort: 9222,
       }),
     ).rejects.toThrow('does not contain "Not interested"');
-  });
-
-  it("throws when post is not found in the feed", async () => {
-    setupMocks();
-    // Simulate an empty feed (0 posts)
-    mockClient.evaluate.mockImplementation((script: string) => {
-      if (typeof script === "string" && script.includes("writeText")) return Promise.resolve(undefined);
-      if (typeof script === "string" && script.includes(".length")) return Promise.resolve(0);
-      return Promise.resolve(null);
-    });
-
-    await expect(
-      dismissFeedPost({
-        postUrl: TARGET_URL,
-        cdpPort: 9222,
-      }),
-    ).rejects.toThrow("Post not found in the feed");
   });
 
   it("disconnects the CDP client even when an error occurs", async () => {
@@ -196,7 +158,7 @@ describe("dismissFeedPost", () => {
 
     await expect(
       dismissFeedPost({
-        postUrl: TARGET_URL,
+        feedIndex: 0,
         cdpPort: 9222,
       }),
     ).rejects.toThrow("evaluation failed");

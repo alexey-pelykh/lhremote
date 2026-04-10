@@ -4,11 +4,12 @@
 import { resolveInstancePort } from "../cdp/index.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { humanizedScrollToByIndex, retryInteraction, waitForElement } from "../linkedin/dom-automation.js";
+import { humanizedScrollToByIndex, retryInteraction } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
-import { FEED_POST_CONTAINER } from "../linkedin/selectors.js";
 import { gaussianDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
+import { navigateAwayIf } from "./navigate-away.js";
+import { waitForFeedLoad } from "./get-feed.js";
 
 /** CSS selector for feed post menu buttons. */
 const FEED_MENU_BUTTON_SELECTOR =
@@ -18,30 +19,33 @@ const FEED_MENU_BUTTON_SELECTOR =
 const HIDE_POSTS_PREFIX = "Hide posts by ";
 
 export interface HideFeedAuthorInput extends ConnectionOptions {
-  /** LinkedIn post URL identifying the feed post whose author to hide. */
-  readonly postUrl: string;
+  /** Zero-based index of the post in the visible LinkedIn feed. */
+  readonly feedIndex: number;
   /** Optional humanized mouse for natural cursor movement and clicks. */
   readonly mouse?: HumanizedMouse | null | undefined;
+  /** When true, locate the menu item but do not click it. */
+  readonly dryRun?: boolean | undefined;
 }
 
 export interface HideFeedAuthorOutput {
   readonly success: true;
-  readonly postUrl: string;
+  readonly feedIndex: number;
   /** Name extracted from the "Hide posts by {Name}" menu item. */
   readonly hiddenName: string;
+  readonly dryRun: boolean;
 }
 
 /**
  * Hide posts by a person via the three-dot menu on a feed post.
  *
- * Navigates to the post URL in the LinkedIn WebView — LinkedIn
- * renders it as the first feed item — then opens the three-dot
- * menu and clicks the "Hide posts by {Name}" menu item.
+ * Navigates to the LinkedIn home feed, opens the three-dot menu of
+ * the post at the given `feedIndex`, and clicks the "Hide posts by
+ * {Name}" menu item.
  *
  * **Note:** The name in the menu may differ from the post's
  * original author (e.g. when the post is a repost).
  *
- * @param input - Post URL and CDP connection parameters.
+ * @param input - Feed index and CDP connection parameters.
  * @returns Confirmation including the name extracted from the menu item.
  */
 export async function hideFeedAuthor(
@@ -76,18 +80,13 @@ export async function hideFeedAuthor(
 
   try {
     const mouse = input.mouse;
+    const dryRun = input.dryRun ?? false;
+    const feedIndex = input.feedIndex;
 
-    // Navigate to the post URL — LinkedIn redirects post URLs to the
-    // feed page with the target post scrolled into view.
-    await client.navigate(input.postUrl);
-
-    // Wait for the feed to render
-    await waitForElement(client, FEED_POST_CONTAINER, undefined, mouse);
-
-    // After navigation, the target post is the first feed item.
-    // Locate its menu button index to ensure we interact with the
-    // correct post (same navigation pattern as react-to-post).
-    const postIndex = 0;
+    // Navigate to the feed (force fresh load if already there)
+    await navigateAwayIf(client, "/feed");
+    await client.navigate("https://www.linkedin.com/feed/");
+    await waitForFeedLoad(client);
 
     // Open the three-dot menu with retry logic
     const hiddenName = await retryInteraction(async () => {
@@ -95,7 +94,7 @@ export async function hideFeedAuthor(
       await humanizedScrollToByIndex(
         client,
         FEED_MENU_BUTTON_SELECTOR,
-        postIndex,
+        feedIndex,
         mouse,
       );
 
@@ -104,7 +103,7 @@ export async function hideFeedAuthor(
         const btns = document.querySelectorAll(
           ${JSON.stringify(FEED_MENU_BUTTON_SELECTOR)}
         );
-        const btn = btns[${postIndex}];
+        const btn = btns[${feedIndex}];
         if (!btn) return false;
         btn.click();
         return true;
@@ -113,7 +112,7 @@ export async function hideFeedAuthor(
       if (!clicked) {
         throw new Error(
           "No feed post menu button found. " +
-            "Ensure the post URL points to a visible feed post.",
+            "Ensure the feed index points to a visible feed post.",
         );
       }
 
@@ -121,12 +120,13 @@ export async function hideFeedAuthor(
 
       // Find and click "Hide posts by {Name}" menu item
       const name = await client.evaluate<string | null>(`(() => {
+        const dryRun = ${dryRun};
         for (const el of document.querySelectorAll('[role="menuitem"]')) {
           const text = el.textContent.trim();
           if (text.startsWith(${JSON.stringify(HIDE_POSTS_PREFIX)})) {
             const name = text.slice(${HIDE_POSTS_PREFIX.length}).trim();
             if (!name) return null;
-            el.click();
+            if (!dryRun) el.click();
             return name;
           }
         }
@@ -148,6 +148,13 @@ export async function hideFeedAuthor(
       return name;
     }, 3);
 
+    if (dryRun) {
+      await client.evaluate(`(() => {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      })()`);
+      await gaussianDelay(300, 75, 200, 500);
+    }
+
     // Let the UI settle after clicking
     await gaussianDelay(550, 75, 400, 700);
 
@@ -155,8 +162,9 @@ export async function hideFeedAuthor(
 
     return {
       success: true as const,
-      postUrl: input.postUrl,
+      feedIndex: input.feedIndex,
       hiddenName,
+      dryRun,
     };
   } finally {
     client.disconnect();

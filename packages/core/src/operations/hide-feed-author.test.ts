@@ -12,7 +12,6 @@ vi.mock("../cdp/discovery.js", () => ({
 }));
 
 vi.mock("../linkedin/dom-automation.js", () => ({
-  waitForElement: vi.fn(),
   humanizedScrollToByIndex: vi.fn(),
   retryInteraction: vi.fn().mockImplementation((fn: () => Promise<unknown>) => fn()),
 }));
@@ -22,9 +21,17 @@ vi.mock("../utils/delay.js", () => ({
   gaussianDelay: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("./navigate-away.js", () => ({
+  navigateAwayIf: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("./get-feed.js", () => ({
+  waitForFeedLoad: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { waitForElement, humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
+import { humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
 import { hideFeedAuthor } from "./hide-feed-author.js";
 
 const mockClient = {
@@ -41,7 +48,6 @@ function setupMocks(hiddenName: string | null = "John Doe") {
   vi.mocked(discoverTargets).mockResolvedValue([
     { id: "target-1", type: "page", title: "LinkedIn", url: "https://www.linkedin.com/feed/", description: "", devtoolsFrontendUrl: "" },
   ]);
-  vi.mocked(waitForElement).mockResolvedValue(undefined);
   vi.mocked(humanizedScrollToByIndex).mockResolvedValue(undefined);
 
   // First evaluate: click menu button by index → returns true
@@ -63,7 +69,7 @@ describe("hideFeedAuthor", () => {
   it("throws on non-loopback host without allowRemote", async () => {
     await expect(
       hideFeedAuthor({
-        postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+        feedIndex: 0,
         cdpPort: 9222,
         cdpHost: "192.168.1.100",
       }),
@@ -74,7 +80,7 @@ describe("hideFeedAuthor", () => {
     setupMocks();
 
     const result = await hideFeedAuthor({
-      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      feedIndex: 0,
       cdpPort: 9222,
       cdpHost: "192.168.1.100",
       allowRemote: true,
@@ -90,7 +96,7 @@ describe("hideFeedAuthor", () => {
 
     await expect(
       hideFeedAuthor({
-        postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+        feedIndex: 0,
         cdpPort: 9222,
       }),
     ).rejects.toThrow("No LinkedIn page found");
@@ -103,13 +109,12 @@ describe("hideFeedAuthor", () => {
     vi.mocked(discoverTargets).mockResolvedValue([
       { id: "target-1", type: "page", title: "LinkedIn", url: "https://www.linkedin.com/feed/", description: "", devtoolsFrontendUrl: "" },
     ]);
-    vi.mocked(waitForElement).mockResolvedValue(undefined);
     vi.mocked(humanizedScrollToByIndex).mockResolvedValue(undefined);
     mockClient.evaluate.mockResolvedValueOnce(false); // no menu button
 
     await expect(
       hideFeedAuthor({
-        postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+        feedIndex: 0,
         cdpPort: 9222,
       }),
     ).rejects.toThrow("No feed post menu button found");
@@ -123,7 +128,7 @@ describe("hideFeedAuthor", () => {
 
     await expect(
       hideFeedAuthor({
-        postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+        feedIndex: 0,
         cdpPort: 9222,
       }),
     ).rejects.toThrow('No "Hide posts by" menu item found');
@@ -133,27 +138,28 @@ describe("hideFeedAuthor", () => {
     setupMocks("Jane Smith");
 
     const result = await hideFeedAuthor({
-      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      feedIndex: 0,
       cdpPort: 9222,
     });
 
     expect(result).toEqual({
       success: true,
-      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      feedIndex: 0,
       hiddenName: "Jane Smith",
+      dryRun: false,
     });
   });
 
-  it("navigates to the post URL", async () => {
+  it("navigates to the feed", async () => {
     setupMocks();
 
     await hideFeedAuthor({
-      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      feedIndex: 0,
       cdpPort: 9222,
     });
 
     expect(mockClient.navigate).toHaveBeenCalledWith(
-      "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      "https://www.linkedin.com/feed/",
     );
   });
 
@@ -161,7 +167,7 @@ describe("hideFeedAuthor", () => {
     setupMocks();
 
     await hideFeedAuthor({
-      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      feedIndex: 0,
       cdpPort: 9222,
     });
 
@@ -180,7 +186,7 @@ describe("hideFeedAuthor", () => {
     const { retryInteraction } = await import("../linkedin/dom-automation.js");
 
     await hideFeedAuthor({
-      postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      feedIndex: 0,
       cdpPort: 9222,
     });
 
@@ -188,15 +194,21 @@ describe("hideFeedAuthor", () => {
   });
 
   it("disconnects the CDP client even when an error occurs", async () => {
-    setupMocks();
-    vi.mocked(waitForElement).mockRejectedValueOnce(new Error("timeout"));
+    vi.mocked(CDPClient).mockImplementation(function () {
+      return mockClient as unknown as CDPClient;
+    });
+    vi.mocked(discoverTargets).mockResolvedValue([
+      { id: "target-1", type: "page", title: "LinkedIn", url: "https://www.linkedin.com/feed/", description: "", devtoolsFrontendUrl: "" },
+    ]);
+    vi.mocked(humanizedScrollToByIndex).mockResolvedValue(undefined);
+    mockClient.evaluate.mockRejectedValue(new Error("evaluation failed"));
 
     await expect(
       hideFeedAuthor({
-        postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+        feedIndex: 0,
         cdpPort: 9222,
       }),
-    ).rejects.toThrow("timeout");
+    ).rejects.toThrow("evaluation failed");
 
     expect(mockClient.disconnect).toHaveBeenCalled();
   });

@@ -10,22 +10,20 @@ import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 export function registerHideFeedAuthor(server: McpServer): void {
   server.tool(
     "hide-feed-author",
-    "Click 'Hide posts by {Name}' in a feed post's three-dot menu. The hidden person may differ from the original author (e.g. reposter).",
+    "Click 'Hide posts by {Name}' in a feed post's three-dot menu. Operates on the home feed by position index (pair with get-feed to identify posts). The hidden person may differ from the original author (e.g. reposter).",
     {
-      postUrl: z
-        .string()
-        .describe(
-          "LinkedIn post URL identifying the feed post whose 'Hide posts by' action to invoke",
-        ),
+      feedIndex: z.number().int().min(0).describe("Zero-based index of the post in the visible LinkedIn feed (pair with get-feed to identify posts)"),
+      dryRun: z.boolean().optional().default(false).describe("When true, locate the menu item but do not click it"),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, cdpPort, cdpHost, allowRemote }) => {
+    async ({ feedIndex, dryRun, cdpPort, cdpHost, allowRemote }) => {
       try {
         const result = await hideFeedAuthor({
-          postUrl,
+          feedIndex,
           cdpPort,
           cdpHost,
           allowRemote,
+          dryRun,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

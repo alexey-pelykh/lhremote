@@ -4,37 +4,42 @@
 import { resolveInstancePort } from "../cdp/index.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { humanizedClick, humanizedScrollTo, retryInteraction, waitForElement } from "../linkedin/dom-automation.js";
+import { humanizedScrollToByIndex, retryInteraction } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { gaussianDelay, maybeHesitate } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
+import { navigateAwayIf } from "./navigate-away.js";
+import { waitForFeedLoad } from "./get-feed.js";
 
-/** CSS selector for the post's three-dot control menu button. */
-const POST_MENU_BUTTON_SELECTOR =
-  'button[aria-label^="Open control menu for post"]';
+/** CSS selector for feed post menu buttons. */
+const FEED_MENU_BUTTON_SELECTOR =
+  '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]';
 
 export interface UnfollowFromFeedInput extends ConnectionOptions {
-  /** LinkedIn post URL identifying a visible feed post. */
-  readonly postUrl: string;
+  /** Zero-based index of the post in the visible LinkedIn feed. */
+  readonly feedIndex: number;
   /** Optional humanized mouse for natural cursor movement and clicks. */
   readonly mouse?: HumanizedMouse | null | undefined;
+  /** When true, locate the menu item but do not click it. */
+  readonly dryRun?: boolean | undefined;
 }
 
 export interface UnfollowFromFeedOutput {
   readonly success: true;
-  readonly postUrl: string;
+  readonly feedIndex: number;
   /** The name extracted from the "Unfollow {Name}" menu item. */
   readonly unfollowedName: string;
+  readonly dryRun: boolean;
 }
 
 /**
  * Unfollow the author of a LinkedIn post via its feed three-dot menu.
  *
- * Navigates to the post URL, opens the three-dot control menu, and
- * clicks the "Unfollow {Name}" menu item.  The unfollowed person's
- * name is extracted from the menu item text.
+ * Navigates to the LinkedIn home feed, opens the three-dot menu of the
+ * post at the given `feedIndex`, and clicks the "Unfollow {Name}" menu
+ * item.  The unfollowed person's name is extracted from the menu item text.
  *
- * @param input - Post URL and CDP connection parameters.
+ * @param input - Feed index and CDP connection parameters.
  * @returns Confirmation including the unfollowed person's name.
  * @throws If the three-dot menu does not contain an "Unfollow" item.
  */
@@ -69,31 +74,49 @@ export async function unfollowFromFeed(
   await client.connect(linkedInTarget.id);
 
   try {
-    // Navigate to the post URL
-    await client.navigate(input.postUrl);
-
     const mouse = input.mouse;
+    const dryRun = input.dryRun ?? false;
+    const feedIndex = input.feedIndex;
 
-    // Wait for the three-dot menu button to appear
-    await waitForElement(client, POST_MENU_BUTTON_SELECTOR, undefined, mouse);
+    // Navigate to the feed (force fresh load if already there)
+    await navigateAwayIf(client, "/feed");
+    await client.navigate("https://www.linkedin.com/feed/");
+    await waitForFeedLoad(client);
 
     await maybeHesitate();
 
-    // Scroll the menu button into view and click it, retrying if the
-    // menu does not open on the first attempt.
+    // Scroll the menu button into view by index and click it, retrying if
+    // the menu does not open on the first attempt.
     const unfollowedName = await retryInteraction(async () => {
-      await humanizedScrollTo(client, POST_MENU_BUTTON_SELECTOR, mouse);
-      await humanizedClick(client, POST_MENU_BUTTON_SELECTOR, mouse);
+      await humanizedScrollToByIndex(client, FEED_MENU_BUTTON_SELECTOR, feedIndex, mouse);
+
+      const clicked = await client.evaluate<boolean>(`(() => {
+        const btns = document.querySelectorAll(
+          ${JSON.stringify(FEED_MENU_BUTTON_SELECTOR)}
+        );
+        const btn = btns[${feedIndex}];
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()`);
+
+      if (!clicked) {
+        throw new Error(
+          "No feed post menu button found. " +
+            "Ensure the feed index points to a visible feed post.",
+        );
+      }
 
       await gaussianDelay(700, 100, 500, 900);
 
       // Find and click the "Unfollow {Name}" menu item, extracting
       // the name from the text.
       const name = await client.evaluate<string | null>(`(() => {
+        const dryRun = ${dryRun};
         for (const el of document.querySelectorAll('[role="menuitem"]')) {
           const text = el.textContent?.trim() ?? '';
           if (text.startsWith('Unfollow ')) {
-            el.click();
+            if (!dryRun) el.click();
             return text.slice('Unfollow '.length);
           }
         }
@@ -119,14 +142,22 @@ export async function unfollowFromFeed(
       return name;
     }, 3);
 
+    if (dryRun) {
+      await client.evaluate(`(() => {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      })()`);
+      await gaussianDelay(300, 75, 200, 500);
+    }
+
     // Let the UI settle after clicking Unfollow
     await gaussianDelay(550, 75, 400, 700);
 
     await gaussianDelay(1_500, 500, 700, 3_500); // Post-action dwell
     return {
       success: true as const,
-      postUrl: input.postUrl,
+      feedIndex: input.feedIndex,
       unfollowedName,
+      dryRun,
     };
   } finally {
     client.disconnect();

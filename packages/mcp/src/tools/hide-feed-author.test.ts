@@ -15,9 +15,9 @@ import { createMockServer } from "./testing/mock-server.js";
 
 const MOCK_RESULT = {
   success: true as const,
-  postUrl:
-    "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+  feedIndex: 0,
   hiddenName: "John Doe",
+  dryRun: false,
 };
 
 describe("registerHideFeedAuthor", () => {
@@ -49,8 +49,7 @@ describe("registerHideFeedAuthor", () => {
 
     const handler = getHandler("hide-feed-author");
     const result = await handler({
-      postUrl:
-        "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      feedIndex: 0,
       cdpPort: 9222,
     });
 
@@ -68,8 +67,7 @@ describe("registerHideFeedAuthor", () => {
 
     const handler = getHandler("hide-feed-author");
     const result = (await handler({
-      postUrl:
-        "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      feedIndex: 0,
       cdpPort: 9222,
     })) as { isError?: boolean; content: { text: string }[] };
 
@@ -82,8 +80,7 @@ describe("registerHideFeedAuthor", () => {
     registerHideFeedAuthor,
     "hide-feed-author",
     () => ({
-      postUrl:
-        "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      feedIndex: 0,
       cdpPort: 9222,
     }),
     (error) => vi.mocked(hideFeedAuthor).mockRejectedValue(error),
