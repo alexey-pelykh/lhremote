@@ -79,6 +79,7 @@ describe("createServer", () => {
     expect(names).toContain("launch-app");
     expect(names).toContain("quit-app");
     expect(names).toContain("list-accounts");
+    expect(names).toContain("list-workspaces");
     expect(names).toContain("start-instance");
     expect(names).toContain("stop-instance");
     expect(names).toContain("query-profile");
@@ -145,6 +146,6 @@ describe("createServer", () => {
     expect(names).toContain("dismiss-feed-post");
     expect(names).toContain("unfollow-from-feed");
     expect(names).toContain("hide-feed-author");
-    expect(names).toHaveLength(71);
+    expect(names).toHaveLength(72);
   });
 });

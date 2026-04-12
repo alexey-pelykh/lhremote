@@ -60,6 +60,7 @@ import { registerListLinkedInReferenceData } from "./list-linkedin-reference-dat
 import { registerLaunchApp } from "./launch-app.js";
 import { registerListCollections } from "./list-collections.js";
 import { registerListAccounts } from "./list-accounts.js";
+import { registerListWorkspaces } from "./list-workspaces.js";
 import { registerQuitApp } from "./quit-app.js";
 import { registerStartInstance } from "./start-instance.js";
 import { registerStopInstance } from "./stop-instance.js";
@@ -132,6 +133,7 @@ export {
   registerLaunchApp,
   registerListCollections,
   registerListAccounts,
+  registerListWorkspaces,
   registerListLinkedInReferenceData,
   registerQueryMessages,
   registerRemovePeopleFromCollection,
@@ -187,6 +189,7 @@ export function registerAllTools(server: McpServer): void {
   registerLaunchApp(server);
   registerQuitApp(server);
   registerListAccounts(server);
+  registerListWorkspaces(server);
   registerStartInstance(server);
   registerStopInstance(server);
   registerQueryMessages(server);

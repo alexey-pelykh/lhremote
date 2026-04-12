@@ -10,6 +10,7 @@ import type {
   PopupState,
   StartInstanceResult,
   UIHealthStatus,
+  Workspace,
 } from "../types/index.js";
 import {
   LinkedHelperNotRunningError,
@@ -29,20 +30,92 @@ import {
  */
 export class LauncherService {
   /**
-   * CDP expression snippet that waits for the webpack module registry
-   * and sets `wpRequire` in the enclosing scope.  Callers must check
-   * `wpRequire` for null and handle the failure case themselves.
+   * CDP snippet that resolves LinkedHelper frontend service singletons
+   * via the webpack module registry and exposes them on `lhSvc`.
+   *
+   * The snippet is designed to be cache-aware: the first invocation
+   * per page navigation performs a marker-based scan of the webpack
+   * module registry and stashes the resolved services on
+   * `window.__lhrServices`. Subsequent invocations read from the cache.
+   *
+   * **Why marker-based?** Webpack module IDs are not stable across
+   * LinkedHelper releases. Between v2.113.11 and v2.113.28, three of
+   * the four service modules we depend on shifted IDs. The only
+   * reliable way to locate services is to scan for module exports
+   * with characteristic fields (e.g. `_workspacesBS` for the workspace
+   * service). See `research/linkedhelper/architecture/V2113-WEBPACK-MODULE-IDS.md`.
+   *
+   * Each resolved service is exposed under a dotless alias for quick
+   * access in subsequent expressions:
+   *
+   * - `lhSvc.auth` — authService (userId, role, isLoggedIn)
+   * - `lhSvc.user` — userService (currentUserBS, fetchUser)
+   * - `lhSvc.runningLi` — runningLiAccountsService
+   *   (extendedLinkedInAccountsBS, getLinkedInAccount, startLinkedInAccountLocal)
+   * - `lhSvc.feSettings` — frontendSettingsService (getFrontendSettings, _cacheBS)
+   * - `lhSvc.workspace` — workspaceService
+   *   (_workspacesBS, _selectedWorkspaceBS, api, refreshWorkspaces); may be
+   *   `null` on LinkedHelper versions that predate workspaces
+   *
+   * Callers must check `lhSvc` for null and handle the failure case.
    */
-  private static readonly WEBPACK_INIT = `
+  private static readonly LH_SERVICES_INIT = `
     const _wpDeadline = Date.now() + 15000;
     while (!window.webpackChunk_linked_helper_front && Date.now() < _wpDeadline) {
       await new Promise(r => setTimeout(r, 250));
     }
-    let wpRequire = null;
-    if (window.webpackChunk_linked_helper_front) {
+    let lhSvc = null;
+    if (window.__lhrServices) {
+      lhSvc = window.__lhrServices;
+    } else if (window.webpackChunk_linked_helper_front) {
+      let _wpReq = null;
       window.webpackChunk_linked_helper_front.push(
-        [[Symbol()], {}, (req) => { wpRequire = req; }]
+        [[Symbol()], {}, (req) => { _wpReq = req; }]
       );
+      if (_wpReq) {
+        const _specs = {
+          auth:        { exportKey: 'authService',              markers: ['userId', 'role'] },
+          user:        { exportKey: 'default',                  markers: ['currentUserBS', 'fetchUser'] },
+          runningLi:   { exportKey: 'runningLiAccountsService', markers: ['extendedLinkedInAccountsBS', 'getLinkedInAccount'] },
+          feSettings:  { exportKey: 'frontendSettingsService',  markers: ['getFrontendSettings', '_cacheBS'] },
+          workspace:   { exportKey: 'A',                        markers: ['_workspacesBS', '_selectedWorkspaceBS'] },
+        };
+        const _resolved = {};
+        for (const _id of Object.keys(_wpReq.m || {})) {
+          let _mod;
+          try { _mod = _wpReq(_id); } catch (_e) { continue; }
+          if (!_mod) continue;
+          for (const _name of Object.keys(_specs)) {
+            if (_resolved[_name]) continue;
+            const _spec = _specs[_name];
+            const _v = _mod[_spec.exportKey];
+            if (_v && typeof _v === 'object' && _spec.markers.every(m => m in _v)) {
+              _resolved[_name] = _v;
+              continue;
+            }
+            for (const _k of Object.keys(_mod)) {
+              const _w = _mod[_k];
+              if (!_w || typeof _w !== 'object') continue;
+              if (_spec.markers.every(m => m in _w)) {
+                _resolved[_name] = _w;
+                break;
+              }
+            }
+          }
+          if (Object.keys(_resolved).length === Object.keys(_specs).length) break;
+        }
+        if (_resolved.auth && _resolved.user && _resolved.runningLi && _resolved.feSettings) {
+          // workspace may legitimately be missing on pre-2.113.x launchers
+          lhSvc = {
+            auth: _resolved.auth,
+            user: _resolved.user,
+            runningLi: _resolved.runningLi,
+            feSettings: _resolved.feSettings,
+            workspace: _resolved.workspace || null,
+          };
+          window.__lhrServices = lhSvc;
+        }
+      }
     }`;
 
   private readonly port: number;
@@ -144,15 +217,15 @@ export class LauncherService {
           const remote = require('@electron/remote');
           const mainWindow = remote.getGlobal('mainWindow');
 
-          ${LauncherService.WEBPACK_INIT}
-          if (!wpRequire) {
-            return { success: false, error: 'webpack module registry not available' };
+          ${LauncherService.LH_SERVICES_INIT}
+          if (!lhSvc) {
+            return { success: false, error: 'LinkedHelper frontend services not available (webpack registry empty or core services missing)' };
           }
 
-          const authService = wpRequire(2742).authService;
-          const userService = wpRequire(75381).userService;
-          const liAccountsSvc = wpRequire(44354).runningLiAccountsService;
-          const feSettingsSvc = wpRequire(81954).frontendSettingsService;
+          const authService = lhSvc.auth;
+          const userService = lhSvc.user;
+          const liAccountsSvc = lhSvc.runningLi;
+          const feSettingsSvc = lhSvc.feSettings;
 
           // 2. Get the account object from the service cache.
           //    Using refetch: false because the LH backend API now
@@ -173,7 +246,15 @@ export class LauncherService {
             }
           }
           if (!account) {
-            return { success: false, error: 'Account not found in cache after 30s' };
+            return { success: false, error: 'Account not found in cache after 30s. On v2.113.x+, the running-accounts cache is filtered to the selected workspace; the account may be in a different workspace.' };
+          }
+
+          // 2a. Gate on workspace access level (v2.113.x+).
+          //     The launcher refuses to start instances with view_only
+          //     or no_access, so fail fast with a clear error.
+          const accessLevel = account.workspaceAccess?.level;
+          if (accessLevel === 'view_only' || accessLevel === 'no_access') {
+            return { success: false, error: 'Workspace access level "' + accessLevel + '" does not allow starting an instance (requires restricted or higher)' };
           }
 
           // 3. Read userId and user profile
@@ -274,39 +355,95 @@ export class LauncherService {
   }
 
   /**
-   * List all accounts configured in LinkedHelper.
+   * List LinkedHelper accounts visible to the current LH user.
    *
-   * Accounts are read from the renderer-side webpack service cache
-   * (`runningLiAccountsService.extendedLinkedInAccountsBS`).  The
-   * launcher populates this cache on startup via IPC; we poll until
-   * it becomes available rather than calling `refetchLinkedInAccounts`
-   * (whose backend API now rejects the old embed format with 400).
+   * Default behaviour (back-compat with pre-workspace clients):
+   * returns only accounts in the **currently selected workspace** —
+   * the same set the launcher UI shows. This reflects the state of
+   * `runningLiAccountsService.extendedLinkedInAccountsBS`, which
+   * LinkedHelper 2.113.x filters to the selected workspace.
+   *
+   * With `{ includeAllWorkspaces: true }`, queries every workspace
+   * the user belongs to and returns the union of owned LinkedIn
+   * accounts (requires `workspaceService.api.getWorkspaceUserOwnedLiAccounts`,
+   * available only on v2.113.x+). Use this when you need to drive
+   * accounts that live outside the currently selected workspace.
+   *
+   * @param options.includeAllWorkspaces If `true`, enumerate all
+   *   workspaces and list accounts across them. Defaults to `false`.
    */
-  async listAccounts(): Promise<Account[]> {
+  async listAccounts(options?: {
+    includeAllWorkspaces?: boolean;
+  }): Promise<Account[]> {
     const client = this.ensureConnected();
+
+    const includeAllWorkspaces = options?.includeAllWorkspaces ?? false;
 
     const accounts = await this.launcherEvaluate<Account[] | null>(
       client,
       `(async () => {
-        ${LauncherService.WEBPACK_INIT}
-        if (!wpRequire) return null;
+        ${LauncherService.LH_SERVICES_INIT}
+        if (!lhSvc) return null;
 
-        const svc = wpRequire(44354).runningLiAccountsService;
+        const svc = lhSvc.runningLi;
+        const wsSvc = lhSvc.workspace;
+        const includeAll = ${String(includeAllWorkspaces)};
 
-        // Poll until the cache is populated by the launcher's startup
-        // process (same pattern as startInstance's account polling).
+        const mapAccount = (a, ws) => ({
+          id: a.id,
+          liId: a.id,
+          name: a.fullName ?? '',
+          email: a.email ?? undefined,
+          workspaceId: a.workspaceId ?? ws?.id,
+          workspaceName: ws?.name,
+          workspaceAccess: a.workspaceAccess
+            ? { level: a.workspaceAccess.level }
+            : undefined,
+        });
+
+        if (includeAll && wsSvc) {
+          // Cross-workspace listing: iterate workspaces and call
+          // getWorkspaceUserOwnedLiAccounts(wsUserId, { minLevel: 'view_only' })
+          // to get everything the current user can see.
+          try {
+            const wsResult = await wsSvc.api.getWorkspaces(
+              { userId: lhSvc.auth.userId, deleted: false },
+              false,
+            );
+            const workspaces = wsResult?.data ?? [];
+            const seen = new Map();
+            for (const ws of workspaces) {
+              if (!ws.workspaceUser) continue;
+              try {
+                const res = await wsSvc.api.getWorkspaceUserOwnedLiAccounts(
+                  ws.workspaceUser.id,
+                  { minLevel: 'view_only' },
+                );
+                for (const a of res?.data ?? []) {
+                  if (seen.has(a.id)) continue;
+                  seen.set(a.id, mapAccount(a, ws));
+                }
+              } catch (_e) {
+                // 403/404 on a workspace is tolerable; skip it
+              }
+            }
+            return Array.from(seen.values());
+          } catch (e) {
+            return { __error: 'cross-workspace listing failed: ' + e.message };
+          }
+        }
+
+        // Default: read from the selected-workspace cache the launcher
+        // maintains. Poll until the cache is populated by the startup
+        // process.
+        const selectedWs = wsSvc?._selectedWorkspaceBS?.value ?? null;
         const cacheDeadline = Date.now() + 30000;
         while (Date.now() < cacheDeadline) {
           const raw = svc.extendedLinkedInAccountsBS?.value;
           if (raw) {
             const entries = Array.isArray(raw) ? raw : Object.values(raw);
             if (entries.length > 0) {
-              return entries.map(a => ({
-                id: a.id,
-                liId: a.id,
-                name: a.fullName ?? '',
-                email: a.email ?? undefined,
-              }));
+              return entries.map(a => mapAccount(a, selectedWs));
             }
           }
           await new Promise(r => setTimeout(r, 500));
@@ -320,7 +457,81 @@ export class LauncherService {
       throw new WrongPortError(this.port);
     }
 
+    if (!Array.isArray(accounts) && typeof accounts === "object") {
+      const errObj = accounts as { __error?: string };
+      if (errObj.__error) {
+        throw new ServiceError(errObj.__error);
+      }
+    }
+
     return accounts;
+  }
+
+  /**
+   * List workspaces the current LH user belongs to.
+   *
+   * Workspaces are a LinkedHelper 2.113.x feature. On earlier
+   * versions this method returns an empty array (the workspace
+   * service module is absent). On v2.113.x+ it returns every
+   * workspace the user is a member of, with the user's role and
+   * an indication of which workspace is currently selected.
+   *
+   * @see `research/linkedhelper/architecture/WORKSPACES.md`
+   */
+  async listWorkspaces(): Promise<Workspace[]> {
+    const client = this.ensureConnected();
+
+    const workspaces = await this.launcherEvaluate<Workspace[] | null>(
+      client,
+      `(async () => {
+        ${LauncherService.LH_SERVICES_INIT}
+        if (!lhSvc) return null;
+        const wsSvc = lhSvc.workspace;
+        if (!wsSvc) return [];
+
+        // Prefer the in-memory cache if populated; otherwise refetch.
+        let cached = wsSvc._workspacesBS?.value ?? null;
+        if (!cached) {
+          try { await wsSvc.refreshWorkspaces(); } catch (_e) {}
+          cached = wsSvc._workspacesBS?.value ?? null;
+        }
+        if (!cached) {
+          // Fall back to a direct API call
+          try {
+            const res = await wsSvc.api.getWorkspaces(
+              { userId: lhSvc.auth.userId, deleted: false },
+              false,
+            );
+            cached = res?.data ?? [];
+          } catch (_e) {
+            cached = [];
+          }
+        }
+
+        const selectedId = wsSvc._selectedWorkspaceBS?.value?.id ?? null;
+        return (cached || []).map(w => ({
+          id: w.id,
+          name: w.name,
+          deleted: !!w.deleted,
+          workspaceUser: w.workspaceUser ? {
+            id: w.workspaceUser.id,
+            userId: w.workspaceUser.userId,
+            workspaceId: w.workspaceUser.workspaceId,
+            role: w.workspaceUser.role,
+            deleted: !!w.workspaceUser.deleted,
+          } : null,
+          selected: w.id === selectedId,
+        })).filter(w => w.workspaceUser !== null);
+      })()`,
+      true,
+    );
+
+    if (workspaces === null) {
+      throw new WrongPortError(this.port);
+    }
+
+    // Drop the null-filter sentinel we used inside the evaluated snippet.
+    return workspaces as Workspace[];
   }
 
   /**

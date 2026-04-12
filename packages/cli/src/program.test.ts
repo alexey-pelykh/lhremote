@@ -40,6 +40,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("launch-app");
     expect(commandNames).toContain("quit-app");
     expect(commandNames).toContain("list-accounts");
+    expect(commandNames).toContain("list-workspaces");
     expect(commandNames).toContain("start-instance");
     expect(commandNames).toContain("stop-instance");
     expect(commandNames).toContain("query-profile");
@@ -105,7 +106,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("dismiss-feed-post");
     expect(commandNames).toContain("unfollow-from-feed");
     expect(commandNames).toContain("hide-feed-author");
-    expect(commandNames).toHaveLength(70);
+    expect(commandNames).toHaveLength(71);
   });
 
   describe("launch-app", () => {

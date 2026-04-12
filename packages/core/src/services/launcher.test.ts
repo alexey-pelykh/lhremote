@@ -361,6 +361,140 @@ describe("LauncherService", () => {
       expect(listCall).toBeDefined();
       expect(listCall?.[1]).toBe(true);
     });
+
+    it("emits includeAll=false by default", async () => {
+      await service.connect();
+      mockEvaluate.mockClear();
+      nextEvaluateResult = [];
+
+      await service.listAccounts();
+
+      const listCall = mockEvaluate.mock.calls.find(
+        (c) => typeof c[0] === "string" && c[0].includes("const includeAll"),
+      );
+      expect(listCall?.[0]).toContain("const includeAll = false");
+    });
+
+    it("emits includeAll=true when includeAllWorkspaces option is set", async () => {
+      await service.connect();
+      mockEvaluate.mockClear();
+      nextEvaluateResult = [];
+
+      await service.listAccounts({ includeAllWorkspaces: true });
+
+      const listCall = mockEvaluate.mock.calls.find(
+        (c) => typeof c[0] === "string" && c[0].includes("const includeAll"),
+      );
+      expect(listCall?.[0]).toContain("const includeAll = true");
+    });
+
+    it("propagates workspace fields in returned accounts", async () => {
+      await service.connect();
+      nextEvaluateResult = [
+        {
+          id: 363386,
+          liId: 363386,
+          name: "Alexey",
+          email: "alexey@example.com",
+          workspaceId: 20338,
+          workspaceName: "PELYKH Consulting",
+          workspaceAccess: { level: "owner" as const },
+        },
+      ];
+
+      const accounts = await service.listAccounts();
+
+      expect(accounts).toHaveLength(1);
+      expect(accounts[0]).toMatchObject({
+        id: 363386,
+        workspaceId: 20338,
+        workspaceName: "PELYKH Consulting",
+        workspaceAccess: { level: "owner" },
+      });
+    });
+
+    it("throws ServiceError when cross-workspace listing fails", async () => {
+      await service.connect();
+      nextEvaluateResult = { __error: "cross-workspace listing failed: boom" };
+
+      await expect(
+        service.listAccounts({ includeAllWorkspaces: true }),
+      ).rejects.toThrow(ServiceError);
+    });
+  });
+
+  describe("listWorkspaces", () => {
+    it("returns parsed workspaces", async () => {
+      await service.connect();
+      nextEvaluateResult = [
+        {
+          id: 473509,
+          name: "Personal workspace",
+          deleted: false,
+          workspaceUser: {
+            id: 518351,
+            userId: 438509,
+            workspaceId: 473509,
+            role: "owner",
+            deleted: false,
+          },
+          selected: false,
+        },
+        {
+          id: 20338,
+          name: "PELYKH Consulting",
+          deleted: false,
+          workspaceUser: {
+            id: 33440,
+            userId: 438509,
+            workspaceId: 20338,
+            role: "owner",
+            deleted: false,
+          },
+          selected: true,
+        },
+      ];
+
+      const workspaces = await service.listWorkspaces();
+
+      expect(workspaces).toHaveLength(2);
+      const selected = workspaces.find((w) => w.selected);
+      expect(selected?.id).toBe(20338);
+      expect(selected?.workspaceUser.role).toBe("owner");
+    });
+
+    it("returns empty array on a launcher without workspace service", async () => {
+      await service.connect();
+      nextEvaluateResult = [];
+
+      const workspaces = await service.listWorkspaces();
+
+      expect(workspaces).toEqual([]);
+    });
+
+    it("throws WrongPortError when webpack registry is unavailable", async () => {
+      await service.connect();
+      nextEvaluateResult = null;
+
+      await expect(service.listWorkspaces()).rejects.toThrow(WrongPortError);
+    });
+
+    it("throws ServiceError when not connected", async () => {
+      await expect(service.listWorkspaces()).rejects.toThrow(ServiceError);
+    });
+
+    it("embeds the workspace service resolution snippet", async () => {
+      await service.connect();
+      nextEvaluateResult = [];
+
+      await service.listWorkspaces();
+
+      const call = mockEvaluate.mock.calls.find(
+        (c) => typeof c[0] === "string" && c[0].includes("_workspacesBS"),
+      );
+      expect(call).toBeDefined();
+      expect(call?.[1]).toBe(true);
+    });
   });
 
   describe("dismissInstanceDialog", () => {

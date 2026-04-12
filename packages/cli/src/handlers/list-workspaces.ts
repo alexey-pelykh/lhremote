@@ -3,13 +3,18 @@
 
 import { errorMessage, LauncherService, resolveAppPort } from "@lhremote/core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | list-accounts} CLI command. */
-export async function handleListAccounts(options: {
+/**
+ * Handle the `list-workspaces` CLI command.
+ *
+ * Lists LinkedHelper workspaces the current LH user belongs to.
+ * Workspaces are a LinkedHelper 2.113.x feature; on earlier versions
+ * the command prints nothing (no workspaces exist).
+ */
+export async function handleListWorkspaces(options: {
   cdpPort?: number;
   cdpHost?: string;
   allowRemote?: boolean;
   json?: boolean;
-  allWorkspaces?: boolean;
 }): Promise<void> {
   let port: number;
   try {
@@ -36,22 +41,17 @@ export async function handleListAccounts(options: {
   }
 
   try {
-    const accounts = await launcher.listAccounts(
-      options.allWorkspaces ? { includeAllWorkspaces: true } : undefined,
-    );
+    const workspaces = await launcher.listWorkspaces();
 
     if (options.json) {
-      process.stdout.write(JSON.stringify(accounts, null, 2) + "\n");
-    } else if (accounts.length === 0) {
-      process.stdout.write("No accounts found\n");
+      process.stdout.write(JSON.stringify(workspaces, null, 2) + "\n");
+    } else if (workspaces.length === 0) {
+      process.stdout.write("No workspaces found\n");
     } else {
-      for (const account of accounts) {
-        const email = account.email ? ` <${account.email}>` : "";
-        const workspace = account.workspaceName
-          ? ` [${account.workspaceName}]`
-          : "";
+      for (const ws of workspaces) {
+        const marker = ws.selected ? "*" : " ";
         process.stdout.write(
-          `${String(account.id)}\t${account.name}${email}${workspace}\n`,
+          `${marker} ${String(ws.id)}\t${ws.name}\t[${ws.workspaceUser.role}]\n`,
         );
       }
     }

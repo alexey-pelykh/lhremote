@@ -93,6 +93,20 @@ export type {
   ThrottleStatus,
   UIHealthStatus,
   UrlBuilderResult,
+  Workspace,
+  WorkspaceAccess,
+  WorkspaceAccessLevel,
+  WorkspaceInvitationStatus,
+  WorkspaceUser,
+  WorkspaceUserRole,
+} from "./types/index.js";
+
+export {
+  canStartInstance,
+  isOwnerOrExtended,
+  isRestrictedOrHigher,
+  isViewOnlyOrHigher,
+  WORKSPACE_ACCESS_LEVEL_ORDER,
 } from "./types/index.js";
 
 // Services

@@ -33,6 +33,23 @@ export type {
 export type { Account } from "./account.js";
 
 export type {
+  Workspace,
+  WorkspaceAccess,
+  WorkspaceAccessLevel,
+  WorkspaceInvitationStatus,
+  WorkspaceUser,
+  WorkspaceUserRole,
+} from "./workspace.js";
+
+export {
+  canStartInstance,
+  isOwnerOrExtended,
+  isRestrictedOrHigher,
+  isViewOnlyOrHigher,
+  WORKSPACE_ACCESS_LEVEL_ORDER,
+} from "./workspace.js";
+
+export type {
   Chat,
   ChatParticipant,
   ConversationMessages,
