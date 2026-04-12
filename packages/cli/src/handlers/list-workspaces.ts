@@ -8,7 +8,9 @@ import { errorMessage, LauncherService, resolveAppPort } from "@lhremote/core";
  *
  * Lists LinkedHelper workspaces the current LH user belongs to.
  * Workspaces are a LinkedHelper 2.113.x feature; on earlier versions
- * the command prints nothing (no workspaces exist).
+ * the workspace service is absent, the returned list is empty, and
+ * the command prints "No workspaces found" (the same output as a
+ * modern launcher where the user happens to belong to no workspaces).
  */
 export async function handleListWorkspaces(options: {
   cdpPort?: number;
