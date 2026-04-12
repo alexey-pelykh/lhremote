@@ -73,6 +73,7 @@ export interface RawDomPost {
  */
 const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   const posts = [];
+  if (window.__lhrNextIdx == null) window.__lhrNextIdx = 0;
 
   // --- Step 1: Find the feed list via data-testid ---
   const feedList = document.querySelector('[data-testid="mainFeed"]');
@@ -90,6 +91,19 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     // Detect real posts: must have a three-dot menu button
     const menuBtn = item.querySelector('button[aria-label^="Open control menu for post"]');
     if (!menuBtn) continue;
+
+    // --- Discovery tagging ---
+    // Tag each listitem with a unique index on first discovery so that
+    // posts can be accumulated across scroll iterations despite LinkedIn
+    // virtualising off-screen items out of the DOM.  The index value
+    // itself isn't consumed by the Node-side logic — it's only used as
+    // the DOM attribute payload so that already-seen items can be
+    // recognised on subsequent scrapes.
+    let _isNew = false;
+    if (!item.hasAttribute('data-lhr-idx')) {
+      item.setAttribute('data-lhr-idx', String(window.__lhrNextIdx++));
+      _isNew = true;
+    }
 
     // --- Author info ---
     let authorName = null;
@@ -176,6 +190,7 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     }
 
     posts.push({
+      _isNew: _isNew,
       url: null,
       authorName: authorName,
       authorHeadline: authorHeadline,
@@ -499,26 +514,94 @@ export async function getFeed(
     // Wait for the initial feed content to render
     await waitForFeedLoad(client);
 
-    // Collect posts — scroll to load more if needed
+    // Collect posts — scroll to load more if needed.
+    //
+    // LinkedIn's main feed virtualises off-screen posts out of the DOM,
+    // so each point-in-time scrape only sees ~8-13 items.  To accumulate
+    // beyond that cap we tag discovered listitems with `data-lhr-idx`
+    // and interleave URL extraction with scrolling so that each post's
+    // URL is captured while the element is still visible.
+    //
+    // The target is counted in URL-bearing posts only (`seenUrls.size`).
+    // Posts whose URL extraction failed are still accumulated for
+    // completeness but don't count toward the target — otherwise a run
+    // of transient failures could make the loop exit with a window of
+    // null-URL posts and no usable cursor.
+    //
+    // We need `count` posts plus one extra so the hasMore check has a
+    // post beyond the result window.  Cursor calls use `count * 2 + 1`:
+    // up to `count` posts may be consumed locating the cursor, then
+    // `count` more for the next page, plus one for hasMore.
     const maxScrollAttempts = 10;
-    let allPosts: RawDomPost[] = [];
-    let previousCount = 0;
+    const allPosts: RawDomPost[] = [];
+    const seenUrls = new Set<string>();
+    const accumulationTarget = cursor ? count * 2 + 1 : count + 1;
+    let previousUrlCount = 0;
+
+    type TaggedPost = RawDomPost & { _isNew: boolean };
 
     // If resuming with a cursor, we need to scroll past already-seen posts
     const cursorUrl = cursor;
 
+    // Install the clipboard interceptor before the scroll loop so that
+    // URL extraction can happen inside each iteration.
+    await installClipboardInterceptor(client);
+
     for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
-      const countBeforeScroll = previousCount;
-      const scraped = await client.evaluate<RawDomPost[]>(SCRAPE_FEED_POSTS_SCRIPT);
-      allPosts = scraped ?? [];
+      const countBefore = allPosts.length;
 
-      // Determine which posts to return
-      const available = allPosts.length;
-      if (available >= count && !cursorUrl) break;
+      // Scrape visible posts — the script tags each listitem with a
+      // discovery index and reports which items are newly discovered.
+      const scraped = await client.evaluate<TaggedPost[]>(SCRAPE_FEED_POSTS_SCRIPT);
+      const batch = scraped ?? [];
 
-      // No new posts appeared after scroll — stop
-      if (allPosts.length === previousCount && scroll > 0) break;
-      previousCount = allPosts.length;
+      // Extract URLs for newly discovered posts while they are visible.
+      // `domIdx` is the position within the current batch which matches
+      // the DOM order of visible menu buttons.
+      //
+      // To avoid extracting URLs for far more posts than needed (each
+      // extraction opens the three-dot menu — ~1-2 s per post), we stop
+      // once we have enough URL-bearing posts.
+      let extractedInBatch = 0;
+      for (let domIdx = 0; domIdx < batch.length; domIdx++) {
+        const post = batch[domIdx];
+        if (!post?._isNew) continue;
+
+        // Stop extracting once we have enough URL-bearing posts
+        if (seenUrls.size >= accumulationTarget) break;
+
+        if (extractedInBatch > 0) await gaussianDelay(550, 125, 300, 800);
+        await maybeBreak();
+
+        const url = await retryInteraction(
+          () => capturePostUrl(client, domIdx, mouse),
+        );
+        if (url) {
+          post.url = url;
+        }
+        extractedInBatch++;
+
+        // Accumulate the post (dedup by URL when available)
+        if (post.url) {
+          if (!seenUrls.has(post.url)) {
+            seenUrls.add(post.url);
+            allPosts.push(post);
+          }
+        } else {
+          // URL extraction failed — include for completeness but don't
+          // count toward accumulationTarget (see comment above).
+          allPosts.push(post);
+        }
+      }
+
+      // Enough URL-bearing posts accumulated?
+      if (seenUrls.size >= accumulationTarget) break;
+
+      // No new URL-bearing posts after scroll — stop
+      if (seenUrls.size === previousUrlCount && scroll > 0) break;
+
+      const newPostCount = allPosts.length - countBefore;
+      previousUrlCount = seenUrls.size;
 
       // Scroll to load more
       if (scroll < maxScrollAttempts) {
@@ -527,7 +610,6 @@ export async function getFeed(
         // Progressive session fatigue: delays increase with each scroll
         const fatigueMultiplier = 1 + scroll * 0.1;
         // Scale delay by newly visible content volume
-        const newPostCount = allPosts.length - countBeforeScroll;
         const contentBonus = Math.min(
           newPostCount * gaussianBetween(350, 75, 200, 500),
           3_000,
@@ -549,25 +631,6 @@ export async function getFeed(
       }
     }
 
-    // --- URL extraction phase ---
-    // Open each post's three-dot menu, click "Copy link to post", and
-    // derive the URN from the captured URL.  This populates the urn/url
-    // fields that the scrape script left null.
-    await installClipboardInterceptor(client);
-
-    for (let i = 0; i < allPosts.length; i++) {
-      const post = allPosts[i];
-      if (!post) continue;
-      if (i > 0) await gaussianDelay(550, 125, 300, 800); // Inter-post delay
-      await maybeBreak();
-      const url = await retryInteraction(
-        () => capturePostUrl(client, i, mouse),
-      );
-      if (url) {
-        post.url = url;
-      }
-    }
-
     // Slice the result window
     let startIdx = 0;
     if (cursorUrl) {
@@ -580,10 +643,20 @@ export async function getFeed(
     const window = allPosts.slice(startIdx, startIdx + count);
     const posts = mapRawPosts(window);
 
-    // Determine next cursor
+    // Determine next cursor — scan backwards for the nearest post with a
+    // non-null URL so that a single failed URL extraction doesn't block
+    // pagination when more posts are available.
     const hasMore = startIdx + count < allPosts.length;
-    const lastPost = window[window.length - 1];
-    const nextCursor = hasMore && lastPost ? lastPost.url : null;
+    let nextCursor: string | null = null;
+    if (hasMore) {
+      for (let i = window.length - 1; i >= 0; i--) {
+        const postUrl = window[i]?.url;
+        if (postUrl) {
+          nextCursor = postUrl;
+          break;
+        }
+      }
+    }
 
     await gaussianDelay(800, 300, 300, 1_800); // Post-action dwell
     return { posts, nextCursor };
