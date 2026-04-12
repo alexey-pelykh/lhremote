@@ -53,19 +53,33 @@ function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
 /**
  * Create a script-aware evaluate mock that handles the getFeed call sequence:
  * 1. waitForFeedLoad → truthy when posts exist
- * 2. SCRAPE_FEED_POSTS_SCRIPT → posts array (may repeat on scroll)
- * 3. Clipboard interceptor install → void
- * 4. Per-post URL capture: reset → void, scroll → void, menu click → true,
- *    copy-link click → void, clipboard read → url string
+ * 2. Clipboard interceptor install → void
+ * 3. SCRAPE_FEED_POSTS_SCRIPT → indexed posts array (may repeat on scroll)
+ * 4. Per-post URL capture (interleaved): reset → void, scroll → void,
+ *    menu click → true, copy-link click → void, clipboard read → url string
+ *
+ * The scrape mock adds an `_isNew` field to match the DOM-tagging
+ * accumulation strategy.  On the first call all posts are "new"; subsequent
+ * calls return the same posts as "already seen" so that the scroll loop
+ * exits after one iteration.
  */
 function createEvaluateMock(scrapedPosts: RawDomPost[]) {
   let urlIdx = 0;
+  let scrapeCallCount = 0;
   return vi.fn().mockImplementation((script: string) => {
     const s = String(script);
     // Order matters: check most specific patterns first
-    // Scrape script: long script with parseCount function
+    // Scrape script: long script with parseCount function.
+    // Returns posts with discovery-tagging field (_isNew).
     if (s.includes("parseCount")) {
-      return Promise.resolve(scrapedPosts);
+      const isFirstScrape = scrapeCallCount === 0;
+      scrapeCallCount++;
+      return Promise.resolve(
+        scrapedPosts.map((p) => ({
+          ...p,
+          _isNew: isFirstScrape,
+        })),
+      );
     }
     // Clipboard interceptor install
     if (s.includes("navigator.clipboard.writeText")) {
@@ -197,9 +211,14 @@ describe("getFeed", () => {
     ]);
 
     let clipboardReadCount = 0;
+    let retryScrapeCount = 0;
     const evaluate = vi.fn().mockImplementation((script: string) => {
       const s = String(script);
-      if (s.includes("parseCount")) return Promise.resolve([post]);
+      if (s.includes("parseCount")) {
+        const isFirst = retryScrapeCount === 0;
+        retryScrapeCount++;
+        return Promise.resolve([{ ...post, _isNew: isFirst }]);
+      }
       if (s.includes("navigator.clipboard.writeText")) return Promise.resolve(undefined);
       if (s.includes("__capturedClipboard = null")) return Promise.resolve(undefined);
       if (s.includes("Copy link to post")) return Promise.resolve(undefined);
@@ -269,6 +288,116 @@ describe("getFeed", () => {
     const result = await getFeed({ cdpPort: CDP_PORT, count: 2 });
 
     expect(result.nextCursor).toBe("https://www.linkedin.com/feed/update/urn:li:activity:2/");
+  });
+
+  it("returns nextCursor from nearest post with URL when last post URL is null", async () => {
+    // Custom mock: 3 posts where only the first has a successful URL extraction.
+    // The clipboard mock returns a URL for the first post only; all subsequent
+    // reads return null, causing capturePostUrl to genuinely fail for posts 2–3.
+    vi.mocked(discoverTargets).mockResolvedValue([{
+      id: "target-1", type: "page", title: "LinkedIn",
+      url: "https://www.linkedin.com/feed/",
+      description: "", devtoolsFrontendUrl: "",
+    }]);
+
+    const posts = [
+      { ...rawPost({ url: null }), _isNew: true },
+      { ...rawPost({ url: null }), _isNew: true },
+      { ...rawPost({ url: null }), _isNew: true },
+    ];
+    let clipIdx = 0;
+    const clipUrls = ["https://www.linkedin.com/feed/update/urn:li:activity:1/"];
+
+    const evaluate = vi.fn().mockImplementation((script: string) => {
+      const s = String(script);
+      if (s.includes("parseCount")) return Promise.resolve(posts);
+      if (s.includes("navigator.clipboard.writeText")) return Promise.resolve(undefined);
+      if (s.includes("__capturedClipboard = null")) return Promise.resolve(undefined);
+      if (s.includes("Copy link to post")) return Promise.resolve(undefined);
+      if (s === "window.__capturedClipboard") {
+        const url = clipUrls[clipIdx] ?? null;
+        clipIdx++;
+        return Promise.resolve(url);
+      }
+      if (s.includes("btn.click()")) return Promise.resolve(true);
+      if (s.includes("scrollIntoView")) return Promise.resolve(undefined);
+      if (s.includes("mainFeed")) return Promise.resolve(true);
+      return Promise.resolve(null);
+    });
+
+    vi.mocked(CDPClient).mockImplementation(function () {
+      return {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect: vi.fn(),
+        navigate: vi.fn().mockResolvedValue({ frameId: "F1" }),
+        evaluate,
+        send: vi.fn().mockResolvedValue(undefined),
+      } as unknown as CDPClient;
+    });
+
+    const result = await getFeed({ cdpPort: CDP_PORT, count: 2 });
+
+    // Window = [post0 (url:activity:1), post1 (url:null)], hasMore = true
+    // post1.url = null → scan backwards → post0.url
+    expect(result.posts).toHaveLength(2);
+    expect(result.nextCursor).toBe("https://www.linkedin.com/feed/update/urn:li:activity:1/");
+  });
+
+  it("stops extracting URLs once accumulationTarget is reached", async () => {
+    // 20 posts available, but count=3 → accumulationTarget = 4.
+    // Only 4 URL extractions should occur (not 20).
+    const posts = Array.from({ length: 20 }, (_, i) => ({
+      ...rawPost({
+        url: `https://www.linkedin.com/feed/update/urn:li:activity:${String(i + 1)}/`,
+      }),
+      _isNew: true,
+    }));
+
+    let copyLinkClicks = 0;
+    let clipIdx = 0;
+
+    vi.mocked(discoverTargets).mockResolvedValue([{
+      id: "target-1", type: "page", title: "LinkedIn",
+      url: "https://www.linkedin.com/feed/",
+      description: "", devtoolsFrontendUrl: "",
+    }]);
+
+    const evaluate = vi.fn().mockImplementation((script: string) => {
+      const s = String(script);
+      if (s.includes("parseCount")) return Promise.resolve(posts);
+      if (s.includes("navigator.clipboard.writeText")) return Promise.resolve(undefined);
+      if (s.includes("__capturedClipboard = null")) return Promise.resolve(undefined);
+      if (s.includes("Copy link to post")) {
+        copyLinkClicks++;
+        return Promise.resolve(undefined);
+      }
+      if (s === "window.__capturedClipboard") {
+        const url = posts[clipIdx]?.url ?? null;
+        clipIdx++;
+        return Promise.resolve(url);
+      }
+      if (s.includes("btn.click()")) return Promise.resolve(true);
+      if (s.includes("scrollIntoView")) return Promise.resolve(undefined);
+      if (s.includes("mainFeed")) return Promise.resolve(true);
+      return Promise.resolve(null);
+    });
+
+    vi.mocked(CDPClient).mockImplementation(function () {
+      return {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect: vi.fn(),
+        navigate: vi.fn().mockResolvedValue({ frameId: "F1" }),
+        evaluate,
+        send: vi.fn().mockResolvedValue(undefined),
+      } as unknown as CDPClient;
+    });
+
+    const result = await getFeed({ cdpPort: CDP_PORT, count: 3 });
+
+    expect(result.posts).toHaveLength(3);
+    // Target = count + 1 = 4.  Extraction stops as soon as seenUrls.size
+    // reaches 4, so "Copy link to post" is clicked exactly 4 times.
+    expect(copyLinkClicks).toBe(4);
   });
 
   it("returns null nextCursor when all posts are returned", async () => {
@@ -368,27 +497,34 @@ describe("getFeed", () => {
       rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:4/" }),
     ];
 
-    let urnIdx = 0;
+    let clipIdx = 0;
     evaluate.mockReset();
     evaluate.mockImplementation((script: string) => {
       const s = String(script);
       if (s.includes("parseCount")) {
         scrapeCall++;
-        return Promise.resolve(scrapeCall === 1 ? firstScrape : secondScrape);
+        // First scrape: 2 posts, all new.
+        // Second scrape: 4 posts — first 2 already tagged, last 2 new.
+        if (scrapeCall === 1) {
+          return Promise.resolve(firstScrape.map((p) => ({ ...p, _isNew: true })));
+        }
+        return Promise.resolve(secondScrape.map((p, i) => ({
+          ...p, _isNew: i >= firstScrape.length,
+        })));
       }
-      if (s.includes("embed-modal")) {
-        urnIdx++;
-        return Promise.resolve(`urn:li:activity:${String(urnIdx)}`);
+      if (s.includes("navigator.clipboard.writeText")) return Promise.resolve(undefined);
+      if (s.includes("__capturedClipboard = null")) return Promise.resolve(undefined);
+      if (s.includes("Copy link to post")) return Promise.resolve(undefined);
+      if (s === "window.__capturedClipboard") {
+        // Return URLs from the combined post list in discovery order
+        const allUrls = [...firstScrape, ...secondScrape.slice(firstScrape.length)];
+        const url = allUrls[clipIdx]?.url ?? null;
+        clipIdx++;
+        return Promise.resolve(url);
       }
-      if (s.includes("btn.click()")) {
-        return Promise.resolve(true);
-      }
-      if (s.includes("scrollIntoView")) {
-        return Promise.resolve(undefined);
-      }
-      if (s.includes("mainFeed")) {
-        return Promise.resolve(true);
-      }
+      if (s.includes("btn.click()")) return Promise.resolve(true);
+      if (s.includes("scrollIntoView")) return Promise.resolve(undefined);
+      if (s.includes("mainFeed")) return Promise.resolve(true);
       return Promise.resolve(null);
     });
 
@@ -412,27 +548,31 @@ describe("getFeed", () => {
       rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
       rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),
     ];
-    let urnIdx = 0;
+    let staleScrapeCount = 0;
+    let staleClipIdx = 0;
 
     evaluate.mockReset();
     evaluate.mockImplementation((script: string) => {
       const s = String(script);
       if (s.includes("parseCount")) {
-        return Promise.resolve(fixedPosts);
+        // First call: posts are new.  Subsequent: same posts, not new.
+        const isFirst = staleScrapeCount === 0;
+        staleScrapeCount++;
+        return Promise.resolve(
+          fixedPosts.map((p) => ({ ...p, _isNew: isFirst })),
+        );
       }
-      if (s.includes("embed-modal")) {
-        urnIdx++;
-        return Promise.resolve(`urn:li:activity:${String(urnIdx)}`);
+      if (s.includes("navigator.clipboard.writeText")) return Promise.resolve(undefined);
+      if (s.includes("__capturedClipboard = null")) return Promise.resolve(undefined);
+      if (s.includes("Copy link to post")) return Promise.resolve(undefined);
+      if (s === "window.__capturedClipboard") {
+        const url = fixedPosts[staleClipIdx]?.url ?? null;
+        staleClipIdx++;
+        return Promise.resolve(url);
       }
-      if (s.includes("btn.click()")) {
-        return Promise.resolve(true);
-      }
-      if (s.includes("scrollIntoView")) {
-        return Promise.resolve(undefined);
-      }
-      if (s.includes("mainFeed")) {
-        return Promise.resolve(true);
-      }
+      if (s.includes("btn.click()")) return Promise.resolve(true);
+      if (s.includes("scrollIntoView")) return Promise.resolve(undefined);
+      if (s.includes("mainFeed")) return Promise.resolve(true);
       return Promise.resolve(null);
     });
 
