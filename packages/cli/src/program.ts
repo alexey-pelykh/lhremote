@@ -62,6 +62,7 @@ import {
   handleLaunchApp,
   handleListAccounts,
   handleListReferenceData,
+  handleListWorkspaces,
   handleQueryMessages,
   handleQueryProfile,
   handleQueryProfiles,
@@ -149,12 +150,22 @@ export function createProgram(): Command {
 
   program
     .command("list-accounts")
-    .description("List LinkedHelper accounts")
+    .description("List LinkedHelper accounts (selected workspace by default)")
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
+    .option("--all-workspaces", "List accounts across every workspace the LH user belongs to, not just the selected one (LinkedHelper 2.113.x+)")
     .action(handleListAccounts);
+
+  program
+    .command("list-workspaces")
+    .description("List LinkedHelper workspaces the current user belongs to (2.113.x+)")
+    .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleListWorkspaces);
 
   program
     .command("start-instance")

@@ -61,6 +61,7 @@ export { handleSearchPosts } from "./search-posts.js";
 export { handleListCollections } from "./list-collections.js";
 export { handleLaunchApp } from "./launch-app.js";
 export { handleListAccounts } from "./list-accounts.js";
+export { handleListWorkspaces } from "./list-workspaces.js";
 export { handleRemovePeopleFromCollection } from "./remove-people-from-collection.js";
 export { handleQuitApp } from "./quit-app.js";
 export { handleReactToPost } from "./react-to-post.js";

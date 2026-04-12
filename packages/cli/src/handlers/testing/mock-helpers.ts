@@ -47,6 +47,7 @@ export function mockLauncher(
       connect: vi.fn().mockResolvedValue(undefined),
       disconnect,
       listAccounts: vi.fn().mockResolvedValue([]),
+      listWorkspaces: vi.fn().mockResolvedValue([]),
       ...overrides,
     } as unknown as LauncherService;
   });
