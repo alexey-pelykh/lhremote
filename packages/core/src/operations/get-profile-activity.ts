@@ -83,6 +83,11 @@ export function extractProfileId(input: string): string {
  * containers and stable class names (unlike the SSR main feed).
  * Each post has a three-dot menu button matching
  * `button[aria-label^="Open control menu"]`.
+ *
+ * Author name is extracted from the menu button's `aria-label` attribute
+ * (the first author link is avatar-only with no text).
+ * Author headline uses the Ember semantic class
+ * `update-components-actor__description`.
  */
 const SCRAPE_ACTIVITY_POSTS_SCRIPT = `(() => {
   const posts = [];
@@ -102,27 +107,17 @@ const SCRAPE_ACTIVITY_POSTS_SCRIPT = `(() => {
     const authorLink = item.querySelector('a[href*="/in/"], a[href*="/company/"]');
     if (authorLink) {
       authorProfileUrl = authorLink.href.split('?')[0] || null;
-      const nameEl = authorLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]')
-        || authorLink;
-      const rawName = (nameEl.textContent || '').trim();
-      authorName = rawName || null;
     }
 
-    const allSpans = item.querySelectorAll('span');
-    for (const span of allSpans) {
-      const txt = (span.textContent || '').trim();
-      if (
-        txt &&
-        txt.length > 5 &&
-        txt.length < 200 &&
-        txt !== authorName &&
-        !txt.match(/^\\d+[smhdw]$/) &&
-        !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
-        !txt.match(/^Follow$|^Promoted$/i)
-      ) {
-        authorHeadline = txt;
-        break;
-      }
+    // Author name: extract from menu button aria-label
+    // (first author link is avatar-only on the activity page)
+    const menuLabel = menuBtn.getAttribute('aria-label') || '';
+    authorName = menuLabel.replace('Open control menu for post by ', '') || null;
+
+    // Author headline: Ember semantic class (stable on activity page)
+    const headlineEl = item.querySelector('span.update-components-actor__description');
+    if (headlineEl) {
+      authorHeadline = (headlineEl.textContent || '').trim() || null;
     }
 
     // --- Post text ---
