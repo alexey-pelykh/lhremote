@@ -123,10 +123,12 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
       authorProfileUrl = authorLink.href.split('?')[0] || null;
     }
 
-    // Author name: strip known prefix from the menu button's aria-label.
+    // Author name: extract only when the menu button aria-label matches
+    // the expected "Open control menu for post by <name>" format.
     // The menu button is already validated above (line that sets menuBtn).
     const menuLabel = menuBtn.getAttribute('aria-label') || '';
-    authorName = menuLabel.replace('Open control menu for post by ', '') || null;
+    const authorNameMatch = menuLabel.match(/^Open control menu for post by\\s+(.+)$/);
+    authorName = authorNameMatch ? authorNameMatch[1].trim() || null : null;
 
     // Author headline + timestamp: find the text-bearing second author
     // link.  Each post has two links to the author profile — the first
@@ -140,11 +142,12 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
       if (textLink) {
         const pEls = Array.from(textLink.querySelectorAll('p'));
 
-        // Timestamp: last <p> matching relative-time pattern (e.g. "18h •")
+        // Timestamp: last <p> containing a relative-time token (e.g. "18h •")
         for (let i = pEls.length - 1; i >= 0; i--) {
           const txt = pEls[i].textContent.trim();
-          if (/^\\d+[smhdw]\\s*/.test(txt)) {
-            timestamp = txt.replace(/\\s*[\\u2022\\u00B7]\\s*$/, '').trim();
+          const timestampMatch = txt.match(/^(\\d+[smhdw])(?:\\s|[\\u2022\\u00B7]|$)/);
+          if (timestampMatch) {
+            timestamp = timestampMatch[1];
             pEls.splice(i, 1);
             break;
           }
