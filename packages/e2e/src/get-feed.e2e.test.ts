@@ -113,6 +113,14 @@ describeE2E("get-feed operation", () => {
       expect(typeof post.commentCount).toBe("number");
       expect(typeof post.shareCount).toBe("number");
       expect(Array.isArray(post.hashtags)).toBe(true);
+
+      // Content extraction: at least 50% of posts should have non-null fields
+      const postsWithText = parsed.posts.filter((p) => p.text !== null);
+      expect(postsWithText.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      const postsWithAuthorName = parsed.posts.filter((p) => p.authorName !== null);
+      expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      const postsWithTimestamp = parsed.posts.filter((p) => p.timestamp !== null);
+      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
     }, 60_000);
 
     it("get-feed prints human-friendly output", async () => {
@@ -156,6 +164,14 @@ describeE2E("get-feed operation", () => {
       const post = parsed.posts[0] as FeedPost;
       expect(post).toHaveProperty("url");
       expect(typeof post.reactionCount).toBe("number");
+
+      // Content extraction: at least 50% of posts should have non-null fields
+      const postsWithText = parsed.posts.filter((p) => p.text !== null);
+      expect(postsWithText.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      const postsWithAuthorName = parsed.posts.filter((p) => p.authorName !== null);
+      expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      const postsWithTimestamp = parsed.posts.filter((p) => p.timestamp !== null);
+      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
     }, 60_000);
 
     it("get-feed tool paginates with cursor", async () => {

@@ -139,6 +139,12 @@ describeE2E("get-profile-activity operation", () => {
         expect(typeof post.commentCount).toBe("number");
         expect(typeof post.shareCount).toBe("number");
       }
+
+      // Content extraction: at least 50% of posts should have non-null fields
+      const postsWithText = parsed.posts.filter((p) => p.text !== null);
+      expect(postsWithText.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      const postsWithAuthorName = parsed.posts.filter((p) => p.authorName !== null);
+      expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
     }, 120_000);
 
     it("get-profile-activity prints human-friendly output", async () => {
@@ -190,6 +196,12 @@ describeE2E("get-profile-activity operation", () => {
 
       expect(parsed.profilePublicId).toBe(profilePublicId);
       expect(Array.isArray(parsed.posts)).toBe(true);
+
+      // Content extraction: at least 50% of posts should have non-null fields
+      const postsWithText = parsed.posts.filter((p) => p.text !== null);
+      expect(postsWithText.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      const postsWithAuthorName = parsed.posts.filter((p) => p.authorName !== null);
+      expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
     }, 120_000);
   });
 });
