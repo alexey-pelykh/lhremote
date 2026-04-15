@@ -114,6 +114,14 @@ describeE2E("search-posts operation", () => {
       const post = parsed.posts[0] as (typeof parsed.posts)[number];
       expect(typeof post.reactionCount).toBe("number");
       expect(typeof post.commentCount).toBe("number");
+
+      // Content extraction: at least 50% of posts should have non-null fields
+      const postsWithText = parsed.posts.filter((p) => p.text !== null);
+      expect(postsWithText.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      const postsWithAuthorName = parsed.posts.filter((p) => p.authorName !== null);
+      expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      const postsWithTimestamp = parsed.posts.filter((p) => p.timestamp !== null);
+      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
     }, 60_000);
 
     it("search-posts prints human-friendly output", async () => {
@@ -158,6 +166,14 @@ describeE2E("search-posts operation", () => {
       // Verify at least one post has a URL
       const postsWithUrls = parsed.posts.filter((p) => p.url !== null);
       expect(postsWithUrls.length).toBeGreaterThan(0);
+
+      // Content extraction: at least 50% of posts should have non-null fields
+      const postsWithText = parsed.posts.filter((p) => p.text !== null);
+      expect(postsWithText.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      const postsWithAuthorName = parsed.posts.filter((p) => p.authorName !== null);
+      expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      const postsWithTimestamp = parsed.posts.filter((p) => p.timestamp !== null);
+      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
     }, 60_000);
 
     it("search-posts tool paginates with cursor", async () => {
