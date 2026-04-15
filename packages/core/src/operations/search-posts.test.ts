@@ -32,8 +32,7 @@ import type { RawDomPost } from "./get-feed.js";
 const CDP_PORT = 9222;
 
 /**
- * Build a minimal raw DOM post object with URN pre-populated (chameleon
- * strategy returns URNs directly from the DOM).
+ * Build a minimal raw DOM post object for test assertions.
  */
 function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
   return {
@@ -56,9 +55,6 @@ function rawPost(overrides: Partial<RawDomPost> = {}): RawDomPost {
  * sequence:
  * 1. waitForSearchResults → truthy when posts exist
  * 2. SCRAPE_SEARCH_RESULTS_SCRIPT → posts array (may repeat on scroll)
- *
- * The chameleon strategy returns URNs directly in the scrape — no
- * three-dot menu interaction needed.
  */
 function createEvaluateMock(scrapedPosts: RawDomPost[]) {
   return vi.fn().mockImplementation((script: string) => {
@@ -147,7 +143,7 @@ describe("searchPosts", () => {
     expect(post?.hashtags).toEqual(["linkedin", "tech"]);
   });
 
-  it("returns posts with URLs from chameleon strategy", async () => {
+  it("returns posts with pre-populated URLs", async () => {
     setupMocks([
       rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
       rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:2/" }),

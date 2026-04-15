@@ -51,11 +51,19 @@ export interface SearchPostsOutput {
  * JavaScript evaluated inside the LinkedIn search results page.  Returns
  * an array of {@link RawDomPost} objects.
  *
+ * ## Discovery strategy (2026-04 onwards)
+ *
  * Search result items are `div[role="listitem"]` elements (NOT wrapped
  * in `data-testid="mainFeed"` like the feed page).  URNs/URLs are NOT
  * exposed inline — they are extracted in a subsequent phase by opening
  * each post's three-dot menu and clicking "Copy link to post", which
  * writes the URL to `navigator.clipboard.writeText`.
+ *
+ * - **Post text**: `[data-testid="expandable-text-box"]` (clone, strip
+ *   `expandable-text-button` child, take `textContent`).
+ * - **Author name**: menu button `aria-label` prefix strip.
+ * - **Author headline**: 3rd `<p>` in the text-bearing author link.
+ * - **Timestamp**: last `<p>` matching `\d+[smhdw]` in that link.
  */
 const SCRAPE_SEARCH_RESULTS_SCRIPT = `(() => {
   const posts = [];
@@ -75,43 +83,59 @@ const SCRAPE_SEARCH_RESULTS_SCRIPT = `(() => {
       let authorName = null;
       let authorHeadline = null;
       let authorProfileUrl = null;
+      let timestamp = null;
 
       const authorLink = card.querySelector('a[href*="/in/"], a[href*="/company/"]');
       if (authorLink) {
         authorProfileUrl = authorLink.href.split('?')[0] || null;
-        const nameEl = authorLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]')
-          || authorLink;
-        const rawName = (nameEl.textContent || '').trim();
-        authorName = rawName || null;
       }
 
-      const allSpans = card.querySelectorAll('span');
-      for (const span of allSpans) {
-        const txt = (span.textContent || '').trim();
-        if (
-          txt &&
-          txt.length > 5 &&
-          txt.length < 200 &&
-          txt !== authorName &&
-          !txt.match(/^\\d+[smhdw]$/) &&
-          !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
-          !txt.match(/^Follow$|^Promoted$/i)
-        ) {
-          authorHeadline = txt;
-          break;
+      // Author name: extract from menu button aria-label
+      const menuLabel = menuBtn.getAttribute('aria-label') || '';
+      const authorNameMatch = menuLabel.match(/^Open control menu for post by\\s+(.+)$/);
+      authorName = authorNameMatch ? authorNameMatch[1].trim() || null : null;
+
+      // Author headline + timestamp: find the text-bearing second author
+      // link.  Each post has two links to the author profile — the first
+      // contains only an avatar (<figure>), the second contains <p>
+      // elements with name, degree, headline, and timestamp.
+      if (authorLink) {
+        const authorPath = new URL(authorLink.href).pathname;
+        const allLinks = Array.from(card.querySelectorAll('a[href*="' + authorPath + '"]'));
+        const textLink = allLinks.find(function(a) { return (a.textContent || '').trim().length > 0; });
+
+        if (textLink) {
+          const pEls = Array.from(textLink.querySelectorAll('p'));
+
+          // Timestamp: last <p> containing a relative-time token (e.g. "18h •")
+          for (let i = pEls.length - 1; i >= 0; i--) {
+            const txt = (pEls[i].textContent || '').trim();
+            const timestampMatch = txt.match(/^(\\d+[smhdw])(?:\\s|[\\u2022\\u00B7]|$)/);
+            if (timestampMatch) {
+              timestamp = timestampMatch[1];
+              pEls.splice(i, 1);
+              break;
+            }
+          }
+
+          // Headline: 3rd <p> (index 2) — after name and connection degree.
+          // Company posts may have only 2 <p> elements (name + timestamp),
+          // in which case authorHeadline stays null.
+          if (pEls.length >= 3) {
+            authorHeadline = (pEls[2].textContent || '').trim() || null;
+          }
         }
       }
 
+      // Post text: expandable-text-box with optional "… more" button stripped
       let text = null;
-      const ltrSpans = card.querySelectorAll('span[dir="ltr"]');
-      let longestText = '';
-      for (const span of ltrSpans) {
-        const txt = (span.textContent || '').trim();
-        if (txt.length > longestText.length && txt !== authorName && txt !== authorHeadline) {
-          longestText = txt;
-        }
+      const textBox = card.querySelector('[data-testid="expandable-text-box"]');
+      if (textBox) {
+        const clone = textBox.cloneNode(true);
+        const moreBtn = clone.querySelector('[data-testid="expandable-text-button"]');
+        if (moreBtn) moreBtn.remove();
+        text = (clone.textContent || '').trim() || null;
       }
-      if (longestText.length > 20) text = longestText;
 
       let mediaType = null;
       if (card.querySelector('video')) {
@@ -135,17 +159,6 @@ const SCRAPE_SEARCH_RESULTS_SCRIPT = `(() => {
       const reactionCount = parseCount(/(\\d[\\d,]*)\\s+reactions?/i);
       const commentCount = parseCount(/(\\d[\\d,]*)\\s+comments?/i);
       const shareCount = parseCount(/(\\d[\\d,]*)\\s+reposts?/i);
-
-      let timestamp = null;
-      const timeEl = card.querySelector('time');
-      if (timeEl) {
-        const dt = timeEl.getAttribute('datetime');
-        if (dt) timestamp = dt;
-      }
-      if (!timestamp) {
-        const timeMatch = cardText.match(/(?:^|\\s)(\\d+[smhdw])(?:\\s|$|\\u00B7|\\xB7)/);
-        if (timeMatch) timestamp = timeMatch[1];
-      }
 
       posts.push({
         url: null,
@@ -176,40 +189,52 @@ const SCRAPE_SEARCH_RESULTS_SCRIPT = `(() => {
     let authorName = null;
     let authorHeadline = null;
     let authorProfileUrl = null;
+    let timestamp = null;
 
     const authorLink = item.querySelector('a[href*="/in/"], a[href*="/company/"]');
     if (authorLink) {
       authorProfileUrl = authorLink.href.split('?')[0] || null;
-      const nameEl = authorLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]')
-        || authorLink;
-      authorName = (nameEl.textContent || '').trim() || null;
     }
 
-    const allSpans = item.querySelectorAll('span');
-    for (const span of allSpans) {
-      const txt = (span.textContent || '').trim();
-      if (
-        txt && txt.length > 5 && txt.length < 200 &&
-        txt !== authorName &&
-        !txt.match(/^\\d+[smhdw]$/) &&
-        !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
-        !txt.match(/^Follow$|^Promoted$/i)
-      ) {
-        authorHeadline = txt;
-        break;
+    // Author name: extract from menu button aria-label
+    const menuLabel = menuBtn.getAttribute('aria-label') || '';
+    const authorNameMatch = menuLabel.match(/^Open control menu for post by\\s+(.+)$/);
+    authorName = authorNameMatch ? authorNameMatch[1].trim() || null : null;
+
+    // Author headline + timestamp via text-bearing second author link
+    if (authorLink) {
+      const authorPath = new URL(authorLink.href).pathname;
+      const allLinks = Array.from(item.querySelectorAll('a[href*="' + authorPath + '"]'));
+      const textLink = allLinks.find(function(a) { return (a.textContent || '').trim().length > 0; });
+
+      if (textLink) {
+        const pEls = Array.from(textLink.querySelectorAll('p'));
+
+        for (let i = pEls.length - 1; i >= 0; i--) {
+          const txt = (pEls[i].textContent || '').trim();
+          const timestampMatch = txt.match(/^(\\d+[smhdw])(?:\\s|[\\u2022\\u00B7]|$)/);
+          if (timestampMatch) {
+            timestamp = timestampMatch[1];
+            pEls.splice(i, 1);
+            break;
+          }
+        }
+
+        if (pEls.length >= 3) {
+          authorHeadline = (pEls[2].textContent || '').trim() || null;
+        }
       }
     }
 
+    // Post text: expandable-text-box with optional "… more" button stripped
     let text = null;
-    const ltrSpans = item.querySelectorAll('span[dir="ltr"]');
-    let longestText = '';
-    for (const span of ltrSpans) {
-      const txt = (span.textContent || '').trim();
-      if (txt.length > longestText.length && txt !== authorName && txt !== authorHeadline) {
-        longestText = txt;
-      }
+    const textBox = item.querySelector('[data-testid="expandable-text-box"]');
+    if (textBox) {
+      const clone = textBox.cloneNode(true);
+      const moreBtn = clone.querySelector('[data-testid="expandable-text-button"]');
+      if (moreBtn) moreBtn.remove();
+      text = (clone.textContent || '').trim() || null;
     }
-    if (longestText.length > 20) text = longestText;
 
     let mediaType = null;
     if (item.querySelector('video')) {
@@ -233,17 +258,6 @@ const SCRAPE_SEARCH_RESULTS_SCRIPT = `(() => {
     const reactionCount = parseCount2(/(\\d[\\d,]*)\\s+reactions?/i);
     const commentCount = parseCount2(/(\\d[\\d,]*)\\s+comments?/i);
     const shareCount = parseCount2(/(\\d[\\d,]*)\\s+reposts?/i);
-
-    let timestamp = null;
-    const timeEl = item.querySelector('time');
-    if (timeEl) {
-      const dt = timeEl.getAttribute('datetime');
-      if (dt) timestamp = dt;
-    }
-    if (!timestamp) {
-      const timeMatch = itemText.match(/(?:^|\\s)(\\d+[smhdw])(?:\\s|$|\\u00B7|\\xB7)/);
-      if (timeMatch) timestamp = timeMatch[1];
-    }
 
     posts.push({
       url: null,
@@ -269,10 +283,8 @@ const SCRAPE_SEARCH_RESULTS_SCRIPT = `(() => {
 /**
  * Wait until search results are visible in the DOM.
  *
- * Checks for two possible page structures:
- * 1. `[data-chameleon-result-urn]` — modern search results with inline URNs.
- * 2. `[data-testid="mainFeed"]` with menu buttons — older layout sharing
- *    the feed container.
+ * Checks for `div[role="listitem"]` elements containing post menu buttons
+ * (outside a `data-testid="mainFeed"` wrapper — that's the feed page).
  *
  * @internal Exported for testing.
  */
