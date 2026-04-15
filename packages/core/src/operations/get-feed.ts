@@ -137,14 +137,14 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     if (authorLink) {
       const authorPath = new URL(authorLink.href).pathname;
       const allLinks = Array.from(item.querySelectorAll('a[href*="' + authorPath + '"]'));
-      const textLink = allLinks.find(function(a) { return a.textContent.trim().length > 0; });
+      const textLink = allLinks.find(function(a) { return (a.textContent || '').trim().length > 0; });
 
       if (textLink) {
         const pEls = Array.from(textLink.querySelectorAll('p'));
 
         // Timestamp: last <p> containing a relative-time token (e.g. "18h •")
         for (let i = pEls.length - 1; i >= 0; i--) {
-          const txt = pEls[i].textContent.trim();
+          const txt = (pEls[i].textContent || '').trim();
           const timestampMatch = txt.match(/^(\\d+[smhdw])(?:\\s|[\\u2022\\u00B7]|$)/);
           if (timestampMatch) {
             timestamp = timestampMatch[1];
@@ -157,7 +157,7 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
         // Company posts may have only 2 <p> elements (name + timestamp),
         // in which case authorHeadline stays null.
         if (pEls.length >= 3) {
-          authorHeadline = pEls[2].textContent.trim() || null;
+          authorHeadline = (pEls[2].textContent || '').trim() || null;
         }
       }
     }
@@ -172,7 +172,7 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
       const clone = textBox.cloneNode(true);
       const moreBtn = clone.querySelector('[data-testid="expandable-text-button"]');
       if (moreBtn) moreBtn.remove();
-      text = clone.textContent.trim() || null;
+      text = (clone.textContent || '').trim() || null;
     }
 
     // --- Media type ---
