@@ -142,9 +142,9 @@ describeE2E("get-profile-activity operation", () => {
 
       // Content extraction: at least 50% of posts should have non-null fields
       const minRequired = Math.ceil(parsed.posts.length / 2);
-      const postsWithText = parsed.posts.filter((p) => p.text !== null);
+      const postsWithText = parsed.posts.filter((p) => p.text != null);
       expect(postsWithText.length).toBeGreaterThanOrEqual(minRequired);
-      const postsWithAuthorName = parsed.posts.filter((p) => p.authorName !== null);
+      const postsWithAuthorName = parsed.posts.filter((p) => p.authorName != null);
       expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(minRequired);
     }, 120_000);
 
@@ -200,9 +200,9 @@ describeE2E("get-profile-activity operation", () => {
 
       // Content extraction: at least 50% of posts should have non-null fields
       const minRequired = Math.ceil(parsed.posts.length / 2);
-      const postsWithText = parsed.posts.filter((p) => p.text !== null);
+      const postsWithText = parsed.posts.filter((p) => p.text != null);
       expect(postsWithText.length).toBeGreaterThanOrEqual(minRequired);
-      const postsWithAuthorName = parsed.posts.filter((p) => p.authorName !== null);
+      const postsWithAuthorName = parsed.posts.filter((p) => p.authorName != null);
       expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(minRequired);
     }, 120_000);
   });
