@@ -115,12 +115,13 @@ describeE2E("get-feed operation", () => {
       expect(Array.isArray(post.hashtags)).toBe(true);
 
       // Content extraction: at least 50% of posts should have non-null fields
+      const minRequired = Math.ceil(parsed.posts.length / 2);
       const postsWithText = parsed.posts.filter((p) => p.text !== null);
-      expect(postsWithText.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      expect(postsWithText.length).toBeGreaterThanOrEqual(minRequired);
       const postsWithAuthorName = parsed.posts.filter((p) => p.authorName !== null);
-      expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(minRequired);
       const postsWithTimestamp = parsed.posts.filter((p) => p.timestamp !== null);
-      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(minRequired);
     }, 60_000);
 
     it("get-feed prints human-friendly output", async () => {
@@ -166,12 +167,13 @@ describeE2E("get-feed operation", () => {
       expect(typeof post.reactionCount).toBe("number");
 
       // Content extraction: at least 50% of posts should have non-null fields
+      const minRequired = Math.ceil(parsed.posts.length / 2);
       const postsWithText = parsed.posts.filter((p) => p.text !== null);
-      expect(postsWithText.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      expect(postsWithText.length).toBeGreaterThanOrEqual(minRequired);
       const postsWithAuthorName = parsed.posts.filter((p) => p.authorName !== null);
-      expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(minRequired);
       const postsWithTimestamp = parsed.posts.filter((p) => p.timestamp !== null);
-      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(Math.ceil(parsed.posts.length / 2));
+      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(minRequired);
     }, 60_000);
 
     it("get-feed tool paginates with cursor", async () => {
