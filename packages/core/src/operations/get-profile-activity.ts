@@ -111,11 +111,14 @@ const SCRAPE_ACTIVITY_POSTS_SCRIPT = `(() => {
 
     // Author name: extract from menu button aria-label
     // (first author link is avatar-only on the activity page)
-    const menuLabel = menuBtn.getAttribute('aria-label') || '';
-    authorName = menuLabel.replace('Open control menu for post by ', '') || null;
+    const PREFIX = 'Open control menu for post by ';
+    const menuLabel = (menuBtn.getAttribute('aria-label') || '').trim();
+    if (menuLabel.startsWith(PREFIX)) {
+      authorName = menuLabel.substring(PREFIX.length).trim() || null;
+    }
 
     // Author headline: Ember semantic class (stable on activity page)
-    const headlineEl = item.querySelector('span.update-components-actor__description');
+    const headlineEl = item.querySelector('.update-components-actor__description');
     if (headlineEl) {
       authorHeadline = (headlineEl.textContent || '').trim() || null;
     }
