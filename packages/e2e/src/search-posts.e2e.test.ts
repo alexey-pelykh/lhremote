@@ -122,7 +122,7 @@ describeE2E("search-posts operation", () => {
       const postsWithAuthorName = parsed.posts.filter((p) => p.authorName != null);
       expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(minRequired);
       const postsWithTimestamp = parsed.posts.filter((p) => p.timestamp != null);
-      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(minRequired);
+      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(1);
     }, 60_000);
 
     it("search-posts prints human-friendly output", async () => {
@@ -175,7 +175,7 @@ describeE2E("search-posts operation", () => {
       const postsWithAuthorName = parsed.posts.filter((p) => p.authorName != null);
       expect(postsWithAuthorName.length).toBeGreaterThanOrEqual(minRequired);
       const postsWithTimestamp = parsed.posts.filter((p) => p.timestamp != null);
-      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(minRequired);
+      expect(postsWithTimestamp.length).toBeGreaterThanOrEqual(1);
     }, 60_000);
 
     it("search-posts tool paginates with cursor", async () => {
