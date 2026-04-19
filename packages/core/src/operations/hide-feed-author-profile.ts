@@ -192,22 +192,35 @@ export async function hideFeedAuthorProfile(
       // two-step confirmation dialog ("Mute {Name}? [Cancel][Mute]").
       // Detect and click the confirmation button BEFORE the outer Escape
       // dismiss runs, otherwise Escape would cancel the mute while we
-      // report success.
+      // report success.  If a dialog is present but we fail to click a
+      // matching confirm button, throw to trigger `retryInteraction`.
       if (item.kind === "mute" && !dryRun) {
         await gaussianDelay(500, 100, 300, 800);
-        await client.evaluate(`(() => {
+        const confirmation = await client.evaluate<{
+          dialogPresent: boolean;
+          confirmed: boolean;
+        }>(`(() => {
           const patterns = ${JSON.stringify(MUTE_CONFIRM_LABEL_PATTERNS)};
           const dialog = document.querySelector('[role="dialog"]');
-          if (!dialog) return false;
+          if (!dialog) {
+            return { dialogPresent: false, confirmed: false };
+          }
           for (const btn of dialog.querySelectorAll('button')) {
             const text = (btn.textContent || "").trim();
             if (patterns.some((p) => text === p || text.startsWith(p + " "))) {
               btn.click();
-              return true;
+              return { dialogPresent: true, confirmed: true };
             }
           }
-          return false;
+          return { dialogPresent: true, confirmed: false };
         })()`);
+
+        if (confirmation.dialogPresent && !confirmation.confirmed) {
+          throw new Error(
+            `Mute confirmation dialog appeared for "${publicId}" ` +
+              "but no matching confirm button was clicked.",
+          );
+        }
       }
 
       return item;
