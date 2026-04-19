@@ -52,6 +52,7 @@ import { registerGetPostEngagers } from "./get-post-engagers.js";
 import { registerGetPostStats } from "./get-post-stats.js";
 import { registerGetFeed } from "./get-feed.js";
 import { registerHideFeedAuthor } from "./hide-feed-author.js";
+import { registerHideFeedAuthorProfile } from "./hide-feed-author-profile.js";
 import { registerGetProfileActivity } from "./get-profile-activity.js";
 import { registerGetErrors } from "./get-errors.js";
 import { registerGetThrottleStatus } from "./get-throttle-status.js";
@@ -74,6 +75,7 @@ import { registerQueryProfilesBulk } from "./query-profiles-bulk.js";
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
 import { registerSearchPosts } from "./search-posts.js";
 import { registerUnfollowFromFeed } from "./unfollow-from-feed.js";
+import { registerUnfollowProfile } from "./unfollow-profile.js";
 import { registerVisitProfile } from "./visit-profile.js";
 
 export {
@@ -122,6 +124,7 @@ export {
   registerGetActionBudget,
   registerGetFeed,
   registerHideFeedAuthor,
+  registerHideFeedAuthorProfile,
   registerGetPost,
   registerGetPostEngagers,
   registerGetPostStats,
@@ -148,6 +151,7 @@ export {
   registerStartInstance,
   registerStopInstance,
   registerUnfollowFromFeed,
+  registerUnfollowProfile,
   registerVisitProfile,
 };
 
@@ -180,6 +184,7 @@ export function registerAllTools(server: McpServer): void {
   registerGetActionBudget(server);
   registerGetFeed(server);
   registerHideFeedAuthor(server);
+  registerHideFeedAuthorProfile(server);
   registerGetPost(server);
   registerGetPostEngagers(server);
   registerGetPostStats(server);
@@ -224,4 +229,5 @@ export function registerAllTools(server: McpServer): void {
   registerSendInmail(server);
   registerSendInvite(server);
   registerUnfollowFromFeed(server);
+  registerUnfollowProfile(server);
 }

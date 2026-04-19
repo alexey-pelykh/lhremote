@@ -327,6 +327,10 @@ export {
   hideFeedAuthor,
   type HideFeedAuthorInput,
   type HideFeedAuthorOutput,
+  hideFeedAuthorProfile,
+  type HideFeedAuthorProfileInput,
+  type HideFeedAuthorProfileOutput,
+  type HideFeedAuthorProfileSkipReason,
   // Post detail
   getPost,
   type GetPostInput,
@@ -411,6 +415,15 @@ export {
   unfollowFromFeed,
   type UnfollowFromFeedInput,
   type UnfollowFromFeedOutput,
+  unfollowProfile,
+  type UnfollowProfileInput,
+  type UnfollowProfileOutput,
+  type UnfollowProfilePriorState,
+  // Profile navigation helpers
+  buildProfileUrl,
+  extractPublicId,
+  LINKEDIN_PROFILE_RE,
+  navigateToProfile,
   // Individual actions (ephemeral campaign)
   type EphemeralActionInput,
   messagePerson,

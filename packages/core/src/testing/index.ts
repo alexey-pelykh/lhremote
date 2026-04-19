@@ -8,6 +8,7 @@ export {
   getE2ECommentUrn,
   getE2EPersonId,
   getE2EPostUrl,
+  getE2EProfileUrl,
   installErrorDetection,
   launchApp,
   type LaunchedApp,

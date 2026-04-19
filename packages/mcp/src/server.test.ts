@@ -146,6 +146,8 @@ describe("createServer", () => {
     expect(names).toContain("dismiss-feed-post");
     expect(names).toContain("unfollow-from-feed");
     expect(names).toContain("hide-feed-author");
-    expect(names).toHaveLength(72);
+    expect(names).toContain("hide-feed-author-profile");
+    expect(names).toContain("unfollow-profile");
+    expect(names).toHaveLength(74);
   });
 });

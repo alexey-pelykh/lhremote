@@ -280,6 +280,22 @@ export function getE2ECommentUrn(): string {
 }
 
 /**
+ * Read the `LHREMOTE_E2E_PROFILE_URL` environment variable.
+ *
+ * Returns a LinkedIn profile URL used for profile-page E2E tests
+ * (unfollow-profile, hide-feed-author-profile).  The URL should point to
+ * a 1st-degree connection so both follow-state and mute-availability paths
+ * can be exercised.
+ *
+ * @throws if `LHREMOTE_E2E_PROFILE_URL` is not set or is empty.
+ */
+export function getE2EProfileUrl(): string {
+  const url = process.env.LHREMOTE_E2E_PROFILE_URL;
+  if (!url) throw new Error("LHREMOTE_E2E_PROFILE_URL must be set");
+  return url;
+}
+
+/**
  * Connect to the launcher, list accounts, and return the first account ID.
  *
  * Fails the test if no accounts are configured in LinkedHelper.

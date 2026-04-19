@@ -106,7 +106,9 @@ describe("createProgram", () => {
     expect(commandNames).toContain("dismiss-feed-post");
     expect(commandNames).toContain("unfollow-from-feed");
     expect(commandNames).toContain("hide-feed-author");
-    expect(commandNames).toHaveLength(71);
+    expect(commandNames).toContain("hide-feed-author-profile");
+    expect(commandNames).toContain("unfollow-profile");
+    expect(commandNames).toHaveLength(73);
   });
 
   describe("launch-app", () => {
