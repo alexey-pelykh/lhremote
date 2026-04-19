@@ -55,6 +55,7 @@ import {
   handleGetErrors,
   handleGetFeed,
   handleHideFeedAuthor,
+  handleHideFeedAuthorProfile,
   handleGetPost,
   handleGetPostStats,
   handleGetProfileActivity,
@@ -77,6 +78,7 @@ import {
   handleStartInstance,
   handleStopInstance,
   handleUnfollowFromFeed,
+  handleUnfollowProfile,
 } from "./handlers/index.js";
 
 const require = createRequire(import.meta.url);
@@ -800,6 +802,28 @@ export function createProgram(): Command {
     .option("--dry-run", "Locate the menu item without clicking it")
     .option("--json", "Output as JSON")
     .action(handleHideFeedAuthor);
+
+  program
+    .command("hide-feed-author-profile")
+    .description("Mute a LinkedIn profile's posts via the profile page's More menu (primarily 1st-degree connections)")
+    .argument("<profileUrl>", "LinkedIn profile URL")
+    .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--dry-run", "Open the More menu and detect mute availability without clicking Mute")
+    .option("--json", "Output as JSON")
+    .action(handleHideFeedAuthorProfile);
+
+  program
+    .command("unfollow-profile")
+    .description("Unfollow a LinkedIn profile by navigating to the profile page and clicking Following → Unfollow")
+    .argument("<profileUrl>", "LinkedIn profile URL")
+    .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--dry-run", "Detect the follow state without clicking Unfollow")
+    .option("--json", "Output as JSON")
+    .action(handleUnfollowProfile);
 
   program
     .command("get-profile-activity")

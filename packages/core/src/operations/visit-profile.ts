@@ -5,6 +5,7 @@ import type { Profile } from "../types/index.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { ProfileRepository } from "../db/index.js";
+import { extractPublicId } from "./navigate-to-profile.js";
 import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 
 export interface VisitProfileInput extends ConnectionOptions {
@@ -17,18 +18,6 @@ export interface VisitProfileOutput {
   readonly success: true;
   readonly actionType: "VisitAndExtract";
   readonly profile: Profile;
-}
-
-const LINKEDIN_PROFILE_RE = /linkedin\.com\/in\/([^/?#]+)/;
-
-function extractPublicId(url: string): string {
-  const match = LINKEDIN_PROFILE_RE.exec(url);
-  if (!match?.[1]) {
-    throw new Error(
-      `Invalid LinkedIn profile URL: ${url}. Expected format: https://www.linkedin.com/in/<public-id>`,
-    );
-  }
-  return decodeURIComponent(match[1]);
 }
 
 export async function visitProfile(

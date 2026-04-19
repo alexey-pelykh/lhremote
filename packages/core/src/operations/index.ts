@@ -248,6 +248,12 @@ export {
   type HideFeedAuthorInput,
   type HideFeedAuthorOutput,
 } from "./hide-feed-author.js";
+export {
+  hideFeedAuthorProfile,
+  type HideFeedAuthorProfileInput,
+  type HideFeedAuthorProfileOutput,
+  type HideFeedAuthorProfileSkipReason,
+} from "./hide-feed-author-profile.js";
 
 // Profile activity
 export {
@@ -275,6 +281,12 @@ export {
   type VisitProfileInput,
   type VisitProfileOutput,
 } from "./visit-profile.js";
+export {
+  buildProfileUrl,
+  extractPublicId,
+  LINKEDIN_PROFILE_RE,
+  navigateToProfile,
+} from "./navigate-to-profile.js";
 
 // Post interaction
 export {
@@ -289,6 +301,12 @@ export {
   type UnfollowFromFeedInput,
   type UnfollowFromFeedOutput,
 } from "./unfollow-from-feed.js";
+export {
+  unfollowProfile,
+  type UnfollowProfileInput,
+  type UnfollowProfileOutput,
+  type UnfollowProfilePriorState,
+} from "./unfollow-profile.js";
 
 // Individual actions (ephemeral campaign)
 export {
