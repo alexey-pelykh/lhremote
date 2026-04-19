@@ -8,12 +8,10 @@ import { gaussianDelay, maybeHesitate } from "../utils/delay.js";
 import { navigateAwayIf } from "./navigate-away.js";
 
 /**
- * Regex matching a LinkedIn profile URL and capturing the public ID.
- *
- * Matches any URL whose pathname starts with `/in/{publicId}` — trailing
- * slashes, query strings, and fragments are tolerated.
+ * Regex matching a LinkedIn profile URL *pathname* (not the full URL) and
+ * capturing the public ID from the first `/in/{slug}` segment.
  */
-export const LINKEDIN_PROFILE_RE = /linkedin\.com\/in\/([^/?#]+)/;
+export const LINKEDIN_PROFILE_RE = /^\/in\/([^/?#]+)/;
 
 /** Selector that identifies a loaded profile page (name card heading). */
 const PROFILE_READY_SELECTOR = "main h1";
@@ -21,14 +19,33 @@ const PROFILE_READY_SELECTOR = "main h1";
 /**
  * Extract the public ID (URL slug) from a LinkedIn profile URL.
  *
- * Accepts any URL matching {@link LINKEDIN_PROFILE_RE} and returns the
- * URL-decoded public ID.  Throws a descriptive error if the URL does not
- * match the expected shape.
+ * The URL is parsed with {@link URL} and validated: the hostname must end
+ * with `linkedin.com` and the pathname must start with `/in/{publicId}`.
+ * The captured slug is URL-decoded before being returned.  Relative URLs,
+ * query-embedded profile links (e.g. `?next=https://.../in/foo`), and
+ * non-LinkedIn hosts are all rejected with a descriptive error.
  *
- * @throws If `url` is not a LinkedIn profile URL.
+ * @throws If `url` is not a well-formed LinkedIn profile URL.
  */
 export function extractPublicId(url: string): string {
-  const match = LINKEDIN_PROFILE_RE.exec(url);
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(
+      `Invalid LinkedIn profile URL: ${url}. Expected format: https://www.linkedin.com/in/<public-id>`,
+    );
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  const isLinkedInHost = host === "linkedin.com" || host.endsWith(".linkedin.com");
+  if (!isLinkedInHost) {
+    throw new Error(
+      `Invalid LinkedIn profile URL: ${url}. Expected format: https://www.linkedin.com/in/<public-id>`,
+    );
+  }
+
+  const match = LINKEDIN_PROFILE_RE.exec(parsed.pathname);
   if (!match?.[1]) {
     throw new Error(
       `Invalid LinkedIn profile URL: ${url}. Expected format: https://www.linkedin.com/in/<public-id>`,

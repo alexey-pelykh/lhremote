@@ -117,6 +117,8 @@ describe("hideFeedAuthorProfile", () => {
       .mockResolvedValueOnce(true)
       // Menu scan → returns mute item
       .mockResolvedValueOnce({ kind: "mute", name: "Jane Doe" })
+      // Mute-confirmation dialog probe → no dialog present
+      .mockResolvedValueOnce({ dialogPresent: false, confirmed: false })
       // Escape dismiss
       .mockResolvedValueOnce(undefined);
 
@@ -136,8 +138,8 @@ describe("hideFeedAuthorProfile", () => {
       .mockResolvedValueOnce(true)
       // Menu scan → returns mute item (click is executed inside the evaluate)
       .mockResolvedValueOnce({ kind: "mute", name: "Jane Doe" })
-      // Mute-confirmation dialog probe → returns false (no dialog present)
-      .mockResolvedValueOnce(false)
+      // Mute-confirmation dialog probe → no dialog present
+      .mockResolvedValueOnce({ dialogPresent: false, confirmed: false })
       // Escape dismiss
       .mockResolvedValueOnce(undefined);
 
@@ -162,8 +164,8 @@ describe("hideFeedAuthorProfile", () => {
     mockClient.evaluate
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce({ kind: "mute", name: "Jane Doe" })
-      // Dialog found and confirm button clicked → returns true
-      .mockResolvedValueOnce(true)
+      // Dialog found and confirm button clicked
+      .mockResolvedValueOnce({ dialogPresent: true, confirmed: true })
       .mockResolvedValueOnce(undefined);
 
     const result = await hideFeedAuthorProfile({
@@ -176,10 +178,24 @@ describe("hideFeedAuthorProfile", () => {
     // The confirmation-dialog probe evaluate script should reference the
     // confirm label patterns.
     const confirmCall = mockClient.evaluate.mock.calls.find((args) =>
-      String(args[0]).includes("MUTE_CONFIRM") ||
       String(args[0]).includes('["Mute","Confirm"]')
     );
     expect(confirmCall).toBeDefined();
+  });
+
+  it("throws when confirmation dialog appears but no matching confirm button is clicked", async () => {
+    setupMocks();
+    mockClient.evaluate
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce({ kind: "mute", name: "Jane Doe" })
+      // Dialog present but no matching confirm button — should throw
+      // through retryInteraction, bubbling out of the retry wrapper
+      // (which is mocked as pass-through).
+      .mockResolvedValueOnce({ dialogPresent: true, confirmed: false });
+
+    await expect(
+      hideFeedAuthorProfile({ profileUrl: PROFILE_URL, cdpPort: 9222 }),
+    ).rejects.toThrow(/Mute confirmation dialog appeared/);
   });
 
   it("returns success with muted=false when dryRun is true", async () => {
