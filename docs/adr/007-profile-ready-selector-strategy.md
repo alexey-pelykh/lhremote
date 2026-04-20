@@ -10,7 +10,7 @@ Accepted (2026-04-19)
 
 The original implementation used `main h1` with a 30-second timeout. On 2026-04-19, both profile-page E2E tests (`unfollow-profile`, `hide-feed-author-profile`) began failing with identical `Timed out waiting for element "main h1" after 30000ms` errors. Diagnostic instrumentation confirmed the profile page was otherwise healthy (correct URL, correct `document.title`, `<main>` present, Message/Follow buttons rendered) — LinkedIn simply no longer wraps the profile name in an `<h1>` element.
 
-This is not an isolated failure. Historical evidence from `research/linkedin/feed-dom-selectors-20260326.md` shows LinkedIn periodically removes semantic markers from its feed and profile DOM. Any selector strategy rooted in DOM headings or CSS class names has an expected half-life on the order of weeks-to-months.
+This is not an isolated failure. Combined with prior selector breakages observed in LinkedIn feed and profile automation, this incident reinforces that LinkedIn periodically removes or reshapes semantic markers in its DOM. Any selector strategy rooted in DOM headings or CSS class names has an expected half-life on the order of weeks-to-months.
 
 ## Decision
 
@@ -70,6 +70,5 @@ Any single match indicates the profile card has hydrated far enough for follow-s
 
 ## Related
 
-- Research: `../research/linkedin/profile-page-dom-20260419.md`
 - Code: `packages/core/src/operations/navigate-to-profile.ts`
 - Branch: `fix/navigate-to-profile-diagnostics`

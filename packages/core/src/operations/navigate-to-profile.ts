@@ -28,7 +28,7 @@ export const LINKEDIN_PROFILE_RE = /^\/in\/([^/?#]+)/;
  * already key off.  Any one present indicates the profile card has
  * hydrated enough for follow-state or More-menu detection.
  */
-const PROFILE_READY_SELECTOR = [
+export const PROFILE_READY_SELECTOR = [
   'main button[aria-label^="Message"]',
   'main button[aria-label^="Follow "]',
   'main button[aria-label^="Following "]',
@@ -114,10 +114,8 @@ export async function navigateToProfile(
   try {
     await waitForElement(client, PROFILE_READY_SELECTOR, { timeout: 30_000 }, mouse);
   } catch (error) {
-    if (
-      error instanceof CDPTimeoutError &&
-      process.env.LHREMOTE_CAPTURE_DIAGNOSTICS === "1"
-    ) {
+    if (error instanceof CDPTimeoutError) {
+      // captureProfileLoadFailure self-gates on LHREMOTE_CAPTURE_DIAGNOSTICS.
       await captureProfileLoadFailure(client, publicId);
     }
     throw error;
@@ -128,34 +126,53 @@ export async function navigateToProfile(
 }
 
 /**
+ * Sanitize a value for use as a filename fragment: keep only a conservative
+ * filesystem-safe character set and cap length.  Public IDs come from
+ * `extractPublicId` which URL-decodes the slug, so encoded path separators
+ * (`%2F`, `%5C`) or parent-directory markers (`..`) could otherwise slip
+ * into the filename and allow directory traversal out of the diagnostics
+ * base directory.
+ */
+function sanitizeForFilename(value: string): string {
+  const safe = value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+  return safe.length > 0 ? safe : "unknown";
+}
+
+/**
  * Best-effort diagnostic capture when `navigateToProfile` times out waiting
  * for the profile action-button row.  Writes
  * `navigate-to-profile-{timestamp}-{publicId}.json` (URL, title, DOM
  * probes, visible text snippet) and `.png` (full-page
- * `Page.captureScreenshot`) under `${os.tmpdir()}/lhremote-diagnostics/`
- * so callers can classify the failure — auth wall, DOM change, or silent
- * navigation error.
+ * `Page.captureScreenshot` with `captureBeyondViewport: true`) under
+ * `${os.tmpdir()}/lhremote-diagnostics/` so callers can classify the
+ * failure — auth wall, DOM change, or silent navigation error.
  *
- * **Opt-in only.** Activated by `LHREMOTE_CAPTURE_DIAGNOSTICS=1`;
- * default-off in production (CLI, MCP server) because the artifacts can
- * contain personal data from the LinkedIn profile page.  E2E tests
- * activate it via `vitest.e2e.config.ts` `env` so every run produces
- * diagnostics without touching the codebase.
+ * **Opt-in only.** Self-gated on `LHREMOTE_CAPTURE_DIAGNOSTICS=1` — no-op
+ * otherwise.  Default-off in production (CLI, MCP server) because the
+ * artifacts can contain personal data from the LinkedIn profile page.
+ * E2E tests activate it via `vitest.e2e.config.ts` `env` so every run
+ * produces diagnostics without touching the codebase.
+ *
+ * `publicId` is sanitized before interpolation into the filename to
+ * prevent path traversal via URL-decoded slugs.
  *
  * Any capture-side failure is swallowed; the original timeout must
  * propagate unchanged.
+ *
+ * @internal Exported for unit testing only; not part of the public API.
  */
-async function captureProfileLoadFailure(
+export async function captureProfileLoadFailure(
   client: CDPClient,
   publicId: string,
 ): Promise<void> {
+  if (process.env.LHREMOTE_CAPTURE_DIAGNOSTICS !== "1") return;
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const baseDir = join(tmpdir(), "lhremote-diagnostics");
     await mkdir(baseDir, { recursive: true });
     const prefix = join(
       baseDir,
-      `navigate-to-profile-${timestamp}-${publicId}`,
+      `navigate-to-profile-${timestamp}-${sanitizeForFilename(publicId)}`,
     );
 
     const info = await client.evaluate<{
@@ -179,6 +196,7 @@ async function captureProfileLoadFailure(
     try {
       const screenshot = (await client.send("Page.captureScreenshot", {
         format: "png",
+        captureBeyondViewport: true,
       })) as { data?: string };
       if (screenshot.data) {
         await writeFile(`${prefix}.png`, Buffer.from(screenshot.data, "base64"));
@@ -187,7 +205,6 @@ async function captureProfileLoadFailure(
       // Screenshot is best-effort; info.json is the primary artifact.
     }
 
-    // eslint-disable-next-line no-console
     console.warn(
       `[navigateToProfile] timeout diagnostics written: ${prefix}.{json,png}`,
     );
