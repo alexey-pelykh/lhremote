@@ -186,22 +186,47 @@ describe("captureProfileLoadFailure", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("sanitizes publicId before using it in the artifact filename", async () => {
+  it("sanitizes publicId so path separators in the decoded slug can't escape the diagnostics dir", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
     const client = makeClient();
+    const { writeFile } = await import("node:fs/promises");
+    const writeFileMock = vi.mocked(writeFile);
+    writeFileMock.mockClear();
 
-    // Any of these would otherwise escape the base directory or produce
-    // invalid filenames on Windows/macOS.  sanitizeForFilename replaces
-    // every non-`[a-zA-Z0-9._-]` char with `_`.
+    // `extractPublicId` URL-decodes before returning, so `%2F`, `%5C`,
+    // and traversal fragments can reach this code.  Sanitization must
+    // replace any path separator in the slug so the final path stays
+    // a direct child of `${tmpdir()}/lhremote-diagnostics/`.
     await captureProfileLoadFailure(client, "../../../etc/passwd");
-    await captureProfileLoadFailure(client, "slug with spaces");
+    await captureProfileLoadFailure(client, "slug\\with\\backslashes");
     await captureProfileLoadFailure(client, "slug/with/slashes");
+    await captureProfileLoadFailure(client, "slug with spaces");
 
-    // The function completes without throwing for any of these inputs;
-    // filesystem writes are mocked.  The sanitization is verified
-    // indirectly by the absence of an exception — direct path assertion
-    // would couple the test to the mocked mkdir/writeFile signatures.
-    expect(client.evaluate).toHaveBeenCalledTimes(3);
+    // Each capture writes a .json (and attempts a .png) — at minimum
+    // the .json calls must have been made for all four inputs.
+    expect(writeFileMock.mock.calls.length).toBeGreaterThanOrEqual(4);
+
+    for (const call of writeFileMock.mock.calls) {
+      const filePath = String(call[0]);
+      const lastSep = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+      const baseDir = lastSep >= 0 ? filePath.slice(0, lastSep) : "";
+      const filename = lastSep >= 0 ? filePath.slice(lastSep + 1) : filePath;
+
+      // The basename must contain no path separator — otherwise the
+      // file would escape baseDir when joined.
+      expect(filename).not.toMatch(/[/\\]/);
+      // The basename must follow the expected shape: the
+      // navigate-to-profile prefix + timestamp + sanitized slug +
+      // extension.  No stray `..` segments that are separated from
+      // other chars by `/` — we already asserted no `/` — so the
+      // filename as a whole stays in-directory.
+      expect(filename).toMatch(
+        /^navigate-to-profile-[\w.-]+\.(json|png)$/,
+      );
+      // And the parent directory must still end at the diagnostics
+      // base dir.
+      expect(baseDir).toMatch(/lhremote-diagnostics$/);
+    }
   });
 });
 
