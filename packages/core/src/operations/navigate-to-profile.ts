@@ -139,6 +139,14 @@ function sanitizeForFilename(value: string): string {
 }
 
 /**
+ * Cap on the wall-clock time the diagnostic capture may take before it is
+ * abandoned.  Without this, a misbehaving CDP connection could prolong
+ * error propagation by up to `CDPClient.send`'s own timeout per call
+ * (`Runtime.evaluate` + `Page.captureScreenshot`).
+ */
+const DIAGNOSTIC_CAPTURE_TIMEOUT_MS = 10_000;
+
+/**
  * Best-effort diagnostic capture when `navigateToProfile` times out waiting
  * for the profile action-button row.  Writes
  * `navigate-to-profile-{timestamp}-{publicId}.json` (URL, title, DOM
@@ -156,8 +164,14 @@ function sanitizeForFilename(value: string): string {
  * `publicId` is sanitized before interpolation into the filename to
  * prevent path traversal via URL-decoded slugs.
  *
- * Any capture-side failure is swallowed; the original timeout must
- * propagate unchanged.
+ * The diagnostics directory is created with mode `0o700` and files with
+ * mode `0o600` (POSIX; no-op on Windows) so that personal data in a
+ * shared `os.tmpdir()` is not exposed to other local users.
+ *
+ * The whole capture is bounded by
+ * {@link DIAGNOSTIC_CAPTURE_TIMEOUT_MS}; any capture-side failure or
+ * overrun is swallowed so the original timeout always propagates
+ * unchanged.
  *
  * @internal Exported for unit testing only; not part of the public API.
  */
@@ -166,49 +180,71 @@ export async function captureProfileLoadFailure(
   publicId: string,
 ): Promise<void> {
   if (process.env.LHREMOTE_CAPTURE_DIAGNOSTICS !== "1") return;
+  let bound: NodeJS.Timeout | undefined;
   try {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const baseDir = join(tmpdir(), "lhremote-diagnostics");
-    await mkdir(baseDir, { recursive: true });
-    const prefix = join(
-      baseDir,
-      `navigate-to-profile-${timestamp}-${sanitizeForFilename(publicId)}`,
-    );
-
-    const info = await client.evaluate<{
-      href: string;
-      title: string;
-      hasMain: boolean;
-      hasH1: boolean;
-      hasMainH1: boolean;
-      bodyTextSnippet: string;
-    }>(`(() => ({
-      href: location.href,
-      title: document.title,
-      hasMain: document.querySelector("main") !== null,
-      hasH1: document.querySelector("h1") !== null,
-      hasMainH1: document.querySelector("main h1") !== null,
-      bodyTextSnippet: (document.body ? document.body.innerText : "").slice(0, 800),
-    }))()`);
-
-    await writeFile(`${prefix}.json`, JSON.stringify(info, null, 2), "utf8");
-
-    try {
-      const screenshot = (await client.send("Page.captureScreenshot", {
-        format: "png",
-        captureBeyondViewport: true,
-      })) as { data?: string };
-      if (screenshot.data) {
-        await writeFile(`${prefix}.png`, Buffer.from(screenshot.data, "base64"));
-      }
-    } catch {
-      // Screenshot is best-effort; info.json is the primary artifact.
-    }
-
-    console.warn(
-      `[navigateToProfile] timeout diagnostics written: ${prefix}.{json,png}`,
-    );
+    await Promise.race([
+      captureProfileLoadFailureInner(client, publicId),
+      new Promise<void>((resolve) => {
+        bound = setTimeout(resolve, DIAGNOSTIC_CAPTURE_TIMEOUT_MS);
+      }),
+    ]);
   } catch {
     // Capture itself failed; do not mask the caller's timeout.
+  } finally {
+    if (bound !== undefined) clearTimeout(bound);
   }
+}
+
+async function captureProfileLoadFailureInner(
+  client: CDPClient,
+  publicId: string,
+): Promise<void> {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const baseDir = join(tmpdir(), "lhremote-diagnostics");
+  // 0o700: owner-only rwx.  POSIX-only; no-op on Windows.
+  await mkdir(baseDir, { recursive: true, mode: 0o700 });
+  const prefix = join(
+    baseDir,
+    `navigate-to-profile-${timestamp}-${sanitizeForFilename(publicId)}`,
+  );
+
+  const info = await client.evaluate<{
+    href: string;
+    title: string;
+    hasMain: boolean;
+    hasH1: boolean;
+    hasMainH1: boolean;
+    bodyTextSnippet: string;
+  }>(`(() => ({
+    href: location.href,
+    title: document.title,
+    hasMain: document.querySelector("main") !== null,
+    hasH1: document.querySelector("h1") !== null,
+    hasMainH1: document.querySelector("main h1") !== null,
+    bodyTextSnippet: (document.body ? document.body.innerText : "").slice(0, 800),
+  }))()`);
+
+  // 0o600: owner-only rw.  POSIX-only; no-op on Windows.
+  await writeFile(`${prefix}.json`, JSON.stringify(info, null, 2), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+
+  try {
+    const screenshot = (await client.send("Page.captureScreenshot", {
+      format: "png",
+      captureBeyondViewport: true,
+    })) as { data?: string };
+    if (screenshot.data) {
+      await writeFile(`${prefix}.png`, Buffer.from(screenshot.data, "base64"), {
+        mode: 0o600,
+      });
+    }
+  } catch {
+    // Screenshot is best-effort; info.json is the primary artifact.
+  }
+
+  console.warn(
+    `[navigateToProfile] timeout diagnostics written: ${prefix}.{json,png}`,
+  );
 }
