@@ -9,5 +9,12 @@ export default defineConfig({
     exclude: ["**/node_modules/**", "**/dist/**"],
     passWithNoTests: true,
     fileParallelism: false,
+    env: {
+      // Opt in to timeout-failure diagnostics (screenshots, DOM probes)
+      // for every E2E run.  Production callers (CLI, MCP) remain default-off
+      // — see `captureProfileLoadFailure` in navigate-to-profile.ts and
+      // ADR-007.
+      LHREMOTE_CAPTURE_DIAGNOSTICS: "1",
+    },
   },
 });

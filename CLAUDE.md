@@ -58,6 +58,7 @@ Do **not** dismiss or ignore Copilot feedback. Every comment must be explicitly 
 - Run a single E2E file: `pnpm --filter @lhremote/e2e test:e2e:file <pattern>` (e.g., `list-accounts`). Do **not** use `--` before the pattern — pnpm forwards it literally and vitest ignores args after `--` for file filtering.
 - E2E tests must assert preconditions explicitly — never silently skip via `if (accounts.length > 0)`. Use `resolveAccountId(port)` from `@lhremote/core/testing` which throws if no accounts exist.
 - Shared E2E helpers (`resolveAccountId`, `forceStopInstance`, `assertDefined`, `getE2EPersonId`) are exported from `@lhremote/core/testing` — do not duplicate them locally in test files.
+- `navigateToProfile` can capture timeout diagnostics (URL, `document.title`, DOM probes, full-page screenshot) under `${os.tmpdir()}/lhremote-diagnostics/` on `CDPTimeoutError`. Activation is gated on `LHREMOTE_CAPTURE_DIAGNOSTICS=1`; E2E runs set it via `vitest.e2e.config.ts`, CLI/MCP are default-off (see ADR-007). Inspect these artifacts before changing profile selectors.
 
 ## Infrastructure
 
@@ -86,6 +87,7 @@ Architecture Decision Records live in `docs/adr/` and explain *why* the codebase
 | [004](docs/adr/004-three-tier-testing-strategy.md) | Three-tier testing strategy | `*.test.ts`, `*.integration.test.ts`, `packages/e2e/` |
 | [005](docs/adr/005-error-hierarchy-design.md) | Error hierarchy design | `packages/core/src/*/errors.ts` |
 | [006](docs/adr/006-operations-layer.md) | Operations layer | `packages/core/src/operations/` |
+| [007](docs/adr/007-profile-ready-selector-strategy.md) | Profile page readiness selector strategy | `packages/core/src/operations/navigate-to-profile.ts` |
 
 ## Task Tracking
 
