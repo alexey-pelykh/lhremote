@@ -12,6 +12,9 @@ catalogs:
     '@modelcontextprotocol/sdk':
       specifier: ^1.26.0
       version: 1.26.0
+    '@tony.ganchev/eslint-plugin-header':
+      specifier: ^3.3.1
+      version: 3.3.1
     '@types/node':
       specifier: ^25
       version: 25.2.3
@@ -27,9 +30,6 @@ catalogs:
     eslint-config-prettier:
       specifier: ^10.1.8
       version: 10.1.8
-    eslint-plugin-header:
-      specifier: ^3.1.1
-      version: 3.1.1
     get-port:
       specifier: ^7.1.0
       version: 7.1.0
@@ -74,6 +74,9 @@ importers:
       '@eslint/js':
         specifier: 'catalog:'
         version: 9.39.2
+      '@tony.ganchev/eslint-plugin-header':
+        specifier: 'catalog:'
+        version: 3.3.1(eslint@9.39.2)
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 4.0.18(vitest@4.0.18(@types/node@25.2.3)(yaml@2.8.2))
@@ -83,9 +86,6 @@ importers:
       eslint-config-prettier:
         specifier: 'catalog:'
         version: 10.1.8(eslint@9.39.2)
-      eslint-plugin-header:
-        specifier: 'catalog:'
-        version: 3.1.1(eslint@9.39.2)
       prettier:
         specifier: 'catalog:'
         version: 3.8.1
@@ -648,6 +648,11 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
+  '@tony.ganchev/eslint-plugin-header@3.3.1':
+    resolution: {integrity: sha512-/Fj0+DaXbBfrlXmd3wBZkB8TIwGT3N++y/oTYxRABK/gzNxjgcBjt63xBpuHCYIXmH1EwuALd6XS1fzNG4S0zg==}
+    peerDependencies:
+      eslint: '>=7.7.0'
+
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -949,11 +954,6 @@ packages:
     hasBin: true
     peerDependencies:
       eslint: '>=7.0.0'
-
-  eslint-plugin-header@3.1.1:
-    resolution: {integrity: sha512-9vlKxuJ4qf793CmeeSrZUvVClw6amtpghq3CuWcB5cUNnWHQhgcqy5eF8oVKFk1G3Y/CbchGfEaw3wiIJaNmVg==}
-    peerDependencies:
-      eslint: '>=7.7.0'
 
   eslint-scope@8.4.0:
     resolution: {integrity: sha512-sNXOfKCn74rt8RICKMvJS7XKV/Xk9kA7DyJr8mJik3S7Cwgy3qlkkmyS2uQB3jiJg6VNdZd/pDBJu0nvG2NlTg==}
@@ -2055,6 +2055,10 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
+  '@tony.ganchev/eslint-plugin-header@3.3.1(eslint@9.39.2)':
+    dependencies:
+      eslint: 9.39.2
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -2404,10 +2408,6 @@ snapshots:
   escape-string-regexp@4.0.0: {}
 
   eslint-config-prettier@10.1.8(eslint@9.39.2):
-    dependencies:
-      eslint: 9.39.2
-
-  eslint-plugin-header@3.1.1(eslint@9.39.2):
     dependencies:
       eslint: 9.39.2
 
