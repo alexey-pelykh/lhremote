@@ -4,18 +4,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CDPClient } from "../cdp/client.js";
-import {
+
+// Register the fs-promises mock BEFORE importing the module under test.
+// `navigate-to-profile.ts` imports `node:fs/promises` at module load;
+// relying on Vitest's vi.mock hoisting to cover this is brittle under
+// ESM transforms.  Dynamic-import after the mock guarantees the mocked
+// version is the one the module sees.
+vi.mock("node:fs/promises", () => ({
+  mkdir: vi.fn().mockResolvedValue(undefined),
+  writeFile: vi.fn().mockResolvedValue(undefined),
+}));
+
+const {
   buildProfileUrl,
   captureProfileLoadFailure,
   extractPublicId,
   LINKEDIN_PROFILE_RE,
   PROFILE_READY_SELECTOR,
-} from "./navigate-to-profile.js";
-
-vi.mock("node:fs/promises", () => ({
-  mkdir: vi.fn().mockResolvedValue(undefined),
-  writeFile: vi.fn().mockResolvedValue(undefined),
-}));
+} = await import("./navigate-to-profile.js");
 
 describe("LINKEDIN_PROFILE_RE", () => {
   it.each([

@@ -139,12 +139,23 @@ function sanitizeForFilename(value: string): string {
 }
 
 /**
- * Cap on the wall-clock time the diagnostic capture may take before it is
- * abandoned.  Without this, a misbehaving CDP connection could prolong
- * error propagation by up to `CDPClient.send`'s own timeout per call
- * (`Runtime.evaluate` + `Page.captureScreenshot`).
+ * Cap on the wall-clock time the diagnostic capture is awaited before the
+ * caller's timeout is re-thrown.  Without this, a misbehaving CDP
+ * connection could prolong error propagation by up to `CDPClient.send`'s
+ * own timeout per call (`Runtime.evaluate` + `Page.captureScreenshot`).
  */
 const DIAGNOSTIC_CAPTURE_TIMEOUT_MS = 10_000;
+
+/**
+ * Mutable cancellation state shared between the outer wrapper and the
+ * inner capture body.  The wrapper flips `timedOut` when the bound timer
+ * wins the race; the inner body checks between each async step and
+ * returns early, giving up any remaining writes so the process can exit
+ * promptly.
+ */
+interface CaptureCancellationState {
+  timedOut: boolean;
+}
 
 /**
  * Best-effort diagnostic capture when `navigateToProfile` times out waiting
@@ -168,10 +179,17 @@ const DIAGNOSTIC_CAPTURE_TIMEOUT_MS = 10_000;
  * mode `0o600` (POSIX; no-op on Windows) so that personal data in a
  * shared `os.tmpdir()` is not exposed to other local users.
  *
- * The whole capture is bounded by
- * {@link DIAGNOSTIC_CAPTURE_TIMEOUT_MS}; any capture-side failure or
- * overrun is swallowed so the original timeout always propagates
- * unchanged.
+ * The capture is cooperatively cancellable and bounded by
+ * {@link DIAGNOSTIC_CAPTURE_TIMEOUT_MS}: the outer wrapper stops awaiting
+ * at the cap, and the inner body checks a shared cancellation flag
+ * between each step and returns early when it flips — so remaining CDP
+ * calls and disk writes are skipped rather than merely un-awaited.  In
+ * rare cases the in-flight async step started before the cap may still
+ * complete in the background; the process is not held alive by this
+ * function beyond the cap plus any such single in-flight step.
+ *
+ * Any capture-side failure is swallowed so the original timeout always
+ * propagates unchanged.
  *
  * @internal Exported for unit testing only; not part of the public API.
  */
@@ -180,12 +198,16 @@ export async function captureProfileLoadFailure(
   publicId: string,
 ): Promise<void> {
   if (process.env.LHREMOTE_CAPTURE_DIAGNOSTICS !== "1") return;
+  const state: CaptureCancellationState = { timedOut: false };
   let bound: NodeJS.Timeout | undefined;
   try {
     await Promise.race([
-      captureProfileLoadFailureInner(client, publicId),
+      captureProfileLoadFailureInner(client, publicId, state),
       new Promise<void>((resolve) => {
-        bound = setTimeout(resolve, DIAGNOSTIC_CAPTURE_TIMEOUT_MS);
+        bound = setTimeout(() => {
+          state.timedOut = true;
+          resolve();
+        }, DIAGNOSTIC_CAPTURE_TIMEOUT_MS);
       }),
     ]);
   } catch {
@@ -198,11 +220,13 @@ export async function captureProfileLoadFailure(
 async function captureProfileLoadFailureInner(
   client: CDPClient,
   publicId: string,
+  state: CaptureCancellationState,
 ): Promise<void> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const baseDir = join(tmpdir(), "lhremote-diagnostics");
   // 0o700: owner-only rwx.  POSIX-only; no-op on Windows.
   await mkdir(baseDir, { recursive: true, mode: 0o700 });
+  if (state.timedOut) return;
   const prefix = join(
     baseDir,
     `navigate-to-profile-${timestamp}-${sanitizeForFilename(publicId)}`,
@@ -223,18 +247,21 @@ async function captureProfileLoadFailureInner(
     hasMainH1: document.querySelector("main h1") !== null,
     bodyTextSnippet: (document.body ? document.body.innerText : "").slice(0, 800),
   }))()`);
+  if (state.timedOut) return;
 
   // 0o600: owner-only rw.  POSIX-only; no-op on Windows.
   await writeFile(`${prefix}.json`, JSON.stringify(info, null, 2), {
     encoding: "utf8",
     mode: 0o600,
   });
+  if (state.timedOut) return;
 
   try {
     const screenshot = (await client.send("Page.captureScreenshot", {
       format: "png",
       captureBeyondViewport: true,
     })) as { data?: string };
+    if (state.timedOut) return;
     if (screenshot.data) {
       await writeFile(`${prefix}.png`, Buffer.from(screenshot.data, "base64"), {
         mode: 0o600,
@@ -243,6 +270,7 @@ async function captureProfileLoadFailureInner(
   } catch {
     // Screenshot is best-effort; info.json is the primary artifact.
   }
+  if (state.timedOut) return;
 
   console.warn(
     `[navigateToProfile] timeout diagnostics written: ${prefix}.{json,png}`,
