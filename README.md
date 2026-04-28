@@ -193,6 +193,7 @@ lhremote get-profile-activity <profile> [--count <n>] [--cursor <token>] [--cdp-
 lhremote search-posts <query> [--count <n>] [--cursor <n>] [--cdp-port <port>] [--json]
 lhremote comment-on-post --url <url> --text <text> [--cdp-port <port>] [--json]
 lhremote react-to-post <postUrl> [--type <like|celebrate|support|love|insightful|funny>] [--cdp-port <port>] [--json]
+lhremote react-to-comment <postUrl> <commentUrn> [--type <like|celebrate|support|love|insightful|funny>] [--dry-run] [--cdp-port <port>] [--json]
 ```
 
 ### LinkedIn Search & Reference
@@ -884,6 +885,18 @@ React to a LinkedIn post with a specific reaction type.
 |-----------|------|----------|---------|-------------|
 | `postUrl` | string | Yes | — | LinkedIn post URL |
 | `reactionType` | string | No | `like` | `like`, `celebrate`, `support`, `love`, `insightful`, or `funny` |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `react-to-comment`
+
+React to a specific LinkedIn comment with a specific reaction type. Use this for the organic-engagement pattern of acknowledging a reply (e.g., the post author replied to your comment) without extending the thread. Mirrors `react-to-post` semantics scoped to one comment via its URN (as returned by `get-post`'s `commentUrn` field).
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `postUrl` | string | Yes | — | LinkedIn post URL containing the target comment |
+| `commentUrn` | string | Yes | — | Comment URN (e.g. `urn:li:comment:(activity:1234567890,9876543210)`) |
+| `reactionType` | string | No | `like` | `like`, `celebrate`, `support`, `love`, `insightful`, or `funny` |
+| `dryRun` | boolean | No | `false` | When true, detects current reaction state without clicking |
 | `cdpPort` | number | No | 9222 | CDP port |
 
 ### LinkedIn Search & Reference

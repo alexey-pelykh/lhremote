@@ -75,6 +75,7 @@ import {
   handleVisitProfile,
   handleQuitApp,
   handleReactToPost,
+  handleReactToComment,
   handleStartInstance,
   handleStopInstance,
   handleUnfollowFromFeed,
@@ -780,6 +781,23 @@ export function createProgram(): Command {
     .option("--dry-run", "Detect current reaction state without clicking")
     .option("--json", "Output as JSON")
     .action(handleReactToPost);
+
+  program
+    .command("react-to-comment")
+    .description("React to a specific LinkedIn comment with a specific reaction type")
+    .argument("<postUrl>", "LinkedIn post URL containing the target comment")
+    .argument("<commentUrn>", "Comment URN (urn:li:comment:(activity:...,...))")
+    .addOption(
+      new Option("--type <type>", "Reaction type (default: like)")
+        .choices(["like", "celebrate", "support", "love", "insightful", "funny"])
+        .default("like"),
+    )
+    .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--dry-run", "Detect current reaction state without clicking")
+    .option("--json", "Output as JSON")
+    .action(handleReactToComment);
 
   program
     .command("unfollow-from-feed")

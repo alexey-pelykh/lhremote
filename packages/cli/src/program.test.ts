@@ -87,6 +87,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("get-post-stats");
     expect(commandNames).toContain("get-feed");
     expect(commandNames).toContain("react-to-post");
+    expect(commandNames).toContain("react-to-comment");
     expect(commandNames).toContain("get-profile-activity");
     expect(commandNames).toContain("build-url");
     expect(commandNames).toContain("resolve-entity");
@@ -108,7 +109,7 @@ describe("createProgram", () => {
     expect(commandNames).toContain("hide-feed-author");
     expect(commandNames).toContain("hide-feed-author-profile");
     expect(commandNames).toContain("unfollow-profile");
-    expect(commandNames).toHaveLength(73);
+    expect(commandNames).toHaveLength(74);
   });
 
   describe("launch-app", () => {

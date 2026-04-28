@@ -20,12 +20,14 @@ import {
   discoverTargets,
   dismissErrors,
   LauncherService,
+  reactToComment,
   reactToPost,
   startInstanceWithRecovery,
 } from "@lhremote/core";
 import type {
   VisitProfileOutput,
   EphemeralActionResult,
+  ReactToCommentOutput,
   ReactToPostOutput,
   CommentOnPostOutput,
 } from "@lhremote/core";
@@ -37,6 +39,7 @@ import {
   handleEndorseSkills,
   handleLikePersonPosts,
   handleReactToPost,
+  handleReactToComment,
   handleCommentOnPost,
 } from "@lhremote/cli/handlers";
 
@@ -47,6 +50,7 @@ import {
   registerEndorseSkills,
   registerLikePersonPosts,
   registerReactToPost,
+  registerReactToComment,
   registerCommentOnPost,
 } from "@lhremote/mcp/tools";
 import { createMockServer } from "@lhremote/mcp/testing";
@@ -549,6 +553,213 @@ describeE2E("engagement operations", () => {
 
         expect(parsed.success).toBe(true);
         expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.reactionType).toBe("insightful");
+        expect(parsed.alreadyReacted).toBe(false);
+      }, 120_000);
+    });
+  });
+
+  // ── react-to-comment ──────────────────────────────────────────────
+
+  describe("react-to-comment", () => {
+    describe("CLI handlers", () => {
+      const originalExitCode = process.exitCode;
+
+      beforeEach(() => {
+        process.exitCode = undefined;
+      });
+
+      afterEach(() => {
+        process.exitCode = originalExitCode;
+        vi.restoreAllMocks();
+      });
+
+      it("react-to-comment --json returns reaction result (like)", async () => {
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleReactToComment(postUrl, commentUrn, { cdpPort, json: true });
+
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
+        const parsed = JSON.parse(output) as ReactToCommentOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.commentUrn).toBe(commentUrn);
+        expect(parsed.reactionType).toBe("like");
+        expect(typeof parsed.alreadyReacted).toBe("boolean");
+      }, 120_000);
+
+      it("react-to-comment --json --dry-run reports dry-run result", async () => {
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleReactToComment(postUrl, commentUrn, {
+          cdpPort,
+          json: true,
+          dryRun: true,
+        });
+
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
+        const parsed = JSON.parse(output) as ReactToCommentOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.commentUrn).toBe(commentUrn);
+        expect(parsed.reactionType).toBe("like");
+        expect(parsed.dryRun).toBe(true);
+      }, 120_000);
+
+      it("react-to-comment --dry-run (human-friendly) includes [dry-run] prefix", async () => {
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleReactToComment(postUrl, commentUrn, { cdpPort, dryRun: true });
+
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
+
+        const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
+        expect(output).toContain("[dry-run]");
+      }, 120_000);
+
+      it("react-to-comment --json with insightful reaction uses popup", async () => {
+        // Ensure comment is in "like" state so the insightful reaction
+        // exercises the unreact-then-react popup path regardless of
+        // leftover state from previous test runs.
+        await reactToComment({
+          postUrl,
+          commentUrn,
+          reactionType: "like",
+          cdpPort,
+        });
+
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+        const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+        await handleReactToComment(postUrl, commentUrn, {
+          cdpPort,
+          type: "insightful",
+          json: true,
+        });
+
+        const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+        expect(process.exitCode, `CLI handler error: ${stderr}`).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
+        const parsed = JSON.parse(output) as ReactToCommentOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.commentUrn).toBe(commentUrn);
+        expect(parsed.reactionType).toBe("insightful");
+        expect(parsed.alreadyReacted).toBe(false);
+      }, 120_000);
+    });
+
+    describe("MCP tools", () => {
+      it("react-to-comment tool returns valid JSON (like)", async () => {
+        const { server, getHandler } = createMockServer();
+        registerReactToComment(server);
+
+        const handler = getHandler("react-to-comment");
+        const result = (await handler({
+          postUrl,
+          commentUrn,
+          reactionType: "like",
+          cdpPort,
+        })) as {
+          isError?: boolean;
+          content: { type: string; text: string }[];
+        };
+
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
+        expect(result.content).toHaveLength(1);
+
+        const parsed = JSON.parse(
+          (result.content[0] as { text: string }).text,
+        ) as ReactToCommentOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.commentUrn).toBe(commentUrn);
+        expect(parsed.reactionType).toBe("like");
+      }, 120_000);
+
+      it("react-to-comment tool returns valid dry-run JSON", async () => {
+        const { server, getHandler } = createMockServer();
+        registerReactToComment(server);
+
+        const handler = getHandler("react-to-comment");
+        const result = (await handler({
+          postUrl,
+          commentUrn,
+          reactionType: "like",
+          cdpPort,
+          dryRun: true,
+        })) as {
+          isError?: boolean;
+          content: { type: string; text: string }[];
+        };
+
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
+        expect(result.content).toHaveLength(1);
+
+        const parsed = JSON.parse(
+          (result.content[0] as { text: string }).text,
+        ) as ReactToCommentOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.commentUrn).toBe(commentUrn);
+        expect(parsed.reactionType).toBe("like");
+        expect(parsed.dryRun).toBe(true);
+      }, 120_000);
+
+      it("react-to-comment tool with insightful reaction uses popup", async () => {
+        // Ensure comment is in "like" state so the insightful reaction
+        // exercises the unreact-then-react popup path regardless of
+        // leftover state from previous test runs.
+        await reactToComment({
+          postUrl,
+          commentUrn,
+          reactionType: "like",
+          cdpPort,
+        });
+
+        const { server, getHandler } = createMockServer();
+        registerReactToComment(server);
+
+        const handler = getHandler("react-to-comment");
+        const result = (await handler({
+          postUrl,
+          commentUrn,
+          reactionType: "insightful",
+          cdpPort,
+        })) as {
+          isError?: boolean;
+          content: { type: string; text: string }[];
+        };
+
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
+        expect(result.content).toHaveLength(1);
+
+        const parsed = JSON.parse(
+          (result.content[0] as { text: string }).text,
+        ) as ReactToCommentOutput;
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.postUrl).toBe(postUrl);
+        expect(parsed.commentUrn).toBe(commentUrn);
         expect(parsed.reactionType).toBe("insightful");
         expect(parsed.alreadyReacted).toBe(false);
       }, 120_000);
