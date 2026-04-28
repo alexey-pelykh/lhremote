@@ -101,6 +101,50 @@ export const REACTION_FUNNY =
  */
 export const COMMENT_REPLY_BUTTON = 'button[aria-label^="Reply to "]';
 
+/**
+ * State-bearing reaction button inside a comment `article`.
+ *
+ * Each comment has a direct Like-toggle button whose `aria-label`
+ * encodes both the action and the current state:
+ *
+ * - Not reacted:  `"React Like to {name}'s comment"`
+ * - Reacted:      `"Unreact Like"` / `"Unreact Like to {name}'s comment"`
+ *                 (and `"Unreact Celebrate"`, `"Unreact Support"`, etc.,
+ *                 when the user reacted with a non-Like reaction via the
+ *                 popup).
+ *
+ * Reading this button's `aria-label` is sufficient for state detection.
+ * Clicking it directly applies/unreacts a Like — but to apply a NON-Like
+ * reaction (Celebrate, Support, Love, Insightful, Funny), the
+ * {@link COMMENT_REACTIONS_MENU} button must be used to open the popup.
+ *
+ * Compose with an article scope, e.g.
+ * `article[data-id="${commentUrn}"] ${COMMENT_REACTION_TRIGGER}`.
+ * Both branches are wrapped in `:is(...)` so the article scope applies
+ * to BOTH branches.
+ */
+export const COMMENT_REACTION_TRIGGER =
+  'button:is([aria-label^="React Like to "], [aria-label^="Unreact "])';
+
+/**
+ * Popup-opening button inside a comment `article`.
+ *
+ * Distinct from the state-bearing {@link COMMENT_REACTION_TRIGGER}.
+ * Hovering this button expands the reactions popup with all 6
+ * reaction buttons (Like / Celebrate / Support / Love / Insightful /
+ * Funny), which then match the post-level {@link REACTION_LIKE},
+ * {@link REACTION_CELEBRATE}, etc. selectors.
+ *
+ * Compose with an article scope, e.g.
+ * `article[data-id="${commentUrn}"] ${COMMENT_REACTIONS_MENU}`.
+ *
+ * On the post itself, an `"Open reactions menu"`-labeled button also
+ * exists alongside the post-level reaction trigger.  Always scope to
+ * the comment article to avoid cross-scope matches.
+ */
+export const COMMENT_REACTIONS_MENU =
+  'button[aria-label="Open reactions menu"]';
+
 // ── Mention autocomplete ─────────────────────────────────────────
 
 /**
@@ -144,6 +188,8 @@ export const SELECTORS = {
   FEED_POST_CONTAINER,
   COMMENT_INPUT,
   COMMENT_REPLY_BUTTON,
+  COMMENT_REACTION_TRIGGER,
+  COMMENT_REACTIONS_MENU,
   MENTION_TYPEAHEAD,
   MENTION_OPTION,
   REACTION_TRIGGER,

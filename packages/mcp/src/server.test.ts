@@ -130,6 +130,7 @@ describe("createServer", () => {
     expect(names).toContain("get-post-stats");
     expect(names).toContain("get-throttle-status");
     expect(names).toContain("react-to-post");
+    expect(names).toContain("react-to-comment");
     expect(names).toContain("visit-profile");
     expect(names).toContain("search-posts");
     expect(names).toContain("comment-on-post");
@@ -148,6 +149,6 @@ describe("createServer", () => {
     expect(names).toContain("hide-feed-author");
     expect(names).toContain("hide-feed-author-profile");
     expect(names).toContain("unfollow-profile");
-    expect(names).toHaveLength(74);
+    expect(names).toHaveLength(75);
   });
 });

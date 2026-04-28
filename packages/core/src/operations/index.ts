@@ -297,6 +297,11 @@ export {
   type ReactionType,
 } from "./react-to-post.js";
 export {
+  reactToComment,
+  type ReactToCommentInput,
+  type ReactToCommentOutput,
+} from "./react-to-comment.js";
+export {
   unfollowFromFeed,
   type UnfollowFromFeedInput,
   type UnfollowFromFeedOutput,
