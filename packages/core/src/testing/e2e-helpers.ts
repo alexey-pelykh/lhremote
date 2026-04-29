@@ -296,6 +296,27 @@ export function getE2EProfileUrl(): string {
 }
 
 /**
+ * Read the `LHREMOTE_E2E_COMPANY_URL` environment variable.
+ *
+ * Returns a LinkedIn company URL used for company-page E2E tests
+ * (unfollow-profile against `/company/{slug}/`).  The URL should point
+ * to an organization that the test account either follows or does not
+ * follow — both states exercise the company-page detection path.
+ *
+ * Pair with `unfollow-profile.e2e.test.ts` to confirm the empirical
+ * premise of ADR-007's 2026-04-29 amendment: that the same readiness
+ * selector and Follow/Following aria-label detection works on company
+ * pages as on member profiles.
+ *
+ * @throws if `LHREMOTE_E2E_COMPANY_URL` is not set or is empty.
+ */
+export function getE2ECompanyUrl(): string {
+  const url = process.env.LHREMOTE_E2E_COMPANY_URL;
+  if (!url) throw new Error("LHREMOTE_E2E_COMPANY_URL must be set");
+  return url;
+}
+
+/**
  * Connect to the launcher, list accounts, and return the first account ID.
  *
  * Fails the test if no accounts are configured in LinkedHelper.

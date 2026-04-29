@@ -39,17 +39,29 @@ export async function handleUnfollowProfile(
     return;
   }
 
+  const targetLabel = result.targetKind === "company" ? "Company" : "Profile";
+  const pageLabel =
+    result.targetKind === "company" ? "company page" : "profile page";
+
   if (result.priorState === "not_following") {
     process.stdout.write(
-      `Profile "${result.publicId}" was not being followed (no action taken)\n`,
+      `${targetLabel} "${result.publicId}" was not being followed (no action taken)\n`,
     );
     return;
   }
 
   if (result.priorState === "unknown") {
+    // "private/blocked" describes member profiles; companies are
+    // "restricted" rather than "private", so use kind-specific wording
+    // so the message accurately describes why the page may have hidden
+    // the Follow / Following toggle.
+    const accessReason =
+      result.targetKind === "company"
+        ? "restricted/unavailable company"
+        : "private/blocked profile";
     process.stdout.write(
       `Could not detect follow state for "${result.publicId}" ` +
-        "(private/blocked profile, or LinkedIn DOM changed — no action taken)\n",
+        `(${accessReason}, or LinkedIn DOM changed — no action taken)\n`,
     );
     return;
   }
@@ -57,13 +69,13 @@ export async function handleUnfollowProfile(
   const name = result.unfollowedName ?? result.publicId;
   if (result.dryRun) {
     process.stdout.write(
-      `[dry-run] Would unfollow "${name}" from their profile page\n` +
-        `  Profile: ${result.profileUrl}\n`,
+      `[dry-run] Would unfollow "${name}" from the ${pageLabel}\n` +
+        `  ${targetLabel}: ${result.profileUrl}\n`,
     );
   } else {
     process.stdout.write(
-      `Unfollowed "${name}" from their profile page\n` +
-        `  Profile: ${result.profileUrl}\n`,
+      `Unfollowed "${name}" from the ${pageLabel}\n` +
+        `  ${targetLabel}: ${result.profileUrl}\n`,
     );
   }
 }

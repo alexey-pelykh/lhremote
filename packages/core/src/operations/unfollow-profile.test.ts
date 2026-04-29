@@ -27,16 +27,18 @@ vi.mock("./navigate-to-profile.js", async (importOriginal) => {
   return {
     ...actual,
     navigateToProfile: vi.fn().mockResolvedValue(undefined),
+    navigateToCompany: vi.fn().mockResolvedValue(undefined),
   };
 });
 
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { retryInteraction } from "../linkedin/dom-automation.js";
-import { navigateToProfile } from "./navigate-to-profile.js";
+import { navigateToCompany, navigateToProfile } from "./navigate-to-profile.js";
 import { unfollowProfile } from "./unfollow-profile.js";
 
 const PROFILE_URL = "https://www.linkedin.com/in/jane-doe/";
+const COMPANY_URL = "https://www.linkedin.com/company/mirohq/";
 const FOLLOWING_SELECTOR = 'main button[aria-label^="Following "]';
 const FOLLOW_SELECTOR = 'main button[aria-label^="Follow "]';
 
@@ -78,7 +80,7 @@ describe("unfollowProfile", () => {
         profileUrl: "https://example.com/not-a-profile",
         cdpPort: 9222,
       }),
-    ).rejects.toThrow("Invalid LinkedIn profile URL");
+    ).rejects.toThrow("Invalid LinkedIn profile or company URL");
 
     expect(discoverTargets).not.toHaveBeenCalled();
   });
@@ -139,6 +141,7 @@ describe("unfollowProfile", () => {
       success: true,
       profileUrl: PROFILE_URL,
       publicId: "jane-doe",
+      targetKind: "profile",
       priorState: "not_following",
       unfollowedName: null,
       dryRun: false,
@@ -159,6 +162,7 @@ describe("unfollowProfile", () => {
       "jane-doe",
       undefined,
     );
+    expect(navigateToCompany).not.toHaveBeenCalled();
   });
 
   it("returns priorState=unknown without clicking when neither button is found", async () => {
@@ -175,6 +179,7 @@ describe("unfollowProfile", () => {
       success: true,
       profileUrl: PROFILE_URL,
       publicId: "jane-doe",
+      targetKind: "profile",
       priorState: "unknown",
       unfollowedName: null,
       dryRun: false,
@@ -201,6 +206,7 @@ describe("unfollowProfile", () => {
       success: true,
       profileUrl: PROFILE_URL,
       publicId: "jane-doe",
+      targetKind: "profile",
       priorState: "following",
       unfollowedName: "Jane Doe",
       dryRun: false,
@@ -279,5 +285,117 @@ describe("unfollowProfile", () => {
     // This pins the selector strategy so accidental changes break the test.
     expect(FOLLOWING_SELECTOR).toBe('main button[aria-label^="Following "]');
     expect(FOLLOW_SELECTOR).toBe('main button[aria-label^="Follow "]');
+  });
+
+  it("accepts a /company/{slug}/ URL and routes navigation to navigateToCompany", async () => {
+    setupMocks();
+    mockClient.evaluate
+      .mockResolvedValueOnce({ state: "not_following", name: null });
+
+    const result = await unfollowProfile({
+      profileUrl: COMPANY_URL,
+      cdpPort: 9222,
+    });
+
+    expect(result).toEqual({
+      success: true,
+      profileUrl: COMPANY_URL,
+      publicId: "mirohq",
+      targetKind: "company",
+      priorState: "not_following",
+      unfollowedName: null,
+      dryRun: false,
+    });
+    expect(navigateToCompany).toHaveBeenCalledWith(
+      mockClient,
+      "mirohq",
+      undefined,
+    );
+    expect(navigateToProfile).not.toHaveBeenCalled();
+  });
+
+  it("clicks Unfollow on a company page when currently following", async () => {
+    setupMocks();
+    mockClient.evaluate
+      // Initial detection: Following "Miro"
+      .mockResolvedValueOnce({ state: "following", name: "Miro" })
+      // Click Following button → returns true
+      .mockResolvedValueOnce(true)
+      // Find "Unfollow Miro" in dialog → returns name
+      .mockResolvedValueOnce("Miro");
+
+    const result = await unfollowProfile({
+      profileUrl: COMPANY_URL,
+      cdpPort: 9222,
+    });
+
+    expect(result).toEqual({
+      success: true,
+      profileUrl: COMPANY_URL,
+      publicId: "mirohq",
+      targetKind: "company",
+      priorState: "following",
+      unfollowedName: "Miro",
+      dryRun: false,
+    });
+    expect(navigateToCompany).toHaveBeenCalledWith(
+      mockClient,
+      "mirohq",
+      undefined,
+    );
+  });
+
+  it("returns priorState=unknown without clicking on a company page when neither button is found", async () => {
+    setupMocks();
+    mockClient.evaluate
+      .mockResolvedValueOnce({ state: "unknown", name: null });
+
+    const result = await unfollowProfile({
+      profileUrl: COMPANY_URL,
+      cdpPort: 9222,
+    });
+
+    expect(result).toEqual({
+      success: true,
+      profileUrl: COMPANY_URL,
+      publicId: "mirohq",
+      targetKind: "company",
+      priorState: "unknown",
+      unfollowedName: null,
+      dryRun: false,
+    });
+    expect(mockClient.evaluate).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to synchronous unfollow on a company page when no dialog appears", async () => {
+    setupMocks();
+    mockClient.evaluate
+      .mockResolvedValueOnce({ state: "following", name: "Miro" })
+      // Click Following button → returns true
+      .mockResolvedValueOnce(true)
+      // Find dialog button → returns null (no dialog)
+      .mockResolvedValueOnce(null)
+      // Verify Follow button now present (synchronous unfollow)
+      .mockResolvedValueOnce(true);
+
+    const result = await unfollowProfile({
+      profileUrl: COMPANY_URL,
+      cdpPort: 9222,
+    });
+
+    expect(result.targetKind).toBe("company");
+    expect(result.priorState).toBe("following");
+    expect(result.unfollowedName).toBe("Miro");
+  });
+
+  it("throws on a company URL with no slug (e.g. https://www.linkedin.com/company/)", async () => {
+    await expect(
+      unfollowProfile({
+        profileUrl: "https://www.linkedin.com/company/",
+        cdpPort: 9222,
+      }),
+    ).rejects.toThrow("Invalid LinkedIn profile or company URL");
+
+    expect(discoverTargets).not.toHaveBeenCalled();
   });
 });

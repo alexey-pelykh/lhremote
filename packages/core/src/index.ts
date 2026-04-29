@@ -422,10 +422,15 @@ export {
   type UnfollowProfileInput,
   type UnfollowProfileOutput,
   type UnfollowProfilePriorState,
-  // Profile navigation helpers
+  // Profile and company navigation helpers
+  buildCompanyUrl,
   buildProfileUrl,
+  extractFollowableTarget,
   extractPublicId,
+  type FollowableTarget,
+  LINKEDIN_COMPANY_RE,
   LINKEDIN_PROFILE_RE,
+  navigateToCompany,
   navigateToProfile,
   // Individual actions (ephemeral campaign)
   type EphemeralActionInput,

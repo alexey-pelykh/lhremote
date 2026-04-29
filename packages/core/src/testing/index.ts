@@ -6,6 +6,7 @@ export {
   describeE2E,
   forceStopInstance,
   getE2ECommentUrn,
+  getE2ECompanyUrl,
   getE2EPersonId,
   getE2EPostUrl,
   getE2EProfileUrl,
