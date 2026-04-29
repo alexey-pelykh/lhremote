@@ -16,9 +16,13 @@ vi.mock("node:fs/promises", () => ({
 }));
 
 const {
+  buildCompanyUrl,
   buildProfileUrl,
+  captureCompanyLoadFailure,
   captureProfileLoadFailure,
+  extractFollowableTarget,
   extractPublicId,
+  LINKEDIN_COMPANY_RE,
   LINKEDIN_PROFILE_RE,
   PROFILE_READY_SELECTOR,
 } = await import("./navigate-to-profile.js");
@@ -40,6 +44,28 @@ describe("LINKEDIN_PROFILE_RE", () => {
     ["in/jane-doe/"], // no leading slash
   ])("does NOT match pathname %s", (pathname) => {
     expect(LINKEDIN_PROFILE_RE.exec(pathname)).toBeNull();
+  });
+});
+
+describe("LINKEDIN_COMPANY_RE", () => {
+  it.each([
+    ["/company/acme/", "acme"],
+    ["/company/acme", "acme"],
+    ["/company/mirohq/", "mirohq"],
+    ["/company/slug-with-dashes-123/", "slug-with-dashes-123"],
+    ["/company/acme/about/", "acme"],
+    ["/company/acme/people/", "acme"],
+  ])("matches pathname %s", (pathname, expected) => {
+    const match = LINKEDIN_COMPANY_RE.exec(pathname);
+    expect(match?.[1]).toBe(expected);
+  });
+
+  it.each([
+    ["/in/jane-doe/"],
+    ["/foo/bar"],
+    ["company/acme/"], // no leading slash
+  ])("does NOT match pathname %s", (pathname) => {
+    expect(LINKEDIN_COMPANY_RE.exec(pathname)).toBeNull();
   });
 });
 
@@ -75,7 +101,8 @@ describe("extractPublicId", () => {
   });
 
   it.each([
-    // Non-profile LinkedIn paths
+    // Non-profile LinkedIn paths — extractPublicId is profile-only;
+    // extractFollowableTarget covers /company/.
     ["https://www.linkedin.com/company/acme/"],
     ["https://www.linkedin.com/feed/"],
     // Non-LinkedIn hosts
@@ -92,6 +119,138 @@ describe("extractPublicId", () => {
   ])("throws on invalid URL %s", (url) => {
     expect(() => extractPublicId(url)).toThrow("Invalid LinkedIn profile URL");
   });
+
+  it("converts URIError from malformed percent-encoding into the validation error", () => {
+    // `%ZZ` is syntactically a percent-escape but invalid hex; native
+    // `decodeURIComponent` throws `URIError`.  The function must catch
+    // and re-throw the standard validation error so callers see one
+    // uniform error class and message.
+    expect(() => extractPublicId("https://www.linkedin.com/in/foo%ZZ/")).toThrow(
+      "Invalid LinkedIn profile URL",
+    );
+  });
+});
+
+describe("extractFollowableTarget", () => {
+  it("returns a profile target for /in/{publicId}/ URLs", () => {
+    expect(extractFollowableTarget("https://www.linkedin.com/in/jane-doe/")).toEqual({
+      kind: "profile",
+      publicId: "jane-doe",
+    });
+  });
+
+  it("returns a company target for /company/{slug}/ URLs", () => {
+    expect(
+      extractFollowableTarget("https://www.linkedin.com/company/mirohq/"),
+    ).toEqual({
+      kind: "company",
+      slug: "mirohq",
+    });
+  });
+
+  it("returns a company target without a trailing slash", () => {
+    expect(
+      extractFollowableTarget("https://www.linkedin.com/company/acme"),
+    ).toEqual({
+      kind: "company",
+      slug: "acme",
+    });
+  });
+
+  it("captures only the slug segment from /company/{slug}/about/", () => {
+    expect(
+      extractFollowableTarget("https://www.linkedin.com/company/acme/about/"),
+    ).toEqual({
+      kind: "company",
+      slug: "acme",
+    });
+  });
+
+  it("URL-decodes percent-encoded company slugs", () => {
+    expect(
+      extractFollowableTarget("https://www.linkedin.com/company/jos%C3%A9-corp/"),
+    ).toEqual({
+      kind: "company",
+      slug: "josé-corp",
+    });
+  });
+
+  it("strips query and fragment for company URLs", () => {
+    expect(
+      extractFollowableTarget(
+        "https://www.linkedin.com/company/acme/?foo=bar#baz",
+      ),
+    ).toEqual({
+      kind: "company",
+      slug: "acme",
+    });
+  });
+
+  it("accepts locale subdomains for company URLs", () => {
+    expect(
+      extractFollowableTarget("https://fr.linkedin.com/company/acme/"),
+    ).toEqual({
+      kind: "company",
+      slug: "acme",
+    });
+  });
+
+  it("accepts http scheme for company URLs", () => {
+    expect(
+      extractFollowableTarget("http://www.linkedin.com/company/acme/"),
+    ).toEqual({
+      kind: "company",
+      slug: "acme",
+    });
+  });
+
+  it("accepts linkedin.com without www for company URLs", () => {
+    expect(
+      extractFollowableTarget("https://linkedin.com/company/acme"),
+    ).toEqual({
+      kind: "company",
+      slug: "acme",
+    });
+  });
+
+  it.each([
+    // Non-followable LinkedIn paths
+    ["https://www.linkedin.com/feed/"],
+    ["https://www.linkedin.com/groups/123/"],
+    ["https://www.linkedin.com/school/mit/"],
+    // Non-LinkedIn hosts
+    ["https://example.com/in/jane-doe/"],
+    ["https://example.com/company/acme/"],
+    ["https://notlinkedin.com/company/acme/"],
+    ["https://linkedin.com.evil.com/company/acme/"],
+    // Embedded link in a non-LinkedIn URL — must NOT match
+    ["https://example.com/?next=https://www.linkedin.com/company/acme/"],
+    ["https://example.com/#https://www.linkedin.com/company/acme/"],
+    // Malformed / unparseable
+    ["not-a-url"],
+    [""],
+    ["/company/acme/"], // no scheme
+  ])("throws on invalid URL %s", (url) => {
+    expect(() => extractFollowableTarget(url)).toThrow(
+      "Invalid LinkedIn profile or company URL",
+    );
+  });
+
+  it.each([
+    // `%ZZ` is syntactically a percent-escape but invalid hex; native
+    // `decodeURIComponent` throws `URIError`.  Both the profile and the
+    // company branch must catch and re-throw the standard validation
+    // error so callers see one uniform error class and message.
+    ["https://www.linkedin.com/in/foo%ZZ/"],
+    ["https://www.linkedin.com/company/acme%ZZ/"],
+  ])(
+    "converts URIError from malformed percent-encoding into the validation error: %s",
+    (url) => {
+      expect(() => extractFollowableTarget(url)).toThrow(
+        "Invalid LinkedIn profile or company URL",
+      );
+    },
+  );
 });
 
 describe("PROFILE_READY_SELECTOR", () => {
@@ -252,5 +411,96 @@ describe("buildProfileUrl", () => {
   it("round-trips through extractPublicId", () => {
     const slug = "some-weird-slug-123";
     expect(extractPublicId(buildProfileUrl(slug))).toBe(slug);
+  });
+});
+
+describe("buildCompanyUrl", () => {
+  it("builds the canonical company URL", () => {
+    expect(buildCompanyUrl("mirohq")).toBe(
+      "https://www.linkedin.com/company/mirohq/",
+    );
+  });
+
+  it("URL-encodes non-ASCII slugs", () => {
+    expect(buildCompanyUrl("josé-corp")).toBe(
+      "https://www.linkedin.com/company/jos%C3%A9-corp/",
+    );
+  });
+
+  it("round-trips through extractFollowableTarget", () => {
+    const slug = "some-weird-slug-123";
+    const target = extractFollowableTarget(buildCompanyUrl(slug));
+    expect(target).toEqual({ kind: "company", slug });
+  });
+});
+
+describe("captureCompanyLoadFailure", () => {
+  const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    } else {
+      process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalEnv;
+    }
+  });
+
+  function makeClient(): CDPClient {
+    return {
+      evaluate: vi.fn().mockResolvedValue({
+        href: "https://www.linkedin.com/company/mirohq/",
+        title: "Miro | LinkedIn",
+        hasMain: true,
+        hasH1: false,
+        hasMainH1: false,
+        bodyTextSnippet: "Miro\nVisual collaboration\n",
+      }),
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+  }
+
+  it("is a no-op when LHREMOTE_CAPTURE_DIAGNOSTICS is unset", async () => {
+    delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    const client = makeClient();
+
+    await captureCompanyLoadFailure(client, "mirohq");
+
+    expect(client.evaluate).not.toHaveBeenCalled();
+    expect(client.send).not.toHaveBeenCalled();
+  });
+
+  it("captures DOM probes and screenshot when LHREMOTE_CAPTURE_DIAGNOSTICS=1", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const client = makeClient();
+
+    await captureCompanyLoadFailure(client, "mirohq");
+
+    expect(client.evaluate).toHaveBeenCalledTimes(1);
+    expect(client.send).toHaveBeenCalledWith("Page.captureScreenshot", {
+      format: "png",
+      captureBeyondViewport: true,
+    });
+  });
+
+  it("writes diagnostics with the navigate-to-company prefix (not navigate-to-profile)", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const client = makeClient();
+    const { writeFile } = await import("node:fs/promises");
+    const writeFileMock = vi.mocked(writeFile);
+    writeFileMock.mockClear();
+
+    await captureCompanyLoadFailure(client, "mirohq");
+
+    expect(writeFileMock.mock.calls.length).toBeGreaterThanOrEqual(1);
+    for (const call of writeFileMock.mock.calls) {
+      const filePath = String(call[0]);
+      const lastSep = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+      const filename = lastSep >= 0 ? filePath.slice(lastSep + 1) : filePath;
+      expect(filename).toMatch(/^navigate-to-company-[\w.-]+\.(json|png)$/);
+    }
   });
 });

@@ -282,10 +282,15 @@ export {
   type VisitProfileOutput,
 } from "./visit-profile.js";
 export {
+  buildCompanyUrl,
   buildProfileUrl,
+  extractFollowableTarget,
   extractPublicId,
+  LINKEDIN_COMPANY_RE,
   LINKEDIN_PROFILE_RE,
+  navigateToCompany,
   navigateToProfile,
+  type FollowableTarget,
 } from "./navigate-to-profile.js";
 
 // Post interaction

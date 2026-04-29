@@ -18,15 +18,40 @@ import { navigateAwayIf } from "./navigate-away.js";
 export const LINKEDIN_PROFILE_RE = /^\/in\/([^/?#]+)/;
 
 /**
- * Selector that identifies a loaded profile page.
+ * Regex matching a LinkedIn company URL *pathname* (not the full URL) and
+ * capturing the company slug from the first `/company/{slug}` segment.
  *
- * Matches any action button in the profile card action row — Message,
+ * LinkedIn's company pages live at `/company/{slug}/` and expose the same
+ * Follow / Following toggle as member profiles, so org-level unfollow
+ * workflows can target them with the same DOM-detection strategy.
+ */
+export const LINKEDIN_COMPANY_RE = /^\/company\/([^/?#]+)/;
+
+/**
+ * Discriminated union representing a LinkedIn followable entity — either a
+ * member profile or an organization page.  Returned by
+ * {@link extractFollowableTarget} so that downstream code can dispatch
+ * navigation and naming based on the target kind.
+ */
+export type FollowableTarget =
+  | { readonly kind: "profile"; readonly publicId: string }
+  | { readonly kind: "company"; readonly slug: string };
+
+/**
+ * Selector that identifies a loaded profile or company page.
+ *
+ * Matches any action button in the page's primary action row — Message,
  * Follow/Following, Connect/Pending, More actions.  LinkedIn no longer
  * wraps the profile name in an `<h1>` element; action-button `aria-label`
  * attributes remain stable across DOM redesigns and are the signal both
  * downstream operations (unfollow-profile, hide-feed-author-profile)
- * already key off.  Any one present indicates the profile card has
- * hydrated enough for follow-state or More-menu detection.
+ * already key off.  Any one present indicates the page has hydrated
+ * enough for follow-state or More-menu detection.
+ *
+ * Company pages do not render Message/Connect/Pending, but they do render
+ * Follow/Following/More — and this selector is a comma-separated
+ * disjunction (CSS OR semantics), so any matching button satisfies the
+ * readiness gate for both profiles and company pages.
  */
 export const PROFILE_READY_SELECTOR = [
   'main button[aria-label^="Message"]',
@@ -73,7 +98,17 @@ export function extractPublicId(url: string): string {
       `Invalid LinkedIn profile URL: ${url}. Expected format: https://www.linkedin.com/in/<public-id>`,
     );
   }
-  return decodeURIComponent(match[1]);
+  // Malformed percent-encoding (e.g. `%ZZ`) makes `decodeURIComponent`
+  // throw `URIError`; convert to the standard validation error so callers
+  // see a uniform message and can route by error.message rather than
+  // distinguishing two unrelated error classes.
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    throw new Error(
+      `Invalid LinkedIn profile URL: ${url}. Expected format: https://www.linkedin.com/in/<public-id>`,
+    );
+  }
 }
 
 /**
@@ -84,6 +119,90 @@ export function extractPublicId(url: string): string {
  */
 export function buildProfileUrl(publicId: string): string {
   return `https://www.linkedin.com/in/${encodeURIComponent(publicId)}/`;
+}
+
+/**
+ * Build a canonical LinkedIn company URL from a slug.
+ *
+ * The slug is URL-encoded before interpolation so values containing
+ * characters that require percent-encoding produce valid URLs.
+ */
+export function buildCompanyUrl(slug: string): string {
+  return `https://www.linkedin.com/company/${encodeURIComponent(slug)}/`;
+}
+
+/**
+ * Extract the followable target (profile or company) from a LinkedIn URL.
+ *
+ * The URL is parsed with {@link URL} and validated: the hostname must end
+ * with `linkedin.com` and the pathname must start with either
+ * `/in/{publicId}` (member profile) or `/company/{slug}` (organization
+ * page).  The captured slug is URL-decoded before being returned.
+ * Relative URLs, query-embedded LinkedIn links (e.g. `?next=...`), and
+ * non-LinkedIn hosts are all rejected with a descriptive error.
+ *
+ * Profile-only callers should continue to use {@link extractPublicId}
+ * (it throws on company URLs); use this function when both kinds of
+ * follow targets are valid input — for example, in `unfollow-profile`,
+ * which mirrors LinkedIn's Following toggle on both pages.
+ *
+ * @throws If `url` is not a well-formed LinkedIn profile or company URL.
+ */
+export function extractFollowableTarget(url: string): FollowableTarget {
+  const expectedFormat =
+    "Expected format: https://www.linkedin.com/in/<public-id> " +
+    "or https://www.linkedin.com/company/<slug>";
+
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(
+      `Invalid LinkedIn profile or company URL: ${url}. ${expectedFormat}`,
+    );
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  const isLinkedInHost = host === "linkedin.com" || host.endsWith(".linkedin.com");
+  if (!isLinkedInHost) {
+    throw new Error(
+      `Invalid LinkedIn profile or company URL: ${url}. ${expectedFormat}`,
+    );
+  }
+
+  // Malformed percent-encoding (e.g. `%ZZ`) makes `decodeURIComponent`
+  // throw `URIError`; convert to the standard validation error here so
+  // callers see a uniform `Invalid LinkedIn profile or company URL`
+  // message instead of a `URIError` leaking through.
+  const safeDecode = (segment: string): string => {
+    try {
+      return decodeURIComponent(segment);
+    } catch {
+      throw new Error(
+        `Invalid LinkedIn profile or company URL: ${url}. ${expectedFormat}`,
+      );
+    }
+  };
+
+  const profileMatch = LINKEDIN_PROFILE_RE.exec(parsed.pathname);
+  if (profileMatch?.[1]) {
+    return {
+      kind: "profile" as const,
+      publicId: safeDecode(profileMatch[1]),
+    };
+  }
+
+  const companyMatch = LINKEDIN_COMPANY_RE.exec(parsed.pathname);
+  if (companyMatch?.[1]) {
+    return {
+      kind: "company" as const,
+      slug: safeDecode(companyMatch[1]),
+    };
+  }
+
+  throw new Error(
+    `Invalid LinkedIn profile or company URL: ${url}. ${expectedFormat}`,
+  );
 }
 
 /**
@@ -126,12 +245,52 @@ export async function navigateToProfile(
 }
 
 /**
+ * Navigate the CDP-controlled LinkedIn tab to the organization page
+ * identified by `slug`, forcing a full reload if the tab is already on a
+ * company page.
+ *
+ * Company pages expose the same Follow / Following toggle as member
+ * profiles, so the readiness wait reuses {@link PROFILE_READY_SELECTOR} —
+ * its `Follow ` / `Following ` / `More` aria-label fragments match on
+ * company pages, and the comma-separated disjunction tolerates the
+ * absence of person-only buttons (Message, Connect, Pending).
+ *
+ * On timeout, if `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a best-effort
+ * diagnostic capture is written to `${os.tmpdir()}/lhremote-diagnostics/`
+ * before the error propagates; see {@link captureCompanyLoadFailure}.
+ *
+ * @param client - Connected CDP client targeting a LinkedIn page.
+ * @param slug   - LinkedIn company slug (URL segment), e.g. `"mirohq"`.
+ * @param mouse  - Optional humanized mouse for idle drift during waits.
+ */
+export async function navigateToCompany(
+  client: CDPClient,
+  slug: string,
+  mouse?: HumanizedMouse | null | undefined,
+): Promise<void> {
+  await navigateAwayIf(client, "/company/");
+  await client.navigate(buildCompanyUrl(slug));
+  try {
+    await waitForElement(client, PROFILE_READY_SELECTOR, { timeout: 30_000 }, mouse);
+  } catch (error) {
+    if (error instanceof CDPTimeoutError) {
+      // captureCompanyLoadFailure self-gates on LHREMOTE_CAPTURE_DIAGNOSTICS.
+      await captureCompanyLoadFailure(client, slug);
+    }
+    throw error;
+  }
+  // Let the SPA finish hydrating action buttons (Follow, More).
+  await gaussianDelay(800, 200, 500, 1_500);
+  await maybeHesitate();
+}
+
+/**
  * Sanitize a value for use as a filename fragment: keep only a conservative
- * filesystem-safe character set and cap length.  Public IDs come from
- * `extractPublicId` which URL-decodes the slug, so encoded path separators
- * (`%2F`, `%5C`) or parent-directory markers (`..`) could otherwise slip
- * into the filename and allow directory traversal out of the diagnostics
- * base directory.
+ * filesystem-safe character set and cap length.  Slugs come from
+ * `extractPublicId` or `extractFollowableTarget`, both of which URL-decode
+ * their captured segments, so encoded path separators (`%2F`, `%5C`) or
+ * parent-directory markers (`..`) could otherwise slip into the filename
+ * and allow directory traversal out of the diagnostics base directory.
  */
 function sanitizeForFilename(value: string): string {
   const safe = value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
@@ -197,12 +356,44 @@ export async function captureProfileLoadFailure(
   client: CDPClient,
   publicId: string,
 ): Promise<void> {
+  await captureNavigationLoadFailure(client, publicId, "profile");
+}
+
+/**
+ * Best-effort diagnostic capture when `navigateToCompany` times out
+ * waiting for the action-button row on a company page.  Mirrors
+ * {@link captureProfileLoadFailure} — same gating, same artifact
+ * structure, same cancellation discipline — but writes
+ * `navigate-to-company-{timestamp}-{slug}.json` / `.png` so the kind of
+ * navigation that failed is identifiable from the filename alone.
+ *
+ * @internal Exported for unit testing only; not part of the public API.
+ */
+export async function captureCompanyLoadFailure(
+  client: CDPClient,
+  slug: string,
+): Promise<void> {
+  await captureNavigationLoadFailure(client, slug, "company");
+}
+
+/**
+ * Shared core of {@link captureProfileLoadFailure} and
+ * {@link captureCompanyLoadFailure}: enforces the env-var gate, the
+ * timeout race, and the cancellation flag, then delegates the actual
+ * capture to {@link captureNavigationLoadFailureInner} with a kind-tagged
+ * filename prefix.
+ */
+async function captureNavigationLoadFailure(
+  client: CDPClient,
+  slug: string,
+  kind: "profile" | "company",
+): Promise<void> {
   if (process.env.LHREMOTE_CAPTURE_DIAGNOSTICS !== "1") return;
   const state: CaptureCancellationState = { timedOut: false };
   let bound: NodeJS.Timeout | undefined;
   try {
     await Promise.race([
-      captureProfileLoadFailureInner(client, publicId, state),
+      captureNavigationLoadFailureInner(client, slug, kind, state),
       new Promise<void>((resolve) => {
         bound = setTimeout(() => {
           state.timedOut = true;
@@ -217,9 +408,10 @@ export async function captureProfileLoadFailure(
   }
 }
 
-async function captureProfileLoadFailureInner(
+async function captureNavigationLoadFailureInner(
   client: CDPClient,
-  publicId: string,
+  slug: string,
+  kind: "profile" | "company",
   state: CaptureCancellationState,
 ): Promise<void> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -229,7 +421,7 @@ async function captureProfileLoadFailureInner(
   if (state.timedOut) return;
   const prefix = join(
     baseDir,
-    `navigate-to-profile-${timestamp}-${sanitizeForFilename(publicId)}`,
+    `navigate-to-${kind}-${timestamp}-${sanitizeForFilename(slug)}`,
   );
 
   const info = await client.evaluate<{
@@ -272,7 +464,8 @@ async function captureProfileLoadFailureInner(
   }
   if (state.timedOut) return;
 
+  const callerLabel = kind === "profile" ? "navigateToProfile" : "navigateToCompany";
   console.warn(
-    `[navigateToProfile] timeout diagnostics written: ${prefix}.{json,png}`,
+    `[${callerLabel}] timeout diagnostics written: ${prefix}.{json,png}`,
   );
 }

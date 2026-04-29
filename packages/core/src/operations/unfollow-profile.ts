@@ -7,39 +7,51 @@ import { resolveInstancePort } from "../cdp/index.js";
 import { retryInteraction, waitForElement } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { gaussianDelay } from "../utils/delay.js";
-import { extractPublicId, navigateToProfile } from "./navigate-to-profile.js";
+import {
+  extractFollowableTarget,
+  navigateToCompany,
+  navigateToProfile,
+  type FollowableTarget,
+} from "./navigate-to-profile.js";
 import type { ConnectionOptions } from "./types.js";
 
-/** aria-label prefix of a profile's "Following {Name}" toggle button. */
+/** aria-label prefix of a "Following {Name}" toggle button (profile or company). */
 const PROFILE_FOLLOWING_ARIA_PREFIX = "Following ";
 
-/** CSS selector for a profile's "Following {Name}" button (when actively following). */
+/** CSS selector for a "Following {Name}" button (when actively following). */
 const PROFILE_FOLLOWING_BUTTON_SELECTOR = `main button[aria-label^="${PROFILE_FOLLOWING_ARIA_PREFIX}"]`;
 
-/** CSS selector for a profile's "Follow {Name}" button (when not following). */
+/** CSS selector for a "Follow {Name}" button (when not following). */
 const PROFILE_FOLLOW_BUTTON_SELECTOR = 'main button[aria-label^="Follow "]';
 
 /** Prefix of the "Unfollow {Name}" confirmation dialog button. */
 const UNFOLLOW_DIALOG_BUTTON_PREFIX = "Unfollow ";
 
 /**
- * Prior follow state inferred from the profile's action button.
+ * Prior follow state inferred from the page's primary action button
+ * (profile or company).
  *
- * - `following`     — Profile showed a "Following" toggle (we proceed to unfollow).
- * - `not_following` — Profile showed a "Follow" toggle (nothing to do).
+ * - `following`     — The page showed a "Following" toggle (we proceed to unfollow).
+ * - `not_following` — The page showed a "Follow" toggle (nothing to do).
  * - `unknown`       — Neither toggle was visible within the timeout.
  */
 export type UnfollowProfilePriorState = "following" | "not_following" | "unknown";
 
 export interface UnfollowProfileInput extends ConnectionOptions {
-  /** LinkedIn profile URL (e.g. `https://www.linkedin.com/in/{publicId}/`). */
+  /**
+   * LinkedIn profile or company URL.  Both member profiles
+   * (`https://www.linkedin.com/in/{publicId}/`) and organization pages
+   * (`https://www.linkedin.com/company/{slug}/`) are accepted; the
+   * Following toggle behaves the same way on both surfaces, so a single
+   * unfollow path covers both.
+   */
   readonly profileUrl: string;
   /** Optional humanized mouse for natural cursor movement and clicks. */
   readonly mouse?: HumanizedMouse | null | undefined;
   /**
-   * When true, locate the profile and detect the follow state but do not
-   * click Unfollow.  Useful to probe the state of a profile without
-   * mutating it.
+   * When true, locate the page and detect the follow state but do not
+   * click Unfollow.  Useful to probe the state of a profile or company
+   * without mutating it.
    */
   readonly dryRun?: boolean | undefined;
 }
@@ -47,8 +59,17 @@ export interface UnfollowProfileInput extends ConnectionOptions {
 export interface UnfollowProfileOutput {
   readonly success: true;
   readonly profileUrl: string;
-  /** Public ID (URL slug) extracted from the profile URL. */
+  /**
+   * URL slug extracted from `profileUrl` — the LinkedIn public ID for
+   * `/in/{publicId}/` URLs and the company slug for `/company/{slug}/`
+   * URLs.  Use {@link UnfollowProfileOutput.targetKind} to discriminate.
+   */
   readonly publicId: string;
+  /**
+   * Kind of followable target unfollowed.  `"profile"` for member
+   * profiles, `"company"` for organization pages.
+   */
+  readonly targetKind: FollowableTarget["kind"];
   /**
    * State of the follow toggle before this call.  When `"not_following"`,
    * no Unfollow click was performed and `unfollowedName` is `null`.
@@ -56,37 +77,51 @@ export interface UnfollowProfileOutput {
   readonly priorState: UnfollowProfilePriorState;
   /**
    * Name extracted from the Following button's aria-label (e.g. `"Jane Doe"`
-   * from `aria-label="Following Jane Doe"`).  `null` when the profile was
-   * not being followed or the name could not be extracted.
+   * from `aria-label="Following Jane Doe"`, or `"Acme Inc"` from
+   * `aria-label="Following Acme Inc"`).  `null` when the target was not
+   * being followed or the name could not be extracted.
    */
   readonly unfollowedName: string | null;
   readonly dryRun: boolean;
 }
 
 /**
- * Unfollow a LinkedIn profile by navigating to its profile page and
- * clicking the Following → Unfollow toggle.
+ * Unfollow a LinkedIn member profile or organization page by navigating
+ * to it and clicking the Following → Unfollow toggle.
  *
- * Unlike {@link unfollowFromFeed}, this operation does not require the
- * author to be currently visible in the home feed and is independent of
- * feed position.  Use it for bulk feed-hygiene workflows where a list of
- * profiles must be processed without per-target feed fetching.
+ * Both `/in/{publicId}/` and `/company/{slug}/` URLs are accepted —
+ * LinkedIn renders the same Follow / Following toggle on both surfaces,
+ * and the same aria-label-anchored detection works for both.  Use this
+ * over {@link unfollowFromFeed} for bulk feed-hygiene workflows where a
+ * list of authors (people or organizations) must be processed without
+ * per-target feed fetching, including org-level MUTE escalation when the
+ * organization isn't currently surfaced in the feed.
  *
  * The operation:
- * 1. Navigates to the profile page parsed from {@link UnfollowProfileInput.profileUrl}.
- * 2. Detects the follow state via aria-label anchors on the primary action button.
- * 3. If the profile is being followed, clicks the "Following" button, waits for
- *    the confirmation dialog, and clicks "Unfollow {Name}".
- * 4. If the profile is not being followed, returns immediately with
+ * 1. Parses {@link UnfollowProfileInput.profileUrl} into a profile or
+ *    company target and navigates to the corresponding page.
+ * 2. Detects the follow state via aria-label anchors on the primary
+ *    action button.
+ * 3. If the target is being followed, clicks the "Following" button,
+ *    waits for the confirmation dialog, and clicks "Unfollow {Name}".
+ * 4. If the target is not being followed, returns immediately with
  *    `priorState: "not_following"` and no click performed.
  *
- * @param input - Profile URL and CDP connection parameters.
- * @returns Confirmation including the detected prior state and extracted name.
+ * @param input - Profile or company URL and CDP connection parameters.
+ * @returns Confirmation including the detected prior state, extracted
+ *   name, and which kind of target (`"profile"` or `"company"`) was
+ *   processed.
  */
 export async function unfollowProfile(
   input: UnfollowProfileInput,
 ): Promise<UnfollowProfileOutput> {
-  const publicId = extractPublicId(input.profileUrl);
+  const target = extractFollowableTarget(input.profileUrl);
+  // `targetSlug` is the URL segment regardless of target kind — the
+  // member public ID for /in/ URLs or the company slug for /company/
+  // URLs.  Used in error messages and on the output's `publicId` field
+  // (which is documented to alias both kinds; see UnfollowProfileOutput).
+  const targetSlug =
+    target.kind === "profile" ? target.publicId : target.slug;
 
   const cdpPort = await resolveInstancePort(input.cdpPort, input.cdpHost);
   const cdpHost = input.cdpHost ?? "127.0.0.1";
@@ -118,10 +153,15 @@ export async function unfollowProfile(
     const mouse = input.mouse;
     const dryRun = input.dryRun ?? false;
 
-    await navigateToProfile(client, publicId, mouse);
+    if (target.kind === "profile") {
+      await navigateToProfile(client, target.publicId, mouse);
+    } else {
+      await navigateToCompany(client, target.slug, mouse);
+    }
 
     // Detect the current follow state by inspecting the primary action
-    // button on the profile card.  LinkedIn renders exactly one of:
+    // button on the page (profile or company).  LinkedIn renders exactly
+    // one of:
     //   - `Following {Name}` — currently following, click opens confirm dialog
     //   - `Follow {Name}`    — not following, nothing to do
     const detection = await client.evaluate<{
@@ -151,7 +191,8 @@ export async function unfollowProfile(
       return {
         success: true as const,
         profileUrl: input.profileUrl,
-        publicId,
+        publicId: targetSlug,
+        targetKind: target.kind,
         priorState: "not_following",
         unfollowedName: null,
         dryRun,
@@ -167,14 +208,15 @@ export async function unfollowProfile(
       return {
         success: true as const,
         profileUrl: input.profileUrl,
-        publicId,
+        publicId: targetSlug,
+        targetKind: target.kind,
         priorState: "unknown",
         unfollowedName: null,
         dryRun,
       };
     }
 
-    // Profile is currently being followed.  Clicking the Following button
+    // The page is currently being followed.  Clicking the Following button
     // opens a confirmation dialog on most LinkedIn variants; on some, it
     // unfollows immediately.  Retry the interaction to tolerate transient
     // dialog-render delays.
@@ -198,7 +240,7 @@ export async function unfollowProfile(
 
       if (!clicked) {
         throw new Error(
-          `Failed to click Following button for "${publicId}".`,
+          `Failed to click Following button for "${targetSlug}".`,
         );
       }
 
@@ -251,7 +293,7 @@ export async function unfollowProfile(
       })()`);
 
       throw new Error(
-        `Unfollow confirmation did not appear for "${publicId}". ` +
+        `Unfollow confirmation did not appear for "${targetSlug}". ` +
           "LinkedIn's DOM may have changed or the page did not fully load.",
       );
     }, 3);
@@ -273,7 +315,8 @@ export async function unfollowProfile(
     return {
       success: true as const,
       profileUrl: input.profileUrl,
-      publicId,
+      publicId: targetSlug,
+      targetKind: target.kind,
       priorState: "following",
       unfollowedName: confirmedName.length > 0 ? confirmedName : null,
       dryRun,

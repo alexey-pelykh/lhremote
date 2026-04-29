@@ -1,8 +1,10 @@
-# ADR-007: Profile Page Readiness Selector Strategy
+# ADR-007: Profile and Company Page Readiness Selector Strategy
 
 ## Status
 
-Accepted (2026-04-19)
+Accepted (2026-04-19); amended 2026-04-29 to extend the readiness selector's
+empirical scope from member profile pages to LinkedIn organization
+(`/company/{slug}/`) pages — see § Amendments.
 
 ## Context
 
@@ -68,7 +70,49 @@ Any single match indicates the profile card has hydrated far enough for follow-s
 | `waitForEvent("Page.frameStoppedLoading")` | Same root issue — SPA navigations don't always trigger frame load events. |
 | Keep `main h1` + fall back | Adds latency on every run once the primary selector is known-dead. |
 
+## Amendments
+
+### 2026-04-29 — Company-page coverage (`navigateToCompany`)
+
+`navigateToCompany` was added alongside `navigateToProfile` to support
+unfollowing LinkedIn organization pages (`/company/{slug}/`) — see
+issue #757. Both functions reuse `PROFILE_READY_SELECTOR` because the
+selector's CSS-disjunction semantics make the profile-only variants
+(`Message`, `Connect`, `Pending`) unreachable on company pages without
+producing a false positive — they simply do not match. `Follow `,
+`Following `, and the `More` / `More actions` overflow buttons are
+present on both surfaces and provide the readiness signal.
+
+**Empirical scope of this amendment**:
+
+- The original 2026-04-19 study (this ADR's body) verified the
+  selector against rendered profile-page DOM (`/in/{publicId}/`).
+- The 2026-04-29 extension to company pages was justified analytically
+  (CSS OR semantics + reporter testimony in issue #757 that "the
+  Following toggle on company pages works the same way as on personal
+  profiles") and verified at the unit level (mock-based dispatch
+  tests) plus E2E-test infrastructure parameterized on
+  `LHREMOTE_E2E_COMPANY_URL`. The empirical company-page DOM has not
+  been studied with the same depth as profile pages — when the next
+  selector regression occurs on company pages, the diagnostic capture
+  (now kind-tagged: `navigate-to-company-{ts}-{slug}.{json,png}`)
+  should produce evidence equivalent to the original profile-page
+  study.
+- If the empirical premise turns out to be false on company pages
+  (e.g., LinkedIn renders `Follow company` instead of `Follow `, or
+  exposes the toggle through a different aria-label shape), the
+  remediation path is to extend `PROFILE_READY_SELECTOR` with the
+  observed company-page variants, not to fork the selector.
+
+**Diagnostic filename rule extends to company navigation**: artifacts
+land at `${os.tmpdir()}/lhremote-diagnostics/navigate-to-{profile,company}-{timestamp}-{slug}.{json,png}`,
+where the kind tag identifies which navigator timed out. Caller-label
+in the `console.warn` line follows the same convention
+(`[navigateToProfile]` vs `[navigateToCompany]`).
+
 ## Related
 
 - Code: `packages/core/src/operations/navigate-to-profile.ts`
-- Branch: `fix/navigate-to-profile-diagnostics`
+- Branch: `fix/navigate-to-profile-diagnostics` (initial selector
+  decision); `fix/unfollow-profile-company-urls` (2026-04-29 amendment)
+- Issues: #757 (company-page extension)

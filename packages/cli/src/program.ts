@@ -834,8 +834,8 @@ export function createProgram(): Command {
 
   program
     .command("unfollow-profile")
-    .description("Unfollow a LinkedIn profile by navigating to the profile page and clicking Following → Unfollow")
-    .argument("<profileUrl>", "LinkedIn profile URL")
+    .description("Unfollow a LinkedIn member profile or organization page by navigating to it and clicking Following → Unfollow")
+    .argument("<profileUrl>", "LinkedIn profile URL (/in/{publicId}/) or company URL (/company/{slug}/)")
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
