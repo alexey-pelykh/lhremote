@@ -116,6 +116,39 @@ describe("resolveLinkedInEntity", () => {
       ]);
     });
 
+    it("surfaces a helpful error when public is empty but no LinkedIn page is open", async () => {
+      // The empty-public → Voyager fallback now surfaces the same
+      // session-required error that SCHOOL queries would, instead of
+      // silently returning {matches: [], strategy: "public"}.
+      vi.mocked(resolveInstancePort).mockResolvedValue(9222);
+      vi.mocked(CDPClient).mockImplementation(function () {
+        return mockClient as unknown as CDPClient;
+      });
+      vi.mocked(discoverTargets).mockResolvedValue([
+        {
+          id: "target-1",
+          type: "page",
+          title: "Other",
+          url: "https://example.com",
+          description: "",
+          devtoolsFrontendUrl: "",
+        },
+      ]);
+
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ elements: [] }),
+      } as unknown as Response);
+
+      await expect(
+        resolveLinkedInEntity({
+          query: "Mistral AI",
+          entityType: "COMPANY",
+          cdpPort: 9222,
+        }),
+      ).rejects.toThrow("No LinkedIn page found");
+    });
+
     it("does not call Voyager when public endpoint returns matches", async () => {
       setupVoyagerMocks();
 
