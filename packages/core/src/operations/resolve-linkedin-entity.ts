@@ -75,7 +75,7 @@ async function tryPublicTypeahead(
     });
     if (!response.ok) return undefined;
 
-    const data = (await response.json()) as PublicTypeaheadResponse;
+    const data: unknown = await response.json();
     return parsePublicTypeaheadResponse(data, entityType);
   } catch {
     return undefined;
@@ -83,30 +83,38 @@ async function tryPublicTypeahead(
 }
 
 /**
- * Shape of the public typeahead API response.
+ * Shape of one entry in the public typeahead API response.
  *
  * The endpoint returns a top-level JSON array (not an object with an
  * `elements` field). Each entry has a flat `{id, type, displayName,
  * trackingId}` shape.
  */
-type PublicTypeaheadResponse = Array<{
+interface PublicTypeaheadEntry {
   id?: string;
   type?: string;
   displayName?: string;
   trackingId?: string;
-}>;
+}
 
 /**
  * Parse the public typeahead response into normalised matches.
+ *
+ * Accepts `unknown` and validates the array shape at runtime: the
+ * upstream `response.json()` cannot be statically typed, and the
+ * endpoint has shifted shape historically (the original bug in #763
+ * was a parser written against an older `{elements: [...]}` shape).
+ * Defensive validation here keeps the contract honest.
  */
 function parsePublicTypeaheadResponse(
-  data: PublicTypeaheadResponse,
+  data: unknown,
   entityType: EntityType,
 ): EntityMatch[] {
   if (!Array.isArray(data)) return [];
 
-  return data
-    .filter((el): el is typeof el & { id: string } => el.id !== undefined)
+  return (data as PublicTypeaheadEntry[])
+    .filter((el): el is PublicTypeaheadEntry & { id: string } =>
+      typeof el?.id === "string",
+    )
     .map((el) => ({
       id: el.id,
       name: el.displayName ?? "",
