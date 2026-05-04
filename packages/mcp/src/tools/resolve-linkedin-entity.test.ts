@@ -51,23 +51,21 @@ describe("registerResolveLinkedInEntity", () => {
         { id: "1441", name: "Google", type: "COMPANY" },
         { id: "1035", name: "Google Cloud", type: "COMPANY" },
       ],
-      strategy: "public",
     });
 
     const handler = getHandler("resolve-linkedin-entity");
     const result = await handler({
       query: "Google",
       entityType: "COMPANY",
-      cdpPort: 9222,
     });
 
     const parsed = JSON.parse(extractText(result)) as {
       matches: Array<{ id: string; name: string }>;
-      strategy: string;
     };
     expect(parsed.matches).toHaveLength(2);
     expect(parsed.matches[0]?.name).toBe("Google");
-    expect(parsed.strategy).toBe("public");
+    // Strategy field removed — only one resolution path exists now.
+    expect(parsed).not.toHaveProperty("strategy");
   });
 
   it("returns error on resolution failure", async () => {
@@ -82,7 +80,6 @@ describe("registerResolveLinkedInEntity", () => {
     const result = await handler({
       query: "Test",
       entityType: "COMPANY",
-      cdpPort: 9222,
     });
 
     expect((result as { isError?: boolean }).isError).toBe(true);

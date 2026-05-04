@@ -511,12 +511,13 @@ describeE2E("profile enrichment and utilities", () => {
         });
 
         it("resolves a COMPANY entity --json", async () => {
+          // Public typeahead — no LH session required (Voyager fallback removed).
+          // The `port` from the surrounding describe block is unused here, but
+          // we keep this test inside `instance-requiring tools` so it still
+          // runs in the live-LinkedIn lane rather than fully unit-mocked.
           const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
 
-          await handleResolveEntity("COMPANY", "Google", {
-            cdpPort: port,
-            json: true,
-          });
+          await handleResolveEntity("COMPANY", "Google", { json: true });
 
           expect(process.exitCode).toBeUndefined();
           expect(stdoutSpy).toHaveBeenCalled();
@@ -524,11 +525,12 @@ describeE2E("profile enrichment and utilities", () => {
           const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
           const parsed = JSON.parse(output) as {
             matches: { id: string; name: string; type: string }[];
-            strategy: string;
           };
 
           expect(Array.isArray(parsed.matches)).toBe(true);
-          expect(["public", "voyager"]).toContain(parsed.strategy);
+          // Strategy field removed alongside Voyager — assert it's absent so
+          // any reintroduction shows up loudly.
+          expect(parsed).not.toHaveProperty("strategy");
           if (parsed.matches.length > 0) {
             expect(parsed.matches[0]).toHaveProperty("id");
             expect(parsed.matches[0]).toHaveProperty("name");
@@ -546,10 +548,10 @@ describeE2E("profile enrichment and utilities", () => {
           registerResolveLinkedInEntity(server);
 
           const handler = getHandler("resolve-linkedin-entity");
+          // Public typeahead — no LH session required (Voyager fallback removed).
           const result = (await handler({
             query: "Google",
             entityType: "COMPANY",
-            cdpPort: port,
           })) as {
             isError?: boolean;
             content: { type: string; text: string }[];
@@ -560,11 +562,11 @@ describeE2E("profile enrichment and utilities", () => {
 
           const parsed = JSON.parse((result.content[0] as { text: string }).text) as {
             matches: { id: string; name: string; type: string }[];
-            strategy: string;
           };
 
           expect(Array.isArray(parsed.matches)).toBe(true);
-          expect(["public", "voyager"]).toContain(parsed.strategy);
+          // Strategy field removed alongside Voyager — assert it's absent.
+          expect(parsed).not.toHaveProperty("strategy");
           if (parsed.matches.length > 0) {
             expect(parsed.matches[0]).toHaveProperty("id");
             expect(parsed.matches[0]).toHaveProperty("name");
