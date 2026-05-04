@@ -876,13 +876,10 @@ export function createProgram(): Command {
 
   program
     .command("resolve-entity")
-    .description("Resolve a LinkedIn entity (company, geo, school) by name")
+    .description("Resolve a LinkedIn entity (company, geo, school) by name via the public LinkedIn typeahead (no auth, no LinkedHelper required)")
     .argument("<entityType>", "Entity type: COMPANY, GEO, or SCHOOL")
     .argument("<query>", "Search query")
     .option("--limit <n>", "Max results to show", parsePositiveInt)
-    .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
-    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
-    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--json", "Output as JSON")
     .action(handleResolveEntity);
 

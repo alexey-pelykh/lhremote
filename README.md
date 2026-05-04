@@ -200,7 +200,7 @@ lhremote react-to-comment <postUrl> <commentUrn> [--type <like|celebrate|support
 
 ```sh
 lhremote build-url <sourceType> [--keywords <keywords>] [--current-company <id>]... [--past-company <id>]... [--geo <id>]... [--industry <id>]... [--school <id>]... [--network <code>]... [--profile-language <code>]... [--service-category <id>]... [--filter <spec>]... [--slug <slug>] [--id <id>] [--json]
-lhremote resolve-entity <entityType> <query> [--limit <n>] [--cdp-port <port>] [--json]
+lhremote resolve-entity <entityType> <query> [--limit <n>] [--json]
 lhremote list-reference-data <dataType> [--json]
 ```
 
@@ -923,13 +923,12 @@ Build a LinkedIn URL for any supported source type. Supports SearchPage (basic s
 
 #### `resolve-linkedin-entity`
 
-Resolve human-readable names (company names, locations, schools) to LinkedIn entity IDs via typeahead endpoints. CLI command: `resolve-entity`.
+Resolve human-readable names (company names, locations, schools) to LinkedIn entity IDs via LinkedIn's public typeahead endpoint. No authentication and no running LinkedHelper instance required. CLI command: `resolve-entity`.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `query` | string | Yes | — | Search query (e.g., company name, city) |
 | `entityType` | string | Yes | — | `COMPANY`, `GEO`, or `SCHOOL` |
-| `cdpPort` | number | No | 9222 | CDP port |
 
 #### `list-linkedin-reference-data`
 

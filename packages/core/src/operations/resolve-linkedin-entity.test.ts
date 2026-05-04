@@ -3,45 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../cdp/index.js", () => ({
-  resolveInstancePort: vi.fn(),
-}));
-
-vi.mock("../cdp/client.js", () => ({
-  CDPClient: vi.fn(),
-}));
-
-vi.mock("../cdp/discovery.js", () => ({
-  discoverTargets: vi.fn(),
-}));
-
-import { resolveInstancePort } from "../cdp/index.js";
-import { CDPClient } from "../cdp/client.js";
-import { discoverTargets } from "../cdp/discovery.js";
 import { resolveLinkedInEntity } from "./resolve-linkedin-entity.js";
-
-const LINKEDIN_TARGET = {
-  id: "target-1",
-  type: "page" as const,
-  title: "LinkedIn",
-  url: "https://www.linkedin.com/feed/",
-  description: "",
-  devtoolsFrontendUrl: "",
-};
-
-const mockClient = {
-  connect: vi.fn().mockResolvedValue(undefined),
-  evaluate: vi.fn(),
-  disconnect: vi.fn(),
-};
-
-function setupVoyagerMocks() {
-  vi.mocked(resolveInstancePort).mockResolvedValue(9222);
-  vi.mocked(CDPClient).mockImplementation(function () {
-    return mockClient as unknown as CDPClient;
-  });
-  vi.mocked(discoverTargets).mockResolvedValue([LINKEDIN_TARGET]);
-}
 
 describe("resolveLinkedInEntity", () => {
   beforeEach(() => {
@@ -52,11 +14,9 @@ describe("resolveLinkedInEntity", () => {
     vi.restoreAllMocks();
   });
 
-  describe("public typeahead (COMPANY/GEO)", () => {
-    it("uses public strategy when public endpoint succeeds", async () => {
-      vi.mocked(resolveInstancePort).mockResolvedValue(9222);
-
-      const mockResponse = {
+  describe("public typeahead — happy path", () => {
+    it("resolves COMPANY queries from the public endpoint array shape", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
         json: vi.fn().mockResolvedValue([
           {
@@ -66,169 +26,23 @@ describe("resolveLinkedInEntity", () => {
             trackingId: "abc==",
           },
         ]),
-      };
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(
-        mockResponse as unknown as Response,
-      );
+      } as unknown as Response);
 
       const result = await resolveLinkedInEntity({
         query: "Acme",
         entityType: "COMPANY",
-        cdpPort: 9222,
       });
 
-      expect(result.strategy).toBe("public");
       expect(result.matches).toEqual([
         { id: "1234", name: "Acme Corp", type: "COMPANY" },
       ]);
+
+      const url = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(url).toContain("typeaheadType=COMPANY");
+      expect(url).toContain("query=Acme");
     });
 
-    it("falls back to Voyager when public endpoint returns an empty array", async () => {
-      setupVoyagerMocks();
-
-      vi.spyOn(globalThis, "fetch").mockResolvedValue({
-        ok: true,
-        json: vi.fn().mockResolvedValue([]),
-      } as unknown as Response);
-
-      mockClient.evaluate.mockResolvedValue({
-        data: {
-          elements: [
-            {
-              targetUrn: "urn:li:organization:9999",
-              title: { text: "Mistral AI" },
-            },
-          ],
-        },
-      });
-
-      const result = await resolveLinkedInEntity({
-        query: "Mistral AI",
-        entityType: "COMPANY",
-        cdpPort: 9222,
-      });
-
-      expect(result.strategy).toBe("voyager");
-      expect(result.matches).toEqual([
-        { id: "9999", name: "Mistral AI", type: "COMPANY" },
-      ]);
-    });
-
-    it("surfaces a helpful error when public is empty but no LinkedIn page is open", async () => {
-      // The empty-public → Voyager fallback now surfaces the same
-      // session-required error that SCHOOL queries would, instead of
-      // silently returning {matches: [], strategy: "public"}.
-      vi.mocked(resolveInstancePort).mockResolvedValue(9222);
-      vi.mocked(CDPClient).mockImplementation(function () {
-        return mockClient as unknown as CDPClient;
-      });
-      vi.mocked(discoverTargets).mockResolvedValue([
-        {
-          id: "target-1",
-          type: "page",
-          title: "Other",
-          url: "https://example.com",
-          description: "",
-          devtoolsFrontendUrl: "",
-        },
-      ]);
-
-      vi.spyOn(globalThis, "fetch").mockResolvedValue({
-        ok: true,
-        json: vi.fn().mockResolvedValue([]),
-      } as unknown as Response);
-
-      await expect(
-        resolveLinkedInEntity({
-          query: "Mistral AI",
-          entityType: "COMPANY",
-          cdpPort: 9222,
-        }),
-      ).rejects.toThrow("No LinkedIn page found");
-    });
-
-    it("does not call Voyager when public endpoint returns matches", async () => {
-      setupVoyagerMocks();
-
-      vi.spyOn(globalThis, "fetch").mockResolvedValue({
-        ok: true,
-        json: vi.fn().mockResolvedValue([
-          { id: "42", type: "COMPANY", displayName: "Match Corp" },
-        ]),
-      } as unknown as Response);
-
-      const result = await resolveLinkedInEntity({
-        query: "Match",
-        entityType: "COMPANY",
-        cdpPort: 9222,
-      });
-
-      expect(result.strategy).toBe("public");
-      expect(result.matches).toEqual([
-        { id: "42", name: "Match Corp", type: "COMPANY" },
-      ]);
-      // Confirm no Voyager-side work happens at all when public has matches:
-      // not just the API call, but also CDP target discovery and client
-      // instantiation. Locks in the early-return contract.
-      expect(mockClient.evaluate).not.toHaveBeenCalled();
-      expect(discoverTargets).not.toHaveBeenCalled();
-      expect(CDPClient).not.toHaveBeenCalled();
-    });
-
-    it("falls back to Voyager when public endpoint fails", async () => {
-      setupVoyagerMocks();
-
-      vi.spyOn(globalThis, "fetch").mockResolvedValue({
-        ok: false,
-        status: 500,
-      } as unknown as Response);
-
-      mockClient.evaluate.mockResolvedValue({
-        data: {
-          elements: [
-            {
-              targetUrn: "urn:li:organization:5678",
-              title: { text: "Fallback Corp" },
-            },
-          ],
-        },
-      });
-
-      const result = await resolveLinkedInEntity({
-        query: "Fallback",
-        entityType: "COMPANY",
-        cdpPort: 9222,
-      });
-
-      expect(result.strategy).toBe("voyager");
-      expect(result.matches).toEqual([
-        { id: "5678", name: "Fallback Corp", type: "COMPANY" },
-      ]);
-    });
-
-    it("falls back to Voyager when public fetch throws", async () => {
-      setupVoyagerMocks();
-
-      vi.spyOn(globalThis, "fetch").mockRejectedValue(
-        new Error("network error"),
-      );
-
-      mockClient.evaluate.mockResolvedValue({
-        data: { elements: [] },
-      });
-
-      const result = await resolveLinkedInEntity({
-        query: "test",
-        entityType: "GEO",
-        cdpPort: 9222,
-      });
-
-      expect(result.strategy).toBe("voyager");
-    });
-
-    it("uses GEO typeahead type for public endpoint", async () => {
-      vi.mocked(resolveInstancePort).mockResolvedValue(9222);
-
+    it("resolves GEO queries with typeaheadType=GEO", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
         json: vi.fn().mockResolvedValue([
@@ -239,7 +53,6 @@ describe("resolveLinkedInEntity", () => {
       await resolveLinkedInEntity({
         query: "San Francisco",
         entityType: "GEO",
-        cdpPort: 9222,
       });
 
       const url = fetchSpy.mock.calls[0]?.[0] as string;
@@ -247,9 +60,94 @@ describe("resolveLinkedInEntity", () => {
       expect(url).toContain("query=San+Francisco");
     });
 
-    it("limits public results to 10", async () => {
-      vi.mocked(resolveInstancePort).mockResolvedValue(9222);
+    it("resolves SCHOOL queries through the COMPANY namespace, preserving SCHOOL in the result type", async () => {
+      // LinkedIn stores schools as organizations; the public endpoint silently
+      // ignores typeaheadType=SCHOOL. SCHOOL queries must use the COMPANY
+      // typeahead but the returned EntityMatch carries the caller's intent
+      // (entityType: SCHOOL) so downstream URL construction can choose the
+      // urn:li:school: scheme if needed.
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue([
+          {
+            id: "1792",
+            type: "COMPANY",
+            displayName: "Stanford University",
+          },
+        ]),
+      } as unknown as Response);
 
+      const result = await resolveLinkedInEntity({
+        query: "Stanford",
+        entityType: "SCHOOL",
+      });
+
+      const url = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(url).toContain("typeaheadType=COMPANY");
+      expect(url).toContain("query=Stanford");
+
+      expect(result.matches).toEqual([
+        { id: "1792", name: "Stanford University", type: "SCHOOL" },
+      ]);
+    });
+  });
+
+  describe("public typeahead — empty / drift", () => {
+    it("returns empty matches when the endpoint returns an empty array", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue([]),
+      } as unknown as Response);
+
+      const result = await resolveLinkedInEntity({
+        query: "ZeroResults Inc",
+        entityType: "COMPANY",
+      });
+
+      expect(result.matches).toEqual([]);
+    });
+
+    it("throws on unexpected response shape (non-array) — does not silently fail like the original #763 bug", async () => {
+      // Defends against the original bug pattern: when the parser previously
+      // expected an object {elements: [...]}, an array response silently
+      // produced []. The mirror failure — an object response when we now
+      // expect an array — must NOT silently produce [] either, or we recreate
+      // exactly the failure mode #763 was filed for. Throw so the caller can
+      // distinguish "LinkedIn changed shape" from "no matches found".
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ elements: [] }),
+      } as unknown as Response);
+
+      await expect(
+        resolveLinkedInEntity({
+          query: "test",
+          entityType: "COMPANY",
+        }),
+      ).rejects.toThrow("unexpected response shape");
+    });
+
+    it("filters out entries without an id", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue([
+          { id: "1", type: "COMPANY", displayName: "Valid" },
+          { type: "COMPANY", displayName: "No ID" },
+          { id: "3", type: "COMPANY", displayName: "Also Valid" },
+        ]),
+      } as unknown as Response);
+
+      const result = await resolveLinkedInEntity({
+        query: "test",
+        entityType: "COMPANY",
+      });
+
+      expect(result.matches).toHaveLength(2);
+      expect(result.matches[0]?.id).toBe("1");
+      expect(result.matches[1]?.id).toBe("3");
+    });
+
+    it("limits matches to 10", async () => {
       const entries = Array.from({ length: 15 }, (_, i) => ({
         id: String(i),
         type: "COMPANY",
@@ -264,274 +162,38 @@ describe("resolveLinkedInEntity", () => {
       const result = await resolveLinkedInEntity({
         query: "test",
         entityType: "COMPANY",
-        cdpPort: 9222,
       });
 
       expect(result.matches).toHaveLength(10);
     });
+  });
 
-    it("filters out entries without id", async () => {
-      vi.mocked(resolveInstancePort).mockResolvedValue(9222);
-
+  describe("public typeahead — error surfacing", () => {
+    it("throws on HTTP non-2xx responses", async () => {
       vi.spyOn(globalThis, "fetch").mockResolvedValue({
-        ok: true,
-        json: vi.fn().mockResolvedValue([
-          { id: "1", type: "COMPANY", displayName: "Valid" },
-          { type: "COMPANY", displayName: "No ID" },
-          { id: "3", type: "COMPANY", displayName: "Also Valid" },
-        ]),
+        ok: false,
+        status: 500,
       } as unknown as Response);
 
-      const result = await resolveLinkedInEntity({
-        query: "test",
-        entityType: "COMPANY",
-        cdpPort: 9222,
-      });
-
-      expect(result.matches).toHaveLength(2);
-      expect(result.matches[0]?.id).toBe("1");
-      expect(result.matches[1]?.id).toBe("3");
+      await expect(
+        resolveLinkedInEntity({
+          query: "test",
+          entityType: "COMPANY",
+        }),
+      ).rejects.toThrow("Public typeahead request failed: HTTP 500");
     });
 
-    it("falls back to Voyager when public response is not an array (defensive)", async () => {
-      // Defends against the original bug: when the parser previously
-      // expected an object {elements: [...]}, an array response would
-      // silently produce []. Now an unexpected non-array response is
-      // explicitly handled by the Array.isArray gate inside the parser
-      // (parser returns []), which then engages the Voyager fallback.
-      setupVoyagerMocks();
-
-      vi.spyOn(globalThis, "fetch").mockResolvedValue({
-        ok: true,
-        json: vi.fn().mockResolvedValue({ elements: [] }),
-      } as unknown as Response);
-
-      mockClient.evaluate.mockResolvedValue({
-        data: {
-          elements: [
-            {
-              targetUrn: "urn:li:organization:5555",
-              title: { text: "Voyager Match" },
-            },
-          ],
-        },
-      });
-
-      const result = await resolveLinkedInEntity({
-        query: "test",
-        entityType: "COMPANY",
-        cdpPort: 9222,
-      });
-
-      // Non-array response treated as empty → falls back to Voyager
-      expect(result.strategy).toBe("voyager");
-      expect(result.matches).toEqual([
-        { id: "5555", name: "Voyager Match", type: "COMPANY" },
-      ]);
-    });
-  });
-
-  describe("Voyager typeahead (SCHOOL)", () => {
-    it("goes directly to Voyager for SCHOOL entity type", async () => {
-      setupVoyagerMocks();
-
-      const fetchSpy = vi.spyOn(globalThis, "fetch");
-
-      mockClient.evaluate.mockResolvedValue({
-        data: {
-          elements: [
-            {
-              targetUrn: "urn:li:school:12345",
-              title: { text: "MIT" },
-            },
-          ],
-        },
-      });
-
-      const result = await resolveLinkedInEntity({
-        query: "MIT",
-        entityType: "SCHOOL",
-        cdpPort: 9222,
-      });
-
-      // Public endpoint should NOT be called for SCHOOL
-      expect(fetchSpy).not.toHaveBeenCalled();
-      expect(result.strategy).toBe("voyager");
-      expect(result.matches).toEqual([
-        { id: "12345", name: "MIT", type: "SCHOOL" },
-      ]);
-    });
-
-    it("extracts ID from tracking URN when targetUrn is missing", async () => {
-      setupVoyagerMocks();
-
-      mockClient.evaluate.mockResolvedValue({
-        data: {
-          elements: [
-            {
-              trackingUrn: "urn:li:school:99999",
-              title: { text: "Stanford" },
-            },
-          ],
-        },
-      });
-
-      const result = await resolveLinkedInEntity({
-        query: "Stanford",
-        entityType: "SCHOOL",
-        cdpPort: 9222,
-      });
-
-      expect(result.matches[0]?.id).toBe("99999");
-    });
-
-    it("disconnects client after Voyager request", async () => {
-      setupVoyagerMocks();
-
-      mockClient.evaluate.mockResolvedValue({
-        data: { elements: [] },
-      });
-
-      await resolveLinkedInEntity({
-        query: "test",
-        entityType: "SCHOOL",
-        cdpPort: 9222,
-      });
-
-      expect(mockClient.disconnect).toHaveBeenCalled();
-    });
-
-    it("disconnects client even when Voyager request fails", async () => {
-      setupVoyagerMocks();
-
-      mockClient.evaluate.mockResolvedValue({
-        error: "HTTP 403: Forbidden",
-      });
+    it("propagates network errors from fetch", async () => {
+      vi.spyOn(globalThis, "fetch").mockRejectedValue(
+        new Error("network error"),
+      );
 
       await expect(
         resolveLinkedInEntity({
           query: "test",
-          entityType: "SCHOOL",
-          cdpPort: 9222,
+          entityType: "GEO",
         }),
-      ).rejects.toThrow("Voyager typeahead request failed");
-
-      expect(mockClient.disconnect).toHaveBeenCalled();
-    });
-
-    it("throws when no LinkedIn page is found", async () => {
-      vi.mocked(resolveInstancePort).mockResolvedValue(9222);
-      vi.mocked(CDPClient).mockImplementation(function () {
-        return mockClient as unknown as CDPClient;
-      });
-      vi.mocked(discoverTargets).mockResolvedValue([
-        {
-          id: "target-1",
-          type: "page",
-          title: "Example",
-          url: "https://example.com",
-          description: "",
-          devtoolsFrontendUrl: "",
-        },
-      ]);
-
-      await expect(
-        resolveLinkedInEntity({
-          query: "test",
-          entityType: "SCHOOL",
-          cdpPort: 9222,
-        }),
-      ).rejects.toThrow("No LinkedIn page found");
-    });
-  });
-
-  describe("security", () => {
-    it("rejects non-loopback host without allowRemote", async () => {
-      vi.mocked(resolveInstancePort).mockResolvedValue(9222);
-      vi.mocked(discoverTargets).mockResolvedValue([LINKEDIN_TARGET]);
-
-      await expect(
-        resolveLinkedInEntity({
-          query: "test",
-          entityType: "SCHOOL",
-          cdpPort: 9222,
-          cdpHost: "192.168.1.100",
-        }),
-      ).rejects.toThrow("requires --allow-remote");
-    });
-
-    it("allows non-loopback host with allowRemote", async () => {
-      setupVoyagerMocks();
-
-      mockClient.evaluate.mockResolvedValue({
-        data: { elements: [] },
-      });
-
-      const result = await resolveLinkedInEntity({
-        query: "test",
-        entityType: "SCHOOL",
-        cdpPort: 9222,
-        cdpHost: "192.168.1.100",
-        allowRemote: true,
-      });
-
-      expect(result.strategy).toBe("voyager");
-    });
-
-    it("allows localhost without allowRemote", async () => {
-      setupVoyagerMocks();
-
-      mockClient.evaluate.mockResolvedValue({
-        data: { elements: [] },
-      });
-
-      const result = await resolveLinkedInEntity({
-        query: "test",
-        entityType: "SCHOOL",
-        cdpPort: 9222,
-        cdpHost: "localhost",
-      });
-
-      expect(result.strategy).toBe("voyager");
-    });
-  });
-
-  describe("connection options", () => {
-    it("defaults cdpHost to 127.0.0.1", async () => {
-      setupVoyagerMocks();
-
-      mockClient.evaluate.mockResolvedValue({
-        data: { elements: [] },
-      });
-
-      await resolveLinkedInEntity({
-        query: "test",
-        entityType: "SCHOOL",
-        cdpPort: 9222,
-      });
-
-      expect(discoverTargets).toHaveBeenCalledWith(9222, "127.0.0.1");
-    });
-
-    it("uses resolveInstancePort to determine actual port", async () => {
-      vi.mocked(resolveInstancePort).mockResolvedValue(35000);
-      vi.mocked(CDPClient).mockImplementation(function () {
-        return mockClient as unknown as CDPClient;
-      });
-      vi.mocked(discoverTargets).mockResolvedValue([LINKEDIN_TARGET]);
-
-      mockClient.evaluate.mockResolvedValue({
-        data: { elements: [] },
-      });
-
-      await resolveLinkedInEntity({
-        query: "test",
-        entityType: "SCHOOL",
-        cdpPort: 9222,
-      });
-
-      expect(resolveInstancePort).toHaveBeenCalledWith(9222, undefined);
-      expect(discoverTargets).toHaveBeenCalledWith(35000, "127.0.0.1");
+      ).rejects.toThrow("network error");
     });
   });
 });

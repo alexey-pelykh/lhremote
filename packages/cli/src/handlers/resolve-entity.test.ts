@@ -17,10 +17,9 @@ import { getStderr, getStdout } from "./testing/mock-helpers.js";
 
 const MOCK_RESULT: ResolveLinkedInEntityOutput = {
   matches: [
-    { id: "urn:li:organization:1441", name: "Google", type: "COMPANY" },
-    { id: "urn:li:organization:1442", name: "Google Cloud", type: "COMPANY" },
+    { id: "1441", name: "Google", type: "COMPANY" },
+    { id: "1442", name: "Google Cloud", type: "COMPANY" },
   ],
-  strategy: "public",
 };
 
 describe("handleResolveEntity", () => {
@@ -48,8 +47,9 @@ describe("handleResolveEntity", () => {
     expect(process.exitCode).toBeUndefined();
     const output = JSON.parse(getStdout(stdoutSpy));
     expect(output.matches).toHaveLength(2);
-    expect(output.strategy).toBe("public");
     expect(output.matches[0].name).toBe("Google");
+    // Strategy field removed — only one resolution path exists now.
+    expect(output).not.toHaveProperty("strategy");
   });
 
   it("prints human-readable output with matches", async () => {
@@ -61,8 +61,7 @@ describe("handleResolveEntity", () => {
     const output = getStdout(stdoutSpy);
     expect(output).toContain('"Google"');
     expect(output).toContain("COMPANY");
-    expect(output).toContain("public");
-    expect(output).toContain("urn:li:organization:1441");
+    expect(output).toContain("1441");
     expect(output).toContain("Google Cloud");
   });
 
@@ -77,7 +76,6 @@ describe("handleResolveEntity", () => {
   it("prints no-matches message when empty", async () => {
     vi.mocked(resolveLinkedInEntity).mockResolvedValue({
       matches: [],
-      strategy: "public",
     });
 
     await handleResolveEntity("COMPANY", "xyznonexistent", {});

@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { resolveInstancePort } from "../cdp/index.js";
 import type { EntityMatch, EntityType } from "../types/linkedin-url.js";
-import { CDPClient } from "../cdp/client.js";
-import { discoverTargets } from "../cdp/discovery.js";
-import type { ConnectionOptions } from "./types.js";
 
 /**
  * Input for resolving a human-readable name to LinkedIn entity IDs.
  */
-export interface ResolveLinkedInEntityInput extends ConnectionOptions {
+export interface ResolveLinkedInEntityInput {
   /** Search query (company name, location, school name). */
   readonly query: string;
   /** Type of entity to resolve. */
@@ -23,64 +19,38 @@ export interface ResolveLinkedInEntityInput extends ConnectionOptions {
 export interface ResolveLinkedInEntityOutput {
   /** Resolved entity matches (up to 10). */
   readonly matches: EntityMatch[];
-  /** Which resolution strategy was used. */
-  readonly strategy: "public" | "voyager";
 }
 
 /**
  * Public typeahead endpoint (no auth required).
  *
- * Works for COMPANY and GEO entity types.
+ * Used by the LinkedIn Jobs guest search page; resolves COMPANY and
+ * GEO entities. Schools are stored as organizations on LinkedIn — a
+ * COMPANY query for "Stanford" returns Stanford University with the
+ * same numeric id Voyager would surface under `urn:li:school:N`, so
+ * SCHOOL queries route through the same endpoint with `typeaheadType`
+ * COMPANY.
+ *
+ * Endpoint shape: top-level JSON array of
+ * `{id, type, displayName, trackingId}`. See lhremote#763, #767, #769
+ * for the empirical findings that established this contract.
  */
 const PUBLIC_TYPEAHEAD_URL =
   "https://www.linkedin.com/jobs-guest/api/typeaheadHits";
 
 /**
- * Map our entity types to public typeahead's `typeaheadType` param.
- */
-const PUBLIC_TYPEAHEAD_TYPE: Partial<Record<EntityType, string>> = {
-  COMPANY: "COMPANY",
-  GEO: "GEO",
-};
-
-/**
- * Map our entity types to Voyager's `type` param.
- */
-const VOYAGER_TYPE: Record<EntityType, string> = {
-  COMPANY: "COMPANY",
-  GEO: "GEO",
-  SCHOOL: "SCHOOL",
-};
-
-/**
- * Try the public typeahead endpoint first.
+ * Map our entity types to the public typeahead's `typeaheadType` param.
  *
- * @returns Matches, or `undefined` if the public endpoint is not
- *          available for this entity type or the request fails.
+ * The endpoint silently ignores unsupported `typeaheadType` values
+ * (degrades to a mixed default search instead of erroring), so SCHOOL
+ * is mapped to COMPANY rather than passed through — schools resolve
+ * via the COMPANY namespace anyway.
  */
-async function tryPublicTypeahead(
-  query: string,
-  entityType: EntityType,
-): Promise<EntityMatch[] | undefined> {
-  const typeaheadType = PUBLIC_TYPEAHEAD_TYPE[entityType];
-  if (typeaheadType === undefined) return undefined;
-
-  const url = new URL(PUBLIC_TYPEAHEAD_URL);
-  url.searchParams.set("typeaheadType", typeaheadType);
-  url.searchParams.set("query", query);
-
-  try {
-    const response = await fetch(url.toString(), {
-      headers: { Accept: "application/json" },
-    });
-    if (!response.ok) return undefined;
-
-    const data: unknown = await response.json();
-    return parsePublicTypeaheadResponse(data, entityType);
-  } catch {
-    return undefined;
-  }
-}
+const PUBLIC_TYPEAHEAD_TYPE: Record<EntityType, string> = {
+  COMPANY: "COMPANY",
+  GEO: "GEO",
+  SCHOOL: "COMPANY",
+};
 
 /**
  * Shape of one entry in the public typeahead API response.
@@ -103,13 +73,18 @@ interface PublicTypeaheadEntry {
  * upstream `response.json()` cannot be statically typed, and the
  * endpoint has shifted shape historically (the original bug in #763
  * was a parser written against an older `{elements: [...]}` shape).
- * Defensive validation here keeps the contract honest.
+ * Non-array responses throw — silently returning `[]` for shape drift
+ * would recreate exactly the silent-failure mode #763 was filed for.
  */
 function parsePublicTypeaheadResponse(
   data: unknown,
   entityType: EntityType,
 ): EntityMatch[] {
-  if (!Array.isArray(data)) return [];
+  if (!Array.isArray(data)) {
+    throw new Error(
+      "Public typeahead returned an unexpected response shape (expected a top-level array)",
+    );
+  }
 
   return (data as PublicTypeaheadEntry[])
     .filter((el): el is PublicTypeaheadEntry & { id: string } =>
@@ -124,194 +99,41 @@ function parsePublicTypeaheadResponse(
 }
 
 /**
- * Try the Voyager typeahead endpoint via CDP.
- *
- * Connects to the LinkedIn webview in LinkedHelper and executes
- * the Voyager request from within the page context (which has
- * the LinkedIn session cookies).
- */
-async function tryVoyagerTypeahead(
-  query: string,
-  entityType: EntityType,
-  cdpPort: number,
-  cdpHost: string,
-  allowRemote: boolean,
-): Promise<EntityMatch[]> {
-  // Enforce loopback guard before making any network requests
-  if (!allowRemote && cdpHost !== "127.0.0.1" && cdpHost !== "localhost") {
-    throw new Error(
-      `Non-loopback CDP host "${cdpHost}" requires --allow-remote. ` +
-        "This is a security measure to prevent remote code execution.",
-    );
-  }
-
-  // Find the LinkedIn page target
-  const targets = await discoverTargets(cdpPort, cdpHost);
-  const linkedInTarget = targets.find(
-    (t) => t.type === "page" && t.url?.includes("linkedin.com"),
-  );
-
-  if (!linkedInTarget) {
-    throw new Error(
-      "No LinkedIn page found in LinkedHelper. " +
-        "Ensure LinkedHelper is running with an active LinkedIn session.",
-    );
-  }
-
-  const client = new CDPClient(cdpPort, {
-    host: cdpHost,
-    allowRemote,
-  });
-  await client.connect(linkedInTarget.id);
-
-  try {
-    // Execute the Voyager typeahead request from within the LinkedIn page
-    // context where session cookies are already available.
-    const voyagerType = VOYAGER_TYPE[entityType];
-    const result = await client.evaluate<VoyagerEvalResult>(
-      `(async () => {
-        const params = new URLSearchParams({
-          type: ${JSON.stringify(voyagerType)},
-          keywords: ${JSON.stringify(query)},
-          q: "type",
-          origin: "OTHER",
-        });
-        const url = "https://www.linkedin.com/voyager/api/typeahead/hitsV2?" + params;
-
-        // Extract CSRF token from cookies. The JSESSIONID value is
-        // typically stored as "ajax:<token>" (with quotes); strip quotes
-        // and use as-is for the Csrf-Token header.
-        const jsessionid = document.cookie
-          .split(";")
-          .map(c => c.trim())
-          .find(c => c.startsWith("JSESSIONID="));
-        let csrfToken = jsessionid
-          ? jsessionid.substring(jsessionid.indexOf("=") + 1).replace(/"/g, "")
-          : "";
-        // Ensure "ajax:" prefix is present exactly once
-        if (!csrfToken.startsWith("ajax:")) {
-          csrfToken = "ajax:" + csrfToken;
-        }
-
-        const response = await fetch(url, {
-          headers: {
-            "Csrf-Token": csrfToken,
-            "X-RestLi-Protocol-Version": "2.0.0",
-          },
-          credentials: "include",
-        });
-
-        if (!response.ok) {
-          return { error: "HTTP " + response.status + ": " + response.statusText };
-        }
-
-        const data = await response.json();
-        return { data };
-      })()`,
-      true, // awaitPromise: the expression is an async IIFE
-    );
-
-    if (result.error) {
-      throw new Error(`Voyager typeahead request failed: ${result.error}`);
-    }
-
-    return parseVoyagerResponse(result.data, entityType);
-  } finally {
-    client.disconnect();
-  }
-}
-
-/** Shape returned by the evaluate expression. */
-interface VoyagerEvalResult {
-  error?: string;
-  data?: VoyagerTypeaheadResponse;
-}
-
-/** Shape of the Voyager typeahead API response. */
-interface VoyagerTypeaheadResponse {
-  elements?: Array<{
-    targetUrn?: string;
-    title?: { text?: string };
-    trackingUrn?: string;
-  }>;
-}
-
-/**
- * Parse the Voyager typeahead response into normalised matches.
- */
-function parseVoyagerResponse(
-  data: VoyagerTypeaheadResponse | undefined,
-  entityType: EntityType,
-): EntityMatch[] {
-  if (!data?.elements) return [];
-
-  return data.elements
-    .filter((el) => el.targetUrn !== undefined || el.trackingUrn !== undefined)
-    .map((el) => {
-      // Extract numeric ID from URN (e.g., "urn:li:organization:1441" → "1441")
-      const urn = el.targetUrn ?? el.trackingUrn ?? "";
-      const id = urn.split(":").pop() ?? urn;
-
-      return {
-        id,
-        name: el.title?.text ?? "",
-        type: entityType,
-      };
-    })
-    .slice(0, 10);
-}
-
-/**
  * Resolve human-readable names (company names, locations, schools) to
- * LinkedIn entity IDs via typeahead endpoints.
+ * LinkedIn entity IDs via the public typeahead endpoint.
  *
- * Two-strategy approach:
- * 1. **Public typeahead** (primary for COMPANY/GEO) — no auth required
- * 2. **Voyager typeahead** (fallback, primary for SCHOOL) — requires CDP
+ * No authentication, no CDP, no LinkedHelper session required — a
+ * direct unauthenticated GET to LinkedIn's Jobs guest typeahead.
+ *
+ * Throws on:
+ *   - transport (network) errors
+ *   - HTTP non-2xx responses
+ *   - unexpected response shape (non-array body)
+ * Returns `{matches: []}` only for valid array responses with no
+ * usable entries — i.e. genuine "no matches" cases.
  *
  * @param input - Resolution parameters
- * @returns Resolved matches with strategy used
+ * @returns Resolved matches (up to 10)
  */
 export async function resolveLinkedInEntity(
   input: ResolveLinkedInEntityInput,
 ): Promise<ResolveLinkedInEntityOutput> {
-  const cdpPort = await resolveInstancePort(input.cdpPort, input.cdpHost);
-  const cdpHost = input.cdpHost ?? "127.0.0.1";
-  const allowRemote = input.allowRemote ?? false;
+  const typeaheadType = PUBLIC_TYPEAHEAD_TYPE[input.entityType];
 
-  // For SCHOOL, public endpoint doesn't support it — go straight to Voyager
-  if (input.entityType === "SCHOOL") {
-    const matches = await tryVoyagerTypeahead(
-      input.query,
-      input.entityType,
-      cdpPort,
-      cdpHost,
-      allowRemote,
+  const url = new URL(PUBLIC_TYPEAHEAD_URL);
+  url.searchParams.set("typeaheadType", typeaheadType);
+  url.searchParams.set("query", input.query);
+
+  const response = await fetch(url.toString(), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Public typeahead request failed: HTTP ${String(response.status)}`,
     );
-    return { matches, strategy: "voyager" };
   }
 
-  // Try public endpoint first. Fall back to Voyager when the request
-  // failed (undefined) OR succeeded with zero matches: the public
-  // typeahead endpoint has been observed to return empty for
-  // well-known COMPANY entities, and the same code path serves GEO.
-  // The authenticated Voyager path is more reliable when LinkedHelper
-  // has an active session.
-  const publicMatches = await tryPublicTypeahead(
-    input.query,
-    input.entityType,
-  );
-  if (publicMatches !== undefined && publicMatches.length > 0) {
-    return { matches: publicMatches, strategy: "public" };
-  }
-
-  // Public endpoint failed or returned zero — fallback to Voyager
-  const voyagerMatches = await tryVoyagerTypeahead(
-    input.query,
-    input.entityType,
-    cdpPort,
-    cdpHost,
-    allowRemote,
-  );
-  return { matches: voyagerMatches, strategy: "voyager" };
+  const data: unknown = await response.json();
+  const matches = parsePublicTypeaheadResponse(data, input.entityType);
+  return { matches };
 }
