@@ -108,7 +108,7 @@ describe("registerQueryProfiles", () => {
     expect(response.offset).toBe(0);
   });
 
-  it("passes only filter parameters to repository (no limit/offset)", async () => {
+  it("passes effective bound (offset + limit) to repository so merged slice has enough records", async () => {
     const { server, getHandler } = createMockServer();
     registerQueryProfiles(server);
     vi.mocked(discoverAllDatabases).mockReturnValue(
@@ -127,7 +127,50 @@ describe("registerQueryProfiles", () => {
     expect(searchFn).toHaveBeenCalledWith({
       query: "Jane",
       company: "Acme",
+      limit: 15,
     });
+  });
+
+  it("returns the offset slice when offset > 0 against a single database (regression for #761)", async () => {
+    const { server, getHandler } = createMockServer();
+    registerQueryProfiles(server);
+    vi.mocked(discoverAllDatabases).mockReturnValue(
+      new Map([[1, "/path/to/db"]]),
+    );
+    mockDb();
+
+    // Simulate a single-DB search with 82 matching records globally
+    // and the repository returning rows [0, offset+limit) up to its limit.
+    const total = 82;
+    const allRows = Array.from({ length: total }, (_, i) => ({
+      id: i + 1,
+      firstName: `Person${i + 1}`,
+      lastName: null,
+      headline: null,
+      company: null,
+      title: null,
+    }));
+    const searchFn = vi.fn().mockImplementation((opts: { limit?: number }) => ({
+      profiles: allRows.slice(0, opts.limit ?? 20),
+      total,
+    }));
+    vi.mocked(ProfileRepository).mockImplementation(function () {
+      return { search: searchFn } as unknown as ProfileRepository;
+    });
+
+    const handler = getHandler("query-profiles");
+    const result = await handler({ offset: 20, limit: 20 });
+
+    const response = JSON.parse(
+      (result as { content: [{ text: string }] }).content[0].text,
+    );
+    expect(response.total).toBe(total);
+    expect(response.profiles).toHaveLength(20);
+    expect(response.profiles[0].id).toBe(21);
+    expect(response.profiles[19].id).toBe(40);
+    expect(searchFn).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 40 }),
+    );
   });
 
   it("passes includeHistory to repository when specified", async () => {
@@ -149,6 +192,7 @@ describe("registerQueryProfiles", () => {
     expect(searchFn).toHaveBeenCalledWith({
       company: "Acme",
       includeHistory: true,
+      limit: 20,
     });
   });
 

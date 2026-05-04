@@ -50,6 +50,12 @@ export function registerQueryProfiles(server: McpServer): void {
         return mcpError("No LinkedHelper databases found.");
       }
 
+      const effectiveOffset = offset ?? 0;
+      const effectiveLimit = limit ?? 20;
+      // Each DB must return enough rows so that the merged slice
+      // [effectiveOffset, effectiveOffset + effectiveLimit) is fully covered.
+      const perDbLimit = effectiveOffset + effectiveLimit;
+
       // Aggregate results from all databases
       const allProfiles: ProfileSearchResult["profiles"] = [];
       let totalCount = 0;
@@ -62,6 +68,7 @@ export function registerQueryProfiles(server: McpServer): void {
             ...(query !== undefined && { query }),
             ...(company !== undefined && { company }),
             ...(includeHistory !== undefined && { includeHistory }),
+            limit: perDbLimit,
           });
           allProfiles.push(...result.profiles);
           totalCount += result.total;
@@ -72,8 +79,6 @@ export function registerQueryProfiles(server: McpServer): void {
         }
       }
 
-      const effectiveOffset = offset ?? 0;
-      const effectiveLimit = limit ?? 20;
       const paginatedProfiles = allProfiles.slice(
         effectiveOffset,
         effectiveOffset + effectiveLimit,
