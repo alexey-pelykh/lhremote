@@ -75,45 +75,49 @@ async function tryPublicTypeahead(
     });
     if (!response.ok) return undefined;
 
-    const data = (await response.json()) as PublicTypeaheadResponse;
+    const data: unknown = await response.json();
     return parsePublicTypeaheadResponse(data, entityType);
   } catch {
     return undefined;
   }
 }
 
-/** Shape of the public typeahead API response. */
-interface PublicTypeaheadResponse {
-  elements?: Array<{
-    hitInfo?: {
-      id?: string;
-      displayName?: string;
-      companyName?: string;
-      locationName?: string;
-    };
-  }>;
+/**
+ * Shape of one entry in the public typeahead API response.
+ *
+ * The endpoint returns a top-level JSON array (not an object with an
+ * `elements` field). Each entry has a flat `{id, type, displayName,
+ * trackingId}` shape.
+ */
+interface PublicTypeaheadEntry {
+  id?: string;
+  type?: string;
+  displayName?: string;
+  trackingId?: string;
 }
 
 /**
  * Parse the public typeahead response into normalised matches.
+ *
+ * Accepts `unknown` and validates the array shape at runtime: the
+ * upstream `response.json()` cannot be statically typed, and the
+ * endpoint has shifted shape historically (the original bug in #763
+ * was a parser written against an older `{elements: [...]}` shape).
+ * Defensive validation here keeps the contract honest.
  */
 function parsePublicTypeaheadResponse(
-  data: PublicTypeaheadResponse,
+  data: unknown,
   entityType: EntityType,
 ): EntityMatch[] {
-  if (!data.elements) return [];
+  if (!Array.isArray(data)) return [];
 
-  return data.elements
-    .filter((el): el is typeof el & { hitInfo: { id: string } } =>
-      el.hitInfo?.id !== undefined,
+  return (data as PublicTypeaheadEntry[])
+    .filter((el): el is PublicTypeaheadEntry & { id: string } =>
+      typeof el?.id === "string",
     )
     .map((el) => ({
-      id: el.hitInfo.id,
-      name:
-        el.hitInfo?.displayName ??
-        el.hitInfo?.companyName ??
-        el.hitInfo?.locationName ??
-        "",
+      id: el.id,
+      name: el.displayName ?? "",
       type: entityType,
     }))
     .slice(0, 10);
