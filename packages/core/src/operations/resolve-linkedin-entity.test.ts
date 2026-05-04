@@ -85,22 +85,63 @@ describe("resolveLinkedInEntity", () => {
       ]);
     });
 
-    it("returns empty matches when public endpoint returns no elements", async () => {
-      vi.mocked(resolveInstancePort).mockResolvedValue(9222);
+    it("falls back to Voyager when public endpoint returns no elements", async () => {
+      setupVoyagerMocks();
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
         json: vi.fn().mockResolvedValue({ elements: [] }),
       } as unknown as Response);
 
+      mockClient.evaluate.mockResolvedValue({
+        data: {
+          elements: [
+            {
+              targetUrn: "urn:li:organization:9999",
+              title: { text: "Mistral AI" },
+            },
+          ],
+        },
+      });
+
       const result = await resolveLinkedInEntity({
-        query: "NonexistentCorp",
+        query: "Mistral AI",
+        entityType: "COMPANY",
+        cdpPort: 9222,
+      });
+
+      expect(result.strategy).toBe("voyager");
+      expect(result.matches).toEqual([
+        { id: "9999", name: "Mistral AI", type: "COMPANY" },
+      ]);
+    });
+
+    it("does not call Voyager when public endpoint returns matches", async () => {
+      setupVoyagerMocks();
+
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          elements: [{ hitInfo: { id: "42", displayName: "Match Corp" } }],
+        }),
+      } as unknown as Response);
+
+      const result = await resolveLinkedInEntity({
+        query: "Match",
         entityType: "COMPANY",
         cdpPort: 9222,
       });
 
       expect(result.strategy).toBe("public");
-      expect(result.matches).toEqual([]);
+      expect(result.matches).toEqual([
+        { id: "42", name: "Match Corp", type: "COMPANY" },
+      ]);
+      // Confirm no Voyager-side work happens at all when public has matches:
+      // not just the API call, but also CDP target discovery and client
+      // instantiation. Locks in the early-return contract.
+      expect(mockClient.evaluate).not.toHaveBeenCalled();
+      expect(discoverTargets).not.toHaveBeenCalled();
+      expect(CDPClient).not.toHaveBeenCalled();
     });
 
     it("falls back to Voyager when public endpoint fails", async () => {
