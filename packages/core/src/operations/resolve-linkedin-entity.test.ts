@@ -293,11 +293,12 @@ describe("resolveLinkedInEntity", () => {
       expect(result.matches[1]?.id).toBe("3");
     });
 
-    it("returns empty matches when public response is not an array (defensive)", async () => {
+    it("falls back to Voyager when public response is not an array (defensive)", async () => {
       // Defends against the original bug: when the parser previously
       // expected an object {elements: [...]}, an array response would
       // silently produce []. Now an unexpected non-array response is
-      // explicitly handled by the Array.isArray gate.
+      // explicitly handled by the Array.isArray gate inside the parser
+      // (parser returns []), which then engages the Voyager fallback.
       setupVoyagerMocks();
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue({
