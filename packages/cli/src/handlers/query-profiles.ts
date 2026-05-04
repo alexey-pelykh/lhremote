@@ -27,6 +27,10 @@ export async function handleQueryProfiles(options: {
     return;
   }
 
+  // Each DB must return enough rows so that the merged slice
+  // [offset, offset + limit) is fully covered.
+  const perDbLimit = offset + limit;
+
   // Aggregate results from all databases
   const allProfiles: ProfileSearchResult["profiles"] = [];
   let totalCount = 0;
@@ -39,6 +43,7 @@ export async function handleQueryProfiles(options: {
         ...(query !== undefined && { query }),
         ...(company !== undefined && { company }),
         ...(includeHistory !== undefined && { includeHistory }),
+        limit: perDbLimit,
       });
       allProfiles.push(...result.profiles);
       totalCount += result.total;
