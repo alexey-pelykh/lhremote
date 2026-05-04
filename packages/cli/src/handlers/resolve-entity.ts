@@ -18,9 +18,6 @@ export async function handleResolveEntity(
   entityType: string,
   query: string,
   options: {
-    cdpPort?: number;
-    cdpHost?: string;
-    allowRemote?: boolean;
     json?: boolean;
     limit?: number;
   },
@@ -38,9 +35,6 @@ export async function handleResolveEntity(
     const result = await resolveLinkedInEntity({
       query,
       entityType: entityType as EntityType,
-      cdpPort: options.cdpPort,
-      ...(options.cdpHost !== undefined && { cdpHost: options.cdpHost }),
-      ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
     });
 
     let matches = result.matches;
@@ -49,9 +43,7 @@ export async function handleResolveEntity(
     }
 
     if (options.json) {
-      process.stdout.write(
-        JSON.stringify({ matches, strategy: result.strategy }, null, 2) + "\n",
-      );
+      process.stdout.write(JSON.stringify({ matches }, null, 2) + "\n");
       return;
     }
 
@@ -60,9 +52,7 @@ export async function handleResolveEntity(
       return;
     }
 
-    process.stdout.write(
-      `Matches for "${query}" (${entityType}, via ${result.strategy}):\n\n`,
-    );
+    process.stdout.write(`Matches for "${query}" (${entityType}):\n\n`);
     for (const match of matches) {
       process.stdout.write(`  ${match.id}  ${match.name}  [${match.type}]\n`);
     }
