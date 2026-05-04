@@ -58,16 +58,14 @@ describe("resolveLinkedInEntity", () => {
 
       const mockResponse = {
         ok: true,
-        json: vi.fn().mockResolvedValue({
-          elements: [
-            {
-              hitInfo: {
-                id: "1234",
-                displayName: "Acme Corp",
-              },
-            },
-          ],
-        }),
+        json: vi.fn().mockResolvedValue([
+          {
+            id: "1234",
+            type: "COMPANY",
+            displayName: "Acme Corp",
+            trackingId: "abc==",
+          },
+        ]),
       };
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
         mockResponse as unknown as Response,
@@ -85,12 +83,12 @@ describe("resolveLinkedInEntity", () => {
       ]);
     });
 
-    it("falls back to Voyager when public endpoint returns no elements", async () => {
+    it("falls back to Voyager when public endpoint returns an empty array", async () => {
       setupVoyagerMocks();
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: vi.fn().mockResolvedValue({ elements: [] }),
+        json: vi.fn().mockResolvedValue([]),
       } as unknown as Response);
 
       mockClient.evaluate.mockResolvedValue({
@@ -137,7 +135,7 @@ describe("resolveLinkedInEntity", () => {
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: vi.fn().mockResolvedValue({ elements: [] }),
+        json: vi.fn().mockResolvedValue([]),
       } as unknown as Response);
 
       await expect(
@@ -154,9 +152,9 @@ describe("resolveLinkedInEntity", () => {
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: vi.fn().mockResolvedValue({
-          elements: [{ hitInfo: { id: "42", displayName: "Match Corp" } }],
-        }),
+        json: vi.fn().mockResolvedValue([
+          { id: "42", type: "COMPANY", displayName: "Match Corp" },
+        ]),
       } as unknown as Response);
 
       const result = await resolveLinkedInEntity({
@@ -233,11 +231,9 @@ describe("resolveLinkedInEntity", () => {
 
       const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: vi.fn().mockResolvedValue({
-          elements: [
-            { hitInfo: { id: "101", locationName: "San Francisco" } },
-          ],
-        }),
+        json: vi.fn().mockResolvedValue([
+          { id: "101", type: "GEO", displayName: "San Francisco" },
+        ]),
       } as unknown as Response);
 
       await resolveLinkedInEntity({
@@ -254,13 +250,15 @@ describe("resolveLinkedInEntity", () => {
     it("limits public results to 10", async () => {
       vi.mocked(resolveInstancePort).mockResolvedValue(9222);
 
-      const elements = Array.from({ length: 15 }, (_, i) => ({
-        hitInfo: { id: String(i), displayName: `Company ${String(i)}` },
+      const entries = Array.from({ length: 15 }, (_, i) => ({
+        id: String(i),
+        type: "COMPANY",
+        displayName: `Company ${String(i)}`,
       }));
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: vi.fn().mockResolvedValue({ elements }),
+        json: vi.fn().mockResolvedValue(entries),
       } as unknown as Response);
 
       const result = await resolveLinkedInEntity({
@@ -272,18 +270,16 @@ describe("resolveLinkedInEntity", () => {
       expect(result.matches).toHaveLength(10);
     });
 
-    it("filters out elements without hitInfo.id", async () => {
+    it("filters out entries without id", async () => {
       vi.mocked(resolveInstancePort).mockResolvedValue(9222);
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
-        json: vi.fn().mockResolvedValue({
-          elements: [
-            { hitInfo: { id: "1", displayName: "Valid" } },
-            { hitInfo: { displayName: "No ID" } },
-            { hitInfo: { id: "3", companyName: "Also Valid" } },
-          ],
-        }),
+        json: vi.fn().mockResolvedValue([
+          { id: "1", type: "COMPANY", displayName: "Valid" },
+          { type: "COMPANY", displayName: "No ID" },
+          { id: "3", type: "COMPANY", displayName: "Also Valid" },
+        ]),
       } as unknown as Response);
 
       const result = await resolveLinkedInEntity({
@@ -295,6 +291,42 @@ describe("resolveLinkedInEntity", () => {
       expect(result.matches).toHaveLength(2);
       expect(result.matches[0]?.id).toBe("1");
       expect(result.matches[1]?.id).toBe("3");
+    });
+
+    it("returns empty matches when public response is not an array (defensive)", async () => {
+      // Defends against the original bug: when the parser previously
+      // expected an object {elements: [...]}, an array response would
+      // silently produce []. Now an unexpected non-array response is
+      // explicitly handled by the Array.isArray gate.
+      setupVoyagerMocks();
+
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ elements: [] }),
+      } as unknown as Response);
+
+      mockClient.evaluate.mockResolvedValue({
+        data: {
+          elements: [
+            {
+              targetUrn: "urn:li:organization:5555",
+              title: { text: "Voyager Match" },
+            },
+          ],
+        },
+      });
+
+      const result = await resolveLinkedInEntity({
+        query: "test",
+        entityType: "COMPANY",
+        cdpPort: 9222,
+      });
+
+      // Non-array response treated as empty → falls back to Voyager
+      expect(result.strategy).toBe("voyager");
+      expect(result.matches).toEqual([
+        { id: "5555", name: "Voyager Match", type: "COMPANY" },
+      ]);
     });
   });
 
