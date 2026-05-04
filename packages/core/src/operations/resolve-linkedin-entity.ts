@@ -287,17 +287,21 @@ export async function resolveLinkedInEntity(
     return { matches, strategy: "voyager" };
   }
 
-  // Try public endpoint first — only fall back to Voyager if the request
-  // itself failed (undefined), not when it succeeded with zero matches.
+  // Try public endpoint first. Fall back to Voyager when the request
+  // failed (undefined) OR succeeded with zero matches: the public
+  // typeahead endpoint has been observed to return empty for
+  // well-known COMPANY entities, and the same code path serves GEO.
+  // The authenticated Voyager path is more reliable when LinkedHelper
+  // has an active session.
   const publicMatches = await tryPublicTypeahead(
     input.query,
     input.entityType,
   );
-  if (publicMatches !== undefined) {
+  if (publicMatches !== undefined && publicMatches.length > 0) {
     return { matches: publicMatches, strategy: "public" };
   }
 
-  // Public endpoint failed — fallback to Voyager
+  // Public endpoint failed or returned zero — fallback to Voyager
   const voyagerMatches = await tryVoyagerTypeahead(
     input.query,
     input.entityType,
