@@ -31,8 +31,9 @@ export interface ResolveLinkedInEntityOutput {
  * SCHOOL queries route through the same endpoint with `typeaheadType`
  * COMPANY.
  *
- * Endpoint shape and behavior documented in
- * `../research/linkedin/public-typeahead-endpoint-20260504.md`.
+ * Endpoint shape: top-level JSON array of
+ * `{id, type, displayName, trackingId}`. See lhremote#763, #767, #769
+ * for the empirical findings that established this contract.
  */
 const PUBLIC_TYPEAHEAD_URL =
   "https://www.linkedin.com/jobs-guest/api/typeaheadHits";
@@ -72,14 +73,18 @@ interface PublicTypeaheadEntry {
  * upstream `response.json()` cannot be statically typed, and the
  * endpoint has shifted shape historically (the original bug in #763
  * was a parser written against an older `{elements: [...]}` shape).
- * Non-array responses fail cleanly to `[]` rather than throwing —
- * shape drift surfaces as "no matches" rather than a hard error.
+ * Non-array responses throw — silently returning `[]` for shape drift
+ * would recreate exactly the silent-failure mode #763 was filed for.
  */
 function parsePublicTypeaheadResponse(
   data: unknown,
   entityType: EntityType,
 ): EntityMatch[] {
-  if (!Array.isArray(data)) return [];
+  if (!Array.isArray(data)) {
+    throw new Error(
+      "Public typeahead returned an unexpected response shape (expected a top-level array)",
+    );
+  }
 
   return (data as PublicTypeaheadEntry[])
     .filter((el): el is PublicTypeaheadEntry & { id: string } =>
@@ -100,9 +105,12 @@ function parsePublicTypeaheadResponse(
  * No authentication, no CDP, no LinkedHelper session required — a
  * direct unauthenticated GET to LinkedIn's Jobs guest typeahead.
  *
- * Throws on transport (network) errors and HTTP non-2xx responses.
- * Returns `{matches: []}` for valid responses with no results AND
- * for unexpected-shape responses (defensive against future API drift).
+ * Throws on:
+ *   - transport (network) errors
+ *   - HTTP non-2xx responses
+ *   - unexpected response shape (non-array body)
+ * Returns `{matches: []}` only for valid array responses with no
+ * usable entries — i.e. genuine "no matches" cases.
  *
  * @param input - Resolution parameters
  * @returns Resolved matches (up to 10)

@@ -107,24 +107,24 @@ describe("resolveLinkedInEntity", () => {
       expect(result.matches).toEqual([]);
     });
 
-    it("returns empty matches (no throw) when the response shape is not an array — defensive against API drift", async () => {
+    it("throws on unexpected response shape (non-array) — does not silently fail like the original #763 bug", async () => {
       // Defends against the original bug pattern: when the parser previously
       // expected an object {elements: [...]}, an array response silently
-      // produced []. The inverse — an object response when we expect array —
-      // is the same risk after a hypothetical future drift. Parser fails
-      // cleanly to [] so shape drift surfaces as "no matches" rather than
-      // a hard error.
+      // produced []. The mirror failure — an object response when we now
+      // expect an array — must NOT silently produce [] either, or we recreate
+      // exactly the failure mode #763 was filed for. Throw so the caller can
+      // distinguish "LinkedIn changed shape" from "no matches found".
       vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
         json: vi.fn().mockResolvedValue({ elements: [] }),
       } as unknown as Response);
 
-      const result = await resolveLinkedInEntity({
-        query: "test",
-        entityType: "COMPANY",
-      });
-
-      expect(result.matches).toEqual([]);
+      await expect(
+        resolveLinkedInEntity({
+          query: "test",
+          entityType: "COMPANY",
+        }),
+      ).rejects.toThrow("unexpected response shape");
     });
 
     it("filters out entries without an id", async () => {

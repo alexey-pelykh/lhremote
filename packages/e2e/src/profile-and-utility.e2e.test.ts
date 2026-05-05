@@ -386,6 +386,86 @@ describeE2E("profile enrichment and utilities", () => {
     });
   });
 
+  // ── resolve-linkedin-entity ──────────────────────────────────────
+  //
+  // Lives at the top level (NOT inside `instance-requiring tools`) on
+  // purpose: this tool calls LinkedIn's public typeahead directly and
+  // requires no LinkedHelper instance, no CDP, no open LinkedIn tab.
+  // Keeping it outside the instance-requiring lane verifies that
+  // contract — a future regression that brings back CDP/session
+  // coupling would fail this test because the suite would have no
+  // running instance to fall back to.
+
+  describe("resolve-linkedin-entity", () => {
+    describe("CLI handler", () => {
+      const originalExitCode = process.exitCode;
+
+      beforeEach(() => {
+        process.exitCode = undefined;
+      });
+
+      afterEach(() => {
+        process.exitCode = originalExitCode;
+        vi.restoreAllMocks();
+      });
+
+      it("resolves a COMPANY entity --json", async () => {
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+        await handleResolveEntity("COMPANY", "Google", { json: true });
+
+        expect(process.exitCode).toBeUndefined();
+        expect(stdoutSpy).toHaveBeenCalled();
+
+        const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
+        const parsed = JSON.parse(output) as {
+          matches: { id: string; name: string; type: string }[];
+        };
+
+        expect(Array.isArray(parsed.matches)).toBe(true);
+        // Strategy field removed alongside Voyager — assert it's absent so
+        // any reintroduction shows up loudly.
+        expect(parsed).not.toHaveProperty("strategy");
+        // "Google" reliably returns matches from LinkedIn's typeahead;
+        // an empty result here is a real regression, not a flake.
+        expect(parsed.matches.length).toBeGreaterThan(0);
+        expect(parsed.matches[0]).toHaveProperty("id");
+        expect(parsed.matches[0]).toHaveProperty("name");
+      }, 30_000);
+    });
+
+    describe("MCP tool", () => {
+      it("resolves a COMPANY entity", async () => {
+        const { server, getHandler } = createMockServer();
+        registerResolveLinkedInEntity(server);
+
+        const handler = getHandler("resolve-linkedin-entity");
+        const result = (await handler({
+          query: "Google",
+          entityType: "COMPANY",
+        })) as {
+          isError?: boolean;
+          content: { type: string; text: string }[];
+        };
+
+        expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
+        expect(result.content).toHaveLength(1);
+
+        const parsed = JSON.parse((result.content[0] as { text: string }).text) as {
+          matches: { id: string; name: string; type: string }[];
+        };
+
+        expect(Array.isArray(parsed.matches)).toBe(true);
+        // Strategy field removed alongside Voyager — assert it's absent.
+        expect(parsed).not.toHaveProperty("strategy");
+        // "Google" reliably returns matches; empty here is a real regression.
+        expect(parsed.matches.length).toBeGreaterThan(0);
+        expect(parsed.matches[0]).toHaveProperty("id");
+        expect(parsed.matches[0]).toHaveProperty("name");
+      }, 30_000);
+    });
+  });
+
   // ── Instance-requiring tools ──────────────────────────────────────
 
   describe("instance-requiring tools", () => {
@@ -496,88 +576,6 @@ describeE2E("profile enrichment and utilities", () => {
     });
 
     // ── resolve-linkedin-entity ─────────────────────────────────────
-
-    describe("resolve-linkedin-entity", () => {
-      describe("CLI handler", () => {
-        const originalExitCode = process.exitCode;
-
-        beforeEach(() => {
-          process.exitCode = undefined;
-        });
-
-        afterEach(() => {
-          process.exitCode = originalExitCode;
-          vi.restoreAllMocks();
-        });
-
-        it("resolves a COMPANY entity --json", async () => {
-          // Public typeahead — no LH session required (Voyager fallback removed).
-          // The `port` from the surrounding describe block is unused here, but
-          // we keep this test inside `instance-requiring tools` so it still
-          // runs in the live-LinkedIn lane rather than fully unit-mocked.
-          const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
-
-          await handleResolveEntity("COMPANY", "Google", { json: true });
-
-          expect(process.exitCode).toBeUndefined();
-          expect(stdoutSpy).toHaveBeenCalled();
-
-          const output = stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
-          const parsed = JSON.parse(output) as {
-            matches: { id: string; name: string; type: string }[];
-          };
-
-          expect(Array.isArray(parsed.matches)).toBe(true);
-          // Strategy field removed alongside Voyager — assert it's absent so
-          // any reintroduction shows up loudly.
-          expect(parsed).not.toHaveProperty("strategy");
-          if (parsed.matches.length > 0) {
-            expect(parsed.matches[0]).toHaveProperty("id");
-            expect(parsed.matches[0]).toHaveProperty("name");
-          } else {
-            // LinkedIn typeahead may return zero results depending on account
-            // state or API availability — log so it's not silently ignored
-            console.warn("resolve-entity CLI: LinkedIn returned 0 matches for 'Google' (COMPANY)");
-          }
-        }, 30_000);
-      });
-
-      describe("MCP tool", () => {
-        it("resolves a COMPANY entity", async () => {
-          const { server, getHandler } = createMockServer();
-          registerResolveLinkedInEntity(server);
-
-          const handler = getHandler("resolve-linkedin-entity");
-          // Public typeahead — no LH session required (Voyager fallback removed).
-          const result = (await handler({
-            query: "Google",
-            entityType: "COMPANY",
-          })) as {
-            isError?: boolean;
-            content: { type: string; text: string }[];
-          };
-
-          expect(result.isError, `MCP tool error: ${result.content?.[0]?.text}`).toBeUndefined();
-          expect(result.content).toHaveLength(1);
-
-          const parsed = JSON.parse((result.content[0] as { text: string }).text) as {
-            matches: { id: string; name: string; type: string }[];
-          };
-
-          expect(Array.isArray(parsed.matches)).toBe(true);
-          // Strategy field removed alongside Voyager — assert it's absent.
-          expect(parsed).not.toHaveProperty("strategy");
-          if (parsed.matches.length > 0) {
-            expect(parsed.matches[0]).toHaveProperty("id");
-            expect(parsed.matches[0]).toHaveProperty("name");
-          } else {
-            // LinkedIn typeahead may return zero results depending on account
-            // state or API availability — log so it's not silently ignored
-            console.warn("resolve-entity MCP: LinkedIn returned 0 matches for 'Google' (COMPANY)");
-          }
-        }, 30_000);
-      });
-    });
 
     // ── get-action-budget ───────────────────────────────────────────
 
