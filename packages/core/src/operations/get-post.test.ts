@@ -12,6 +12,7 @@ vi.mock("../cdp/client.js", () => ({
 }));
 
 vi.mock("../utils/delay.js", () => ({
+  delay: vi.fn().mockResolvedValue(undefined),
   gaussianDelay: vi.fn().mockResolvedValue(undefined),
 }));
 

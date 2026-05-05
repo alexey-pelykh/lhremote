@@ -32,7 +32,7 @@ Any single match indicates the profile card has hydrated far enough for follow-s
 
 **Rule for future profile-area selectors**: prefer `aria-label` prefixes on interactive elements over DOM headings, CSS classes, or `data-view-name` values. When a new readiness signal is needed, extend `PROFILE_READY_SELECTOR` with additional action-button variants rather than falling back to structural selectors.
 
-**Diagnostic instrumentation is first-class but opt-in**: `navigateToProfile` can capture `{ href, title, DOM probes, screenshot }` on `CDPTimeoutError`. Activation is gated on `LHREMOTE_CAPTURE_DIAGNOSTICS=1`; artifacts land under `${os.tmpdir()}/lhremote-diagnostics/` as `navigate-to-profile-{timestamp}-{publicId}.{json,png}`. E2E tests set this env var via `vitest.e2e.config.ts`, so every test run produces diagnostics without code changes. Production callers (CLI, MCP server) remain default-off — screenshots of LinkedIn profile pages contain personal data and must not be written silently. Future LinkedIn DOM changes are still classifiable (re-run with the env var set) without code changes.
+**Diagnostic instrumentation is first-class but opt-in**: `navigateToProfile` can capture `{ href, title, DOM probes, screenshot }` on `CDPTimeoutError`. Activation is gated on `LHREMOTE_CAPTURE_DIAGNOSTICS=1`; artifacts land under a per-invocation `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/` directory (created via `mkdtemp` for atomic TOCTOU-safe creation — see § 2026-05-05 Amendment) as `navigate-to-profile-{timestamp}-{publicId}.{json,png}`. E2E tests set this env var via `vitest.e2e.config.ts`, so every test run produces diagnostics without code changes. Production callers (CLI, MCP server) remain default-off — screenshots of LinkedIn profile pages contain personal data and must not be written silently. Future LinkedIn DOM changes are still classifiable (re-run with the env var set) without code changes.
 
 ## Consequences
 
@@ -105,10 +105,44 @@ present on both surfaces and provide the readiness signal.
   observed company-page variants, not to fork the selector.
 
 **Diagnostic filename rule extends to company navigation**: artifacts
-land at `${os.tmpdir()}/lhremote-diagnostics/navigate-to-{profile,company}-{timestamp}-{slug}.{json,png}`,
+land at `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/navigate-to-{profile,company}-{timestamp}-{slug}.{json,png}`,
 where the kind tag identifies which navigator timed out. Caller-label
 in the `console.warn` line follows the same convention
 (`[navigateToProfile]` vs `[navigateToCompany]`).
+
+### 2026-05-05 — Diagnostic directory layout (TOCTOU mitigation)
+
+The diagnostic directory layout originally documented above
+(`${os.tmpdir()}/lhremote-diagnostics/`) was a single shared parent
+across all captures. PR #770's review surfaced a TOCTOU concern: when
+the shared parent pre-exists as a symlink another local user
+controls, `mkdir(..., { recursive: true })` traverses that symlink
+before any validation can run, so subsequent writes land in the
+attacker's target directory.
+
+The mitigation: switch from a shared parent + `mkdir(recursive: true)`
+to a per-invocation `mkdtemp(${tmpdir()}/lhremote-diagnostics-)`. The
+`mkdtemp` syscall generates the random suffix and creates the
+directory atomically, refusing to follow any pre-existing symlink at
+the prefix. Each capture invocation produces a guaranteed-fresh
+directory at `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/`, so the
+artifacts the caller's `console.warn` reports are always in a
+directory the OS just created for that capture.
+
+This applies symmetrically to:
+
+- `captureProfileLoadFailure` / `captureCompanyLoadFailure`
+  (`navigate-to-profile.ts`)
+- `capturePostLoadFailure` (`cdp/wait-for-post-load.ts`, introduced
+  by PR #770 as the second call site that triggered the ADR's
+  "Generalize diagnostic capture" follow-up condition)
+
+The `console.warn` lines and operator-facing E2E error messages
+should use the per-invocation directory path returned by `mkdtemp`,
+not a hard-coded shared parent path. Any documentation that still
+references the shared `lhremote-diagnostics/` parent without the
+trailing random suffix is stale and should be updated when next
+modified.
 
 ## Related
 
