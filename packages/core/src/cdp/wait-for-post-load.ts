@@ -69,11 +69,12 @@ const POST_LTR_SPAN_FALLBACK_SELECTOR = 'span[dir="ltr"]';
  *  2. Any of {@link POST_INTERACTION_SELECTOR} suffices.
  *  3. Otherwise fall back to {@link POST_LTR_SPAN_FALLBACK_SELECTOR}.
  *
- * Issues #762 / #771: the original `span[dir="ltr"]`-only predicate stopped
- * matching after LinkedIn's 2026-05 post-detail markup refresh removed
- * `[data-testid="mainFeed"]`, `span[dir="ltr"]`, and `<article>`.  Phase 1
- * (PR #770) shipped diagnostic capture that pinned the regression; this
- * helper closes it.
+ * Issues #762 / #771: the original predicate required both an author link
+ * AND at least one `span[dir="ltr"]`; LinkedIn's 2026-05 post-detail markup
+ * refresh removed `[data-testid="mainFeed"]`, `span[dir="ltr"]`, and
+ * `<article>`, breaking the second gate (the author link still renders).
+ * Phase 1 (PR #770) shipped diagnostic capture that pinned the regression;
+ * this helper closes it.
  *
  * On timeout, if `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a best-effort diagnostic
  * capture is written to a per-invocation
