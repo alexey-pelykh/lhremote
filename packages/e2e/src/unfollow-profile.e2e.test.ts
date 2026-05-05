@@ -186,7 +186,9 @@ describeE2E("unfollow-profile operation", () => {
         `Detection returned "unknown" on company page ${companyUrl} — ` +
           `ADR-007's amended premise (Follow/Following toggle works on ` +
           `company pages) was violated.  Inspect the diagnostic capture ` +
-          `under \${os.tmpdir()}/lhremote-diagnostics/navigate-to-company-*.{json,png}.`,
+          `under \${os.tmpdir()}/lhremote-diagnostics-*/navigate-to-company-*.{json,png} ` +
+          `(per-invocation mkdtemp directory; the helper's console.warn ` +
+          `reports the actual path).`,
       ).not.toBe("unknown");
       expect(["following", "not_following"]).toContain(parsed.priorState);
 

@@ -12,15 +12,12 @@ vi.mock("../cdp/client.js", () => ({
 }));
 
 vi.mock("../utils/delay.js", () => ({
+  delay: vi.fn().mockResolvedValue(undefined),
   gaussianDelay: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./navigate-away.js", () => ({
   navigateAwayIf: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock("./get-feed.js", () => ({
-  delay: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { discoverTargets } from "../cdp/discovery.js";

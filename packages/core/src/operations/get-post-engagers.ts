@@ -5,6 +5,7 @@ import { resolveInstancePort } from "../cdp/index.js";
 import type { PostEngager } from "../types/post-analytics.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
+import { waitForPostLoad } from "../cdp/wait-for-post-load.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
 import { delay, gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak, simulateReadingTime } from "../utils/delay.js";
@@ -212,31 +213,6 @@ const GET_MODAL_TOTAL_SCRIPT = `(() => {
 // ---------------------------------------------------------------------------
 // Wait helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Poll the DOM until the post detail page has rendered.  The page is
- * considered ready when an author link and at least one `span[dir="ltr"]`
- * are present.
- */
-async function waitForPostLoad(
-  client: CDPClient,
-  timeoutMs = 15_000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const ready = await client.evaluate<boolean>(`(() => {
-      const authorLink = document.querySelector('a[href*="/in/"], a[href*="/company/"]');
-      if (!authorLink) return false;
-      const ltrSpans = document.querySelectorAll('span[dir="ltr"]');
-      return ltrSpans.length > 0;
-    })()`);
-    if (ready) return;
-    await delay(500);
-  }
-  throw new Error(
-    "Timed out waiting for post detail to appear in the DOM",
-  );
-}
 
 /**
  * Poll the DOM until the reactions modal has loaded with at least one

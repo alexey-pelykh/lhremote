@@ -11,8 +11,20 @@ import type { CDPClient } from "../cdp/client.js";
 // ESM transforms.  Dynamic-import after the mock guarantees the mocked
 // version is the one the module sees.
 vi.mock("node:fs/promises", () => ({
-  mkdir: vi.fn().mockResolvedValue(undefined),
+  // mkdtemp returns the path of the freshly-created directory; we
+  // append a deterministic suffix in tests so assertions can match it.
+  mkdtemp: vi.fn(async (prefix: string) => `${prefix}TESTABCDEF`),
   writeFile: vi.fn().mockResolvedValue(undefined),
+  // lstat/chmod back the post-mkdtemp security check
+  // (`ensureSecureDiagnosticDir`).  Default returns a fresh-and-secure
+  // directory shape so tests that don't care about the security path
+  // continue to pass.
+  lstat: vi.fn().mockResolvedValue({
+    isSymbolicLink: () => false,
+    isDirectory: () => true,
+    mode: 0o700,
+  }),
+  chmod: vi.fn().mockResolvedValue(undefined),
 }));
 
 const {
@@ -351,6 +363,56 @@ describe("captureProfileLoadFailure", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("late rejection from capture body does not surface as UnhandledPromiseRejection (timer-wins race)", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+
+    // Mirrors the same test in wait-for-post-load.test.ts — exercises
+    // the `.catch(() => undefined)` on the inner Promise.race arm.
+    // Without that catch, when the timer wins the race AND the inner
+    // capture rejects later, the rejection escapes as an
+    // UnhandledPromiseRejection.  This test forces that scenario:
+    // setTimeout fires synchronously on the microtask queue (timer
+    // always wins), and the inner evaluate's setImmediate-scheduled
+    // rejection then has nowhere to land.
+    const unhandled: unknown[] = [];
+    const handler = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", handler);
+
+    const timeoutSpy = vi
+      .spyOn(globalThis, "setTimeout")
+      .mockImplementation(((cb: () => void) => {
+        Promise.resolve().then(cb);
+        return 0 as unknown as NodeJS.Timeout;
+      }) as typeof setTimeout);
+
+    try {
+      const client = {
+        evaluate: vi.fn(
+          () =>
+            new Promise<unknown>((_, reject) => {
+              setImmediate(() =>
+                reject(new Error("simulated late CDP rejection")),
+              );
+            }),
+        ),
+        send: vi.fn(),
+      } as unknown as CDPClient;
+
+      await captureProfileLoadFailure(client, "jane-doe");
+
+      // Allow the late rejection to settle.
+      await new Promise<void>((r) => setImmediate(r));
+      await new Promise<void>((r) => setImmediate(r));
+
+      expect(unhandled).toHaveLength(0);
+    } finally {
+      timeoutSpy.mockRestore();
+      process.off("unhandledRejection", handler);
+    }
+  });
+
   it("sanitizes publicId so path separators in the decoded slug can't escape the diagnostics dir", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
     const client = makeClient();
@@ -388,9 +450,9 @@ describe("captureProfileLoadFailure", () => {
       expect(filename).toMatch(
         /^navigate-to-profile-[\w.-]+\.(json|png)$/,
       );
-      // And the parent directory must still end at the diagnostics
-      // base dir.
-      expect(baseDir).toMatch(/lhremote-diagnostics$/);
+      // And the parent directory ends at the per-invocation mkdtemp
+      // result — see capturePostLoadFailure for the TOCTOU rationale.
+      expect(baseDir).toMatch(/lhremote-diagnostics-[A-Za-z0-9]+$/);
     }
   });
 });

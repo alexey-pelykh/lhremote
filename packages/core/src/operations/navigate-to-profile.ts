@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CDPClient } from "../cdp/client.js";
 import { CDPTimeoutError } from "../cdp/errors.js";
+import { ensureSecureDiagnosticDir } from "../cdp/wait-for-post-load.js";
 import { waitForElement } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { gaussianDelay, maybeHesitate } from "../utils/delay.js";
@@ -216,8 +217,10 @@ export function extractFollowableTarget(url: string): FollowableTarget {
  * buttons fully render.
  *
  * On timeout, if `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a best-effort
- * diagnostic capture is written to `${os.tmpdir()}/lhremote-diagnostics/`
- * before the error propagates; see {@link captureProfileLoadFailure}.
+ * diagnostic capture is written to a per-invocation
+ * `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/` directory before the
+ * error propagates; see {@link captureProfileLoadFailure}.  The
+ * helper's trailing `console.warn` reports the actual artifact path.
  *
  * @param client   - Connected CDP client targeting a LinkedIn page.
  * @param publicId - LinkedIn public ID (URL slug), e.g. `"jane-doe-123"`.
@@ -256,8 +259,10 @@ export async function navigateToProfile(
  * absence of person-only buttons (Message, Connect, Pending).
  *
  * On timeout, if `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a best-effort
- * diagnostic capture is written to `${os.tmpdir()}/lhremote-diagnostics/`
- * before the error propagates; see {@link captureCompanyLoadFailure}.
+ * diagnostic capture is written to a per-invocation
+ * `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/` directory before the
+ * error propagates; see {@link captureCompanyLoadFailure}.  The
+ * helper's trailing `console.warn` reports the actual artifact path.
  *
  * @param client - Connected CDP client targeting a LinkedIn page.
  * @param slug   - LinkedIn company slug (URL segment), e.g. `"mirohq"`.
@@ -318,11 +323,14 @@ interface CaptureCancellationState {
 
 /**
  * Best-effort diagnostic capture when `navigateToProfile` times out waiting
- * for the profile action-button row.  Writes
+ * for the profile action-button row.  Each invocation creates a
+ * fresh `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/` directory via
+ * `mkdtemp` (atomic; refuses to follow any pre-existing symlink at
+ * the prefix — see ADR-007 § 2026-05-05 Amendment) and writes
  * `navigate-to-profile-{timestamp}-{publicId}.json` (URL, title, DOM
- * probes, visible text snippet) and `.png` (full-page
- * `Page.captureScreenshot` with `captureBeyondViewport: true`) under
- * `${os.tmpdir()}/lhremote-diagnostics/` so callers can classify the
+ * probes, visible text snippet) plus a sibling `.png` (full-page
+ * `Page.captureScreenshot` with `captureBeyondViewport: true`, when
+ * the screenshot succeeds) inside it, so callers can classify the
  * failure — auth wall, DOM change, or silent navigation error.
  *
  * **Opt-in only.** Self-gated on `LHREMOTE_CAPTURE_DIAGNOSTICS=1` — no-op
@@ -393,7 +401,14 @@ async function captureNavigationLoadFailure(
   let bound: NodeJS.Timeout | undefined;
   try {
     await Promise.race([
-      captureNavigationLoadFailureInner(client, slug, kind, state),
+      // Attach a no-op catch to the inner promise so a late rejection
+      // (after the timer wins the race) does not escape as an
+      // UnhandledPromiseRejection — capture-side errors must always be
+      // swallowed to keep the caller's timeout propagating unchanged.
+      // Mirrors the same mitigation in wait-for-post-load.ts.
+      captureNavigationLoadFailureInner(client, slug, kind, state).catch(
+        () => undefined,
+      ),
       new Promise<void>((resolve) => {
         bound = setTimeout(() => {
           state.timedOut = true;
@@ -415,9 +430,13 @@ async function captureNavigationLoadFailureInner(
   state: CaptureCancellationState,
 ): Promise<void> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const baseDir = join(tmpdir(), "lhremote-diagnostics");
-  // 0o700: owner-only rwx.  POSIX-only; no-op on Windows.
-  await mkdir(baseDir, { recursive: true, mode: 0o700 });
+  // mkdtemp creates a fresh per-invocation directory atomically and
+  // refuses to follow any pre-existing symlink at the prefix.  Mirrors
+  // the wait-for-post-load.ts approach — see that file's
+  // `capturePostLoadFailureInner` for the full TOCTOU rationale.
+  const baseDir = await mkdtemp(join(tmpdir(), "lhremote-diagnostics-"));
+  if (state.timedOut) return;
+  if (!(await ensureSecureDiagnosticDir(baseDir))) return;
   if (state.timedOut) return;
   const prefix = join(
     baseDir,
@@ -441,31 +460,43 @@ async function captureNavigationLoadFailureInner(
   }))()`);
   if (state.timedOut) return;
 
+  const callerLabel = kind === "profile" ? "navigateToProfile" : "navigateToCompany";
   // 0o600: owner-only rw.  POSIX-only; no-op on Windows.
   await writeFile(`${prefix}.json`, JSON.stringify(info, null, 2), {
     encoding: "utf8",
     mode: 0o600,
   });
-  if (state.timedOut) return;
+  if (state.timedOut) {
+    // Surface the path NOW — the per-invocation mkdtemp directory is
+    // the only place these artifacts live, so an early return without
+    // a warn would leave operators unable to find them.
+    console.warn(
+      `[${callerLabel}] timeout diagnostics partial: ${prefix}.json (screenshot skipped — capture cap reached)`,
+    );
+    return;
+  }
 
+  let wroteScreenshot = false;
   try {
     const screenshot = (await client.send("Page.captureScreenshot", {
       format: "png",
       captureBeyondViewport: true,
     })) as { data?: string };
-    if (state.timedOut) return;
-    if (screenshot.data) {
+    if (!state.timedOut && screenshot.data) {
       await writeFile(`${prefix}.png`, Buffer.from(screenshot.data, "base64"), {
         mode: 0o600,
       });
+      wroteScreenshot = true;
     }
   } catch {
     // Screenshot is best-effort; info.json is the primary artifact.
   }
-  if (state.timedOut) return;
 
-  const callerLabel = kind === "profile" ? "navigateToProfile" : "navigateToCompany";
+  // Unconditional warn — even if `state.timedOut` flipped during the
+  // screenshot, we still have at least the JSON at the randomized
+  // path.  Mirrors wait-for-post-load.ts.
+  const artifacts = wroteScreenshot ? "{json,png}" : "json";
   console.warn(
-    `[${callerLabel}] timeout diagnostics written: ${prefix}.{json,png}`,
+    `[${callerLabel}] timeout diagnostics written: ${prefix}.${artifacts}`,
   );
 }
