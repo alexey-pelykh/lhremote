@@ -6,7 +6,10 @@ import type { PostEngager } from "../types/post-analytics.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { waitForPostLoad } from "../cdp/wait-for-post-load.js";
-import { waitForReactionsModal } from "../cdp/wait-for-reactions-modal.js";
+import {
+  RESOLVE_REACTIONS_MODAL_SCRIPT,
+  waitForReactionsModal,
+} from "../cdp/wait-for-reactions-modal.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
 import { gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak, simulateReadingTime } from "../utils/delay.js";
@@ -85,13 +88,17 @@ const REACTIONS_SELECTOR = "[data-lhremote-reactions]";
 /**
  * JavaScript source that extracts engager data from the reactions modal.
  *
- * The modal (`[role="dialog"]`) contains a scrollable list of people who
- * reacted to the post.  Each entry has a profile link (`a[href*="/in/"]`),
- * name text, headline, and a small reaction-type icon overlay.
+ * The modal contains a scrollable list of people who reacted to the
+ * post.  Each entry has a profile link (`a[href*="/in/"]`), name text,
+ * headline, and a small reaction-type icon overlay.  The modal element
+ * is resolved via {@link RESOLVE_REACTIONS_MODAL_SCRIPT}'s fallback
+ * chain — see #773 for why `[role="dialog"]` alone is no longer
+ * sufficient as of LinkedIn's 2026-05 markup refresh.
  */
 const SCRAPE_ENGAGERS_SCRIPT = `(() => {
+  ${RESOLVE_REACTIONS_MODAL_SCRIPT}
   const engagers = [];
-  const modal = document.querySelector('[role="dialog"]');
+  const modal = __getReactionsModal();
   if (!modal) return engagers;
 
   const seen = new Set();
@@ -165,11 +172,14 @@ const SCRAPE_ENGAGERS_SCRIPT = `(() => {
  * Build a scroll-modal script with a randomised scroll distance.
  *
  * The distance varies between 350–650 px to avoid the detection signal
- * of a perfectly uniform modal scroll cadence.
+ * of a perfectly uniform modal scroll cadence.  The modal element is
+ * resolved via {@link RESOLVE_REACTIONS_MODAL_SCRIPT}'s fallback chain
+ * (see #773 / Phase 1 diagnostics — `[role="dialog"]` alone is stale).
  */
 function createScrollModalScript(distance: number): string {
   return `(() => {
-  const modal = document.querySelector('[role="dialog"]');
+  ${RESOLVE_REACTIONS_MODAL_SCRIPT}
+  const modal = __getReactionsModal();
   if (!modal) return false;
 
   const divs = modal.querySelectorAll('div');
@@ -196,9 +206,12 @@ function createScrollModalScript(distance: number): string {
 /**
  * JavaScript source that extracts the total reactions count from the
  * reactions modal header text (e.g. "42 Reactions" or "All (42)").
+ * Modal resolution shares {@link RESOLVE_REACTIONS_MODAL_SCRIPT}'s
+ * fallback chain with the predicate / scrape / scroll scripts.
  */
 const GET_MODAL_TOTAL_SCRIPT = `(() => {
-  const modal = document.querySelector('[role="dialog"]');
+  ${RESOLVE_REACTIONS_MODAL_SCRIPT}
+  const modal = __getReactionsModal();
   if (!modal) return 0;
 
   const text = modal.textContent || '';

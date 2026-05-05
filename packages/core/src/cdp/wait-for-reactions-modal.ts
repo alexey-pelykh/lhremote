@@ -9,39 +9,147 @@ import type { CDPClient } from "./client.js";
 import { ensureSecureDiagnosticDir } from "./wait-for-post-load.js";
 
 // ----------------------------------------------------------------------------
-// Selectors used by both the readiness predicate ({@link waitForReactionsModal})
-// and the diagnostic probe ({@link captureReactionsModalFailure}).
-// Centralizing them keeps the two aligned: a future timeout's "which-of-three-
-// is-missing" signal stays accurate by definition.
+// Selectors used by the readiness predicate, the diagnostic probe, and the
+// modal resolver shared with `get-post-engagers.ts` (scrape / scroll / total).
+// Centralizing them keeps the call sites aligned: a future regression in
+// "which selector matches the engager modal" lands as a precise diagnostic
+// signal rather than a generic timeout.
 // ----------------------------------------------------------------------------
 
 /**
- * Reactions modal wrapper — the standard ARIA dialog LinkedIn opens after
- * the user clicks the reactions count beneath a post.  This selector has
- * been stable across LinkedIn UI revisions; the probe still reports
- * `dialogCount` so a future change away from `[role="dialog"]` lands as
- * a precise diagnostic signal rather than a generic timeout.
+ * Reactions modal wrapper — ordered fallback chain.  LinkedIn's 2026-05
+ * markup refresh removed the `[role="dialog"]` ARIA wrapper from the
+ * engager modal (Phase 1 diagnostic capture, JSON `dialogCount: 0`
+ * while the modal IS visible in `bodyTextSnippet` — see #773).
+ *
+ * Tried sequentially by the resolver, in this order — first match wins:
+ *   1. `dialog`               — HTML5 native dialog
+ *   2. `[aria-modal="true"]`  — ARIA standard for modal regions
+ *   3. `[role="dialog"]`      — defensive retention (legacy markup)
+ *
+ * `querySelector` with a comma-joined selector list returns the first
+ * match in **document order**, not in the order the selectors are
+ * listed.  That breaks the precedence claim above when multiple
+ * candidate wrappers coexist on the page (e.g. engager modal +
+ * unrelated dialog).  An array iterated by the resolver enforces real
+ * precedence.  Used by the readiness predicate
+ * ({@link waitForReactionsModal}) and shared via
+ * {@link RESOLVE_REACTIONS_MODAL_SCRIPT} with the diagnostic probe and
+ * the scrape / scroll / total scripts in `get-post-engagers.ts`.
  */
-const REACTIONS_MODAL_SELECTOR = '[role="dialog"]';
+const REACTIONS_MODAL_WRAPPER_SELECTORS: readonly string[] = [
+  "dialog",
+  '[aria-modal="true"]',
+  '[role="dialog"]',
+];
+
+/**
+ * Tab-anchor fallback selector — the "All reactions" filter button
+ * that sits at the top of the open engager modal.  Used when none of
+ * the canonical wrappers match: walk up from the tab to find the
+ * modal-like ancestor that contains the engager links.  The button
+ * aria-label has stayed stable across the 2026-05 refresh
+ * (`reactionsButtonAriaLabels` in the diagnostic JSON includes
+ * "24 All reactions") even though the wrapper element shape shifted.
+ */
+const REACTIONS_TAB_FALLBACK_SELECTOR =
+  'button[aria-label$=" All reactions"]';
 
 /**
  * Engager profile link inside the modal — each engager entry contains an
  * `<a href="/in/{slug}">` linking to that person's profile.  Used both
- * by the readiness predicate (presence ⇒ engager rows hydrated) and by
- * the diagnostic probe (`dialogHasInLinks`).
+ * by the readiness predicate (presence ⇒ engager rows hydrated), the
+ * modal resolver (anchor-walk termination signal), and the diagnostic
+ * probe (`dialogHasInLinks`).
  */
 const REACTIONS_MODAL_ENGAGER_LINK_SELECTOR = 'a[href*="/in/"]';
+
+/**
+ * Maximum ancestor depth the tab-anchor fallback walks up from the
+ * "All reactions" button.  12 is generous: it crosses the modal
+ * wrapper plus typical layout chrome (toolbar, root-of-modal,
+ * portal-host) without risking a runaway walk into `<body>` if the
+ * page structure changes.
+ */
+const REACTIONS_MODAL_ANCESTOR_WALK_DEPTH = 12;
+
+/**
+ * In-page JavaScript that resolves the engager modal element via the
+ * fallback chain (canonical wrappers → tab-anchor walk).  Defines a
+ * function `__getReactionsModal()` that returns either the resolved
+ * `Element` or `null`.  Prepended to every consumer that needs the
+ * resolved modal — the readiness predicate ({@link waitForReactionsModal}),
+ * the diagnostic probe ({@link captureReactionsModalFailure}), and the
+ * scrape / scroll / total scripts in `get-post-engagers.ts` — so all
+ * call sites share a single resolution rule.  String form (not a
+ * function) because each call site composes a separate
+ * `Runtime.evaluate` script.
+ *
+ * Exported for reuse from `get-post-engagers.ts`.
+ */
+export const RESOLVE_REACTIONS_MODAL_SCRIPT = `
+function __getReactionsModal() {
+  // Stage 1: try the canonical wrapper selectors in precedence order.
+  // For each selector, iterate ALL matches and validate each one —
+  // accept only candidates that contain the "All reactions" filter
+  // tab OR at least one engager profile link.  Without this gate, an
+  // unrelated \`<dialog>\` / \`[aria-modal="true"]\` / \`[role="dialog"]\`
+  // rendered earlier in the DOM (cookie banner, unrelated overlay)
+  // would shadow the actual engager modal — Stage 1 would return the
+  // wrong element, Stage 2 would never run, and the predicate would
+  // poll until timeout while the real modal is open.  Per #773 Phase 1
+  // diagnostics, LinkedIn dropped \`[role="dialog"]\` from the engager
+  // modal in 2026-05; the broader list lets future restorations take
+  // effect without a code change.
+  const wrapperSelectors = ${JSON.stringify(REACTIONS_MODAL_WRAPPER_SELECTORS)};
+  for (let i = 0; i < wrapperSelectors.length; i++) {
+    const candidates = document.querySelectorAll(wrapperSelectors[i]);
+    for (let j = 0; j < candidates.length; j++) {
+      const c = candidates[j];
+      if (
+        c.querySelector('${REACTIONS_TAB_FALLBACK_SELECTOR}') ||
+        c.querySelector('${REACTIONS_MODAL_ENGAGER_LINK_SELECTOR}')
+      ) {
+        return c;
+      }
+    }
+  }
+  // Stage 2: walk up from the "All reactions" filter tab to find the
+  // modal-like ancestor.  Reached when no canonical wrapper holds the
+  // engager modal — either none exists (LinkedIn's 2026-05 state per
+  // Phase 1 diagnostics: zero matching dialog wrappers) or the
+  // wrapper is some other shape entirely.  The tab aria-label stayed
+  // stable across the refresh; its closest ancestor that holds
+  // engager links IS the modal.  Bounded depth so a
+  // missing-engager-links page doesn't infinite-loop.
+  const tab = document.querySelector('${REACTIONS_TAB_FALLBACK_SELECTOR}');
+  if (!tab || tab.offsetHeight === 0) return null;
+  let ancestor = tab.parentElement;
+  let depth = 0;
+  while (ancestor && depth < ${REACTIONS_MODAL_ANCESTOR_WALK_DEPTH}) {
+    if (ancestor.querySelectorAll('${REACTIONS_MODAL_ENGAGER_LINK_SELECTOR}').length > 0) {
+      return ancestor;
+    }
+    ancestor = ancestor.parentElement;
+    depth++;
+  }
+  return null;
+}
+`;
 
 /**
  * Poll the DOM until the reactions modal has loaded with at least one
  * profile link visible.
  *
- * Issue #773 Phase 1: this helper was lifted from `get-post-engagers.ts`
- * (where it lived as a local function) to a shared module so the same
- * diagnostic-capture pattern that pinned the post-detail regression in
- * #762 / #771 (PR #770 / PR #772) can apply here.  The lifted predicate
- * is unchanged — Phase 2 will update it per diagnostic data captured
- * on the next E2E timeout.
+ * Issue #773: the engager modal's `[role="dialog"]` wrapper disappeared
+ * with LinkedIn's 2026-05 markup refresh (Phase 1 diagnostic capture
+ * confirmed `dialogCount: 0` while the modal IS visually open — see
+ * `reactionsButtonAriaLabels` and `bodyTextSnippet`).  This predicate
+ * resolves the modal via {@link RESOLVE_REACTIONS_MODAL_SCRIPT}'s
+ * fallback chain: canonical wrappers (`<dialog>` / `[aria-modal="true"]`
+ * / `[role="dialog"]`) first, then a tab-anchor walk from the "All
+ * reactions" filter button — whose aria-label stayed stable.  Engager
+ * links inside the resolved element gate the predicate.
  *
  * On timeout, if `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a best-effort
  * diagnostic capture is written to a per-invocation
@@ -62,7 +170,8 @@ export async function waitForReactionsModal(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const ready = await client.evaluate<boolean>(`(() => {
-      const modal = document.querySelector('${REACTIONS_MODAL_SELECTOR}');
+      ${RESOLVE_REACTIONS_MODAL_SCRIPT}
+      const modal = __getReactionsModal();
       if (!modal) return false;
       return modal.querySelectorAll('${REACTIONS_MODAL_ENGAGER_LINK_SELECTOR}').length > 0;
     })()`);
@@ -141,14 +250,27 @@ interface CaptureCancellationState {
  *
  * Probe set: `{ href, dialogCount, dialogHasInLinks,
  * dialogChildElementCount, bodyTextSnippet, reactionsButtonAriaLabels,
- * reactionsCountText }` — distinguishes:
- *  1. "click never opened a dialog" (`dialogCount === 0`)
+ * reactionsCountText, htmlDialogCount, ariaModalCount, hasReactionsTab,
+ * reactionsTabAncestorChain, resolvedModalAncestorTag }` —
+ * distinguishes:
+ *  1. "click never opened a dialog" (`dialogCount === 0` AND
+ *     `htmlDialogCount === 0` AND `ariaModalCount === 0` AND
+ *     `hasReactionsTab === false`)
  *  2. "dialog opened but engager-link selectors stale"
  *     (`dialogCount > 0 && !dialogHasInLinks`)
  *  3. "wrong button was clicked" (`reactionsButtonAriaLabels` reveals
  *     which aria-labels exist on visible reaction-related buttons,
  *     and `reactionsCountText` reports what the
  *     `FIND_REACTIONS_SCRIPT` regex would currently match)
+ *  4. "modal opens but uses non-canonical wrapper" — at least one of
+ *     `htmlDialogCount` / `ariaModalCount` / `hasReactionsTab` is
+ *     non-zero/true; `reactionsTabAncestorChain` reveals which
+ *     ancestor tag/role/aria-modal/class shape the modal wrapper
+ *     actually has, so the resolver fallback chain in
+ *     {@link RESOLVE_REACTIONS_MODAL_SCRIPT} can target it directly
+ *  5. "resolver fallback walk found a candidate but engager links
+ *     missing" — `resolvedModalAncestorTag` non-null but the predicate
+ *     still failed; rare hydration race vs. actual selector miss
  *
  * Mirrors the diagnostic-capture pattern documented in ADR-007 for
  * `navigateToProfile` and `waitForPostLoad` — same env var, same
@@ -209,21 +331,82 @@ async function captureReactionsModalFailureInner(
     bodyTextSnippet: string;
     reactionsButtonAriaLabels: string[];
     reactionsCountText: string | null;
+    htmlDialogCount: number;
+    ariaModalCount: number;
+    hasReactionsTab: boolean;
+    reactionsTabAncestorChain: string[];
+    resolvedModalAncestorTag: string | null;
   }>(`(() => {
-    const dialogs = document.querySelectorAll('${REACTIONS_MODAL_SELECTOR}');
-    const firstDialog = dialogs[0] || null;
-    const dialogHasInLinks = firstDialog
-      ? firstDialog.querySelectorAll('${REACTIONS_MODAL_ENGAGER_LINK_SELECTOR}').length > 0
+    ${RESOLVE_REACTIONS_MODAL_SCRIPT}
+    // Legacy dialog probe — preserved for continuity with the original
+    // diagnostic shape; \`dialogCount === 0\` is the signal that pinned
+    // #773 in Phase 1.
+    const legacyDialogs = document.querySelectorAll('[role="dialog"]');
+    const firstLegacyDialog = legacyDialogs[0] || null;
+    const dialogHasInLinks = firstLegacyDialog
+      ? firstLegacyDialog.querySelectorAll('${REACTIONS_MODAL_ENGAGER_LINK_SELECTOR}').length > 0
       : false;
-    const dialogChildElementCount = firstDialog ? firstDialog.childElementCount : 0;
+    const dialogChildElementCount = firstLegacyDialog ? firstLegacyDialog.childElementCount : 0;
+
+    // New wrapper-shape probes — distinguish "modal not opened at all"
+    // from "modal opened but uses a different wrapper element".  If any
+    // of these are non-zero / true while \`dialogCount === 0\`, the
+    // resolver fallback in RESOLVE_REACTIONS_MODAL_SCRIPT must adapt.
+    const htmlDialogCount = document.querySelectorAll('dialog').length;
+    const ariaModalCount = document.querySelectorAll('[aria-modal="true"]').length;
+    const reactionsTab = document.querySelector('${REACTIONS_TAB_FALLBACK_SELECTOR}');
+    const hasReactionsTab = reactionsTab !== null && reactionsTab.offsetHeight > 0;
+
+    // Walk up from the "All reactions" tab and capture each ancestor's
+    // shape (tag, role, aria-modal, aria-labelledby presence, class
+    // first-token) up to the same depth the resolver walks.  Lets a
+    // future regression target the wrapper element directly without
+    // another round of probe extension.
+    const reactionsTabAncestorChain = [];
+    if (reactionsTab) {
+      let ancestor = reactionsTab.parentElement;
+      let depth = 0;
+      while (ancestor && depth < ${REACTIONS_MODAL_ANCESTOR_WALK_DEPTH}) {
+        const tag = (ancestor.tagName || '').toLowerCase();
+        const role = ancestor.getAttribute('role') || '';
+        const ariaModal = ancestor.getAttribute('aria-modal') || '';
+        const ariaLabelledBy = ancestor.getAttribute('aria-labelledby') ? 'yes' : '';
+        // First class token only — bounds artifact size; full classlist
+        // would balloon for utility-CSS-heavy pages.
+        const classToken = ((ancestor.className && typeof ancestor.className === 'string')
+          ? ancestor.className.trim().split(/\\s+/)[0]
+          : '') || '';
+        const inLinks = ancestor.querySelectorAll('${REACTIONS_MODAL_ENGAGER_LINK_SELECTOR}').length;
+        reactionsTabAncestorChain.push(
+          tag + (role ? ' role=' + role : '') +
+          (ariaModal ? ' aria-modal=' + ariaModal : '') +
+          (ariaLabelledBy ? ' aria-labelledby=yes' : '') +
+          (classToken ? ' .' + classToken : '') +
+          ' inLinks=' + inLinks
+        );
+        ancestor = ancestor.parentElement;
+        depth++;
+      }
+    }
+
+    // Did the resolver land?  Reports the resolved element's tag for
+    // the "fallback found a candidate but predicate still failed" case.
+    const resolvedModal = __getReactionsModal();
+    const resolvedModalAncestorTag = resolvedModal
+      ? (resolvedModal.tagName || '').toLowerCase()
+      : null;
 
     // Capture aria-labels of visible buttons whose label hints at
     // reactions / engagement — distinguishes "clicked the wrong button"
     // (e.g. clicked a generic "Like" toggle instead of the reactions
-    // count summary) from "right button, modal selectors stale".  Cap
-    // length and count to keep the artifact bounded.
+    // count summary) from "right button, modal selectors stale".
+    // \`offsetHeight > 0\` filters out hidden/offscreen buttons (matches
+    // the "visible" promise in the comment AND mirrors the visibility
+    // check in the FIND_REACTIONS_SCRIPT below).  Cap length and count
+    // to keep the artifact bounded.
     const reactionsButtonAriaLabels = Array.prototype.slice
       .call(document.querySelectorAll('button[aria-label]'))
+      .filter(function (el) { return el.offsetHeight > 0; })
       .map(function (el) { return (el.getAttribute('aria-label') || '').trim(); })
       .filter(function (label) {
         return /reaction|like|engager|comment/i.test(label) && label.length < 200;
@@ -245,12 +428,17 @@ async function captureReactionsModalFailureInner(
 
     return {
       href: location.href,
-      dialogCount: dialogs.length,
+      dialogCount: legacyDialogs.length,
       dialogHasInLinks: dialogHasInLinks,
       dialogChildElementCount: dialogChildElementCount,
       bodyTextSnippet: (document.body ? document.body.innerText : "").slice(0, 800),
       reactionsButtonAriaLabels: reactionsButtonAriaLabels,
       reactionsCountText: reactionsCountText,
+      htmlDialogCount: htmlDialogCount,
+      ariaModalCount: ariaModalCount,
+      hasReactionsTab: hasReactionsTab,
+      reactionsTabAncestorChain: reactionsTabAncestorChain,
+      resolvedModalAncestorTag: resolvedModalAncestorTag,
     };
   })()`);
   if (state.timedOut) return;

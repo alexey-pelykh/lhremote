@@ -74,7 +74,7 @@ describe("waitForReactionsModal", () => {
     expect(evaluate).toHaveBeenCalledTimes(3);
   });
 
-  it("polls with the dialog + engager-link readiness predicate", async () => {
+  it("polls with the resolver fallback chain (validated canonical wrappers + tab-anchor walk)", async () => {
     const evaluate = vi.fn().mockResolvedValueOnce(true);
     const client = {
       evaluate,
@@ -84,11 +84,41 @@ describe("waitForReactionsModal", () => {
     await waitForReactionsModal(client);
 
     const script = String(evaluate.mock.calls[0]?.[0] ?? "");
-    // Stage 1: ARIA dialog wrapper must exist.
-    expect(script).toContain('[role="dialog"]');
-    // Stage 2: at least one engager profile link inside the dialog
-    // must have hydrated.
+    // Resolver helper signature must appear (shared with the scrape /
+    // scroll / total scripts in get-post-engagers.ts).
+    expect(script).toContain("__getReactionsModal");
+    // Stage 1 wrappers — sequential, ordered.  The selector list is
+    // emitted as a JSON array literal so the resolver can iterate and
+    // return on first match (preserving documented precedence).  The
+    // assertions below use the JSON-source form (backslash-escaped
+    // quotes) because that is the literal text the resolver script
+    // contains; the JS engine resolves the escapes at evaluation time
+    // back to `aria-modal="true"` etc.
+    expect(script).toContain('"dialog"');
+    expect(script).toContain('"[aria-modal=\\"true\\"]"');
+    expect(script).toContain('"[role=\\"dialog\\"]"');
+    // Sequential per-selector iteration — not a single comma-joined
+    // `querySelector`, which would return the first match in document
+    // order rather than the first match in selector-precedence order.
+    expect(script).toContain("for (let i = 0;");
+    expect(script).toContain("wrapperSelectors[i]");
+    // Per-selector iteration over ALL matches (not just the first
+    // match) — without this, an unrelated <dialog> / [aria-modal] /
+    // [role=dialog] earlier in the DOM would shadow the engager modal
+    // and the predicate would poll until timeout while the real
+    // modal is open.
+    expect(script).toContain("querySelectorAll");
+    expect(script).toContain("for (let j = 0;");
+    // Per-candidate validation — only accept a candidate if it
+    // contains the "All reactions" tab OR an engager link.  The
+    // predicate's "is this actually the engager modal?" gate.
+    expect(script).toContain('aria-label$=" All reactions"');
     expect(script).toContain('a[href*="/in/"]');
+    // Stage 2 fallback — tab-anchor walk reached only when no
+    // canonical wrapper validated.  The tab aria-label stayed stable
+    // across the 2026-05 refresh; the ancestor walk locates the modal
+    // wrapper that no longer carries any of the canonical roles.
+    expect(script).toContain("ancestor.parentElement");
   });
 
   it("throws the reactions-modal timeout error when readiness predicate never matches before the deadline", async () => {
@@ -124,6 +154,11 @@ describe("waitForReactionsModal", () => {
           bodyTextSnippet: "",
           reactionsButtonAriaLabels: [],
           reactionsCountText: null,
+          htmlDialogCount: 0,
+          ariaModalCount: 0,
+          hasReactionsTab: false,
+          reactionsTabAncestorChain: [],
+          resolvedModalAncestorTag: null,
         };
       }
       return false;
@@ -176,6 +211,14 @@ describe("captureReactionsModalFailure", () => {
         bodyTextSnippet: "Reactions\n",
         reactionsButtonAriaLabels: ["React Like to post by Alice"],
         reactionsCountText: "42 reactions",
+        htmlDialogCount: 0,
+        ariaModalCount: 1,
+        hasReactionsTab: true,
+        reactionsTabAncestorChain: [
+          "div role=tablist inLinks=0",
+          "div .artdeco-modal__content inLinks=24",
+        ],
+        resolvedModalAncestorTag: "div",
       }),
       send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
     } as unknown as CDPClient;
@@ -221,9 +264,7 @@ describe("captureReactionsModalFailure", () => {
     await captureReactionsModalFailure(client);
 
     const script = String(vi.mocked(client.evaluate).mock.calls[0]?.[0] ?? "");
-    // All seven probe-shape fields the issue body specifies must be
-    // collected — the JSON the operator inspects is shaped by this
-    // script alone.
+    // Original probe-shape fields (#773 Phase 1 issue body baseline).
     expect(script).toContain("href");
     expect(script).toContain("dialogCount");
     expect(script).toContain("dialogHasInLinks");
@@ -231,10 +272,19 @@ describe("captureReactionsModalFailure", () => {
     expect(script).toContain("bodyTextSnippet");
     expect(script).toContain("reactionsButtonAriaLabels");
     expect(script).toContain("reactionsCountText");
-    // Selectors the predicate uses must appear verbatim in the probe
-    // so the diagnostic and the predicate stay aligned.
+    // Phase 2 expansion — wrapper-shape probes that distinguish
+    // "modal not opened" from "modal opened with non-canonical wrapper".
+    expect(script).toContain("htmlDialogCount");
+    expect(script).toContain("ariaModalCount");
+    expect(script).toContain("hasReactionsTab");
+    expect(script).toContain("reactionsTabAncestorChain");
+    expect(script).toContain("resolvedModalAncestorTag");
+    // Selectors the predicate / resolver use must appear verbatim in
+    // the probe so the diagnostic and the resolution rule stay aligned.
     expect(script).toContain('[role="dialog"]');
     expect(script).toContain('a[href*="/in/"]');
+    // Resolver helper signature — probe re-uses RESOLVE_REACTIONS_MODAL_SCRIPT.
+    expect(script).toContain("__getReactionsModal");
     // FIND_REACTIONS_SCRIPT regex shape — the probe re-uses it so a
     // future update there is reflected in diagnostics without a
     // separate change.
@@ -331,6 +381,11 @@ describe("captureReactionsModalFailure", () => {
         bodyTextSnippet: "",
         reactionsButtonAriaLabels: [],
         reactionsCountText: null,
+        htmlDialogCount: 0,
+        ariaModalCount: 0,
+        hasReactionsTab: false,
+        reactionsTabAncestorChain: [],
+        resolvedModalAncestorTag: null,
       }),
       send: vi.fn().mockRejectedValue(new Error("captureScreenshot failed")),
     } as unknown as CDPClient;
