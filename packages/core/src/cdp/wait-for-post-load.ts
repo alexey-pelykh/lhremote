@@ -7,28 +7,79 @@ import { join } from "node:path";
 import { delay } from "../utils/delay.js";
 import type { CDPClient } from "./client.js";
 
+// ----------------------------------------------------------------------------
+// Selectors used by both the readiness predicate ({@link waitForPostLoad}) and
+// the diagnostic probe ({@link capturePostLoadFailure}).  Centralizing them
+// keeps the two aligned: the predicate's joined disjunction is exactly the
+// union of the three probes the diagnostic reports individually, so a future
+// timeout's "which-of-three-is-missing" signal stays accurate by definition.
+// ----------------------------------------------------------------------------
+
+/**
+ * `<main>`-scoped author link — anchor pointing to either a member profile
+ * (`/in/{slug}`) or a company page (`/company/{slug}`).  Phase 1 (PR #770)
+ * confirmed this anchor still renders post-2026-05 markup refresh; the
+ * `<main>` scope avoids matching nav / sidebar profile chips that hydrate
+ * before the post itself.
+ */
+const POST_READY_AUTHOR_LINK_SELECTOR =
+  'main a[href*="/in/"], main a[href*="/company/"]';
+
+/**
+ * Document-wide author-link selector — diagnostic-only.  Reported alongside
+ * {@link POST_READY_AUTHOR_LINK_SELECTOR} so a future regression can
+ * distinguish "page failed to render entirely" from "page rendered nav /
+ * sidebar chips but not the post body".
+ */
+const POST_AUTHOR_LINK_DOCUMENT_WIDE_SELECTOR =
+  'a[href*="/in/"], a[href*="/company/"]';
+
+// Post-detail interaction markers (per ADR-007 — aria-label-based markers
+// preferred over structural CSS / role selectors).  Each renders only after
+// the post has hydrated far enough for downstream extraction; any single
+// match satisfies the readiness predicate.  The diagnostic probe reports
+// each individually so a future timeout produces a precise
+// "which-of-three-is-missing" signal.
+const POST_REACT_LIKE_SELECTOR =
+  'main button[aria-label^="React Like to "]';
+const POST_COMMENT_ON_SELECTOR =
+  'main button[aria-label^="Comment on"]';
+const POST_EDITOR_SELECTOR =
+  'main [role="textbox"][aria-label^="Text editor for creating"]';
+
+/** Comma-separated disjunction of the three interaction markers. */
+const POST_INTERACTION_SELECTOR = [
+  POST_REACT_LIKE_SELECTOR,
+  POST_COMMENT_ON_SELECTOR,
+  POST_EDITOR_SELECTOR,
+].join(", ");
+
+/**
+ * Legacy `span[dir="ltr"]` fallback selector.  Phase 1 confirmed gone as of
+ * 2026-05-05 but kept defensively: costs nothing if missing, and provides a
+ * path back to the original signal if/when LinkedIn restores the markup.
+ */
+const POST_LTR_SPAN_FALLBACK_SELECTOR = 'span[dir="ltr"]';
+
 /**
  * Poll the DOM until a LinkedIn post detail page has rendered.
  *
- * The page is considered ready when an author link
- * (`a[href*="/in/"]` or `a[href*="/company/"]`) and at least one
- * `span[dir="ltr"]` are present.  These selectors mirror the in-page
- * scraping scripts that downstream extraction uses, so a positive
- * match indicates the DOM has the structural anchors those scripts
- * key off.
+ * Three-stage layered predicate (per ADR-007):
+ *  1. {@link POST_READY_AUTHOR_LINK_SELECTOR} must match — required.
+ *  2. Any of {@link POST_INTERACTION_SELECTOR} suffices.
+ *  3. Otherwise fall back to {@link POST_LTR_SPAN_FALLBACK_SELECTOR}.
  *
- * On timeout, if `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a best-effort
- * diagnostic capture is written to a per-invocation
- * `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/` directory before the
- * error propagates; see {@link capturePostLoadFailure}.  The capture
- * is opt-in because LinkedIn post-detail pages can include personal
- * data.
+ * Issues #762 / #771: the original `span[dir="ltr"]`-only predicate stopped
+ * matching after LinkedIn's 2026-05 post-detail markup refresh removed
+ * `[data-testid="mainFeed"]`, `span[dir="ltr"]`, and `<article>`.  Phase 1
+ * (PR #770) shipped diagnostic capture that pinned the regression; this
+ * helper closes it.
  *
- * The structural-selector strategy mirrors the original implementation
- * verbatim — this helper exists primarily to remove duplication across
- * `get-post`, `get-post-engagers`, and `get-post-stats`, and to add the
- * diagnostic capture surface so the next selector regression produces
- * classifiable evidence (per ADR-007's pattern for `navigateToProfile`).
+ * On timeout, if `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a best-effort diagnostic
+ * capture is written to a per-invocation
+ * `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/` directory before the error
+ * propagates; see {@link capturePostLoadFailure}.  Opt-in because LinkedIn
+ * post-detail pages can include personal data.
  *
  * @param client    - Connected CDP client targeting a LinkedIn page.
  * @param timeoutMs - Polling deadline in milliseconds (default: 15s).
@@ -42,10 +93,9 @@ export async function waitForPostLoad(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const ready = await client.evaluate<boolean>(`(() => {
-      const authorLink = document.querySelector('a[href*="/in/"], a[href*="/company/"]');
-      if (!authorLink) return false;
-      const ltrSpans = document.querySelectorAll('span[dir="ltr"]');
-      return ltrSpans.length > 0;
+      if (!document.querySelector('${POST_READY_AUTHOR_LINK_SELECTOR}')) return false;
+      if (document.querySelector('${POST_INTERACTION_SELECTOR}')) return true;
+      return document.querySelectorAll('${POST_LTR_SPAN_FALLBACK_SELECTOR}').length > 0;
     })()`);
     if (ready) return;
     await delay(500);
@@ -119,24 +169,31 @@ interface CaptureCancellationState {
  *
  * Probe set: `{ href, title, hasMain, hasMainFeed,
  * mainFeedListItemCount, mainFeedListItemsWithMenuButton,
- * mainFeedListItemsViableForPostScrape, hasAuthorLink, hasLtrSpans,
- * hasArticles, bodyTextSnippet }` — mirrors the container-selection
- * logic in `SCRAPE_POST_DETAIL_SCRIPT`: it scopes from `<main>`
- * (fallback) → `[data-testid="mainFeed"]` → `div[role="listitem"]`
- * inside that feed → per-item
- * `button[aria-label^="Open control menu for post"]` → items with
- * `offsetHeight >= 100` (the scraper skips smaller skeleton/hidden
- * items).  Each layer is probed separately so a future timeout
- * reproduces the exact selector-presence picture without re-running
- * the wait.  Counts (rather than booleans) for the listitem,
- * menu-button, and viable-item layers help Phase 2 distinguish
- * "wrapper renamed" from "no items rendered yet" from "items present
- * but skeleton-sized" — a healthy `mainFeed` with zero listitems is a
- * different failure mode than a missing `mainFeed`, and items with
- * menu buttons but `offsetHeight < 100` would be picked up by a
- * naive count yet rejected by the scraper.  The menu-button count is
- * scoped to listitems inside `mainFeed` (not document-wide) so it
- * can't be inflated by unrelated buttons elsewhere on the page.
+ * mainFeedListItemsViableForPostScrape, hasAuthorLink,
+ * hasAuthorLinkInMain, hasLtrSpans, hasArticles, hasReactLikeButton,
+ * hasCommentOnButton, hasTopLevelEditor, bodyTextSnippet }` —
+ * mirrors the container-selection logic in
+ * `SCRAPE_POST_DETAIL_SCRIPT`: it scopes from `<main>` (fallback) →
+ * `[data-testid="mainFeed"]` → `div[role="listitem"]` inside that
+ * feed → per-item `button[aria-label^="Open control menu for post"]`
+ * → items with `offsetHeight >= 100` (the scraper skips smaller
+ * skeleton/hidden items).  Each layer is probed separately so a
+ * future timeout reproduces the exact selector-presence picture
+ * without re-running the wait.  Counts (rather than booleans) for
+ * the listitem, menu-button, and viable-item layers help Phase 2
+ * distinguish "wrapper renamed" from "no items rendered yet" from
+ * "items present but skeleton-sized" — a healthy `mainFeed` with
+ * zero listitems is a different failure mode than a missing
+ * `mainFeed`, and items with menu buttons but `offsetHeight < 100`
+ * would be picked up by a naive count yet rejected by the scraper.
+ * The menu-button count is scoped to listitems inside `mainFeed`
+ * (not document-wide) so it can't be inflated by unrelated buttons
+ * elsewhere on the page.
+ *
+ * The post-#771 probes (`hasAuthorLinkInMain`, `hasReactLikeButton`,
+ * `hasCommentOnButton`, `hasTopLevelEditor`) shadow
+ * {@link waitForPostLoad}'s readiness selectors so a timeout pins
+ * exactly which post-anchored signal is missing.
  *
  * Mirrors the diagnostic-capture pattern documented in ADR-007 for
  * `navigateToProfile` — same env var, same artifact structure, same
@@ -206,8 +263,12 @@ async function capturePostLoadFailureInner(
     mainFeedListItemsWithMenuButton: number;
     mainFeedListItemsViableForPostScrape: number;
     hasAuthorLink: boolean;
+    hasAuthorLinkInMain: boolean;
     hasLtrSpans: boolean;
     hasArticles: boolean;
+    hasReactLikeButton: boolean;
+    hasCommentOnButton: boolean;
+    hasTopLevelEditor: boolean;
     bodyTextSnippet: string;
   }>(`(() => {
     const mainFeed = document.querySelector('[data-testid="mainFeed"]');
@@ -234,9 +295,13 @@ async function capturePostLoadFailureInner(
       mainFeedListItemCount: listItems.length,
       mainFeedListItemsWithMenuButton: itemsWithMenu.length,
       mainFeedListItemsViableForPostScrape: viableItems.length,
-      hasAuthorLink: document.querySelector('a[href*="/in/"], a[href*="/company/"]') !== null,
-      hasLtrSpans: document.querySelectorAll('span[dir="ltr"]').length > 0,
+      hasAuthorLink: document.querySelector('${POST_AUTHOR_LINK_DOCUMENT_WIDE_SELECTOR}') !== null,
+      hasAuthorLinkInMain: document.querySelector('${POST_READY_AUTHOR_LINK_SELECTOR}') !== null,
+      hasLtrSpans: document.querySelectorAll('${POST_LTR_SPAN_FALLBACK_SELECTOR}').length > 0,
       hasArticles: document.querySelectorAll('article').length > 0,
+      hasReactLikeButton: document.querySelector('${POST_REACT_LIKE_SELECTOR}') !== null,
+      hasCommentOnButton: document.querySelector('${POST_COMMENT_ON_SELECTOR}') !== null,
+      hasTopLevelEditor: document.querySelector('${POST_EDITOR_SELECTOR}') !== null,
       bodyTextSnippet: (document.body ? document.body.innerText : "").slice(0, 800),
     };
   })()`);

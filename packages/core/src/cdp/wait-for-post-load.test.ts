@@ -72,7 +72,7 @@ describe("waitForPostLoad", () => {
     expect(evaluate).toHaveBeenCalledTimes(3);
   });
 
-  it("polls with the documented readiness predicate (author link AND span[dir=\"ltr\"])", async () => {
+  it("polls with the three-stage layered readiness predicate (main-scoped author link, aria-label markers, span[dir=ltr] fallback)", async () => {
     const evaluate = vi.fn().mockResolvedValueOnce(true);
     const client = {
       evaluate,
@@ -82,8 +82,16 @@ describe("waitForPostLoad", () => {
     await waitForPostLoad(client);
 
     const script = String(evaluate.mock.calls[0]?.[0] ?? "");
-    expect(script).toContain('a[href*="/in/"]');
-    expect(script).toContain('a[href*="/company/"]');
+    // Stage 1: <main>-scoped author link (document-wide would match
+    // nav/sidebar chips that hydrate before the post body).
+    expect(script).toContain('main a[href*="/in/"]');
+    expect(script).toContain('main a[href*="/company/"]');
+    // Stage 2: aria-label-based interaction markers per ADR-007.
+    expect(script).toContain('aria-label^="React Like to "');
+    expect(script).toContain('aria-label^="Comment on"');
+    expect(script).toContain('aria-label^="Text editor for creating"');
+    // Stage 3: legacy span[dir="ltr"] fallback (defensive retention
+    // in case LinkedIn restores the markup).
     expect(script).toContain('span[dir="ltr"]');
   });
 
@@ -121,8 +129,12 @@ describe("waitForPostLoad", () => {
           mainFeedListItemsWithMenuButton: 0,
           mainFeedListItemsViableForPostScrape: 0,
           hasAuthorLink: false,
+          hasAuthorLinkInMain: false,
           hasLtrSpans: false,
           hasArticles: false,
+          hasReactLikeButton: false,
+          hasCommentOnButton: false,
+          hasTopLevelEditor: false,
           bodyTextSnippet: "",
         };
       }
@@ -177,8 +189,12 @@ describe("capturePostLoadFailure", () => {
         mainFeedListItemsWithMenuButton: 0,
         mainFeedListItemsViableForPostScrape: 0,
         hasAuthorLink: false,
+        hasAuthorLinkInMain: false,
         hasLtrSpans: true,
         hasArticles: false,
+        hasReactLikeButton: false,
+        hasCommentOnButton: false,
+        hasTopLevelEditor: false,
         bodyTextSnippet: "Post body text\n",
       }),
       send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
@@ -234,8 +250,21 @@ describe("capturePostLoadFailure", () => {
     expect(script).toContain("mainFeedListItemsViableForPostScrape");
     expect(script).toContain("offsetHeight >= 100");
     expect(script).toContain("hasAuthorLink");
+    // Post-#771: <main>-scoped author-link probe (separate from
+    // document-wide hasAuthorLink) so a future regression can
+    // distinguish "page failed entirely" from "page rendered
+    // sidebar/nav chips but not the post body".
+    expect(script).toContain("hasAuthorLinkInMain");
     expect(script).toContain("hasLtrSpans");
     expect(script).toContain("hasArticles");
+    // Post-#771: aria-label-based interactive markers per ADR-007 —
+    // exact selectors the new readiness predicate uses.
+    expect(script).toContain("hasReactLikeButton");
+    expect(script).toContain("hasCommentOnButton");
+    expect(script).toContain("hasTopLevelEditor");
+    expect(script).toContain('aria-label^="React Like to "');
+    expect(script).toContain('aria-label^="Comment on"');
+    expect(script).toContain('aria-label^="Text editor for creating"');
     expect(script).toContain("bodyTextSnippet");
   });
 
@@ -341,8 +370,12 @@ describe("capturePostLoadFailure", () => {
         mainFeedListItemsWithMenuButton: 0,
         mainFeedListItemsViableForPostScrape: 0,
         hasAuthorLink: false,
+        hasAuthorLinkInMain: false,
         hasLtrSpans: false,
         hasArticles: false,
+        hasReactLikeButton: false,
+        hasCommentOnButton: false,
+        hasTopLevelEditor: false,
         bodyTextSnippet: "",
       }),
       send: vi.fn().mockRejectedValue(new Error("captureScreenshot failed")),
