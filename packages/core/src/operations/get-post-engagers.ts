@@ -6,9 +6,10 @@ import type { PostEngager } from "../types/post-analytics.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { waitForPostLoad } from "../cdp/wait-for-post-load.js";
+import { waitForReactionsModal } from "../cdp/wait-for-reactions-modal.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
-import { delay, gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak, simulateReadingTime } from "../utils/delay.js";
+import { gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak, simulateReadingTime } from "../utils/delay.js";
 import { humanizedScrollTo, humanizedClick } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { navigateAwayIf } from "./navigate-away.js";
@@ -209,33 +210,6 @@ const GET_MODAL_TOTAL_SCRIPT = `(() => {
 
   return 0;
 })()`;
-
-// ---------------------------------------------------------------------------
-// Wait helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Poll the DOM until the reactions modal has loaded with at least one
- * profile link visible.
- */
-async function waitForReactionsModal(
-  client: CDPClient,
-  timeoutMs = 10_000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const ready = await client.evaluate<boolean>(`(() => {
-      const modal = document.querySelector('[role="dialog"]');
-      if (!modal) return false;
-      return modal.querySelectorAll('a[href*="/in/"]').length > 0;
-    })()`);
-    if (ready) return;
-    await delay(500);
-  }
-  throw new Error(
-    "Timed out waiting for reactions modal to appear",
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Main operation
