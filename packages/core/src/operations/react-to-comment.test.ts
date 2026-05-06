@@ -15,7 +15,7 @@ vi.mock("../linkedin/dom-automation.js", () => ({
   waitForElement: vi.fn(),
   waitForDOMStable: vi.fn().mockResolvedValue(undefined),
   hover: vi.fn(),
-  click: vi.fn(),
+  click: vi.fn().mockResolvedValue(undefined),
   humanizedHover: vi.fn(),
   humanizedClick: vi.fn(),
   humanizedScrollTo: vi.fn(),
@@ -30,6 +30,7 @@ vi.mock("../utils/delay.js", () => ({
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import {
+  click,
   humanizedClick,
   humanizedHover,
   humanizedScrollTo,
@@ -40,12 +41,12 @@ import { reactToComment } from "./react-to-comment.js";
 
 const POST_URL = "https://www.linkedin.com/feed/update/urn:li:activity:7436698865522851840/";
 const COMMENT_URN = "urn:li:comment:(activity:7436698865522851840,7436707959465730049)";
-// The operation stamps a `data-comment-urn` marker onto the matching
-// article and uses that for subsequent scoped queries (see operation
-// implementation comment for rationale).  Tests assert against the
-// marker-based selector.
-const ARTICLE_SELECTOR = `article[data-comment-urn="${COMMENT_URN}"]`;
-const TRIGGER_SELECTOR = `${ARTICLE_SELECTOR} button:is([aria-label^="React Like to "], [aria-label^="Unreact "])`;
+// The operation normalizes `commentUrn` to the React/SDUI form
+// (`urn:li:comment:(urn:li:activity:N,M)`) and scopes selectors to a
+// `componentkey="replaceableComment_<URN>"` element.  Tests assert
+// against the normalized componentkey selector.  See lhremote#776.
+const NORMALIZED_COMMENT_URN = "urn:li:comment:(urn:li:activity:7436698865522851840,7436707959465730049)";
+const ARTICLE_SELECTOR = `[componentkey="replaceableComment_${NORMALIZED_COMMENT_URN}"]`;
 const MENU_SELECTOR = `${ARTICLE_SELECTOR} button[aria-label="Open reactions menu"]`;
 
 const mockClient = {
@@ -57,8 +58,23 @@ const mockClient = {
   waitForEvent: vi.fn().mockResolvedValue(undefined),
 };
 
-/** Default trigger aria-label (no reaction applied). */
-let nextTriggerLabel: string | null = null;
+/** Default reaction-state textContent (null → operation reads as not-reacted). */
+let nextReactionStateText: string | null = null;
+
+/**
+ * Helper: build the React/SDUI state-text for a given reaction type.
+ * Produces the doubled-word form the parser expects (e.g. "InsightfulInsightful").
+ * Pass `null` for the not-reacted state.
+ */
+function reactionStateText(name: string | null): string {
+  if (name === null) {
+    // "no reactionLike" — visible "Like" prompt is appended to the hidden
+    // a11y "no reaction" label.
+    return "Reaction button state: no reactionLike";
+  }
+  // "InsightfulInsightful" — hidden a11y label + visible button face.
+  return `Reaction button state: ${name}${name}`;
+}
 
 function setupMocks() {
   vi.mocked(CDPClient).mockImplementation(function () {
@@ -75,27 +91,38 @@ function setupMocks() {
   // Conditional evaluate mock — the operation calls evaluate for several
   // distinct purposes:
   //   (a) `location.pathname`     — navigateAwayIf decision
-  //   (b) JS-side comment-presence probe (load-more pagination loop)
-  //   (c) reading the trigger button's `aria-label`
+  //   (b) JS-side comment-presence probe (load-more pagination loop) —
+  //       SDUI stack uses `componentkey="replaceableComment_<URN>"`.
+  //   (c) reading the comment's reaction state via the `[role="button"]`
+  //       text content (`Reaction button state: <X>`).
   // Defaulting to a no-op pathname avoids navigateAwayIf side effects.
   // The presence probe defaults to `true` so the pagination loop exits
   // on its first iteration without clicking "Load more comments" — tests
   // that exercise pagination can override per-call.
-  // The trigger label is read from `nextTriggerLabel` (set per test).
-  nextTriggerLabel = null;
+  // The current reaction is set per test via `nextReactionStateText`
+  // (e.g. "Reaction button state: InsightfulInsightful" → Insightful;
+  //       "Reaction button state: no reactionLike" → not reacted).
+  nextReactionStateText = null;
   mockClient.evaluate.mockImplementation((script: unknown) => {
     if (typeof script === "string" && script.includes("location.pathname")) {
       return Promise.resolve("/feed/");
     }
+    // State-text read MUST be matched before the componentkey-presence
+    // check below — the state-detection script also contains
+    // `componentkey=` (in the JSON-stringified scope selector), so the
+    // order matters.
     if (
       typeof script === "string" &&
-      script.includes("article[data-id]") &&
-      script.includes("setAttribute('data-comment-urn'")
+      script.includes("Reaction button state:")
+    ) {
+      return Promise.resolve(nextReactionStateText);
+    }
+    if (
+      typeof script === "string" &&
+      script.includes("componentkey=") &&
+      script.includes("replaceableComment_")
     ) {
       return Promise.resolve(true);
-    }
-    if (typeof script === "string" && script.includes("getAttribute('aria-label')")) {
-      return Promise.resolve(nextTriggerLabel);
     }
     return Promise.resolve(null);
   });
@@ -214,9 +241,9 @@ describe("reactToComment", () => {
     });
   });
 
-  it('returns alreadyReacted when same reaction is active ("Unreact Like")', async () => {
+  it("returns alreadyReacted when same reaction is active (state-text 'LikeLike')", async () => {
     setupMocks();
-    nextTriggerLabel = "Unreact Like";
+    nextReactionStateText = reactionStateText("Like");
 
     const result = await reactToComment({
       postUrl: POST_URL,
@@ -229,29 +256,13 @@ describe("reactToComment", () => {
     expect(result.reactionType).toBe("like");
     expect(result.alreadyReacted).toBe(true);
     expect(humanizedHover).not.toHaveBeenCalled();
+    // No menu click happens — the no-op short-circuits before the popup.
+    expect(humanizedClick).not.toHaveBeenCalled();
   });
 
-  it('returns alreadyReacted with comment-context aria-label ("Unreact Like to X\'s comment")', async () => {
+  it("opens menu and clicks new reaction when switching from Celebrate → Like", async () => {
     setupMocks();
-    // Verifies the regex /^Unreact\s+(\w+)/i correctly handles the
-    // comment-context-preserving form by capturing only the first word.
-    nextTriggerLabel = "Unreact Like to Olly's comment";
-
-    const result = await reactToComment({
-      postUrl: POST_URL,
-      commentUrn: COMMENT_URN,
-      reactionType: "like",
-      cdpPort: 9222,
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.alreadyReacted).toBe(true);
-    expect(humanizedHover).not.toHaveBeenCalled();
-  });
-
-  it("unreacts first then re-Likes via direct trigger when target is Like", async () => {
-    setupMocks();
-    nextTriggerLabel = "Unreact Celebrate";
+    nextReactionStateText = reactionStateText("Celebrate");
 
     const result = await reactToComment({
       postUrl: POST_URL,
@@ -263,17 +274,19 @@ describe("reactToComment", () => {
     expect(result.success).toBe(true);
     expect(result.reactionType).toBe("like");
     expect(result.alreadyReacted).toBe(false);
-    // For Like target: NO popup is needed — clicking the direct-Like
-    // trigger is the apply mechanism.  2 clicks: (1) trigger to unreact
-    // existing reaction, (2) trigger again to apply Like.
-    expect(humanizedClick).toHaveBeenCalledTimes(2);
-    expect(humanizedClick).toHaveBeenNthCalledWith(1, mockClient, TRIGGER_SELECTOR, undefined);
-    expect(humanizedClick).toHaveBeenNthCalledWith(2, mockClient, TRIGGER_SELECTOR, undefined);
+    expect(result.currentReaction).toBe("celebrate");
+    // SDUI stack: humanizedClick on menu (opens popup) → plain click on
+    // popup reaction (no mouse motion, popup stays open).  LinkedIn
+    // auto-replaces the existing reaction.
+    expect(humanizedClick).toHaveBeenCalledTimes(1);
+    expect(humanizedClick).toHaveBeenCalledWith(mockClient, MENU_SELECTOR, undefined);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledWith(mockClient, 'button[aria-label="Like"]');
   });
 
-  it("unreacts first then opens popup when target is non-Like", async () => {
+  it("opens menu and clicks new reaction when switching from Like → Celebrate", async () => {
     setupMocks();
-    nextTriggerLabel = "Unreact Like";
+    nextReactionStateText = reactionStateText("Like");
 
     const result = await reactToComment({
       postUrl: POST_URL,
@@ -285,20 +298,13 @@ describe("reactToComment", () => {
     expect(result.success).toBe(true);
     expect(result.reactionType).toBe("celebrate");
     expect(result.alreadyReacted).toBe(false);
-    // For non-Like target: 3 clicks: (1) trigger to unreact, (2) menu
-    // to open popup, (3) popup-reaction button.
-    expect(humanizedClick).toHaveBeenCalledTimes(3);
-    expect(humanizedClick).toHaveBeenNthCalledWith(1, mockClient, TRIGGER_SELECTOR, undefined);
-    expect(humanizedClick).toHaveBeenNthCalledWith(2, mockClient, MENU_SELECTOR, undefined);
-    expect(humanizedClick).toHaveBeenNthCalledWith(
-      3,
-      mockClient,
-      'button[aria-label^="React Celebrate to "]',
-      undefined,
-    );
+    expect(humanizedClick).toHaveBeenCalledTimes(1);
+    expect(humanizedClick).toHaveBeenCalledWith(mockClient, MENU_SELECTOR, undefined);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledWith(mockClient, 'button[aria-label="Celebrate"]');
   });
 
-  it("returns dryRun: true for Like target — no clicks at all", async () => {
+  it("returns dryRun for Like target — opens menu, validates popup, no reaction click", async () => {
     setupMocks();
 
     const result = await reactToComment({
@@ -313,11 +319,15 @@ describe("reactToComment", () => {
     expect(result.dryRun).toBe(true);
     expect(result.alreadyReacted).toBe(false);
     expect(result.currentReaction).toBeNull();
-    // For Like target with dryRun: NO popup involved, NO clicks at all.
-    expect(humanizedClick).not.toHaveBeenCalled();
+    // SDUI stack: every reaction (incl. Like) goes through the popup.
+    // Dry-run clicks the menu (validates the popup machinery) but skips
+    // clicking the reaction button.
+    expect(humanizedClick).toHaveBeenCalledTimes(1);
+    expect(humanizedClick).toHaveBeenCalledWith(mockClient, MENU_SELECTOR, undefined);
+    expect(click).not.toHaveBeenCalled();
   });
 
-  it("returns dryRun: true for non-Like target — clicks menu but skips reaction", async () => {
+  it("returns dryRun for non-Like target — opens menu but skips reaction click", async () => {
     setupMocks();
 
     const result = await reactToComment({
@@ -332,15 +342,14 @@ describe("reactToComment", () => {
     expect(result.dryRun).toBe(true);
     expect(result.alreadyReacted).toBe(false);
     expect(result.currentReaction).toBeNull();
-    // For non-Like target with dryRun: clicks menu to validate popup opens,
-    // but does NOT click the reaction button — exactly 1 click.
     expect(humanizedClick).toHaveBeenCalledTimes(1);
     expect(humanizedClick).toHaveBeenCalledWith(mockClient, MENU_SELECTOR, undefined);
+    expect(click).not.toHaveBeenCalled();
   });
 
   it("returns dryRun with currentReaction when a different reaction is active", async () => {
     setupMocks();
-    nextTriggerLabel = "Unreact Celebrate";
+    nextReactionStateText = reactionStateText("Celebrate");
 
     const result = await reactToComment({
       postUrl: POST_URL,
@@ -354,16 +363,16 @@ describe("reactToComment", () => {
     expect(result.dryRun).toBe(true);
     expect(result.alreadyReacted).toBe(false);
     expect(result.currentReaction).toBe("celebrate");
-    // Should NOT click trigger to unreact (dryRun preserves state),
-    // but DOES click menu to validate popup opens (non-Like target) —
-    // exactly 1 click (no unreact, no reaction button).
+    // Dry-run preserves state — clicks the menu (popup-validation) but
+    // does not click the reaction.  No "unreact first" step in the SDUI flow.
     expect(humanizedClick).toHaveBeenCalledTimes(1);
     expect(humanizedClick).toHaveBeenCalledWith(mockClient, MENU_SELECTOR, undefined);
+    expect(click).not.toHaveBeenCalled();
   });
 
   it("returns alreadyReacted with dryRun when same reaction is active", async () => {
     setupMocks();
-    nextTriggerLabel = "Unreact Like";
+    nextReactionStateText = reactionStateText("Like");
 
     const result = await reactToComment({
       postUrl: POST_URL,
@@ -402,10 +411,11 @@ describe("reactToComment", () => {
 
     // First waitForElement: anchor — any comment article (proves the
     // comments section has hydrated before we look for a specific URN).
+    // SDUI stack uses `componentkey^="replaceableComment_"` (lhremote#776).
     expect(waitForElement).toHaveBeenNthCalledWith(
       1,
       mockClient,
-      "article.comments-comment-entity",
+      '[componentkey^="replaceableComment_"]',
       undefined,
       undefined,
     );
@@ -419,11 +429,11 @@ describe("reactToComment", () => {
       undefined,
     );
 
-    // Third waitForElement: the comment-scoped reaction trigger
+    // Third waitForElement: the comment-scoped reactions menu opener
     expect(waitForElement).toHaveBeenNthCalledWith(
       3,
       mockClient,
-      TRIGGER_SELECTOR,
+      MENU_SELECTOR,
       undefined,
       undefined,
     );
@@ -445,7 +455,7 @@ describe("reactToComment", () => {
     );
   });
 
-  it("clicks the direct trigger (no popup) when target is Like", async () => {
+  it("opens the menu via humanizedClick and clicks Like via plain click in popup (SDUI: no direct trigger)", async () => {
     setupMocks();
 
     await reactToComment({
@@ -455,16 +465,18 @@ describe("reactToComment", () => {
       cdpPort: 9222,
     });
 
-    // Like target: just click the direct-Like trigger.  No menu.
+    // SDUI stack: every reaction goes through the popup, including Like.
+    // Sequence: humanizedClick on menu (opens click-anchored popup),
+    // then plain `click` on reaction button (no mouse motion — popup
+    // cannot close mid-motion).
     expect(humanizedClick).toHaveBeenCalledTimes(1);
-    expect(humanizedClick).toHaveBeenCalledWith(
-      mockClient,
-      TRIGGER_SELECTOR,
-      undefined,
-    );
+    expect(humanizedClick).toHaveBeenCalledWith(mockClient, MENU_SELECTOR, undefined);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledWith(mockClient, 'button[aria-label="Like"]');
+    expect(humanizedHover).not.toHaveBeenCalled();
   });
 
-  it("clicks Open-reactions-menu when target is non-Like", async () => {
+  it("clicks Open-reactions-menu when target is non-Like (popup is click-anchored)", async () => {
     setupMocks();
 
     await reactToComment({
@@ -474,15 +486,12 @@ describe("reactToComment", () => {
       cdpPort: 9222,
     });
 
-    // Non-Like target: click menu to open popup.
-    expect(humanizedClick).toHaveBeenCalledWith(
-      mockClient,
-      MENU_SELECTOR,
-      undefined,
-    );
+    // Non-Like target: same flow — humanizedClick opens, plain click selects.
+    expect(humanizedClick).toHaveBeenCalledWith(mockClient, MENU_SELECTOR, undefined);
+    expect(click).toHaveBeenCalledWith(mockClient, 'button[aria-label="Celebrate"]');
   });
 
-  it("wraps popup wait in retryInteraction (only fires for non-Like)", async () => {
+  it("wraps popup wait in retryInteraction (always — SDUI uses popup for every reaction)", async () => {
     setupMocks();
 
     await reactToComment({
@@ -494,11 +503,12 @@ describe("reactToComment", () => {
 
     expect(retryInteraction).toHaveBeenCalledWith(expect.any(Function), 3);
 
-    // Final waitForElement: the comment-level popup reaction button
-    // ("React {Type} to {Name}'s comment" prefix), with timeout, no mouse.
+    // Final waitForElement: the popup reaction button.  SDUI uses the
+    // bare aria-label format (`button[aria-label="<Type>"]`) — same as
+    // post-level reactions.
     expect(waitForElement).toHaveBeenLastCalledWith(
       mockClient,
-      'button[aria-label^="React Insightful to "]',
+      'button[aria-label="Insightful"]',
       { timeout: 10_000 },
     );
   });
@@ -513,11 +523,7 @@ describe("reactToComment", () => {
       cdpPort: 9222,
     });
 
-    expect(humanizedClick).toHaveBeenCalledWith(
-      mockClient,
-      'button[aria-label^="React Funny to "]',
-      undefined,
-    );
+    expect(click).toHaveBeenCalledWith(mockClient, 'button[aria-label="Funny"]');
   });
 
   it("disconnects the CDP client even when an error occurs", async () => {

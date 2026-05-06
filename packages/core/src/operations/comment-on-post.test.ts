@@ -58,6 +58,10 @@ function createMockClient() {
     send: vi.fn().mockResolvedValue(undefined),
     navigate: vi.fn().mockResolvedValue({ frameId: "F1" }),
     waitForEvent: vi.fn().mockResolvedValue(undefined),
+    // Reply path stamps a `data-lhremote-reply` marker on the Reply
+    // <button> via Runtime.evaluate.  Default: report success so the
+    // operation uses the stamped-marker selector.
+    evaluate: vi.fn().mockResolvedValue(true),
   };
 }
 
@@ -330,13 +334,22 @@ describe("commentOnPost", () => {
     // Reply flow: waitForElement called for comment article, reply button, focused input, submit button
     expect(waitForElement).toHaveBeenCalledTimes(4);
 
-    // First call: wait for the target comment article
-    const firstSelector = vi.mocked(waitForElement).mock.calls[0]?.[1];
-    expect(firstSelector).toContain(`article[data-id="${parentUrn}"]`);
+    // SDUI stack: legacy `urn:li:comment:(activity:N,M)` is normalized to
+    // `urn:li:comment:(urn:li:activity:N,M)` for componentkey lookups.
+    // (See lhremote#776 and `normalizeCommentUrnForReactStack`.)
+    const normalizedParentUrn = "urn:li:comment:(urn:li:activity:123,999)";
+    const expectedComponentkey = `[componentkey="replaceableComment_${normalizedParentUrn}"]`;
 
-    // Second call: wait for reply button within the article
+    // First call: wait for the target comment article (componentkey-scoped)
+    const firstSelector = vi.mocked(waitForElement).mock.calls[0]?.[1];
+    expect(firstSelector).toContain(expectedComponentkey);
+
+    // Second call: wait for the Reply button within the comment.  In the
+    // SDUI stack the Reply button has no aria-label, so the operation
+    // stamps a `data-lhremote-reply` marker via Runtime.evaluate (mocked
+    // to return `true`) and waits on the marker selector.
     const secondSelector = vi.mocked(waitForElement).mock.calls[1]?.[1];
-    expect(secondSelector).toContain('button[aria-label^="Reply to "]');
+    expect(secondSelector).toContain('button[data-lhremote-reply="1"]');
 
     // Third call: wait for focused comment input (not the global one)
     const thirdSelector = vi.mocked(waitForElement).mock.calls[2]?.[1];
@@ -345,7 +358,7 @@ describe("commentOnPost", () => {
     // scrollTo called for the comment article (not the top-level input)
     expect(humanizedScrollTo).toHaveBeenCalledTimes(1);
     const scrollSelector = vi.mocked(humanizedScrollTo).mock.calls[0]?.[1];
-    expect(scrollSelector).toContain(`article[data-id="${parentUrn}"]`);
+    expect(scrollSelector).toContain(expectedComponentkey);
   });
 
   it("rejects invalid parentCommentUrn format", async () => {

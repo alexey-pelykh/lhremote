@@ -8,7 +8,13 @@ import { ActionBudgetRepository } from "../db/index.js";
 import { waitForElement, humanizedScrollTo, humanizedClick, typeText, typeTextWithMentions } from "../linkedin/dom-automation.js";
 import type { MentionEntry } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
-import { COMMENT_INPUT, COMMENT_REPLY_BUTTON, COMMENT_SUBMIT_BUTTON } from "../linkedin/selectors.js";
+import {
+  commentArticleSelectorByUrn,
+  COMMENT_INPUT,
+  COMMENT_REPLY_BUTTON,
+  COMMENT_SUBMIT_BUTTON,
+  normalizeCommentUrnForReactStack,
+} from "../linkedin/selectors.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { BudgetExceededError } from "../services/errors.js";
 import { withDatabase } from "../services/instance-context.js";
@@ -19,8 +25,18 @@ import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 const LINKEDIN_POST_URL_RE =
   /linkedin\.com\/(?:feed\/update\/urn:li:\w+:\d+|posts\/[^/]+)/;
 
-/** Pattern matching a LinkedIn comment URN (e.g. `urn:li:comment:(activity:123,456)`). */
-const COMMENT_URN_RE = /^urn:li:comment:\(\w+:\d+,\d+\)$/;
+/**
+ * Pattern matching a LinkedIn comment URN.
+ *
+ * Accepts BOTH formats:
+ * - Legacy Ember stack: `urn:li:comment:(activity:123,456)`
+ * - React/SDUI stack:   `urn:li:comment:(urn:li:activity:123,456)`
+ *
+ * `normalizeCommentUrnForReactStack` converts to the React-stack form
+ * before DOM lookups.  See lhremote#776 and
+ * `research/linkedin/post-detail-comment-dom-react-sdui-20260506.md`.
+ */
+const COMMENT_URN_RE = /^urn:li:comment:\((?:urn:li:)?\w+:\d+,\d+\)$/;
 
 /** Limit type ID for PostComment in the LinkedHelper budget system. */
 const POST_COMMENT_LIMIT_TYPE_ID = 19;
@@ -171,13 +187,35 @@ export async function commentOnPost(
 
     if (parentUrn) {
       // --- Reply to a specific comment ---
-      // Find the target comment article by its data-id attribute
-      const commentSelector = `article[data-id="${parentUrn}"]`;
+      // React/SDUI stack: each comment is a `<div componentkey="replaceableComment_<URN>">`,
+      // not the legacy `<article class="comments-comment-entity" data-id="<URN>">`.
+      // Normalize the URN to the SDUI form (legacy callers pass
+      // `urn:li:comment:(activity:N,M)`; SDUI uses
+      // `urn:li:comment:(urn:li:activity:N,M)`).  See lhremote#776.
+      const normalizedParentUrn = normalizeCommentUrnForReactStack(parentUrn);
+      const commentSelector = commentArticleSelectorByUrn(normalizedParentUrn);
       await waitForElement(client, commentSelector, undefined, mouse);
       await humanizedScrollTo(client, commentSelector, mouse);
 
-      // Click the Reply button within that comment
-      const replySelector = `${commentSelector} ${COMMENT_REPLY_BUTTON}`;
+      // The Reply button has no aria-label in the React/SDUI stack — it's
+      // identified only by its `textContent === "Reply"`.  Stamp a marker
+      // attribute via JS so we can use a CSS selector for the subsequent
+      // wait/click flow.  Falls back to the legacy `aria-label^="Reply to "`
+      // if the marker stamp couldn't find a Reply button (covers any
+      // residual Ember-stack pages or future re-skin).
+      const replyMarkerStamped = await client.evaluate<boolean>(`(() => {
+        const scope = document.querySelector(${JSON.stringify(commentSelector)});
+        if (!scope) return false;
+        const btn = Array.from(scope.querySelectorAll('button'))
+          .find(b => (b.textContent || '').trim() === 'Reply');
+        if (!btn) return false;
+        btn.setAttribute('data-lhremote-reply', '1');
+        return true;
+      })()`);
+
+      const replySelector = replyMarkerStamped
+        ? `${commentSelector} button[data-lhremote-reply="1"]`
+        : `${commentSelector} ${COMMENT_REPLY_BUTTON}`;
       await waitForElement(client, replySelector, undefined, mouse);
       await humanizedClick(client, replySelector, mouse);
       await gaussianDelay(550, 75, 400, 700);

@@ -5,6 +5,7 @@ import { resolveInstancePort } from "../cdp/index.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import {
+  click,
   humanizedClick,
   humanizedScrollTo,
   retryInteraction,
@@ -13,8 +14,10 @@ import {
 } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import {
-  COMMENT_REACTION_TRIGGER,
+  commentArticleSelectorByUrn,
+  COMMENT_ARTICLE_ANY,
   COMMENT_REACTIONS_MENU,
+  normalizeCommentUrnForReactStack,
 } from "../linkedin/selectors.js";
 import { gaussianDelay } from "../utils/delay.js";
 import { navigateAwayIf } from "./navigate-away.js";
@@ -25,8 +28,18 @@ import type { ConnectionOptions } from "./types.js";
 const LINKEDIN_POST_URL_RE =
   /linkedin\.com\/(?:feed\/update\/urn:li:\w+:\d+|posts\/[^/]+)/;
 
-/** Pattern matching a LinkedIn comment URN (e.g. `urn:li:comment:(activity:123,456)`). */
-const COMMENT_URN_RE = /^urn:li:comment:\(\w+:\d+,\d+\)$/;
+/**
+ * Pattern matching a LinkedIn comment URN.
+ *
+ * Accepts BOTH formats:
+ * - Legacy Ember stack: `urn:li:comment:(activity:123,456)`
+ * - React/SDUI stack:   `urn:li:comment:(urn:li:activity:123,456)`
+ *
+ * Code paths normalize to the React-stack form via
+ * `normalizeCommentUrnForReactStack` before DOM lookups.  See
+ * `research/linkedin/post-detail-comment-dom-react-sdui-20260506.md`.
+ */
+const COMMENT_URN_RE = /^urn:li:comment:\((?:urn:li:)?\w+:\d+,\d+\)$/;
 
 /**
  * JavaScript source that finds and clicks the "Load more comments" button
@@ -77,23 +90,26 @@ const MAX_LOAD_MORE_ATTEMPTS = 20;
 
 /**
  * Map from reaction type to its popup-button selector for the
- * comment-level reactions popup.
+ * comment-level reactions popup (LinkedIn React/SDUI stack).
  *
- * **Important**: comment-level popup buttons have aria-labels of the form
- * `"React {Type} to {Name}'s comment"` — distinct from the post-level
- * popup which uses bare `"React Like"` / `"Like"` / etc.  The post-level
- * REACTION_LIKE/CELEBRATE/etc. constants do NOT match here.
+ * **History**: Previously the comment-level popup used aria-labels like
+ * `"React Like to {Name}'s comment"` (Ember stack).  After the React/SDUI
+ * rewrite (verified 2026-05-06, see
+ * `research/linkedin/post-detail-comment-dom-react-sdui-20260506.md`)
+ * clicking `Open reactions menu` on a comment opens the SAME page-level
+ * popup that `react-to-post` uses, so the bare `aria-label="Like"` /
+ * `aria-label="Celebrate"` / etc. selectors apply directly.
  *
- * Discovered via E2E diagnostic capture against the LinkedHelper webview
- * (lhremote#754).  See `../research/linkedin/comment-reactions-dom-20260428.md`.
+ * Verified live via `comment-dom-spike.e2e.test.ts` reactions-popup probe
+ * (lhremote#776).
  */
 const COMMENT_POPUP_REACTION_SELECTORS: Readonly<Record<ReactionType, string>> = {
-  like: 'button[aria-label^="React Like to "]',
-  celebrate: 'button[aria-label^="React Celebrate to "]',
-  support: 'button[aria-label^="React Support to "]',
-  love: 'button[aria-label^="React Love to "]',
-  insightful: 'button[aria-label^="React Insightful to "]',
-  funny: 'button[aria-label^="React Funny to "]',
+  like: 'button[aria-label="Like"]',
+  celebrate: 'button[aria-label="Celebrate"]',
+  support: 'button[aria-label="Support"]',
+  love: 'button[aria-label="Love"]',
+  insightful: 'button[aria-label="Insightful"]',
+  funny: 'button[aria-label="Funny"]',
 };
 
 /** Map from display name (as it appears in aria-labels) to reaction type. */
@@ -107,39 +123,61 @@ const REACTION_NAME_MAP: Readonly<Partial<Record<string, ReactionType>>> = {
 };
 
 /**
- * Detect the current reaction state of a specific comment by inspecting
- * the comment-scoped reaction trigger button's `aria-label`.
+ * Detect the current reaction state of a specific comment by reading
+ * the React/SDUI state-display element inside the comment scope.
  *
- * The expected aria-label patterns on the post detail page (Ember stack):
+ * **Stack note**: The Ember stack exposed state via the trigger button's
+ * `aria-label` (e.g., `"Unreact Like"`).  The React/SDUI rewrite removed
+ * the direct-Like trigger entirely; reaction state now lives in an
+ * element with `role="button"` (observed as `<div role="button">` and
+ * a sibling `<p role="button">`, both bearing the same text — we match
+ * either via the role-based selector).  Its `textContent` follows
+ * `"Reaction button state: <X><X>"` — the leading `<X>` is the hidden
+ * a11y label, the trailing `<X>` is the visible button face.  When the
+ * comment is unreacted, the text reads `"Reaction button state: no reactionLike"`
+ * (the trailing `Like` is the prompt shown to invite the user to react).
  *
- * - Not reacted: `"React Like to {Name}'s comment"`
- * - Reacted:    `"Unreact Like"` or `"Unreact Like to {Name}'s comment"`
- *               (and equivalent for Celebrate / Support / Love / Insightful / Funny)
- *
- * Uses the same `^Unreact\s+(\w+)` regex as the post-level detector;
- * the `\w+` capture takes only the first word, so it correctly handles
- * both the bare `"Unreact Like"` form and the comment-context-preserving
- * `"Unreact Like to {Name}'s comment"` form.
+ * Verified via `comment-dom-spike.e2e.test.ts` inner-button probe
+ * (lhremote#776).
  *
  * @returns The current reaction type, or `null` if not reacted.
  */
 async function detectCommentReaction(
   client: CDPClient,
-  scopedTriggerSelector: string,
+  commentScopeSelector: string,
 ): Promise<ReactionType | null> {
-  const label = await client.evaluate<string | null>(
+  const text = await client.evaluate<string | null>(
     `(() => {
-      const el = document.querySelector(${JSON.stringify(scopedTriggerSelector)});
-      return el ? el.getAttribute('aria-label') : null;
+      const scope = document.querySelector(${JSON.stringify(commentScopeSelector)});
+      if (!scope) return null;
+      const stateEl = Array.from(scope.querySelectorAll('[role="button"]'))
+        .find(el => /Reaction button state:/.test(el.textContent || ''));
+      return stateEl ? (stateEl.textContent || '').trim() : null;
     })()`,
   );
 
-  if (!label) return null;
+  if (!text) return null;
 
-  // Reacted: "Unreact Like" / "Unreact Like to {Name}'s comment", etc.
-  const unreactMatch = /^Unreact\s+(\w+)/i.exec(label);
-  if (unreactMatch?.[1]) {
-    return REACTION_NAME_MAP[unreactMatch[1].toLowerCase()] ?? null;
+  const match = /Reaction button state:\s*(.+)$/.exec(text);
+  const rest = match?.[1]?.trim();
+  if (!rest) return null;
+
+  // "no reactionLike" → not reacted
+  if (/^no reaction/i.test(rest)) return null;
+
+  // "InsightfulInsightful" → "Insightful" (perfect repetition of the
+  // state name).  Detect by checking whether the string is two halves of
+  // the same word.
+  const half = rest.slice(0, Math.floor(rest.length / 2));
+  if (half && rest === half + half) {
+    return REACTION_NAME_MAP[half.toLowerCase()] ?? null;
+  }
+
+  // Fallback: take the first word (covers single-rendered forms).
+  const wordMatch = /^([A-Za-z]+)/.exec(rest);
+  const word = wordMatch?.[1];
+  if (word) {
+    return REACTION_NAME_MAP[word.toLowerCase()] ?? null;
   }
 
   return null;
@@ -278,42 +316,38 @@ export async function reactToComment(
 
     const mouse = input.mouse;
 
-    // Wait for the comments section to render at least one comment.
-    // Without this anchor, looking up a specific `article[data-id="..."]`
-    // races the comments-section's lazy hydration: the post body lands
-    // first, comments arrive later as a JS-fetched batch.  Mirrors the
-    // pattern that `comment-on-post.ts` benefits from implicitly via
-    // `waitForElement(COMMENT_INPUT)` (its reply test runs after a
-    // top-level comment-on-post test that already triggered hydration).
-    await waitForElement(client, "article.comments-comment-entity", undefined, mouse);
+    // Normalize URN to React-stack format (legacy callers pass
+    // `urn:li:comment:(activity:N,M)`; the SDUI DOM uses
+    // `urn:li:comment:(urn:li:activity:N,M)`).  Use the normalized URN
+    // for all DOM lookups; preserve `input.commentUrn` for output / error
+    // messages so callers see what they passed in.
+    const normalizedUrn = normalizeCommentUrnForReactStack(input.commentUrn);
 
-    // Locate the target comment article — it may not be in the initial
-    // batch on a post with many comments (LinkedIn shows ~3-5 by default
-    // and paginates the rest behind a "Load more comments" button).
-    // Click the load-more button repeatedly until the specific URN is
+    // Wait for the comments section to render at least one comment.
+    // Without this anchor, looking up a specific componentkey races the
+    // comments-section's lazy hydration: the post body lands first,
+    // comments arrive later as a JS-fetched batch.  Mirrors the pattern
+    // that `comment-on-post.ts` benefits from implicitly via
+    // `waitForElement(COMMENT_INPUT)`.
+    await waitForElement(client, COMMENT_ARTICLE_ANY, undefined, mouse);
+
+    // Locate the target comment — it may not be in the initial batch on
+    // a post with many comments (LinkedIn shows ~3-5 by default and
+    // paginates the rest behind a "Load more comments" button).  Click
+    // the load-more button repeatedly until the specific URN is
     // reachable, or until no more load-more buttons remain.
-    // CSS attribute selectors with parentheses and colons in the value
-    // (e.g., `article[data-id="urn:li:comment:(activity:N,M)"]`) are
-    // technically valid CSS3, but the LinkedIn Electron webview has
-    // intermittent issues matching them via `querySelector`.  We use
-    // JS-side equality (`getAttribute('data-id') === target`) for
-    // presence checks and CSS-attribute scoping; the latter is fine
-    // for `:scope` searches inside the article once the element is
-    // found, but for *finding* the article we use a `data-comment-urn`
-    // marker stamped onto the element so subsequent scoped queries
-    // ride a clean attribute selector.
-    const articleSelector = `article[data-comment-urn="${input.commentUrn}"]`;
+    //
+    // The React/SDUI stack identifies each comment by
+    // `componentkey="replaceableComment_<URN>"` (three nested elements
+    // share the same value — the selector matches all three, which is
+    // fine for descendant queries).  See
+    // `research/linkedin/post-detail-comment-dom-react-sdui-20260506.md`
+    // and lhremote#776.
+    const articleSelector = commentArticleSelectorByUrn(normalizedUrn);
     let articleFound = false;
     for (let attempt = 0; attempt <= MAX_LOAD_MORE_ATTEMPTS; attempt++) {
       const isPresent = await client.evaluate<boolean>(`(() => {
-        const target = ${JSON.stringify(input.commentUrn)};
-        const article = Array.from(document.querySelectorAll('article[data-id]'))
-          .find(a => a.getAttribute('data-id') === target);
-        if (!article) return false;
-        // Stamp a marker so subsequent CSS attribute selectors can find it
-        // without depending on parens/colons being parsed correctly.
-        article.setAttribute('data-comment-urn', target);
-        return true;
+        return document.querySelector(${JSON.stringify(articleSelector)}) !== null;
       })()`);
       if (isPresent) {
         articleFound = true;
@@ -336,17 +370,18 @@ export async function reactToComment(
     await waitForElement(client, articleSelector, undefined, mouse);
     await humanizedScrollTo(client, articleSelector, mouse);
 
-    // Two distinct comment-scoped buttons (see selectors.ts):
-    //   - triggerSelector: state-bearing direct-Like button, used for
-    //     reading current reaction and unreacting an existing one.
-    //   - menuSelector:    popup-opening button, hovered/clicked to
-    //     expand the 6-reaction picker.
-    const triggerSelector = `${articleSelector} ${COMMENT_REACTION_TRIGGER}`;
+    // React/SDUI stack: the comment exposes ONE reaction-related button
+    // (the menu opener) and a state-display element.  The legacy
+    // "state-bearing direct-Like trigger" is gone — every reaction now
+    // goes through the popup, and switching reactions is a single click
+    // on the new reaction in the popup (LinkedIn auto-replaces the
+    // existing one).  See lhremote#776 and
+    // `research/linkedin/post-detail-comment-dom-react-sdui-20260506.md`.
     const menuSelector = `${articleSelector} ${COMMENT_REACTIONS_MENU}`;
-    await waitForElement(client, triggerSelector, undefined, mouse);
+    await waitForElement(client, menuSelector, undefined, mouse);
 
-    // Detect existing reaction state from the trigger's aria-label
-    const currentReaction = await detectCommentReaction(client, triggerSelector);
+    // Detect existing reaction state from the role="button" state element.
+    const currentReaction = await detectCommentReaction(client, articleSelector);
 
     if (currentReaction === reactionType) {
       // Already reacted with the requested type — no-op
@@ -362,44 +397,40 @@ export async function reactToComment(
       };
     }
 
-    if (!dryRun && currentReaction !== null) {
-      // Reacted with a different type — click the state-bearing trigger
-      // to unreact first.  Clicking the trigger when its aria-label is
-      // "Unreact {Type} to ..." toggles the existing reaction off.
-      await humanizedClick(client, triggerSelector, mouse);
-      // Wait for DOM to settle after unreacting — the trigger element's
-      // aria-label changes back to "React Like to ...".
+    // Apply / switch reaction.  In the React/SDUI stack the popup is
+    // CLICK-anchored on the menu button (verified via spike — hover
+    // alone does not open it; humanizedClick does).  But the popup is
+    // also fragile: humanizedClick on the popup button takes ~500ms
+    // (viewport scroll + multi-step humanized mouse motion + pre-hover
+    // pause), and the popup closes mid-motion before the click lands —
+    // observed as "Element button[aria-label=\"Like\"] not found for click".
+    //
+    // Workaround: open the menu via humanizedClick (fine — single click,
+    // mouse stays put), then dispatch the reaction via the lightweight
+    // synchronous JS click() helper (one CDP roundtrip, no mouse motion).
+    //
+    // The popup buttons are PAGE-LEVEL (not scoped to the comment) —
+    // clicking the menu re-positions the same shared popup anchored on
+    // the comment.  Selectors come from COMMENT_POPUP_REACTION_SELECTORS
+    // (bare aria-label="<Type>").
+    const popupReactionSelector = COMMENT_POPUP_REACTION_SELECTORS[reactionType];
+    await retryInteraction(async () => {
+      await humanizedClick(client, menuSelector, mouse);
+      await gaussianDelay(800, 200, 500, 1_500);
+      await waitForElement(client, popupReactionSelector, { timeout: 10_000 });
+    }, 3);
+
+    if (!dryRun) {
+      await click(client, popupReactionSelector);
+      await gaussianDelay(550, 75, 400, 700);
+      // After applying, give the DOM time to settle (the state element
+      // text updates to reflect the new reaction).
       await waitForDOMStable(client, 300);
-    }
-
-    // Apply the new reaction.
-    //
-    // For the "like" reaction specifically, the state-bearing direct-Like
-    // button (COMMENT_REACTION_TRIGGER) IS the apply mechanism — clicking
-    // it when in unreacted state applies a Like.  No popup needed.
-    //
-    // For the 5 non-Like reactions, we must open the reactions popup
-    // (COMMENT_REACTIONS_MENU) via a CLICK (not hover, unlike post-level)
-    // and then click the popup button.  Comment-level popup buttons have
-    // aria-labels "React {Type} to {Name}'s comment" — distinct from the
-    // post-level bare "React {Type}" / "{Type}" pattern.
-    if (reactionType === "like") {
-      if (!dryRun) {
-        await humanizedClick(client, triggerSelector, mouse);
-        await gaussianDelay(550, 75, 400, 700);
-      }
     } else {
-      const popupReactionSelector = COMMENT_POPUP_REACTION_SELECTORS[reactionType];
-      await retryInteraction(async () => {
-        await humanizedClick(client, menuSelector, mouse);
-        await gaussianDelay(800, 200, 500, 1_500);
-        await waitForElement(client, popupReactionSelector, { timeout: 10_000 });
-      }, 3);
-
-      if (!dryRun) {
-        await humanizedClick(client, popupReactionSelector, mouse);
-        await gaussianDelay(550, 75, 400, 700);
-      }
+      // Dry-run: dismiss the popup we just opened so we leave the page
+      // visually clean.
+      await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+      await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
     }
 
     await gaussianDelay(1_500, 500, 700, 3_500); // Post-action dwell

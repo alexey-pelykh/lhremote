@@ -145,6 +145,72 @@ export const COMMENT_REACTION_TRIGGER =
 export const COMMENT_REACTIONS_MENU =
   'button[aria-label="Open reactions menu"]';
 
+// ── React-stack post detail (LinkedIn 2026-05 SDUI rewrite) ──────
+
+/**
+ * Selects ANY comment article on the post-detail page.
+ *
+ * **Stack note**: as of LinkedIn's React/SDUI post-detail rewrite (live by
+ * 2026-05), comments are no longer `<article class="comments-comment-entity">`.
+ * Each comment is a `<div componentkey="replaceableComment_<URN>">` rendered
+ * inside a `<div data-component-type="LazyColumn" data-testid="...commentList...FeedType_FEED_DETAIL">`
+ * container.  Three nested `<div>` elements share the same `componentkey`
+ * value (outer wrapper, mid wrapper, inner content row); the selector
+ * matches all three but `waitForElement` style usage is unaffected.
+ *
+ * Use with `waitForElement` to anchor on the comments section having
+ * hydrated at least one comment.  Pair with {@link commentArticleSelectorByUrn}
+ * to scope subsequent selectors to a specific comment.
+ *
+ * See `research/linkedin/post-detail-comment-dom-react-sdui-20260506.md` and
+ * lhremote issue #776.
+ */
+export const COMMENT_ARTICLE_ANY = '[componentkey^="replaceableComment_"]';
+
+/**
+ * Build a selector that scopes to a specific comment article by URN.
+ *
+ * @param urn  Comment URN in the React-stack format
+ *             (`urn:li:comment:(urn:li:activity:<postId>,<commentId>)`).
+ *             Use {@link normalizeCommentUrnForReactStack} if you have the
+ *             legacy format `urn:li:comment:(activity:N,M)`.
+ *
+ * Returns a selector that matches the three nested elements sharing the
+ * same `componentkey`.  For scoped queries (e.g. finding a button inside
+ * the comment) the scope works regardless of which level the descendant
+ * lives at.
+ */
+export function commentArticleSelectorByUrn(urn: string): string {
+  return `[componentkey="replaceableComment_${urn}"]`;
+}
+
+/**
+ * Convert a legacy comment URN (`urn:li:comment:(activity:N,M)`) to the
+ * React-stack format (`urn:li:comment:(urn:li:activity:N,M)`).
+ *
+ * The legacy format was emitted by `get-post` and consumed by
+ * `comment-on-post` / `react-to-comment` against the Ember stack.  After
+ * LinkedIn's SDUI rewrite, the inner `activity:` segment is fully URN-qualified
+ * (`urn:li:activity:`).  The DOM only matches the new format, so client
+ * input in either form is normalized here before DOM lookups.
+ *
+ * @returns the new-format URN if the input matches the legacy form;
+ *          otherwise returns the input unchanged (idempotent for new format
+ *          and inputs that don't match either pattern).
+ */
+export function normalizeCommentUrnForReactStack(urn: string): string {
+  // Legacy:  urn:li:comment:(activity:N,M)
+  // SDUI:    urn:li:comment:(urn:li:activity:N,M)
+  const legacy = /^urn:li:comment:\((\w+):(\d+),(\d+)\)$/.exec(urn);
+  if (legacy) {
+    const type = legacy[1];
+    const postId = legacy[2];
+    const commentId = legacy[3];
+    return `urn:li:comment:(urn:li:${type}:${postId},${commentId})`;
+  }
+  return urn;
+}
+
 // ── Mention autocomplete ─────────────────────────────────────────
 
 /**
