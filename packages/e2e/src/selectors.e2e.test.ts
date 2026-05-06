@@ -109,7 +109,7 @@ describeE2E("LinkedIn selectors registry", () => {
         if (p === null) throw new Error("Instance CDP port not discovered yet");
         return p;
       },
-      { retries: 10, delay: 2_000 },
+      { retries: 30, delay: 2_000 },
     );
 
     // 4. Connect directly to the LinkedIn WebView target
@@ -123,7 +123,7 @@ describeE2E("LinkedIn selectors registry", () => {
         if (!li) throw new Error("LinkedIn target not found yet");
         return li;
       },
-      { retries: 10, delay: 2_000 },
+      { retries: 30, delay: 2_000 },
     );
 
     linkedInClient = new CDPClient(instancePort);

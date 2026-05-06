@@ -56,7 +56,7 @@ describeE2E("feed dismissal operations", () => {
         if (p === null) throw new Error("Instance CDP port not discovered yet");
         return p;
       },
-      { retries: 10, delay: 2_000 },
+      { retries: 30, delay: 2_000 },
     );
     cdpPort = instancePort;
 

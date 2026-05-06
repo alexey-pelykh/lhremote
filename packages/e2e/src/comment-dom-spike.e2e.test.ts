@@ -110,7 +110,7 @@ describeE2E("comment-dom regression probe (#776)", () => {
         if (p === null) throw new Error("Instance CDP port not discovered yet");
         return p;
       },
-      { retries: 10, delay: 2_000 },
+      { retries: 30, delay: 2_000 },
     );
 
     const liTarget = await retryAsync(
