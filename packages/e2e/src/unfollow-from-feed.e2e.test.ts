@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, expect, it } from "vitest";
 import {
   describeE2E,
   forceStopInstance,
@@ -15,6 +15,7 @@ import {
   type AppService,
   discoverInstancePort,
   discoverTargets,
+  dismissErrors,
   LauncherService,
   startInstanceWithRecovery,
 } from "@lhremote/core";
@@ -68,6 +69,14 @@ describeE2E("unfollow-from-feed operation", () => {
       { retries: 30, delay: 2_000 },
     );
   }, 120_000);
+
+  // Dismiss any leftover error popups before each test to prevent cascade failures (#792).
+  // Pass launcher `port` (not instance `cdpPort`) so dismissErrors can clear BOTH
+  // launcher- and instance-level popups via auto-discovery — passing the instance
+  // port skips the launcher-popup branch and leaves launcher popups to cascade.
+  beforeEach(async () => {
+    await dismissErrors({ cdpPort: port, accountId }).catch(() => {});
+  }, 30_000);
 
   installErrorDetection(() => port);
 

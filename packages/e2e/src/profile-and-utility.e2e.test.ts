@@ -14,6 +14,7 @@ import {
 } from "@lhremote/core/testing";
 import {
   type AppService,
+  dismissErrors,
   LauncherService,
   startInstanceWithRecovery,
 } from "@lhremote/core";
@@ -504,6 +505,11 @@ describeE2E("profile enrichment and utilities", () => {
       }
       await quitApp(app);
     }, 60_000);
+
+    // Dismiss any leftover error popups before each test to prevent cascade failures (#792)
+    beforeEach(async () => {
+      await dismissErrors({ cdpPort: port, accountId }).catch(() => {});
+    }, 30_000);
 
     installErrorDetection(() => port);
 

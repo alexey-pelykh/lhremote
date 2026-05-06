@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { assertDefined, describeE2E, forceStopInstance, installErrorDetection, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
 import {
   type AppService,
+  dismissErrors,
   LauncherService,
   startInstanceWithRecovery,
 } from "@lhremote/core";
@@ -69,6 +70,11 @@ describeE2E("Campaign advanced operations", () => {
     }
     await quitApp(app);
   }, 60_000);
+
+  // Dismiss any leftover error popups before each test to prevent cascade failures (#792)
+  beforeEach(async () => {
+    await dismissErrors({ cdpPort: port, accountId }).catch(() => {});
+  }, 30_000);
 
   installErrorDetection(() => port);
 
