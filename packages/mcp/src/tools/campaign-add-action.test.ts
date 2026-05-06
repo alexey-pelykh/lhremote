@@ -82,6 +82,25 @@ describe("registerCampaignAddAction", () => {
     });
   });
 
+  it("forwards accountId to campaignAddAction", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCampaignAddAction(server);
+    vi.mocked(campaignAddAction).mockResolvedValue(MOCK_ACTION);
+
+    const handler = getHandler("campaign-add-action");
+    await handler({
+      campaignId: 15,
+      name: "Visit & Extract",
+      actionType: "VisitAndExtract",
+      cdpPort: 9222,
+      accountId: 550116,
+    });
+
+    expect(campaignAddAction).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 550116 }),
+    );
+  });
+
   it("returns error for invalid actionSettings JSON", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignAddAction(server);

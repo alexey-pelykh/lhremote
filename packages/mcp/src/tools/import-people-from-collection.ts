@@ -27,9 +27,9 @@ export function registerImportPeopleFromCollection(server: McpServer): void {
         .describe("Campaign ID to import people into"),
       ...cdpConnectionSchema,
     },
-    async ({ collectionId, campaignId, cdpPort, cdpHost, allowRemote }) => {
+    async ({ collectionId, campaignId, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await importPeopleFromCollection({ collectionId, campaignId, cdpPort, cdpHost, allowRemote });
+        const result = await importPeopleFromCollection({ collectionId, campaignId, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CampaignExecutionError) {

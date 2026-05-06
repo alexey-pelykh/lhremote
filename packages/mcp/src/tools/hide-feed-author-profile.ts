@@ -30,7 +30,7 @@ export function registerHideFeedAuthorProfile(server: McpServer): void {
         ),
       ...cdpConnectionSchema,
     },
-    async ({ profileUrl, dryRun, cdpPort, cdpHost, allowRemote }) => {
+    async ({ profileUrl, dryRun, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const result = await withLoggedInStateRetryAtPort(
           cdpPort,
@@ -42,6 +42,7 @@ export function registerHideFeedAuthorProfile(server: McpServer): void {
           cdpPort,
           cdpHost,
           allowRemote,
+          accountId,
           dryRun,
           }),
         );

@@ -30,7 +30,7 @@ export function registerCampaignUpdate(server: McpServer): void {
         .describe("New campaign description (null to clear)"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, name, description, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, name, description, cdpPort, cdpHost, allowRemote, accountId }) => {
       // Validate that at least one field is provided
       if (name === undefined && description === undefined) {
         return mcpError("At least one of name or description must be provided.");
@@ -41,7 +41,7 @@ export function registerCampaignUpdate(server: McpServer): void {
       if (description !== undefined) updates.description = description;
 
       try {
-        const result = await campaignUpdate({ campaignId, updates, cdpPort, cdpHost, allowRemote });
+        const result = await campaignUpdate({ campaignId, updates, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to update campaign");

@@ -56,6 +56,7 @@ export function registerCampaignAddAction(server: McpServer): void {
       cdpPort,
       cdpHost,
       allowRemote,
+      accountId,
     }) => {
       // Parse action settings JSON if provided
       let parsedSettings: Record<string, unknown> = {};
@@ -71,7 +72,7 @@ export function registerCampaignAddAction(server: McpServer): void {
         const result = await campaignAddAction({
           campaignId, name, actionType, description, coolDown,
           maxActionResultsPerIteration, actionSettings: parsedSettings,
-          cdpPort, cdpHost, allowRemote,
+          cdpPort, cdpHost, allowRemote, accountId,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

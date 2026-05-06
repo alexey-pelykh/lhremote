@@ -35,9 +35,9 @@ export function registerCampaignStatistics(server: McpServer): void {
         .describe("Maximum number of top errors per action (default: 5)"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, actionId, maxErrors, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, actionId, maxErrors, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await campaignStatistics({ campaignId, actionId, maxErrors, cdpPort, cdpHost, allowRemote });
+        const result = await campaignStatistics({ campaignId, actionId, maxErrors, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof ActionNotFoundError) {

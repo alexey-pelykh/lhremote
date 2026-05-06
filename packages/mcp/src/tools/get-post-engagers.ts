@@ -33,7 +33,7 @@ export function registerGetPostEngagers(server: McpServer): void {
         .describe("Number of engagers per page (default: 20)"),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, start, count, cdpPort, cdpHost, allowRemote }) => {
+    async ({ postUrl, start, count, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const result = await getPostEngagers({
           postUrl,
@@ -42,6 +42,7 @@ export function registerGetPostEngagers(server: McpServer): void {
           cdpPort,
           cdpHost,
           allowRemote,
+          accountId,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

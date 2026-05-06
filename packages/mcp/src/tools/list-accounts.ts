@@ -20,10 +20,10 @@ export function registerListAccounts(server: McpServer): void {
           "When true, enumerate accounts across every workspace the user belongs to, not just the selected workspace. Default: false.",
         ),
     },
-    async ({ cdpPort, cdpHost, allowRemote, includeAllWorkspaces }) => {
+    async ({ cdpPort, cdpHost, allowRemote, accountId, includeAllWorkspaces }) => {
       try {
         const port = await resolveLauncherPort(cdpPort, cdpHost);
-        const launcher = new LauncherService(port, buildCdpOptions({ cdpHost, allowRemote }));
+        const launcher = new LauncherService(port, buildCdpOptions({ cdpHost, allowRemote, accountId }));
 
         try {
           await launcher.connect();

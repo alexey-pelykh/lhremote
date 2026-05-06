@@ -13,9 +13,9 @@ export function registerListCollections(server: McpServer): void {
     {
       ...cdpConnectionSchema,
     },
-    async ({ cdpPort, cdpHost, allowRemote }) => {
+    async ({ cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await listCollections({ cdpPort, cdpHost, allowRemote });
+        const result = await listCollections({ cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to list collections");

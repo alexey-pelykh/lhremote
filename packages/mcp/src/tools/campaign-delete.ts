@@ -26,9 +26,9 @@ export function registerCampaignDelete(server: McpServer): void {
         .describe("Permanently delete the campaign and all related data instead of archiving"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, hard, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, hard, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await campaignDelete({ campaignId, hard, cdpPort, cdpHost, allowRemote });
+        const result = await campaignDelete({ campaignId, hard, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CampaignExecutionError) {

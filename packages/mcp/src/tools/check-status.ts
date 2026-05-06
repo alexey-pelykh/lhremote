@@ -13,9 +13,9 @@ export function registerCheckStatus(server: McpServer): void {
     {
       ...cdpConnectionSchema,
     },
-    async ({ cdpPort, cdpHost, allowRemote }) => {
+    async ({ cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const report = await checkStatus(cdpPort, buildCdpOptions({ cdpHost, allowRemote }));
+        const report = await checkStatus(cdpPort, buildCdpOptions({ cdpHost, allowRemote, accountId }));
 
         return mcpSuccess(JSON.stringify(report, null, 2));
       } catch (error) {

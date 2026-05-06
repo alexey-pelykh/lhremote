@@ -19,9 +19,9 @@ export function registerDeleteCollection(server: McpServer): void {
         .describe("Collection ID to delete"),
       ...cdpConnectionSchema,
     },
-    async ({ collectionId, cdpPort, cdpHost, allowRemote }) => {
+    async ({ collectionId, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await deleteCollection({ collectionId, cdpPort, cdpHost, allowRemote });
+        const result = await deleteCollection({ collectionId, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to delete collection");

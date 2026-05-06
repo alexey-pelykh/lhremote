@@ -13,9 +13,9 @@ export function registerGetThrottleStatus(server: McpServer): void {
     {
       ...cdpConnectionSchema,
     },
-    async ({ cdpPort, cdpHost, allowRemote }) => {
+    async ({ cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await getThrottleStatus({ cdpPort, cdpHost, allowRemote });
+        const result = await getThrottleStatus({ cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to get throttle status");

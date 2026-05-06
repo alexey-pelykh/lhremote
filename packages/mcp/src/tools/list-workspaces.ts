@@ -24,10 +24,10 @@ export function registerListWorkspaces(server: McpServer): void {
     {
       ...cdpConnectionSchema,
     },
-    async ({ cdpPort, cdpHost, allowRemote }) => {
+    async ({ cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const port = await resolveLauncherPort(cdpPort, cdpHost);
-        const launcher = new LauncherService(port, buildCdpOptions({ cdpHost, allowRemote }));
+        const launcher = new LauncherService(port, buildCdpOptions({ cdpHost, allowRemote, accountId }));
 
         try {
           await launcher.connect();

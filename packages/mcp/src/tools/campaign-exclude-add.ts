@@ -35,9 +35,9 @@ export function registerCampaignExcludeAdd(server: McpServer): void {
         ),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, personIds, actionId, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, personIds, actionId, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await campaignExcludeAdd({ campaignId, personIds, actionId, cdpPort, cdpHost, allowRemote });
+        const result = await campaignExcludeAdd({ campaignId, personIds, actionId, cdpPort, cdpHost, allowRemote, accountId });
         const targetLabel = actionId !== undefined
           ? `action ${String(actionId)} in campaign ${String(campaignId)}`
           : `campaign ${String(campaignId)}`;

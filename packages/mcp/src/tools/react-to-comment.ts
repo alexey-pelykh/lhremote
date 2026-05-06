@@ -36,7 +36,7 @@ export function registerReactToComment(server: McpServer): void {
       dryRun: z.boolean().optional().default(false).describe("When true, detect current reaction state without clicking"),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, commentUrn, reactionType, dryRun, cdpPort, cdpHost, allowRemote }) => {
+    async ({ postUrl, commentUrn, reactionType, dryRun, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const result = await withLoggedInStateRetryAtPort(
           cdpPort,
@@ -50,6 +50,7 @@ export function registerReactToComment(server: McpServer): void {
           cdpPort,
           cdpHost,
           allowRemote,
+          accountId,
           dryRun,
           }),
         );

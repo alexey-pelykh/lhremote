@@ -38,7 +38,7 @@ export function registerCampaignCreate(server: McpServer): void {
         .describe("Configuration format"),
       ...cdpConnectionSchema,
     },
-    async ({ config, format, cdpPort, cdpHost, allowRemote }) => {
+    async ({ config, format, cdpPort, cdpHost, allowRemote, accountId }) => {
       // Parse campaign config
       let parsedConfig;
       try {
@@ -55,7 +55,7 @@ export function registerCampaignCreate(server: McpServer): void {
       }
 
       try {
-        const result = await campaignCreate({ config: parsedConfig, cdpPort, cdpHost, allowRemote });
+        const result = await campaignCreate({ config: parsedConfig, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CampaignExecutionError) {

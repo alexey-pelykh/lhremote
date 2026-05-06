@@ -179,6 +179,26 @@ describe("registerCampaignCreate", () => {
     });
   });
 
+  it("forwards accountId to campaignCreate", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCampaignCreate(server);
+
+    vi.mocked(parseCampaignYaml).mockReturnValue(PARSED_CONFIG);
+    vi.mocked(campaignCreate).mockResolvedValue(MOCK_CAMPAIGN);
+
+    const handler = getHandler("campaign-create");
+    await handler({
+      config: YAML_CONFIG,
+      format: "yaml",
+      cdpPort: 9222,
+      accountId: 550116,
+    });
+
+    expect(campaignCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 550116 }),
+    );
+  });
+
   it("returns error when campaign creation fails", async () => {
     const { server, getHandler } = createMockServer();
     registerCampaignCreate(server);

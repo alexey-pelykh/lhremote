@@ -26,9 +26,9 @@ export function registerCampaignExport(server: McpServer): void {
         .describe("Export format"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, format, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, format, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await campaignExport({ campaignId, format, cdpPort, cdpHost, allowRemote });
+        const result = await campaignExport({ campaignId, format, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to export campaign");

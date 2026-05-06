@@ -101,6 +101,22 @@ describe("registerCheckStatus", () => {
     expect(mockedCheckStatus).toHaveBeenCalledWith(4567, {});
   });
 
+  it("forwards accountId to checkStatus via buildCdpOptions", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCheckStatus(server);
+
+    mockedCheckStatus.mockResolvedValue({
+      launcher: { reachable: false, port: 4567 },
+      instances: [],
+      databases: [],
+    });
+
+    const handler = getHandler("check-status");
+    await handler({ cdpPort: 4567, accountId: 550116 });
+
+    expect(mockedCheckStatus).toHaveBeenCalledWith(4567, { accountId: 550116 });
+  });
+
   it("returns error when checkStatus throws", async () => {
     const { server, getHandler } = createMockServer();
     registerCheckStatus(server);

@@ -26,7 +26,7 @@ export function registerGetPost(server: McpServer): void {
         .describe("Maximum number of comments to load (default: 100, 0 to skip)"),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, commentCount, cdpPort, cdpHost, allowRemote }) => {
+    async ({ postUrl, commentCount, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const result = await getPost({
           postUrl,
@@ -34,6 +34,7 @@ export function registerGetPost(server: McpServer): void {
           cdpPort,
           cdpHost,
           allowRemote,
+          accountId,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

@@ -26,9 +26,9 @@ export function registerImportPeopleFromUrls(server: McpServer): void {
         .describe("LinkedIn profile URLs to import"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, linkedInUrls, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, linkedInUrls, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await importPeopleFromUrls({ campaignId, linkedInUrls, cdpPort, cdpHost, allowRemote });
+        const result = await importPeopleFromUrls({ campaignId, linkedInUrls, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CampaignExecutionError) {

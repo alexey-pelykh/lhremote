@@ -23,9 +23,9 @@ export function registerRemovePeopleFromCollection(server: McpServer): void {
         .describe("Person IDs to remove from the collection"),
       ...cdpConnectionSchema,
     },
-    async ({ collectionId, personIds, cdpPort, cdpHost, allowRemote }) => {
+    async ({ collectionId, personIds, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await removePeopleFromCollection({ collectionId, personIds, cdpPort, cdpHost, allowRemote });
+        const result = await removePeopleFromCollection({ collectionId, personIds, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to remove people from collection");

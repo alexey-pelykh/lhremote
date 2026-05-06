@@ -23,9 +23,9 @@ export function registerAddPeopleToCollection(server: McpServer): void {
         .describe("Person IDs to add to the collection"),
       ...cdpConnectionSchema,
     },
-    async ({ collectionId, personIds, cdpPort, cdpHost, allowRemote }) => {
+    async ({ collectionId, personIds, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await addPeopleToCollection({ collectionId, personIds, cdpPort, cdpHost, allowRemote });
+        const result = await addPeopleToCollection({ collectionId, personIds, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to add people to collection");

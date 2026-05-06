@@ -28,9 +28,9 @@ export function registerCampaignRemoveAction(server: McpServer): void {
         .describe("Action ID to remove"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, actionId, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, actionId, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await campaignRemoveAction({ campaignId, actionId, cdpPort, cdpHost, allowRemote });
+        const result = await campaignRemoveAction({ campaignId, actionId, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof ActionNotFoundError) {
