@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { reactToComment, REACTION_TYPES ,
+import {
+  reactToComment,
+  REACTION_TYPES,
   withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 import { z } from "zod";

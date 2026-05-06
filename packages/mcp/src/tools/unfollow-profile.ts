@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { unfollowProfile ,
+import {
+  unfollowProfile,
   withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 import { z } from "zod";

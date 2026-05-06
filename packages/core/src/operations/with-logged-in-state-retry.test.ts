@@ -145,7 +145,11 @@ describe("withLoggedInStateRetry", () => {
       expect(err).toBeInstanceOf(LoggedInStatePersistedError);
       const e = err as LoggedInStatePersistedError;
       expect(e.innerError).toBe(original);
-      expect(e.waitedMs).toBe(12_345);
+      // waitedMs reflects ACTUAL elapsed time across all wait attempts, not
+      // the configured deadline.  Mocked waitForLoggedInState resolves
+      // immediately, so the elapsed time is small but non-negative.
+      expect(e.waitedMs).toBeGreaterThanOrEqual(0);
+      expect(e.waitedMs).toBeLessThan(12_345);
     }
   });
 

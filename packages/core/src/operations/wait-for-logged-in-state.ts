@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+import { ServiceError } from "../services/errors.js";
 import { InstanceService } from "../services/instance.js";
 import { delay } from "../utils/delay.js";
 
@@ -40,7 +41,7 @@ const LOGGED_IN_PATH_PREFIXES = [
  * re-validating the session (fresh `/me` API call in flight) or the
  * instance has dropped to a security-checkpoint page.
  */
-export class LoggedInStateTimeoutError extends Error {
+export class LoggedInStateTimeoutError extends ServiceError {
   readonly waitedMs: number;
   readonly lastReason: string;
 

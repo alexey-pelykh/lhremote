@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { resolveInstancePort } from "../cdp/index.js";
+import { ServiceError } from "../services/errors.js";
 import { InstanceService } from "../services/instance.js";
 import { waitForLoggedInState } from "./wait-for-logged-in-state.js";
 
@@ -25,7 +26,7 @@ const DEFAULT_MAX_RETRIES = 1;
  * Wraps the original error as {@link innerError} so callers can inspect
  * the underlying failure mode.
  */
-export class LoggedInStatePersistedError extends Error {
+export class LoggedInStatePersistedError extends ServiceError {
   readonly waitedMs: number;
   readonly innerError: Error;
 
@@ -112,6 +113,7 @@ export async function withLoggedInStateRetry<T>(
   const waitTimeout = opts.waitTimeout ?? DEFAULT_WAIT_TIMEOUT;
 
   let attempt = 0;
+  let totalWaitedMs = 0;
   while (true) {
     try {
       return await op();
@@ -121,10 +123,15 @@ export async function withLoggedInStateRetry<T>(
       }
       if (attempt >= maxRetries) {
         const inner = err instanceof Error ? err : new Error(String(err));
-        throw new LoggedInStatePersistedError(waitTimeout, inner);
+        throw new LoggedInStatePersistedError(totalWaitedMs, inner);
       }
       attempt++;
-      await waitForLoggedInState(instance, { timeout: waitTimeout });
+      const waitStart = Date.now();
+      try {
+        await waitForLoggedInState(instance, { timeout: waitTimeout });
+      } finally {
+        totalWaitedMs += Date.now() - waitStart;
+      }
     }
   }
 }
@@ -147,6 +154,7 @@ export async function withLoggedInStateRetryAtPort<T>(
   const waitTimeout = opts.waitTimeout ?? DEFAULT_WAIT_TIMEOUT;
 
   let attempt = 0;
+  let totalWaitedMs = 0;
   while (true) {
     try {
       return await op();
@@ -156,16 +164,21 @@ export async function withLoggedInStateRetryAtPort<T>(
       }
       if (attempt >= maxRetries) {
         const inner = err instanceof Error ? err : new Error(String(err));
-        throw new LoggedInStatePersistedError(waitTimeout, inner);
+        throw new LoggedInStatePersistedError(totalWaitedMs, inner);
       }
       attempt++;
-      const resolvedPort = await resolveInstancePort(cdpPort, cdpHost);
-      const instance = new InstanceService(resolvedPort, { host: cdpHost, allowRemote });
-      await instance.connect();
+      const waitStart = Date.now();
       try {
-        await waitForLoggedInState(instance, { timeout: waitTimeout });
+        const resolvedPort = await resolveInstancePort(cdpPort, cdpHost);
+        const instance = new InstanceService(resolvedPort, { host: cdpHost, allowRemote });
+        await instance.connect();
+        try {
+          await waitForLoggedInState(instance, { timeout: waitTimeout });
+        } finally {
+          instance.disconnect();
+        }
       } finally {
-        instance.disconnect();
+        totalWaitedMs += Date.now() - waitStart;
       }
     }
   }

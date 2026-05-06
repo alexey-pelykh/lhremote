@@ -377,7 +377,14 @@ describeE2E("spike: liWindow state IPC channel (#781)", () => {
       const liClient = new CDPClient(instancePort);
       await liClient.connect(linkedInTarget.id);
       try {
-        const result = await liClient.evaluate<unknown>(`(() => {
+        const result = await liClient.evaluate<{
+          hostname: string;
+          pathname: string;
+          pathMatch: boolean;
+          hasProfileShrinkImg: boolean;
+          hasMain: boolean;
+          title: string;
+        }>(`(() => {
           const out = { hostname: location.hostname, pathname: location.pathname };
           const PATHS = ['/feed', '/in/', '/mynetwork', '/search', '/messaging', '/groups', '/company', '/posts', '/events'];
           out.pathMatch = PATHS.some(p => location.pathname.startsWith(p));
@@ -394,6 +401,16 @@ describeE2E("spike: liWindow state IPC channel (#781)", () => {
           return out;
         })()`);
         recordFinding("dom-heuristic", "LinkedIn target DOM probes", { ok: true, value: result });
+
+        // Regression assertions: any future LinkedIn rewrite that breaks one
+        // of these signals must surface here so the helper's predicate can
+        // be re-tuned before `waitForLoggedInState` falls behind.
+        expect(result.hostname, "hostname must match LH LoggedInState.canEnter").toBe("www.linkedin.com");
+        expect(result.pathMatch, "pathname must match the LoggedInState path-prefix set").toBe(true);
+        expect(
+          result.hasProfileShrinkImg,
+          "profile-displayphoto-shrink avatar must render once meRawData hydrates — this is the helper's primary signal",
+        ).toBe(true);
       } finally {
         liClient.disconnect();
       }

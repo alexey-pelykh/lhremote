@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { reactToPost, REACTION_TYPES, withLoggedInStateRetryAtPort } from "@lhremote/core";
+import {
+  reactToPost,
+  REACTION_TYPES,
+  withLoggedInStateRetryAtPort,
+} from "@lhremote/core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
