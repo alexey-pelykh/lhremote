@@ -11,7 +11,13 @@
     },
     "test:e2e": {
       "dependsOn": ["build", "^test:e2e"],
-      "passThroughEnv": ["LHREMOTE_E2E_PERSON_ID", "LHREMOTE_E2E_POST_URL", "LHREMOTE_E2E_COMMENT_URN"],
+      "passThroughEnv": [
+        "LHREMOTE_E2E_PERSON_ID",
+        "LHREMOTE_E2E_POST_URL",
+        "LHREMOTE_E2E_COMMENT_URN",
+        "LHREMOTE_E2E_PROFILE_URL",
+        "LHREMOTE_E2E_COMPANY_URL"
+      ],
       "cache": false
     },
     "lint": {
