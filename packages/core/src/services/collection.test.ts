@@ -59,14 +59,15 @@ describe("CollectionService", () => {
       const stateExpr = mockEvaluateUI.mock.calls[0]?.[0] as string;
       expect(stateExpr).toContain("mainWindowService.mainWindow.state");
 
-      // 2. canCollect — uses internal kebab-case type
+      // 2. canCollect — uses callRead (read-only IPC variant in 2.113.61+)
       const canCollectExpr = mockEvaluateUI.mock.calls[1]?.[0] as string;
-      expect(canCollectExpr).toContain("canCollect");
+      expect(canCollectExpr).toContain("mws.callRead('canCollect'");
       expect(canCollectExpr).toContain("search-page");
 
-      // 3. collect — uses internal kebab-case type as first arg, config as second
+      // 3. collect — uses callWrite (mutating IPC variant in 2.113.61+);
+      // internal kebab-case type as first arg, config as second
       const collectExpr = mockEvaluateUI.mock.calls[2]?.[0] as string;
-      expect(collectExpr).toContain("mws.call('collect'");
+      expect(collectExpr).toContain("mws.callWrite('collect'");
       expect(collectExpr).toContain("search-page");
       expect(collectExpr).toContain('"campaignId":1');
       expect(collectExpr).toContain('"actionId":10');

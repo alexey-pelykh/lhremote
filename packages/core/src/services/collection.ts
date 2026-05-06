@@ -101,7 +101,9 @@ export class CollectionService {
     return this.instance.evaluateUI<boolean>(
       `(async () => {
         const mws = window.mainWindowService;
-        return await mws.call('canCollect', ${JSON.stringify(internalType)});
+        // LH 2.113.61+: canCollect is dispatched through callRead (read-only).
+        // See research/linkedhelper/architecture/V2113-MWS-TYPED-CALL.md.
+        return await mws.callRead('canCollect', ${JSON.stringify(internalType)});
       })()`,
     );
   }
@@ -163,7 +165,7 @@ export class CollectionService {
    * signature discovered from LinkedHelper's renderer source:
    *
    * ```
-   * mainWindowService.call("collect", sourceType, {
+   * mainWindowService.callWrite("collect", sourceType, {
    *   campaignId, actionId, target, withoutScraping
    * })
    * ```
@@ -173,7 +175,21 @@ export class CollectionService {
    * include `actionId` (the campaign action to collect into) and
    * `target` (the collection target type).
    *
-   * @throws {CollectionError} if the call returns `false`.
+   * `collect` is dispatched through `callWrite` because it is mutating;
+   * LH 2.113.61+ rejects `callRead('collect')` with "wrong method names
+   * for callRead". See research/linkedhelper/architecture/V2113-MWS-TYPED-CALL.md.
+   *
+   * **Fire-and-forget**: the inner script invokes `mws.callWrite('collect', …)`
+   * without awaiting it (the collect IPC blocks for the full collection
+   * lifetime — minutes — which would deadlock CDP `Runtime.evaluate`).
+   * The outer script returns `true` immediately, so this method does not
+   * surface failures from the IPC call itself.  Callers poll
+   * `getRunnerState()` to observe progress and detect "stuck collecting"
+   * via the operation-level wrapper in `operations/collect-people.ts`.
+   *
+   * @throws {CollectionError} only when the wrapping `evaluateUI` itself
+   *   fails (e.g. CDP disconnected) — never from the `collect` IPC's
+   *   eventual outcome.
    */
   private async startCollecting(
     sourceType: SourceType,
@@ -193,7 +209,7 @@ export class CollectionService {
     await this.instance.evaluateUI<boolean>(
       `(() => {
         const mws = window.mainWindowService;
-        mws.call('collect', ${JSON.stringify(internalType)}, ${JSON.stringify(config)});
+        mws.callWrite('collect', ${JSON.stringify(internalType)}, ${JSON.stringify(config)});
         return true;
       })()`,
       false,

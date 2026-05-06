@@ -334,6 +334,21 @@ describe("InstanceService", () => {
       expect(script).toContain('"value"');
     });
 
+    it("dispatches executeSingleAction via callWrite (LH 2.113.61+ typed IPC)", async () => {
+      // Regression guard for #775: legacy mws.call('executeSingleAction', ...)
+      // was rejected by LH 2.113.61 with "wrong method names for callRead/Write".
+      // executeSingleAction is mutating, so callWrite is the correct variant.
+      mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
+      await service.connect();
+
+      await service.executeAction("ScrapeMessagingHistory");
+
+      const uiClient = getClientMocks("UI1");
+      const script = uiClient.evaluate.mock.calls[0]?.[0] as string;
+      expect(script).toContain("mws.callWrite('executeSingleAction'");
+      expect(script).not.toContain("mws.call('executeSingleAction'");
+    });
+
     it("returns ActionResult with success on completion", async () => {
       mockedDiscoverTargets.mockResolvedValue([LINKEDIN_TARGET, UI_TARGET]);
       await service.connect();

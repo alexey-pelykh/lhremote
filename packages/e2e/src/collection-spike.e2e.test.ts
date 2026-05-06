@@ -231,6 +231,187 @@ describeE2E("spike: collection CDP entry points (#401)", () => {
 
       recordFinding("baseline", "collection method availability", results);
     }, 30_000);
+
+    // Issue #775 — names-only renderer probe.  Returns ONLY primitives and
+    // arrays of strings.  Avoids recursing into values, avoids touching
+    // mws.mainWindow (an @electron/remote proxy whose property reads cross
+    // the IPC boundary and can crash the main process with "object could
+    // not be cloned").  Anything richer goes in a follow-up targeted probe.
+    // Issue #775 — probe each typed call variant against the three handler
+    // names lhremote relies on, to determine the new mapping.  Each variant
+    // is invoked in isolation so a single LH-side error doesn't poison the
+    // others.  Logs full result/error per (variant, handler) pair.
+    //
+    // Mutation safety: probing executeSingleAction/collect with empty
+    // config is non-destructive on its own (LH validates the config and
+    // returns false without dispatching).  We still cancel any
+    // accidentally-started execution after each handler to keep the
+    // runner state clean for subsequent probes — the existing
+    // `cancelExecution` helper covers liWindow.cancelExec and the
+    // contentWindowController fallback.
+    it("probes call variants for canCollect / executeSingleAction / collect (#775)", async () => {
+      const VARIANTS = [
+        "call", "callRead", "callWrite", "callRaw",
+        "callWindow", "callBrowserWindow",
+        "callWebContentsRead", "callWebContentsWrite",
+        "requestActionAtLauncherRead", "requestActionAtLauncherWrite",
+      ];
+
+      // Pair each handler with the args lhremote currently sends.
+      const PROBES: Array<{
+        handler: string;
+        args: unknown[];
+        cancelAfter: boolean;
+      }> = [
+        { handler: "canCollect", args: ["SearchPage"], cancelAfter: false },
+        // Use AutoCollectPeople w/o searchUrl so any accidentally-successful
+        // call lands in an idle state we can quickly cancel.  Empty config
+        // matches the existing spike `tests executeSingleAction with empty
+        // config` row.
+        { handler: "executeSingleAction", args: ["AutoCollectPeople", {}], cancelAfter: true },
+        { handler: "collect", args: ["SearchPage", { campaignId: 0, actionId: 0, target: "target" }], cancelAfter: true },
+      ];
+
+      const matrix: Record<string, Record<string, unknown>> = {};
+      for (const { handler, args, cancelAfter } of PROBES) {
+        matrix[handler] = {};
+        for (const variant of VARIANTS) {
+          const argsJson = args.map((a) => JSON.stringify(a)).join(", ");
+          const expression = `(async () => {
+            const mws = window.mainWindowService;
+            if (!mws) return { status: 'no_mws' };
+            if (typeof mws[${JSON.stringify(variant)}] !== 'function') {
+              return { status: 'variant_absent' };
+            }
+            try {
+              const r = await mws[${JSON.stringify(variant)}](${JSON.stringify(handler)}${argsJson ? ", " + argsJson : ""});
+              // Only return primitive/JSON-friendly summary.
+              return {
+                status: 'ok',
+                resultType: typeof r,
+                resultPreview: r === null ? 'null'
+                  : typeof r === 'object' ? Object.keys(r).slice(0, 20)
+                  : typeof r === 'function' ? 'function'
+                  : String(r),
+              };
+            } catch (e) {
+              return { status: 'error', error: String(e && e.message || e) };
+            }
+          })()`;
+          const result = await probeExpression(instance, expression);
+          matrix[handler][variant] = result;
+        }
+        if (cancelAfter) {
+          // Cancel any execution that an accidentally-mutating variant may
+          // have started — keeps the runner idle for the next handler's probes.
+          await cancelExecution(instance);
+        }
+      }
+
+      recordFinding("baseline", "call-variant probe matrix (#775)", matrix);
+
+      // Sanity assertion: every (handler, variant) probe completed without
+      // the wrapping evaluate throwing.  Failures here mean the probe
+      // mechanism itself broke (e.g. CDP disconnect), not that LH's IPC
+      // surface changed — those are recorded inside each entry's `status`.
+      for (const handler of Object.keys(matrix)) {
+        const handlerMatrix = matrix[handler] as Record<string, { ok?: boolean }>;
+        for (const variant of VARIANTS) {
+          const entry = handlerMatrix[variant];
+          expect(entry?.ok, `${handler} × ${variant} probe failed at evaluate level`).toBe(true);
+        }
+      }
+    }, 90_000);
+
+    it("enumerates renderer IPC surface — names-only (#775)", async () => {
+      const result = await probeExpression(instance, `(() => {
+        const out = {};
+
+        // (a) All top-level window key NAMES.  No value access.
+        try { out.windowAllKeys = Object.keys(window); } catch (e) { out.windowAllKeysError = String(e); }
+
+        // (b) Subset of window keys that look service-shaped.
+        try {
+          out.windowServiceLikeKeys = Object.keys(window).filter(k =>
+            /[Ss]ervice$|[Ss]ource$|^source|^liWindow|electron|^api$|API$|Bridge$|bridge$|IPC|ipc|RPC|rpc|invoke|dispatch/.test(k));
+        } catch (e) { out.windowServiceLikeKeysError = String(e); }
+
+        // (c) mainWindowService itself — names of own keys + ctor name.
+        const mws = window.mainWindowService;
+        if (mws) {
+          try { out.mwsCtor = mws.constructor && mws.constructor.name; } catch (e) { out.mwsCtorError = String(e); }
+          try { out.mwsOwnKeys = Object.keys(mws); } catch (e) { out.mwsOwnKeysError = String(e); }
+          try { out.mwsOwnPropertyNames = Object.getOwnPropertyNames(mws); } catch (e) { out.mwsOwnPropertyNamesError = String(e); }
+
+          // (d) Probe candidate IPC method names — only typeof, never read value.
+          const candidates = [
+            'call', 'invoke', 'dispatch', 'run', 'exec', 'send', 'request', 'rpc',
+            'executeSingleAction', 'canCollect', 'collect', 'prepareCollecting',
+            'execute', 'executeAction', 'startAction',
+          ];
+          out.mwsCandidateMethods = {};
+          for (const name of candidates) {
+            try { out.mwsCandidateMethods[name] = typeof mws[name]; } catch (e) { out.mwsCandidateMethods[name] = 'throw: ' + String(e); }
+          }
+
+          // (e) Property descriptors for the candidates (catches getters/setters).
+          out.mwsCandidateDescriptors = {};
+          for (const name of candidates) {
+            try {
+              const desc = Object.getOwnPropertyDescriptor(mws, name);
+              out.mwsCandidateDescriptors[name] = desc
+                ? {
+                    hasGetter: !!desc.get,
+                    hasSetter: !!desc.set,
+                    valueType: desc.value === undefined ? 'undefined' : typeof desc.value,
+                    enumerable: desc.enumerable,
+                    configurable: desc.configurable,
+                  }
+                : 'absent';
+            } catch (e) { out.mwsCandidateDescriptors[name] = 'throw: ' + String(e); }
+          }
+
+          // (f) Prototype chain — NAMES only, no value/typeof reads.
+          const protoChain = [];
+          try {
+            let p = Object.getPrototypeOf(mws);
+            let depth = 0;
+            while (p && p !== Object.prototype && depth < 10) {
+              const ctor = p.constructor && p.constructor.name;
+              const names = Object.getOwnPropertyNames(p);
+              protoChain.push({ ctor, namesCount: names.length, names: names.slice(0, 100) });
+              p = Object.getPrototypeOf(p);
+              depth++;
+            }
+          } catch (e) { out.mwsProtoChainError = String(e); }
+          out.mwsProtoChain = protoChain;
+        } else {
+          out.mwsExists = false;
+        }
+
+        // (g) Top-level globals that frequently host preload-script bridges.
+        try { out.hasWindowElectron = typeof window.electron; } catch (e) { out.hasWindowElectron = 'throw: ' + String(e); }
+        try { out.hasWindowElectronAPI = typeof window.electronAPI; } catch (e) { out.hasWindowElectronAPI = 'throw: ' + String(e); }
+        try { out.hasWindowBridge = typeof window.bridge; } catch (e) { out.hasWindowBridge = 'throw: ' + String(e); }
+        try { out.hasWindowApi = typeof window.api; } catch (e) { out.hasWindowApi = 'throw: ' + String(e); }
+        try { out.hasWindowSource = typeof window.source; } catch (e) { out.hasWindowSource = 'throw: ' + String(e); }
+        try { out.hasWindowLiWindow = typeof window.liWindow; } catch (e) { out.hasWindowLiWindow = 'throw: ' + String(e); }
+
+        return out;
+      })()`);
+
+      recordFinding("baseline", "renderer IPC surface — names only (#775)", result);
+
+      // Sanity assertion: the probe must complete successfully and report
+      // mainWindowService presence + a non-empty prototype chain.
+      // Failures here mean either the probe expression broke or LH no
+      // longer exposes window.mainWindowService at all (the latter would
+      // be a much bigger regression than the typed-call shift).
+      expect(result.ok).toBe(true);
+      const value = (result as { ok: true; value: { mwsExists?: false; mwsProtoChain?: unknown[] } }).value;
+      expect(value.mwsExists, "window.mainWindowService should still exist on the renderer").not.toBe(false);
+      expect(value.mwsProtoChain, "mainWindowService prototype chain should be enumerable").toBeDefined();
+    }, 30_000);
   });
 
   // -------------------------------------------------------------------

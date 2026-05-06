@@ -208,7 +208,12 @@ export class InstanceService {
         `(async () => {
         const mws = window.mainWindowService;
         if (!mws) throw new Error('mainWindowService not found on window');
-        return await mws.call('executeSingleAction', ${JSON.stringify(actionName)}, ${JSON.stringify(config)});
+        // LH 2.113.61+: the legacy mws.call() was split into typed
+        // variants — read-only handlers on callRead, mutating handlers on
+        // callWrite (LH validates the dispatch and rejects mismatches with
+        // "wrong method names for callRead/callWrite").  executeSingleAction
+        // is mutating.  See research/linkedhelper/architecture/V2113-MWS-TYPED-CALL.md.
+        return await mws.callWrite('executeSingleAction', ${JSON.stringify(actionName)}, ${JSON.stringify(config)});
       })()`,
         true,
       );
