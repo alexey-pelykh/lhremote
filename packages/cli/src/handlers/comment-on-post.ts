@@ -7,6 +7,7 @@ import {
   commentOnPost,
   type CommentOnPostOutput,
   type MentionEntry,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#comment-on-post | comment-on-post} CLI command. */
@@ -63,7 +64,12 @@ export async function handleCommentOnPost(options: {
 
   let result: CommentOnPostOutput;
   try {
-    result = await commentOnPost({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        commentOnPost({
       postUrl: options.url,
       text: options.text,
       parentCommentUrn: options.parentCommentUrn,
@@ -73,7 +79,8 @@ export async function handleCommentOnPost(options: {
       allowRemote: options.allowRemote,
       accountId: options.accountId,
       dryRun: options.dryRun,
-    });
+      }),
+    );
   } catch (error) {
     if (error instanceof BudgetExceededError) {
       process.stderr.write(`${error.message}\n`);

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { commentOnPost } from "@lhremote/core";
+import { commentOnPost, withLoggedInStateRetryAtPort } from "@lhremote/core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
@@ -51,7 +51,12 @@ export function registerCommentOnPost(server: McpServer): void {
     },
     async ({ postUrl, text, parentCommentUrn, mentions, dryRun, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await commentOnPost({ postUrl, text, parentCommentUrn, mentions, dryRun, cdpPort, cdpHost, allowRemote, accountId });
+        const result = await withLoggedInStateRetryAtPort(
+          cdpPort,
+          cdpHost ?? "127.0.0.1",
+          allowRemote ?? false,
+          () => commentOnPost({ postUrl, text, parentCommentUrn, mentions, dryRun, cdpPort, cdpHost, allowRemote, accountId }),
+        );
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to comment on post");

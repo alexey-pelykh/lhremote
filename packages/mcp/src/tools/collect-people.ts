@@ -6,6 +6,7 @@ import {
   CollectionBusyError,
   CollectionError,
   collectPeople,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
@@ -51,7 +52,12 @@ export function registerCollectPeople(server: McpServer): void {
     },
     async ({ campaignId, sourceUrl, limit, maxPages, pageSize, sourceType, cdpPort, cdpHost, allowRemote }) => {
       try {
-        const result = await collectPeople({
+        const result = await withLoggedInStateRetryAtPort(
+          cdpPort,
+          cdpHost ?? "127.0.0.1",
+          allowRemote ?? false,
+          () =>
+            collectPeople({
           campaignId,
           sourceUrl,
           ...(limit !== undefined && { limit }),
@@ -61,7 +67,8 @@ export function registerCollectPeople(server: McpServer): void {
           cdpPort,
           ...(cdpHost !== undefined && { cdpHost }),
           ...(allowRemote !== undefined && { allowRemote }),
-        });
+          }),
+        );
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CollectionBusyError) {

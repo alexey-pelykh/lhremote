@@ -22,6 +22,14 @@ vi.mock("../utils/delay.js", () => ({
   maybeHesitate: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("./wait-for-logged-in-state.js", () => ({
+  gateOnLoggedInState: vi.fn().mockResolvedValue(undefined),
+  waitForLoggedInState: vi.fn().mockResolvedValue(undefined),
+  LoggedInStateTimeoutError: class extends Error {},
+}));
+
+import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
+
 vi.mock("./navigate-to-profile.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./navigate-to-profile.js")>();
   return {
@@ -174,6 +182,7 @@ describe("hideFeedAuthorProfile", () => {
     });
 
     expect(result.success).toBe(true);
+    expect(vi.mocked(gateOnLoggedInState)).toHaveBeenCalled();
 
     // The confirmation-dialog probe evaluate script should reference the
     // confirm label patterns.

@@ -20,6 +20,7 @@ import { BudgetExceededError } from "../services/errors.js";
 import { withDatabase } from "../services/instance-context.js";
 import { gaussianDelay } from "../utils/delay.js";
 import { buildCdpOptions, type ConnectionOptions } from "./types.js";
+import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
 
 /** Pattern matching supported LinkedIn post URL formats. */
 const LINKEDIN_POST_URL_RE =
@@ -152,6 +153,8 @@ export async function commentOnPost(
       );
     }
   });
+
+  await gateOnLoggedInState(cdpPort, cdpHost, allowRemote, { timeout: 60_000 });
 
   // Connect to the LinkedIn webview
   const targets = await discoverTargets(cdpPort, cdpHost);

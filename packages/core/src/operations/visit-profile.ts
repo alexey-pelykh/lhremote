@@ -7,6 +7,7 @@ import { withInstanceDatabase } from "../services/instance-context.js";
 import { ProfileRepository } from "../db/index.js";
 import { extractPublicId } from "./navigate-to-profile.js";
 import { buildCdpOptions, type ConnectionOptions } from "./types.js";
+import { waitForLoggedInState } from "./wait-for-logged-in-state.js";
 
 export interface VisitProfileInput extends ConnectionOptions {
   readonly personId?: number | undefined;
@@ -42,6 +43,8 @@ export async function visitProfile(
       const existing = repo.findByPublicId(publicId);
       personId = existing.id;
     }
+
+    await waitForLoggedInState(instance, { timeout: 60_000 });
 
     await instance.executeAction("VisitAndExtract", {
       personIds: [personId],

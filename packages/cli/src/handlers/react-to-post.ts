@@ -6,6 +6,7 @@ import {
   reactToPost,
   type ReactToPostOutput,
   type ReactionType,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#react-to-post | react-to-post} CLI command. */
@@ -22,14 +23,20 @@ export async function handleReactToPost(
 ): Promise<void> {
   let result: ReactToPostOutput;
   try {
-    result = await reactToPost({
-      postUrl,
-      reactionType: (options.type as ReactionType | undefined),
-      cdpPort: options.cdpPort,
-      cdpHost: options.cdpHost,
-      allowRemote: options.allowRemote,
-      dryRun: options.dryRun,
-    });
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        reactToPost({
+          postUrl,
+          reactionType: (options.type as ReactionType | undefined),
+          cdpPort: options.cdpPort,
+          cdpHost: options.cdpHost,
+          allowRemote: options.allowRemote,
+          dryRun: options.dryRun,
+        }),
+    );
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);

@@ -6,6 +6,7 @@ import {
   reactToComment,
   type ReactToCommentOutput,
   type ReactionType,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#react-to-comment | react-to-comment} CLI command. */
@@ -23,7 +24,12 @@ export async function handleReactToComment(
 ): Promise<void> {
   let result: ReactToCommentOutput;
   try {
-    result = await reactToComment({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        reactToComment({
       postUrl,
       commentUrn,
       reactionType: (options.type as ReactionType | undefined),
@@ -31,7 +37,8 @@ export async function handleReactToComment(
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
       dryRun: options.dryRun,
-    });
+      }),
+    );
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);

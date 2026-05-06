@@ -5,6 +5,7 @@ import {
   errorMessage,
   searchPosts,
   type SearchPostsOutput,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#search-posts | search-posts} CLI command. */
@@ -21,14 +22,20 @@ export async function handleSearchPosts(
 ): Promise<void> {
   let result: SearchPostsOutput;
   try {
-    result = await searchPosts({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        searchPosts({
       query,
       cursor: options.cursor,
       count: options.count,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
-    });
+      }),
+    );
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);

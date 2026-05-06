@@ -7,6 +7,7 @@ import {
   InstanceNotRunningError,
   scrapeMessagingHistory,
   type ScrapeMessagingHistoryOutput,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | scrape-messaging-history} CLI command. */
@@ -28,13 +29,19 @@ export async function handleScrapeMessagingHistory(options: {
 
   let result: ScrapeMessagingHistoryOutput;
   try {
-    result = await scrapeMessagingHistory({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        scrapeMessagingHistory({
       personIds: options.personId,
       pauseOthers: options.pauseOthers,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
-    });
+      }),
+    );
   } catch (error) {
     if (error instanceof InstanceNotRunningError) {
       process.stderr.write(`${error.message}\n`);

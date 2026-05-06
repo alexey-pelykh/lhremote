@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { hideFeedAuthor } from "@lhremote/core";
+import { hideFeedAuthor ,
+  withLoggedInStateRetryAtPort,
+} from "@lhremote/core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
@@ -18,13 +20,19 @@ export function registerHideFeedAuthor(server: McpServer): void {
     },
     async ({ feedIndex, dryRun, cdpPort, cdpHost, allowRemote }) => {
       try {
-        const result = await hideFeedAuthor({
+        const result = await withLoggedInStateRetryAtPort(
+          cdpPort,
+          cdpHost ?? "127.0.0.1",
+          allowRemote ?? false,
+          () =>
+            hideFeedAuthor({
           feedIndex,
           cdpPort,
           cdpHost,
           allowRemote,
           dryRun,
-        });
+          }),
+        );
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to hide feed author");

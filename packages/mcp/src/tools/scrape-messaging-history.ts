@@ -4,6 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   scrapeMessagingHistory,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
@@ -28,7 +29,12 @@ export function registerScrapeMessagingHistory(server: McpServer): void {
     },
     async ({ personIds, pauseOthers, cdpPort, cdpHost, allowRemote }) => {
       try {
-        const result = await scrapeMessagingHistory({ personIds, pauseOthers, cdpPort, cdpHost, allowRemote });
+        const result = await withLoggedInStateRetryAtPort(
+          cdpPort,
+          cdpHost ?? "127.0.0.1",
+          allowRemote ?? false,
+          () => scrapeMessagingHistory({ personIds, pauseOthers, cdpPort, cdpHost, allowRemote }),
+        );
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to scrape messaging history");

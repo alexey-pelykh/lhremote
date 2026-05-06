@@ -5,6 +5,7 @@ import {
   errorMessage,
   unfollowProfile,
   type UnfollowProfileOutput,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#unfollow-profile | unfollow-profile} CLI command. */
@@ -20,13 +21,19 @@ export async function handleUnfollowProfile(
 ): Promise<void> {
   let result: UnfollowProfileOutput;
   try {
-    result = await unfollowProfile({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        unfollowProfile({
       profileUrl,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
       dryRun: options.dryRun,
-    });
+      }),
+    );
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);

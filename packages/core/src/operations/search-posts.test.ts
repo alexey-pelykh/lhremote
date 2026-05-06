@@ -24,6 +24,14 @@ vi.mock("../utils/delay.js", () => ({
   simulateReadingTime: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("./wait-for-logged-in-state.js", () => ({
+  gateOnLoggedInState: vi.fn().mockResolvedValue(undefined),
+  waitForLoggedInState: vi.fn().mockResolvedValue(undefined),
+  LoggedInStateTimeoutError: class extends Error {},
+}));
+
+import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
+
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
 import { searchPosts } from "./search-posts.js";
@@ -127,6 +135,7 @@ describe("searchPosts", () => {
     ]);
 
     const result = await searchPosts({ query: "linkedin", cdpPort: CDP_PORT });
+    expect(vi.mocked(gateOnLoggedInState)).toHaveBeenCalled();
 
     expect(result.query).toBe("linkedin");
     expect(result.posts).toHaveLength(1);

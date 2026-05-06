@@ -17,6 +17,7 @@ import {
 } from "../linkedin/selectors.js";
 import { gaussianDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
+import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
 
 /**
  * Supported LinkedIn reaction types.
@@ -168,6 +169,8 @@ export async function reactToPost(
         "This is a security measure to prevent remote code execution.",
     );
   }
+
+  await gateOnLoggedInState(cdpPort, cdpHost, allowRemote, { timeout: 60_000 });
 
   const targets = await discoverTargets(cdpPort, cdpHost);
   const linkedInTarget = targets.find(

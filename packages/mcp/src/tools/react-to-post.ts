@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { reactToPost, REACTION_TYPES } from "@lhremote/core";
+import { reactToPost, REACTION_TYPES, withLoggedInStateRetryAtPort } from "@lhremote/core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
@@ -29,14 +29,20 @@ export function registerReactToPost(server: McpServer): void {
     },
     async ({ postUrl, reactionType, dryRun, cdpPort, cdpHost, allowRemote }) => {
       try {
-        const result = await reactToPost({
-          postUrl,
-          reactionType: reactionType as Parameters<typeof reactToPost>[0]["reactionType"],
+        const result = await withLoggedInStateRetryAtPort(
           cdpPort,
-          cdpHost,
-          allowRemote,
-          dryRun,
-        });
+          cdpHost ?? "127.0.0.1",
+          allowRemote ?? false,
+          () =>
+            reactToPost({
+              postUrl,
+              reactionType: reactionType as Parameters<typeof reactToPost>[0]["reactionType"],
+              cdpPort,
+              cdpHost,
+              allowRemote,
+              dryRun,
+            }),
+        );
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to react to post");

@@ -10,6 +10,7 @@ import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { delay as utilsDelay, gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak, simulateReadingTime } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
+import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
 
 /**
  * Input for the get-feed operation.
@@ -500,6 +501,8 @@ export async function getFeed(
         "This is a security measure to prevent remote code execution.",
     );
   }
+
+  await gateOnLoggedInState(cdpPort, cdpHost, allowRemote, { timeout: 60_000 });
 
   const targets = await discoverTargets(cdpPort, cdpHost);
   const linkedInTarget = targets.find(

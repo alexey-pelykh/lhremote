@@ -7,6 +7,7 @@ import {
   type EphemeralActionResult,
   CampaignExecutionError,
   CampaignTimeoutError,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#endorse-skills | endorse-skills} CLI command. */
@@ -34,7 +35,12 @@ export async function handleEndorseSkills(options: {
 
   let result: EphemeralActionResult;
   try {
-    result = await endorseSkills({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        endorseSkills({
       personId: options.personId,
       url: options.url,
       skillNames: options.skillNames,
@@ -46,7 +52,8 @@ export async function handleEndorseSkills(options: {
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
       accountId: options.accountId,
-    });
+      }),
+    );
   } catch (error) {
     if (error instanceof CampaignExecutionError || error instanceof CampaignTimeoutError) {
       process.stderr.write(`${error.message}\n`);

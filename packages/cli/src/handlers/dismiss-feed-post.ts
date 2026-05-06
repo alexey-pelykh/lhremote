@@ -5,6 +5,7 @@ import {
   errorMessage,
   dismissFeedPost,
   type DismissFeedPostOutput,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#dismiss-feed-post | dismiss-feed-post} CLI command. */
@@ -20,13 +21,19 @@ export async function handleDismissFeedPost(
 ): Promise<void> {
   let result: DismissFeedPostOutput;
   try {
-    result = await dismissFeedPost({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        dismissFeedPost({
       feedIndex,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
       dryRun: options.dryRun,
-    });
+      }),
+    );
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);

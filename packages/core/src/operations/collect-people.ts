@@ -9,6 +9,7 @@ import { CollectionError } from "../services/errors.js";
 import { CampaignRepository } from "../db/index.js";
 import { detectSourceType, validateSourceType } from "../services/source-type-registry.js";
 import { buildCdpOptions, type ConnectionOptions } from "./types.js";
+import { waitForLoggedInState } from "./wait-for-logged-in-state.js";
 
 /**
  * Input for the collect-people operation.
@@ -91,6 +92,8 @@ export async function collectPeople(
       );
     }
     const actionId = firstAction.id;
+
+    await waitForLoggedInState(instance, { timeout: 60_000 });
 
     const collectionService = new CollectionService(instance);
     await collectionService.collect(input.sourceUrl, input.campaignId, actionId);

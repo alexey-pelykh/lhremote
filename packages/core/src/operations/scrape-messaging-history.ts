@@ -10,6 +10,7 @@ import { MessageRepository, ProfileRepository } from "../db/index.js";
 import { delay } from "../utils/delay.js";
 import { errorMessage } from "../utils/error-message.js";
 import { buildCdpOptions, type ConnectionOptions } from "./types.js";
+import { waitForLoggedInState } from "./wait-for-logged-in-state.js";
 
 /** Timeout for ephemeral campaign completion (5 minutes). */
 const CAMPAIGN_TIMEOUT = 300_000;
@@ -40,6 +41,8 @@ export async function scrapeMessagingHistory(
   const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
+    await waitForLoggedInState(instance, { timeout: 60_000 });
+
     const campaignService = new CampaignService(instance, db);
     const profileRepo = new ProfileRepository(db);
 

@@ -6,6 +6,7 @@ import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
 import { EphemeralCampaignService } from "../services/ephemeral-campaign.js";
 import { buildCdpOptions, type ConnectionOptions } from "./types.js";
+import { waitForLoggedInState } from "./wait-for-logged-in-state.js";
 
 /**
  * Shared input fields for all ephemeral action operations.
@@ -42,6 +43,8 @@ export async function executeEphemeralAction(
   const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
 
   return withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
+    await waitForLoggedInState(instance, { timeout: 60_000 });
+
     const ephemeral = new EphemeralCampaignService(instance, db);
     return ephemeral.execute(actionType, target, actionSettings, {
       ...(input.keepCampaign !== undefined && { keepCampaign: input.keepCampaign }),

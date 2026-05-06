@@ -5,6 +5,7 @@ import {
   errorMessage,
   unfollowFromFeed,
   type UnfollowFromFeedOutput,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#unfollow-from-feed | unfollow-from-feed} CLI command. */
@@ -20,13 +21,19 @@ export async function handleUnfollowFromFeed(
 ): Promise<void> {
   let result: UnfollowFromFeedOutput;
   try {
-    result = await unfollowFromFeed({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        unfollowFromFeed({
       feedIndex,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
       dryRun: options.dryRun,
-    });
+      }),
+    );
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);

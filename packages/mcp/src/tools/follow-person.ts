@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { followPerson } from "@lhremote/core";
+import { followPerson ,
+  withLoggedInStateRetryAtPort,
+} from "@lhremote/core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
@@ -48,9 +50,15 @@ export function registerFollowPerson(server: McpServer): void {
       }
 
       try {
-        const result = await followPerson({
+        const result = await withLoggedInStateRetryAtPort(
+          cdpPort,
+          cdpHost ?? "127.0.0.1",
+          allowRemote ?? false,
+          () =>
+            followPerson({
           personId, url, mode, skipIfUnfollowable, keepCampaign, timeout, cdpPort, cdpHost, allowRemote, accountId,
-        });
+          }),
+        );
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to follow person");

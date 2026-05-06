@@ -10,6 +10,7 @@ import { gaussianDelay, maybeHesitate } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
 import { waitForFeedLoad } from "./get-feed.js";
+import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
 
 /** CSS selector for feed post menu buttons. */
 const FEED_MENU_BUTTON_SELECTOR =
@@ -57,6 +58,8 @@ export async function unfollowFromFeed(
         "This is a security measure to prevent remote code execution.",
     );
   }
+
+  await gateOnLoggedInState(cdpPort, cdpHost, allowRemote, { timeout: 60_000 });
 
   const targets = await discoverTargets(cdpPort, cdpHost);
   const linkedInTarget = targets.find(

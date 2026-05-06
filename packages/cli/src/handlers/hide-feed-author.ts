@@ -5,6 +5,7 @@ import {
   errorMessage,
   hideFeedAuthor,
   type HideFeedAuthorOutput,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#hide-feed-author | hide-feed-author} CLI command. */
@@ -20,13 +21,19 @@ export async function handleHideFeedAuthor(
 ): Promise<void> {
   let result: HideFeedAuthorOutput;
   try {
-    result = await hideFeedAuthor({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        hideFeedAuthor({
       feedIndex,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
       dryRun: options.dryRun,
-    });
+      }),
+    );
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);

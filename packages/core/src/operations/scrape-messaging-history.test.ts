@@ -24,6 +24,14 @@ vi.mock("../utils/delay.js", () => ({
   delay: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("./wait-for-logged-in-state.js", () => ({
+  gateOnLoggedInState: vi.fn().mockResolvedValue(undefined),
+  waitForLoggedInState: vi.fn().mockResolvedValue(undefined),
+  LoggedInStateTimeoutError: class extends Error {},
+}));
+
+import { waitForLoggedInState } from "./wait-for-logged-in-state.js";
+
 import type { InstanceDatabaseContext } from "../services/instance-context.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
@@ -116,6 +124,7 @@ describe("scrapeMessagingHistory", () => {
     });
 
     expect(result.success).toBe(true);
+    expect(vi.mocked(waitForLoggedInState)).toHaveBeenCalled();
     expect(result.actionType).toBe("ScrapeMessagingHistory");
     expect(result.stats).toBe(MOCK_STATS);
   });

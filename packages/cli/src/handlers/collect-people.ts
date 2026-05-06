@@ -6,6 +6,7 @@ import {
   CollectionError,
   collectPeople,
   errorMessage,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#collect-people | collect-people} CLI command. */
@@ -24,7 +25,12 @@ export async function handleCollectPeople(
   },
 ): Promise<void> {
   try {
-    const result = await collectPeople({
+    const result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        collectPeople({
       campaignId,
       sourceUrl,
       ...(options.limit !== undefined && { limit: options.limit }),
@@ -34,7 +40,8 @@ export async function handleCollectPeople(
       cdpPort: options.cdpPort,
       ...(options.cdpHost !== undefined && { cdpHost: options.cdpHost }),
       ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
-    });
+      }),
+    );
 
     if (options.json) {
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");

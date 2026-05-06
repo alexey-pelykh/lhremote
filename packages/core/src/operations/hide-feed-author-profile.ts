@@ -9,6 +9,7 @@ import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
 import { gaussianDelay } from "../utils/delay.js";
 import { extractPublicId, navigateToProfile } from "./navigate-to-profile.js";
 import type { ConnectionOptions } from "./types.js";
+import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
 
 /** CSS selector for the profile-page overflow action menu button. */
 const PROFILE_MORE_BUTTON_SELECTOR =
@@ -108,6 +109,8 @@ export async function hideFeedAuthorProfile(
         "This is a security measure to prevent remote code execution.",
     );
   }
+
+  await gateOnLoggedInState(cdpPort, cdpHost, allowRemote, { timeout: 60_000 });
 
   const targets = await discoverTargets(cdpPort, cdpHost);
   const linkedInTarget = targets.find(

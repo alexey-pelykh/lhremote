@@ -37,6 +37,14 @@ vi.mock("../utils/delay.js", () => ({
   gaussianDelay: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("./wait-for-logged-in-state.js", () => ({
+  gateOnLoggedInState: vi.fn().mockResolvedValue(undefined),
+  waitForLoggedInState: vi.fn().mockResolvedValue(undefined),
+  LoggedInStateTimeoutError: class extends Error {},
+}));
+
+import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
+
 import type { DatabaseContext } from "../services/instance-context.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withDatabase } from "../services/instance-context.js";
@@ -144,6 +152,7 @@ describe("commentOnPost", () => {
       cdpPort: MOCK_CDP_PORT,
     });
     expect(result.success).toBe(true);
+    expect(vi.mocked(gateOnLoggedInState)).toHaveBeenCalled();
   });
 
   it("accepts /posts/ URL format", async () => {

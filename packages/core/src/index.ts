@@ -466,6 +466,15 @@ export {
   resolveLinkedInEntity,
   type ResolveLinkedInEntityInput,
   type ResolveLinkedInEntityOutput,
+  // LinkedIn ContentWindow state gating (#781, #782)
+  gateOnLoggedInState,
+  LoggedInStateTimeoutError,
+  waitForLoggedInState,
+  type WaitForLoggedInStateOptions,
+  LoggedInStatePersistedError,
+  withLoggedInStateRetry,
+  withLoggedInStateRetryAtPort,
+  type WithLoggedInStateRetryOptions,
 } from "./operations/index.js";
 
 // LinkedIn DOM automation & selectors

@@ -23,6 +23,7 @@ import { gaussianDelay } from "../utils/delay.js";
 import { navigateAwayIf } from "./navigate-away.js";
 import { REACTION_TYPES, type ReactionType } from "./react-to-post.js";
 import type { ConnectionOptions } from "./types.js";
+import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
 
 /** Pattern matching supported LinkedIn post URL formats. */
 const LINKEDIN_POST_URL_RE =
@@ -278,6 +279,8 @@ export async function reactToComment(
         "This is a security measure to prevent remote code execution.",
     );
   }
+
+  await gateOnLoggedInState(cdpPort, cdpHost, allowRemote, { timeout: 60_000 });
 
   const targets = await discoverTargets(cdpPort, cdpHost);
   const linkedInTarget = targets.find(

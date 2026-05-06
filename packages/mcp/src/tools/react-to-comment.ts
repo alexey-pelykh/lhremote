@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { reactToComment, REACTION_TYPES } from "@lhremote/core";
+import { reactToComment, REACTION_TYPES ,
+  withLoggedInStateRetryAtPort,
+} from "@lhremote/core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
@@ -34,7 +36,12 @@ export function registerReactToComment(server: McpServer): void {
     },
     async ({ postUrl, commentUrn, reactionType, dryRun, cdpPort, cdpHost, allowRemote }) => {
       try {
-        const result = await reactToComment({
+        const result = await withLoggedInStateRetryAtPort(
+          cdpPort,
+          cdpHost ?? "127.0.0.1",
+          allowRemote ?? false,
+          () =>
+            reactToComment({
           postUrl,
           commentUrn,
           reactionType: reactionType as Parameters<typeof reactToComment>[0]["reactionType"],
@@ -42,7 +49,8 @@ export function registerReactToComment(server: McpServer): void {
           cdpHost,
           allowRemote,
           dryRun,
-        });
+          }),
+        );
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to react to comment");

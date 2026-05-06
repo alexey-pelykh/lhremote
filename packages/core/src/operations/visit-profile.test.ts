@@ -15,6 +15,14 @@ vi.mock("../db/index.js", () => ({
   ProfileRepository: vi.fn(),
 }));
 
+vi.mock("./wait-for-logged-in-state.js", () => ({
+  gateOnLoggedInState: vi.fn().mockResolvedValue(undefined),
+  waitForLoggedInState: vi.fn().mockResolvedValue(undefined),
+  LoggedInStateTimeoutError: class extends Error {},
+}));
+
+import { waitForLoggedInState } from "./wait-for-logged-in-state.js";
+
 import type { InstanceDatabaseContext } from "../services/instance-context.js";
 import { resolveAccount } from "../services/account-resolution.js";
 import { withInstanceDatabase } from "../services/instance-context.js";
@@ -97,6 +105,7 @@ describe("visitProfile", () => {
     });
 
     expect(result.success).toBe(true);
+    expect(vi.mocked(waitForLoggedInState)).toHaveBeenCalled();
     expect(result.actionType).toBe("VisitAndExtract");
     expect(result.profile).toBe(MOCK_PROFILE);
   });

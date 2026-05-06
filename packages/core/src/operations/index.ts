@@ -364,6 +364,20 @@ export {
   type EnrichmentCategory,
 } from "./enrich-profile.js";
 
+// LinkedIn ContentWindow state gating (see #781)
+export {
+  gateOnLoggedInState,
+  LoggedInStateTimeoutError,
+  waitForLoggedInState,
+  type WaitForLoggedInStateOptions,
+} from "./wait-for-logged-in-state.js";
+export {
+  LoggedInStatePersistedError,
+  withLoggedInStateRetry,
+  withLoggedInStateRetryAtPort,
+  type WithLoggedInStateRetryOptions,
+} from "./with-logged-in-state-retry.js";
+
 // URL building & entity resolution
 export {
   buildLinkedInUrl,

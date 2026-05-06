@@ -257,6 +257,26 @@ export class InstanceService {
   }
 
   /**
+   * Evaluate a JavaScript expression against the LinkedIn webview.
+   *
+   * Targets the linkedin.com page (not the LinkedHelper UI), so the script
+   * sees `document`, `location`, etc. of the LinkedIn React/SDUI tree.
+   * Used by {@link waitForLoggedInState} (DOM heuristic for the LH
+   * `LoggedInState` predicate) and any future direct-LinkedIn-DOM probes.
+   *
+   * @param expression  JavaScript source to evaluate.
+   * @param awaitPromise Whether to await a Promise result (default `true`).
+   * @throws {ServiceError} if the LinkedIn client is not connected.
+   */
+  async evaluateLinkedIn<T = unknown>(
+    expression: string,
+    awaitPromise = true,
+  ): Promise<T> {
+    const client = this.ensureLinkedInClient();
+    return client.evaluate<T>(expression, awaitPromise);
+  }
+
+  /**
    * Navigate the LinkedIn webview to the given URL.
    *
    * Enables the CDP Page domain so that `Page.loadEventFired` events

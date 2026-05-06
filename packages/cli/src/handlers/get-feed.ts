@@ -5,6 +5,7 @@ import {
   errorMessage,
   getFeed,
   type GetFeedOutput,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#get-feed | get-feed} CLI command. */
@@ -20,13 +21,19 @@ export async function handleGetFeed(
 ): Promise<void> {
   let result: GetFeedOutput;
   try {
-    result = await getFeed({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        getFeed({
       count: options.count,
       cursor: options.cursor,
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
-    });
+      }),
+    );
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message}\n`);

@@ -26,6 +26,14 @@ vi.mock("../utils/delay.js", () => ({
   gaussianDelay: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("./wait-for-logged-in-state.js", () => ({
+  gateOnLoggedInState: vi.fn().mockResolvedValue(undefined),
+  waitForLoggedInState: vi.fn().mockResolvedValue(undefined),
+  LoggedInStateTimeoutError: class extends Error {},
+}));
+
+import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
+
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { waitForElement, humanizedHover, humanizedClick, retryInteraction } from "../linkedin/dom-automation.js";
@@ -90,6 +98,7 @@ describe("reactToPost", () => {
     });
 
     expect(result.success).toBe(true);
+    expect(vi.mocked(gateOnLoggedInState)).toHaveBeenCalled();
   });
 
   it("throws when no LinkedIn page is found", async () => {

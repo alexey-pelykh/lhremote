@@ -7,6 +7,7 @@ import {
   InstanceNotRunningError,
   visitProfile,
   type VisitProfileOutput,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#visit-profile | visit-profile} CLI command. */
@@ -32,7 +33,12 @@ export async function handleVisitProfile(options: {
 
   let result: VisitProfileOutput;
   try {
-    result = await visitProfile({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        visitProfile({
       personId: options.personId,
       url: options.url,
       extractCurrentOrganizations: options.extractCurrentOrganizations,
@@ -40,7 +46,8 @@ export async function handleVisitProfile(options: {
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
       accountId: options.accountId,
-    });
+      }),
+    );
   } catch (error) {
     if (error instanceof InstanceNotRunningError) {
       process.stderr.write(`${error.message}\n`);

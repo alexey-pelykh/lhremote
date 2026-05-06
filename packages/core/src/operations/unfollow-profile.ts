@@ -14,6 +14,7 @@ import {
   type FollowableTarget,
 } from "./navigate-to-profile.js";
 import type { ConnectionOptions } from "./types.js";
+import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
 
 /** aria-label prefix of a "Following {Name}" toggle button (profile or company). */
 const PROFILE_FOLLOWING_ARIA_PREFIX = "Following ";
@@ -133,6 +134,8 @@ export async function unfollowProfile(
         "This is a security measure to prevent remote code execution.",
     );
   }
+
+  await gateOnLoggedInState(cdpPort, cdpHost, allowRemote, { timeout: 60_000 });
 
   const targets = await discoverTargets(cdpPort, cdpHost);
   const linkedInTarget = targets.find(

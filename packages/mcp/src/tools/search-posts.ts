@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { searchPosts } from "@lhremote/core";
+import { searchPosts ,
+  withLoggedInStateRetryAtPort,
+} from "@lhremote/core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
@@ -36,14 +38,20 @@ export function registerSearchPosts(server: McpServer): void {
     },
     async ({ query, count, cursor, cdpPort, cdpHost, allowRemote }) => {
       try {
-        const result = await searchPosts({
+        const result = await withLoggedInStateRetryAtPort(
+          cdpPort,
+          cdpHost ?? "127.0.0.1",
+          allowRemote ?? false,
+          () =>
+            searchPosts({
           query,
           count,
           cursor,
           cdpPort,
           cdpHost,
           allowRemote,
-        });
+          }),
+        );
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to search posts");

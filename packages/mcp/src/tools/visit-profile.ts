@@ -4,6 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   visitProfile,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
@@ -42,7 +43,12 @@ export function registerVisitProfile(server: McpServer): void {
       }
 
       try {
-        const result = await visitProfile({ personId, url, extractCurrentOrganizations, cdpPort, cdpHost, allowRemote, accountId });
+        const result = await withLoggedInStateRetryAtPort(
+          cdpPort,
+          cdpHost ?? "127.0.0.1",
+          allowRemote ?? false,
+          () => visitProfile({ personId, url, extractCurrentOrganizations, cdpPort, cdpHost, allowRemote, accountId }),
+        );
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to visit profile");

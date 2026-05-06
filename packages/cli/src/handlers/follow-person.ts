@@ -7,6 +7,7 @@ import {
   type EphemeralActionResult,
   CampaignExecutionError,
   CampaignTimeoutError,
+  withLoggedInStateRetryAtPort,
 } from "@lhremote/core";
 
 /** Handle the {@link https://github.com/alexey-pelykh/lhremote#follow-person | follow-person} CLI command. */
@@ -34,7 +35,12 @@ export async function handleFollowPerson(options: {
 
   let result: EphemeralActionResult;
   try {
-    result = await followPerson({
+    result = await withLoggedInStateRetryAtPort(
+      options.cdpPort,
+      options.cdpHost ?? "127.0.0.1",
+      options.allowRemote ?? false,
+      () =>
+        followPerson({
       personId: options.personId,
       url: options.url,
       mode: options.mode,
@@ -45,7 +51,8 @@ export async function handleFollowPerson(options: {
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
       accountId: options.accountId,
-    });
+      }),
+    );
   } catch (error) {
     if (error instanceof CampaignExecutionError || error instanceof CampaignTimeoutError) {
       process.stderr.write(`${error.message}\n`);
