@@ -328,7 +328,16 @@ describe("monitorCollectingSaga", () => {
 
     try {
       await monitorCollectingSaga(instance, {
-        timeout: 1,
+        // 50 ms gives the loop room to enter and complete at least one
+        // iteration even under slow CI (Ubuntu + vitest --coverage).
+        // With timeout=1 the deadline (start + 1 ms) can expire before
+        // `while (Date.now() < deadline)` evaluates the first time —
+        // millisecond quantization + scheduling overhead between the
+        // `start = Date.now()` capture and the loop entry — causing the
+        // body to never run, so recoveryEvents stays 0 and the >= 1
+        // assertion fails. (`delay` is mocked to resolve immediately;
+        // pollInterval timing is not the flake source.)
+        timeout: 50,
         pollInterval: 1,
       });
       expect.unreachable("expected MonitorCollectingSagaTimeoutError");
