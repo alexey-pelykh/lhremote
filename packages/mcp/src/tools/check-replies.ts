@@ -32,9 +32,9 @@ export function registerCheckReplies(server: McpServer): void {
         ),
       ...cdpConnectionSchema,
     },
-    async ({ personIds, since, pauseOthers, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personIds, since, pauseOthers, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await checkReplies({ personIds, since, pauseOthers, cdpPort, cdpHost, allowRemote });
+        const result = await checkReplies({ personIds, since, pauseOthers, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to check replies");

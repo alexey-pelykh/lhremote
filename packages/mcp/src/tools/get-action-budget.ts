@@ -13,9 +13,9 @@ export function registerGetActionBudget(server: McpServer): void {
     {
       ...cdpConnectionSchema,
     },
-    async ({ cdpPort, cdpHost, allowRemote }) => {
+    async ({ cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await getActionBudget({ cdpPort, cdpHost, allowRemote });
+        const result = await getActionBudget({ cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to get action budget");

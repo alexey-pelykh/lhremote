@@ -20,6 +20,7 @@ import {
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_STATS: MessageStats = {
   totalMessages: 2500,
@@ -167,4 +168,11 @@ describe("registerScrapeMessagingHistory", () => {
     (error) => vi.mocked(scrapeMessagingHistory).mockRejectedValue(error),
     "Failed to scrape messaging history",
   );
+  describeAccountIdForwarding({
+    registerTool: registerScrapeMessagingHistory,
+    toolName: "scrape-messaging-history",
+    mock: vi.mocked(scrapeMessagingHistory),
+    baseArgs: { personIds: [1] },
+  });
+
 });

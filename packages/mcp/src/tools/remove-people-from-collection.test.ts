@@ -12,6 +12,7 @@ import { removePeopleFromCollection } from "@lhremote/core";
 import { registerRemovePeopleFromCollection } from "./remove-people-from-collection.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_RESULT = {
   success: true as const,
@@ -85,4 +86,12 @@ describe("registerRemovePeopleFromCollection", () => {
       vi.mocked(removePeopleFromCollection).mockRejectedValue(error),
     "Failed to remove people from collection",
   );
+  describeAccountIdForwarding({
+    registerTool: registerRemovePeopleFromCollection,
+    toolName: "remove-people-from-collection",
+    mock: vi.mocked(removePeopleFromCollection),
+    baseArgs: { collectionId: 1, personIds: [1] },
+    mockResolvedValue: { removed: 0 },
+  });
+
 });

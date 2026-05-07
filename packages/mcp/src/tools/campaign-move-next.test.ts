@@ -21,6 +21,7 @@ import {
 import { registerCampaignMoveNext } from "./campaign-move-next.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOVE_RESULT = {
   success: true as const,
@@ -179,4 +180,11 @@ describe("registerCampaignMoveNext", () => {
     () => ({ campaignId: 10, actionId: 5, personIds: [100], cdpPort: 9222 }),
     (error) => vi.mocked(campaignMoveNext).mockRejectedValue(error),
   );
+  describeAccountIdForwarding({
+    registerTool: registerCampaignMoveNext,
+    toolName: "campaign-move-next",
+    mock: vi.mocked(campaignMoveNext),
+    baseArgs: { campaignId: 1, actionId: 1, personIds: [1] },
+  });
+
 });

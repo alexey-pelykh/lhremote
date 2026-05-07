@@ -140,4 +140,19 @@ describe("registerListAccounts", () => {
 
     expect(LauncherService).toHaveBeenCalledWith(4567, {});
   });
+
+  it("forwards accountId via buildCdpOptions to LauncherService when supplied (regression #793)", async () => {
+    const { server, getHandler } = createMockServer();
+    registerListAccounts(server);
+
+    mockLauncher();
+
+    const handler = getHandler("list-accounts");
+    await handler({ cdpPort: 9222, accountId: 12345 });
+
+    expect(LauncherService).toHaveBeenCalledWith(
+      9222,
+      expect.objectContaining({ accountId: 12345 }),
+    );
+  });
 });

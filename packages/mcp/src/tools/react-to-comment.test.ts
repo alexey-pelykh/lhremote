@@ -12,6 +12,7 @@ import { reactToComment } from "@lhremote/core";
 import { registerReactToComment } from "./react-to-comment.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const POST_URL = "https://www.linkedin.com/feed/update/urn:li:activity:123/";
 const COMMENT_URN = "urn:li:comment:(activity:123,456)";
@@ -96,4 +97,11 @@ describe("registerReactToComment", () => {
     (error) => vi.mocked(reactToComment).mockRejectedValue(error),
     "Failed to react to comment",
   );
+  describeAccountIdForwarding({
+    registerTool: registerReactToComment,
+    toolName: "react-to-comment",
+    mock: vi.mocked(reactToComment),
+    baseArgs: { postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:1/", commentUrn: "urn:li:comment:(activity:1,1)", reactionType: "like" },
+  });
+
 });

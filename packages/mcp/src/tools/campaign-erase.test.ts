@@ -20,6 +20,7 @@ import {
 import { registerCampaignErase } from "./campaign-erase.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const ERASE_RESULT = { success: true as const, campaignId: 15 };
 
@@ -124,4 +125,11 @@ describe("registerCampaignErase", () => {
       ],
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerCampaignErase,
+    toolName: "campaign-erase",
+    mock: vi.mocked(campaignErase),
+    baseArgs: { campaignId: 1 },
+  });
+
 });

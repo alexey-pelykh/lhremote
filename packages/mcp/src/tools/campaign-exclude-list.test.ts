@@ -21,6 +21,7 @@ import {
 import { registerCampaignExcludeList } from "./campaign-exclude-list.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 describe("registerCampaignExcludeList", () => {
   beforeEach(() => {
@@ -252,4 +253,12 @@ describe("registerCampaignExcludeList", () => {
     (error) => vi.mocked(campaignExcludeList).mockRejectedValue(error),
     "Failed to get exclude list",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCampaignExcludeList,
+    toolName: "campaign-exclude-list",
+    mock: vi.mocked(campaignExcludeList),
+    baseArgs: { campaignId: 1 },
+    mockResolvedValue: { count: 0 },
+  });
+
 });

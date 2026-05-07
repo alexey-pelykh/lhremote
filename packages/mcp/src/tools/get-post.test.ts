@@ -12,6 +12,7 @@ import { getPost } from "@lhremote/core";
 import { registerGetPost } from "./get-post.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_RESULT = {
   post: {
@@ -117,4 +118,11 @@ describe("registerGetPost", () => {
     (error) => vi.mocked(getPost).mockRejectedValue(error),
     "Failed to get post",
   );
+  describeAccountIdForwarding({
+    registerTool: registerGetPost,
+    toolName: "get-post",
+    mock: vi.mocked(getPost),
+    baseArgs: { postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:1/" },
+  });
+
 });

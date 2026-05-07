@@ -19,9 +19,9 @@ export function registerGetPostStats(server: McpServer): void {
         ),
       ...cdpConnectionSchema,
     },
-    async ({ postUrl, cdpPort, cdpHost, allowRemote }) => {
+    async ({ postUrl, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await getPostStats({ postUrl, cdpPort, cdpHost, allowRemote });
+        const result = await getPostStats({ postUrl, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to get post stats");

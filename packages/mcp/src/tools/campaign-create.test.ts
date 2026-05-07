@@ -24,6 +24,7 @@ import {
 
 import { registerCampaignCreate } from "./campaign-create.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const YAML_CONFIG = `
 version: "1"
@@ -205,4 +206,11 @@ describe("registerCampaignCreate", () => {
       ],
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerCampaignCreate,
+    toolName: "campaign-create",
+    mock: vi.mocked(campaignCreate),
+    baseArgs: { config: "version: \"1\"\nname: x\nactions: []" },
+  });
+
 });

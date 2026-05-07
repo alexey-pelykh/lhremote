@@ -19,7 +19,7 @@ export function registerDismissFeedPost(server: McpServer): void {
       dryRun: z.boolean().optional().default(false).describe("When true, locate the menu item but do not click it"),
       ...cdpConnectionSchema,
     },
-    async ({ feedIndex, dryRun, cdpPort, cdpHost, allowRemote }) => {
+    async ({ feedIndex, dryRun, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const result = await withLoggedInStateRetryAtPort(
           cdpPort,
@@ -31,6 +31,7 @@ export function registerDismissFeedPost(server: McpServer): void {
           cdpPort,
           cdpHost,
           allowRemote,
+          accountId,
           dryRun,
           }),
         );

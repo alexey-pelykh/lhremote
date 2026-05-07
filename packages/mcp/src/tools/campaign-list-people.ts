@@ -46,9 +46,9 @@ export function registerCampaignListPeople(server: McpServer): void {
         .describe("Pagination offset (default: 0)"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, actionId, status, limit, offset, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, actionId, status, limit, offset, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await campaignListPeople({ campaignId, actionId, status, limit, offset, cdpPort, cdpHost, allowRemote });
+        const result = await campaignListPeople({ campaignId, actionId, status, limit, offset, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof ActionNotFoundError) {

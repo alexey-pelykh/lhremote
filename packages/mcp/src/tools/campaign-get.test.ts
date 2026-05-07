@@ -21,6 +21,7 @@ import {
 import { registerCampaignGet } from "./campaign-get.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_CAMPAIGN: Campaign = {
   id: 15,
@@ -121,4 +122,11 @@ describe("registerCampaignGet", () => {
     (error) => vi.mocked(campaignGet).mockRejectedValue(error),
     "Failed to get campaign",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCampaignGet,
+    toolName: "campaign-get",
+    mock: vi.mocked(campaignGet),
+    baseArgs: { campaignId: 1 },
+  });
+
 });

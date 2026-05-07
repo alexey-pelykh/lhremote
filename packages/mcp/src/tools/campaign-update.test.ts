@@ -20,6 +20,7 @@ import {
 import { registerCampaignUpdate } from "./campaign-update.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_CAMPAIGN: Campaign = {
   id: 15,
@@ -151,4 +152,11 @@ describe("registerCampaignUpdate", () => {
     (error) => vi.mocked(campaignUpdate).mockRejectedValue(error),
     "Failed to update campaign",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCampaignUpdate,
+    toolName: "campaign-update",
+    mock: vi.mocked(campaignUpdate),
+    baseArgs: { campaignId: 1, name: "New Name" },
+  });
+
 });

@@ -26,9 +26,9 @@ export function registerCampaignRemovePeople(server: McpServer): void {
         .describe("Person IDs to remove from the campaign target list"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, personIds, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, personIds, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await campaignRemovePeople({ campaignId, personIds, cdpPort, cdpHost, allowRemote });
+        const result = await campaignRemovePeople({ campaignId, personIds, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CampaignExecutionError) {

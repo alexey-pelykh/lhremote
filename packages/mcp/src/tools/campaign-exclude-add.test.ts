@@ -21,6 +21,7 @@ import {
 import { registerCampaignExcludeAdd } from "./campaign-exclude-add.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 describe("registerCampaignExcludeAdd", () => {
   beforeEach(() => {
@@ -221,4 +222,12 @@ describe("registerCampaignExcludeAdd", () => {
     (error) => vi.mocked(campaignExcludeAdd).mockRejectedValue(error),
     "Failed to add to exclude list",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCampaignExcludeAdd,
+    toolName: "campaign-exclude-add",
+    mock: vi.mocked(campaignExcludeAdd),
+    baseArgs: { campaignId: 1, personIds: [1] },
+    mockResolvedValue: { added: 0 },
+  });
+
 });

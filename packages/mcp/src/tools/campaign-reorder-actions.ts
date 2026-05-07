@@ -27,9 +27,9 @@ export function registerCampaignReorderActions(server: McpServer): void {
         .describe("Action IDs in the desired order"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, actionIds, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, actionIds, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await campaignReorderActions({ campaignId, actionIds, cdpPort, cdpHost, allowRemote });
+        const result = await campaignReorderActions({ campaignId, actionIds, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof ActionNotFoundError) {

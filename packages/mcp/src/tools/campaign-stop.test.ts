@@ -20,6 +20,7 @@ import {
 import { registerCampaignStop } from "./campaign-stop.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const STOP_RESULT = {
   success: true as const,
@@ -128,4 +129,11 @@ describe("registerCampaignStop", () => {
       ],
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerCampaignStop,
+    toolName: "campaign-stop",
+    mock: vi.mocked(campaignStop),
+    baseArgs: { campaignId: 1 },
+  });
+
 });

@@ -12,6 +12,7 @@ import { searchPosts } from "@lhremote/core";
 import type { SearchPostsOutput } from "@lhremote/core";
 import { registerSearchPosts } from "./search-posts.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_RESULTS: SearchPostsOutput = {
   query: "AI agents",
@@ -109,4 +110,11 @@ describe("registerSearchPosts", () => {
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain("Failed to search posts");
   });
+  describeAccountIdForwarding({
+    registerTool: registerSearchPosts,
+    toolName: "search-posts",
+    mock: vi.mocked(searchPosts),
+    baseArgs: { query: "ai" },
+  });
+
 });

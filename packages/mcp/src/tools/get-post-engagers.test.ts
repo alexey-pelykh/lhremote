@@ -11,6 +11,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import { getPostEngagers } from "@lhremote/core";
 import { registerGetPostEngagers } from "./get-post-engagers.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_ENGAGERS = {
   postUrn: "urn:li:activity:7123456789012345678",
@@ -108,4 +109,11 @@ describe("registerGetPostEngagers", () => {
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain("Failed to get post engagers");
   });
+  describeAccountIdForwarding({
+    registerTool: registerGetPostEngagers,
+    toolName: "get-post-engagers",
+    mock: vi.mocked(getPostEngagers),
+    baseArgs: { postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:1/" },
+  });
+
 });

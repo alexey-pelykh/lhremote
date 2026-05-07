@@ -11,6 +11,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import { getActionBudget } from "@lhremote/core";
 import { registerGetActionBudget } from "./get-action-budget.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_BUDGET = {
   entries: [
@@ -74,4 +75,11 @@ describe("registerGetActionBudget", () => {
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain("Failed to get action budget");
   });
+  describeAccountIdForwarding({
+    registerTool: registerGetActionBudget,
+    toolName: "get-action-budget",
+    mock: vi.mocked(getActionBudget),
+    baseArgs: { campaignId: 1, actionId: 1 },
+  });
+
 });

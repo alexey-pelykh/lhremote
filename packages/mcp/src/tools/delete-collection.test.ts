@@ -12,6 +12,7 @@ import { deleteCollection } from "@lhremote/core";
 import { registerDeleteCollection } from "./delete-collection.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_RESULT = {
   success: true as const,
@@ -79,4 +80,11 @@ describe("registerDeleteCollection", () => {
     (error) => vi.mocked(deleteCollection).mockRejectedValue(error),
     "Failed to delete collection",
   );
+  describeAccountIdForwarding({
+    registerTool: registerDeleteCollection,
+    toolName: "delete-collection",
+    mock: vi.mocked(deleteCollection),
+    baseArgs: { collectionId: 1 },
+  });
+
 });

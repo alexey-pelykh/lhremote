@@ -22,6 +22,7 @@ import {
 import { registerCampaignStatistics } from "./campaign-statistics.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const SAMPLE_STATISTICS: CampaignStatistics = {
   campaignId: 10,
@@ -228,4 +229,11 @@ describe("registerCampaignStatistics", () => {
       ],
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerCampaignStatistics,
+    toolName: "campaign-statistics",
+    mock: vi.mocked(campaignStatistics),
+    baseArgs: { campaignId: 1 },
+  });
+
 });

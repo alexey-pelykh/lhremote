@@ -45,9 +45,9 @@ export function registerQueryMessages(server: McpServer): void {
         .describe("Pagination offset (default: 0)"),
       ...cdpConnectionSchema,
     },
-    async ({ personId, chatId, search, limit, offset, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personId, chatId, search, limit, offset, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await queryMessages({ personId, chatId, search, limit, offset, cdpPort, cdpHost, allowRemote });
+        const result = await queryMessages({ personId, chatId, search, limit, offset, cdpPort, cdpHost, allowRemote, accountId });
         if (result.kind === "thread") return mcpSuccess(JSON.stringify(result.thread, null, 2));
         if (result.kind === "search") return mcpSuccess(JSON.stringify({ messages: result.messages, total: result.total }, null, 2));
         return mcpSuccess(JSON.stringify({ conversations: result.conversations, total: result.total }, null, 2));

@@ -22,6 +22,7 @@ import {
 import { registerCampaignRemoveAction } from "./campaign-remove-action.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const REMOVE_RESULT = { success: true as const, campaignId: 15, removedActionId: 50 };
 
@@ -178,4 +179,11 @@ describe("registerCampaignRemoveAction", () => {
       ],
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerCampaignRemoveAction,
+    toolName: "campaign-remove-action",
+    mock: vi.mocked(campaignRemoveAction),
+    baseArgs: { campaignId: 1, actionId: 1 },
+  });
+
 });

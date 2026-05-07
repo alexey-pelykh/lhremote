@@ -12,6 +12,7 @@ import { listCollections } from "@lhremote/core";
 import { registerListCollections } from "./list-collections.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_RESULT = {
   collections: [
@@ -80,4 +81,11 @@ describe("registerListCollections", () => {
     (error) => vi.mocked(listCollections).mockRejectedValue(error),
     "Failed to list collections",
   );
+  describeAccountIdForwarding({
+    registerTool: registerListCollections,
+    toolName: "list-collections",
+    mock: vi.mocked(listCollections),
+    mockResolvedValue: { collections: [] },
+  });
+
 });

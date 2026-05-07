@@ -19,6 +19,7 @@ import {
 import { registerCampaignExport } from "./campaign-export.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 describe("registerCampaignExport", () => {
   beforeEach(() => {
@@ -111,4 +112,11 @@ describe("registerCampaignExport", () => {
     (error) => vi.mocked(campaignExport).mockRejectedValue(error),
     "Failed to export campaign",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCampaignExport,
+    toolName: "campaign-export",
+    mock: vi.mocked(campaignExport),
+    baseArgs: { campaignId: 1 },
+  });
+
 });

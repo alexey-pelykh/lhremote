@@ -139,4 +139,19 @@ describe("registerListWorkspaces", () => {
 
     expect(disconnect).toHaveBeenCalledOnce();
   });
+
+  it("forwards accountId via buildCdpOptions to LauncherService when supplied (regression #793)", async () => {
+    const { server, getHandler } = createMockServer();
+    registerListWorkspaces(server);
+
+    mockLauncher();
+
+    const handler = getHandler("list-workspaces");
+    await handler({ cdpPort: 9222, accountId: 12345 });
+
+    expect(LauncherService).toHaveBeenCalledWith(
+      9222,
+      expect.objectContaining({ accountId: 12345 }),
+    );
+  });
 });

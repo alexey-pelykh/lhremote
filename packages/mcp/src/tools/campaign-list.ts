@@ -21,9 +21,9 @@ export function registerCampaignList(server: McpServer): void {
         .describe("Include archived campaigns"),
       ...cdpConnectionSchema,
     },
-    async ({ includeArchived, cdpPort, cdpHost, allowRemote }) => {
+    async ({ includeArchived, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await campaignList({ includeArchived, cdpPort, cdpHost, allowRemote });
+        const result = await campaignList({ includeArchived, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to list campaigns");

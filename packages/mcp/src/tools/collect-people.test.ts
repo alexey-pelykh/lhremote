@@ -20,6 +20,7 @@ import {
 import { registerCollectPeople } from "./collect-people.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 describe("registerCollectPeople", () => {
   beforeEach(() => {
@@ -175,4 +176,11 @@ describe("registerCollectPeople", () => {
     (error) => vi.mocked(collectPeople).mockRejectedValue(error),
     "Failed to collect people",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCollectPeople,
+    toolName: "collect-people",
+    mock: vi.mocked(collectPeople),
+    baseArgs: { campaignId: 1, sourceUrl: "https://www.linkedin.com/search/results/people/" },
+  });
+
 });

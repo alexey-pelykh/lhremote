@@ -30,7 +30,7 @@ export function registerGetProfileActivity(server: McpServer): void {
         .describe("Cursor token from a previous call for the next page"),
       ...cdpConnectionSchema,
     },
-    async ({ profile, count, cursor, cdpPort, cdpHost, allowRemote }) => {
+    async ({ profile, count, cursor, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const result = await getProfileActivity({
           profile,
@@ -39,6 +39,7 @@ export function registerGetProfileActivity(server: McpServer): void {
           cdpPort,
           cdpHost,
           allowRemote,
+          accountId,
         });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

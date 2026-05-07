@@ -20,6 +20,7 @@ import {
 import { registerImportPeopleFromUrls } from "./import-people-from-urls.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 describe("registerImportPeopleFromUrls", () => {
   beforeEach(() => {
@@ -188,4 +189,11 @@ describe("registerImportPeopleFromUrls", () => {
     (error) => vi.mocked(importPeopleFromUrls).mockRejectedValue(error),
     "Failed to import people",
   );
+  describeAccountIdForwarding({
+    registerTool: registerImportPeopleFromUrls,
+    toolName: "import-people-from-urls",
+    mock: vi.mocked(importPeopleFromUrls),
+    baseArgs: { campaignId: 1, linkedInUrls: ["https://www.linkedin.com/in/alice/"] },
+  });
+
 });

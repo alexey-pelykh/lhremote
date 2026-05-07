@@ -21,6 +21,7 @@ import {
 import { registerCampaignStart } from "./campaign-start.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const START_RESULT = {
   success: true as const,
@@ -162,4 +163,11 @@ describe("registerCampaignStart", () => {
       ],
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerCampaignStart,
+    toolName: "campaign-start",
+    mock: vi.mocked(campaignStart),
+    baseArgs: { campaignId: 1, personIds: [1] },
+  });
+
 });

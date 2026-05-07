@@ -12,6 +12,7 @@ import { createCollection } from "@lhremote/core";
 import { registerCreateCollection } from "./create-collection.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_RESULT = {
   success: true as const,
@@ -79,4 +80,11 @@ describe("registerCreateCollection", () => {
     (error) => vi.mocked(createCollection).mockRejectedValue(error),
     "Failed to create collection",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCreateCollection,
+    toolName: "create-collection",
+    mock: vi.mocked(createCollection),
+    baseArgs: { name: "x" },
+  });
+
 });

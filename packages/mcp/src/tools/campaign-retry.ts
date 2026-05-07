@@ -25,9 +25,9 @@ export function registerCampaignRetry(server: McpServer): void {
         .describe("Person IDs to reset for retry"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, personIds, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, personIds, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await campaignRetry({ campaignId, personIds, cdpPort, cdpHost, allowRemote });
+        const result = await campaignRetry({ campaignId, personIds, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to reset persons for retry");

@@ -21,6 +21,7 @@ import {
 import { registerCampaignExcludeRemove } from "./campaign-exclude-remove.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 describe("registerCampaignExcludeRemove", () => {
   beforeEach(() => {
@@ -221,4 +222,12 @@ describe("registerCampaignExcludeRemove", () => {
     (error) => vi.mocked(campaignExcludeRemove).mockRejectedValue(error),
     "Failed to remove from exclude list",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCampaignExcludeRemove,
+    toolName: "campaign-exclude-remove",
+    mock: vi.mocked(campaignExcludeRemove),
+    baseArgs: { campaignId: 1, personIds: [1] },
+    mockResolvedValue: { removed: 0 },
+  });
+
 });

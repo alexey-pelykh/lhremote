@@ -20,6 +20,7 @@ import {
 import { registerCampaignAddAction } from "./campaign-add-action.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_ACTION: CampaignAction = {
   id: 50,
@@ -137,4 +138,11 @@ describe("registerCampaignAddAction", () => {
     () => ({ campaignId: 15, name: "Visit", actionType: "VisitAndExtract", cdpPort: 9222 }),
     (error) => vi.mocked(campaignAddAction).mockRejectedValue(error),
   );
+  describeAccountIdForwarding({
+    registerTool: registerCampaignAddAction,
+    toolName: "campaign-add-action",
+    mock: vi.mocked(campaignAddAction),
+    baseArgs: { campaignId: 1, name: "x", actionType: "VisitAndExtract" },
+  });
+
 });

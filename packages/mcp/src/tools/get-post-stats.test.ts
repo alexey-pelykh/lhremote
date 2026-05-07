@@ -11,6 +11,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import { getPostStats } from "@lhremote/core";
 import { registerGetPostStats } from "./get-post-stats.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_STATS = {
   stats: {
@@ -79,4 +80,11 @@ describe("registerGetPostStats", () => {
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain("Failed to get post stats");
   });
+  describeAccountIdForwarding({
+    registerTool: registerGetPostStats,
+    toolName: "get-post-stats",
+    mock: vi.mocked(getPostStats),
+    baseArgs: { postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:1/" },
+  });
+
 });

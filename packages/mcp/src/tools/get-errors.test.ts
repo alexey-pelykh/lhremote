@@ -15,6 +15,7 @@ import { type GetErrorsOutput, getErrors } from "@lhremote/core";
 
 import { registerGetErrors } from "./get-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const mockedGetErrors = vi.mocked(getErrors);
 
@@ -133,4 +134,10 @@ describe("registerGetErrors", () => {
       allowRemote: undefined,
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerGetErrors,
+    toolName: "get-errors",
+    mock: vi.mocked(getErrors),
+  });
+
 });

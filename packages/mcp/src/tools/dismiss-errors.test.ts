@@ -15,6 +15,7 @@ import { type DismissErrorsOutput, dismissErrors } from "@lhremote/core";
 
 import { registerDismissErrors } from "./dismiss-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const mockedDismissErrors = vi.mocked(dismissErrors);
 
@@ -99,4 +100,11 @@ describe("registerDismissErrors", () => {
       allowRemote: undefined,
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerDismissErrors,
+    toolName: "dismiss-errors",
+    mock: vi.mocked(dismissErrors),
+    mockResolvedValue: { accountId: 1, dismissed: 0, nonDismissable: 0 },
+  });
+
 });

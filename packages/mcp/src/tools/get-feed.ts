@@ -30,7 +30,7 @@ export function registerGetFeed(server: McpServer): void {
         ),
       ...cdpConnectionSchema,
     },
-    async ({ count, cursor, cdpPort, cdpHost, allowRemote }) => {
+    async ({ count, cursor, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const result = await withLoggedInStateRetryAtPort(
           cdpPort,
@@ -43,6 +43,7 @@ export function registerGetFeed(server: McpServer): void {
           cdpPort,
           cdpHost,
           allowRemote,
+          accountId,
           }),
         );
         return mcpSuccess(JSON.stringify(result, null, 2));

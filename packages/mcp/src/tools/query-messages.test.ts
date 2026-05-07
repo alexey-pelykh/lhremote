@@ -22,6 +22,7 @@ import {
 import { registerQueryMessages } from "./query-messages.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_CHAT: Chat = {
   id: 123,
@@ -288,4 +289,10 @@ describe("registerQueryMessages", () => {
       ],
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerQueryMessages,
+    toolName: "query-messages",
+    mock: vi.mocked(queryMessages),
+  });
+
 });

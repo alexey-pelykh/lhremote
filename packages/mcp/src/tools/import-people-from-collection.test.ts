@@ -15,6 +15,7 @@ import {
 import { registerImportPeopleFromCollection } from "./import-people-from-collection.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_RESULT = {
   success: true as const,
@@ -119,4 +120,11 @@ describe("registerImportPeopleFromCollection", () => {
       vi.mocked(importPeopleFromCollection).mockRejectedValue(error),
     "Failed to import people from collection",
   );
+  describeAccountIdForwarding({
+    registerTool: registerImportPeopleFromCollection,
+    toolName: "import-people-from-collection",
+    mock: vi.mocked(importPeopleFromCollection),
+    baseArgs: { campaignId: 1, collectionId: 1 },
+  });
+
 });

@@ -22,9 +22,9 @@ export function registerCampaignErase(server: McpServer): void {
         .describe("Campaign ID"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await campaignErase({ campaignId, cdpPort, cdpHost, allowRemote });
+        const result = await campaignErase({ campaignId, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         if (error instanceof CampaignExecutionError) {

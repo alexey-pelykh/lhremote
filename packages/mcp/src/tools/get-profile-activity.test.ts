@@ -11,6 +11,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import { getProfileActivity } from "@lhremote/core";
 import { registerGetProfileActivity } from "./get-profile-activity.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_ACTIVITY = {
   profilePublicId: "johndoe",
@@ -90,4 +91,11 @@ describe("registerGetProfileActivity", () => {
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain("Failed to get profile activity");
   });
+  describeAccountIdForwarding({
+    registerTool: registerGetProfileActivity,
+    toolName: "get-profile-activity",
+    mock: vi.mocked(getProfileActivity),
+    baseArgs: { profile: "https://www.linkedin.com/in/alice/" },
+  });
+
 });

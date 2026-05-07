@@ -37,7 +37,7 @@ export function registerSearchPosts(server: McpServer): void {
         ),
       ...cdpConnectionSchema,
     },
-    async ({ query, count, cursor, cdpPort, cdpHost, allowRemote }) => {
+    async ({ query, count, cursor, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const result = await withLoggedInStateRetryAtPort(
           cdpPort,
@@ -51,6 +51,7 @@ export function registerSearchPosts(server: McpServer): void {
           cdpPort,
           cdpHost,
           allowRemote,
+          accountId,
           }),
         );
         return mcpSuccess(JSON.stringify(result, null, 2));

@@ -19,6 +19,7 @@ import {
 import { registerCampaignRetry } from "./campaign-retry.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const RETRY_RESULT = {
   success: true as const,
@@ -123,4 +124,11 @@ describe("registerCampaignRetry", () => {
     (error) => vi.mocked(campaignRetry).mockRejectedValue(error),
     "Failed to reset persons for retry",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCampaignRetry,
+    toolName: "campaign-retry",
+    mock: vi.mocked(campaignRetry),
+    baseArgs: { campaignId: 1, personIds: [1] },
+  });
+
 });

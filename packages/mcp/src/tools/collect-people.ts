@@ -50,7 +50,7 @@ export function registerCollectPeople(server: McpServer): void {
         .describe("Explicit source type to bypass URL detection (e.g., SearchPage, MyConnections)"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, sourceUrl, limit, maxPages, pageSize, sourceType, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, sourceUrl, limit, maxPages, pageSize, sourceType, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const result = await withLoggedInStateRetryAtPort(
           cdpPort,
@@ -67,6 +67,7 @@ export function registerCollectPeople(server: McpServer): void {
           cdpPort,
           ...(cdpHost !== undefined && { cdpHost }),
           ...(allowRemote !== undefined && { allowRemote }),
+          ...(accountId !== undefined && { accountId }),
           }),
         );
         return mcpSuccess(JSON.stringify(result, null, 2));

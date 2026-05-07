@@ -20,6 +20,7 @@ import {
 import { registerCheckReplies } from "./check-replies.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_CONVERSATIONS: ConversationMessages[] = [
   {
@@ -259,4 +260,11 @@ describe("registerCheckReplies", () => {
     (error) => vi.mocked(checkReplies).mockRejectedValue(error),
     "Failed to check replies",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCheckReplies,
+    toolName: "check-replies",
+    mock: vi.mocked(checkReplies),
+    baseArgs: { personIds: [1] },
+  });
+
 });

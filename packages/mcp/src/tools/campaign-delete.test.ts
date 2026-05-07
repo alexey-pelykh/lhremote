@@ -20,6 +20,7 @@ import {
 import { registerCampaignDelete } from "./campaign-delete.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const DELETE_RESULT = { success: true as const, campaignId: 15, action: "archived" as const };
 
@@ -124,4 +125,11 @@ describe("registerCampaignDelete", () => {
       ],
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerCampaignDelete,
+    toolName: "campaign-delete",
+    mock: vi.mocked(campaignDelete),
+    baseArgs: { campaignId: 1 },
+  });
+
 });

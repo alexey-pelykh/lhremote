@@ -19,6 +19,7 @@ import {
 import { registerCampaignList } from "./campaign-list.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_CAMPAIGNS: CampaignSummary[] = [
   {
@@ -124,4 +125,12 @@ describe("registerCampaignList", () => {
     (error) => vi.mocked(campaignList).mockRejectedValue(error),
     "Failed to list campaigns",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCampaignList,
+    toolName: "campaign-list",
+    mock: vi.mocked(campaignList),
+    baseArgs: { includeArchived: false },
+    mockResolvedValue: { campaigns: [], total: 0 },
+  });
+
 });

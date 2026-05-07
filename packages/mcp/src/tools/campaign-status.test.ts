@@ -24,6 +24,7 @@ import {
 
 import { registerCampaignStatus } from "./campaign-status.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const defaultStatusResult = {
   campaignId: 15,
@@ -357,4 +358,11 @@ describe("registerCampaignStatus", () => {
       ],
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerCampaignStatus,
+    toolName: "campaign-status",
+    mock: vi.mocked(campaignStatus),
+    baseArgs: { campaignId: 1 },
+  });
+
 });

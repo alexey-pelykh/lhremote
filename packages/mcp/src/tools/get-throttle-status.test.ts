@@ -11,6 +11,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import { getThrottleStatus } from "@lhremote/core";
 import { registerGetThrottleStatus } from "./get-throttle-status.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 describe("registerGetThrottleStatus", () => {
   beforeEach(() => {
@@ -73,4 +74,10 @@ describe("registerGetThrottleStatus", () => {
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain("Failed to get throttle status");
   });
+  describeAccountIdForwarding({
+    registerTool: registerGetThrottleStatus,
+    toolName: "get-throttle-status",
+    mock: vi.mocked(getThrottleStatus),
+  });
+
 });

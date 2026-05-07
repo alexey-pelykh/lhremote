@@ -11,6 +11,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import { getFeed } from "@lhremote/core";
 import { registerGetFeed } from "./get-feed.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_RESULT = {
   posts: [
@@ -95,4 +96,12 @@ describe("registerGetFeed", () => {
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain("Failed to get feed");
   });
+  describeAccountIdForwarding({
+    registerTool: registerGetFeed,
+    toolName: "get-feed",
+    mock: vi.mocked(getFeed),
+    baseArgs: { count: 5 },
+    mockResolvedValue: { posts: [], nextCursor: null },
+  });
+
 });

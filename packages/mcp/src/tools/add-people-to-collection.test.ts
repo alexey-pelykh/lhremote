@@ -12,6 +12,7 @@ import { addPeopleToCollection } from "@lhremote/core";
 import { registerAddPeopleToCollection } from "./add-people-to-collection.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_RESULT = {
   success: true as const,
@@ -85,4 +86,12 @@ describe("registerAddPeopleToCollection", () => {
     (error) => vi.mocked(addPeopleToCollection).mockRejectedValue(error),
     "Failed to add people to collection",
   );
+  describeAccountIdForwarding({
+    registerTool: registerAddPeopleToCollection,
+    toolName: "add-people-to-collection",
+    mock: vi.mocked(addPeopleToCollection),
+    baseArgs: { collectionId: 1, personIds: [1] },
+    mockResolvedValue: { added: 0 },
+  });
+
 });

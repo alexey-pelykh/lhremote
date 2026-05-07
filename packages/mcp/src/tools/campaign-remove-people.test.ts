@@ -20,6 +20,7 @@ import {
 import { registerCampaignRemovePeople } from "./campaign-remove-people.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 describe("registerCampaignRemovePeople", () => {
   beforeEach(() => {
@@ -173,4 +174,11 @@ describe("registerCampaignRemovePeople", () => {
     (error) => vi.mocked(campaignRemovePeople).mockRejectedValue(error),
     "Failed to remove people",
   );
+  describeAccountIdForwarding({
+    registerTool: registerCampaignRemovePeople,
+    toolName: "campaign-remove-people",
+    mock: vi.mocked(campaignRemovePeople),
+    baseArgs: { campaignId: 1, personIds: [1] },
+  });
+
 });

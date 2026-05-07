@@ -12,6 +12,7 @@ import { reactToPost } from "@lhremote/core";
 import { registerReactToPost } from "./react-to-post.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_RESULT = {
   success: true as const,
@@ -95,4 +96,11 @@ describe("registerReactToPost", () => {
     (error) => vi.mocked(reactToPost).mockRejectedValue(error),
     "Failed to react to post",
   );
+  describeAccountIdForwarding({
+    registerTool: registerReactToPost,
+    toolName: "react-to-post",
+    mock: vi.mocked(reactToPost),
+    baseArgs: { postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:1/", reactionType: "like" },
+  });
+
 });

@@ -27,13 +27,13 @@ export function registerScrapeMessagingHistory(server: McpServer): void {
         ),
       ...cdpConnectionSchema,
     },
-    async ({ personIds, pauseOthers, cdpPort, cdpHost, allowRemote }) => {
+    async ({ personIds, pauseOthers, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const result = await withLoggedInStateRetryAtPort(
           cdpPort,
           cdpHost ?? "127.0.0.1",
           allowRemote ?? false,
-          () => scrapeMessagingHistory({ personIds, pauseOthers, cdpPort, cdpHost, allowRemote }),
+          () => scrapeMessagingHistory({ personIds, pauseOthers, cdpPort, cdpHost, allowRemote, accountId }),
         );
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {

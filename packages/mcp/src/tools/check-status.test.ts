@@ -120,4 +120,23 @@ describe("registerCheckStatus", () => {
       ],
     });
   });
+
+  it("forwards accountId via buildCdpOptions when supplied (regression #793)", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCheckStatus(server);
+
+    mockedCheckStatus.mockResolvedValue({
+      launcher: { reachable: false, port: 9222 },
+      instances: [],
+      databases: [],
+    });
+
+    const handler = getHandler("check-status");
+    await handler({ cdpPort: 9222, accountId: 12345 });
+
+    expect(mockedCheckStatus).toHaveBeenCalledWith(
+      9222,
+      expect.objectContaining({ accountId: 12345 }),
+    );
+  });
 });

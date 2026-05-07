@@ -34,7 +34,7 @@ export function registerCampaignStatus(server: McpServer): void {
         .describe("Max results to return"),
       ...cdpConnectionSchema,
     },
-    async ({ campaignId, includeResults, limit, cdpPort, cdpHost, allowRemote }) => {
+    async ({ campaignId, includeResults, limit, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
         const result = await campaignStatus({
           campaignId,
@@ -43,6 +43,7 @@ export function registerCampaignStatus(server: McpServer): void {
           cdpPort,
           cdpHost,
           allowRemote,
+          accountId,
         });
 
         return mcpSuccess(JSON.stringify(result, null, 2));

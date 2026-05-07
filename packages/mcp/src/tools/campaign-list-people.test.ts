@@ -22,6 +22,7 @@ import {
 import { registerCampaignListPeople } from "./campaign-list-people.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const SAMPLE_OUTPUT: CampaignListPeopleOutput = {
   campaignId: 10,
@@ -233,4 +234,12 @@ describe("registerCampaignListPeople", () => {
       ],
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerCampaignListPeople,
+    toolName: "campaign-list-people",
+    mock: vi.mocked(campaignListPeople),
+    baseArgs: { campaignId: 1 },
+    mockResolvedValue: { people: [], total: 0 },
+  });
+
 });

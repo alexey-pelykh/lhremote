@@ -22,6 +22,7 @@ import {
 import { registerCampaignReorderActions } from "./campaign-reorder-actions.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 
 const MOCK_ACTIONS: CampaignAction[] = [
   {
@@ -186,4 +187,11 @@ describe("registerCampaignReorderActions", () => {
       ],
     });
   });
+  describeAccountIdForwarding({
+    registerTool: registerCampaignReorderActions,
+    toolName: "campaign-reorder-actions",
+    mock: vi.mocked(campaignReorderActions),
+    baseArgs: { campaignId: 1, actionIds: [1] },
+  });
+
 });

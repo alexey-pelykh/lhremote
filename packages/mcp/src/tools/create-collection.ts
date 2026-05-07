@@ -18,9 +18,9 @@ export function registerCreateCollection(server: McpServer): void {
         .describe("Name for the new collection"),
       ...cdpConnectionSchema,
     },
-    async ({ name, cdpPort, cdpHost, allowRemote }) => {
+    async ({ name, cdpPort, cdpHost, allowRemote, accountId }) => {
       try {
-        const result = await createCollection({ name, cdpPort, cdpHost, allowRemote });
+        const result = await createCollection({ name, cdpPort, cdpHost, allowRemote, accountId });
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
         return mcpCatchAll(error, "Failed to create collection");

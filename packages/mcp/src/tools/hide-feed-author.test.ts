@@ -10,6 +10,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 
 import { hideFeedAuthor } from "@lhremote/core";
 import { registerHideFeedAuthor } from "./hide-feed-author.js";
+import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";
 
@@ -86,4 +87,11 @@ describe("registerHideFeedAuthor", () => {
     (error) => vi.mocked(hideFeedAuthor).mockRejectedValue(error),
     "Failed to hide feed author",
   );
+
+  describeAccountIdForwarding({
+    registerTool: registerHideFeedAuthor,
+    toolName: "hide-feed-author",
+    mock: vi.mocked(hideFeedAuthor),
+    baseArgs: { feedIndex: 0 },
+  });
 });
