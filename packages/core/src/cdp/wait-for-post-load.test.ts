@@ -72,7 +72,7 @@ describe("waitForPostLoad", () => {
     expect(evaluate).toHaveBeenCalledTimes(3);
   });
 
-  it("polls with the three-stage layered readiness predicate (main-scoped author link, aria-label markers, span[dir=ltr] fallback)", async () => {
+  it("polls with the three-stage layered readiness predicate (main-scoped author link, aria-label + componentkey markers, span[dir=ltr] fallback)", async () => {
     const evaluate = vi.fn().mockResolvedValueOnce(true);
     const client = {
       evaluate,
@@ -86,10 +86,19 @@ describe("waitForPostLoad", () => {
     // nav/sidebar chips that hydrate before the post body).
     expect(script).toContain('main a[href*="/in/"]');
     expect(script).toContain('main a[href*="/company/"]');
-    // Stage 2: aria-label-based interaction markers per ADR-007.
+    // Stage 2: aria-label-based interaction markers per ADR-007.  Legacy
+    // markers retained for defensive coverage even though both currently
+    // match 0 elements post-2026-05 SDUI rewrite (lhremote#800).
     expect(script).toContain('aria-label^="React Like to "');
     expect(script).toContain('aria-label^="Comment on"');
     expect(script).toContain('aria-label^="Text editor for creating"');
+    // Stage 2 (lhremote#800 hardening): new SDUI markers — aria-label
+    // for the post-level reactions menu opener, plus a structural
+    // componentkey marker that survives aria-label rotation entirely.
+    expect(script).toContain('aria-label="Open reactions menu"');
+    expect(script).toContain(
+      '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]',
+    );
     // Stage 3: legacy span[dir="ltr"] fallback (defensive retention
     // in case LinkedIn restores the markup).
     expect(script).toContain('span[dir="ltr"]');
@@ -135,6 +144,8 @@ describe("waitForPostLoad", () => {
           hasReactLikeButton: false,
           hasCommentOnButton: false,
           hasTopLevelEditor: false,
+          hasReactionsMenu: false,
+          hasPostDetailContainer: false,
           bodyTextSnippet: "",
         };
       }
@@ -195,6 +206,8 @@ describe("capturePostLoadFailure", () => {
         hasReactLikeButton: false,
         hasCommentOnButton: false,
         hasTopLevelEditor: false,
+        hasReactionsMenu: false,
+        hasPostDetailContainer: false,
         bodyTextSnippet: "Post body text\n",
       }),
       send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
@@ -265,6 +278,14 @@ describe("capturePostLoadFailure", () => {
     expect(script).toContain('aria-label^="React Like to "');
     expect(script).toContain('aria-label^="Comment on"');
     expect(script).toContain('aria-label^="Text editor for creating"');
+    // lhremote#800 hardening: new SDUI readiness markers also probed
+    // so a future timeout pins which-of-N-is-missing.
+    expect(script).toContain("hasReactionsMenu");
+    expect(script).toContain("hasPostDetailContainer");
+    expect(script).toContain('aria-label="Open reactions menu"');
+    expect(script).toContain(
+      '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]',
+    );
     expect(script).toContain("bodyTextSnippet");
   });
 
@@ -376,6 +397,8 @@ describe("capturePostLoadFailure", () => {
         hasReactLikeButton: false,
         hasCommentOnButton: false,
         hasTopLevelEditor: false,
+        hasReactionsMenu: false,
+        hasPostDetailContainer: false,
         bodyTextSnippet: "",
       }),
       send: vi.fn().mockRejectedValue(new Error("captureScreenshot failed")),

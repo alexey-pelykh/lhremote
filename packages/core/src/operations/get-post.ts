@@ -6,6 +6,7 @@ import type { PostComment, PostDetail } from "../types/post.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { waitForPostLoad } from "../cdp/wait-for-post-load.js";
+import { denormalizeCommentUrnToLegacy } from "../linkedin/selectors.js";
 import { gaussianDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
@@ -75,10 +76,17 @@ interface RawComment {
  * JavaScript source evaluated inside the LinkedIn post detail page to
  * extract post metadata from the rendered DOM.
  *
- * The post detail page (`/feed/update/{urn}/`) renders a single post
- * using the same SSR feed structure as the home feed.  The script looks
- * for `[data-testid="mainFeed"]` → `div[role="listitem"]` first, then
- * falls back to the full document.
+ * Post-2026-05 LinkedIn migrated `/posts/...` to a React + CSS Modules
+ * + SDUI stack (see lhremote#800 + research file
+ * `post-detail-body-dom-react-sdui-20260507.md`).  The legacy anchors
+ * `[data-testid="mainFeed"]`, `<article>`, and `span[dir="ltr"]` are
+ * all gone.  The script now scopes to the post-detail container by
+ * `[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]`,
+ * which contains EXACTLY the post body (author links, headline, text,
+ * post-level reactions trigger) and excludes the LinkedIn chrome
+ * (Premium banner, sidebar, comment list, comment authors) — all of
+ * which the legacy fallback-to-`<main>` cascade was incorrectly
+ * picking up.
  */
 const SCRAPE_POST_DETAIL_SCRIPT = `(() => {
   let authorName = null;
@@ -90,53 +98,71 @@ const SCRAPE_POST_DETAIL_SCRIPT = `(() => {
   let shareCount = 0;
   let timestamp = null;
 
-  // Narrow scope: try mainFeed listitem, then <main>, then document
-  let scope = document.querySelector('main') || document;
-  const feedList = document.querySelector('[data-testid="mainFeed"]');
-  if (feedList) {
-    const items = feedList.querySelectorAll('div[role="listitem"]');
-    for (const item of items) {
-      if (item.offsetHeight < 100) continue;
-      const menuBtn = item.querySelector('button[aria-label^="Open control menu for post"]');
-      if (menuBtn) {
-        scope = item;
-        break;
-      }
-    }
-  }
+  // Scope to the post-detail container (lhremote#800).  Cascades down
+  // to the SDUI screen and finally <main> if the componentkey prefix
+  // changes.
+  const scope =
+    document.querySelector('[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]') ||
+    document.querySelector('[data-sdui-screen="com.linkedin.sdui.flagshipnav.feed.UpdateDetail"]') ||
+    document.querySelector('main') ||
+    document;
 
   // --- Author info ---
-  const authorLink = scope.querySelector('a[href*="/in/"], a[href*="/company/"]');
+  // The post-author has 3 anchors inside scope: avatar (text empty),
+  // name link ("<Name>  • <degree>"), and a height-zero "extended click
+  // area".  All point to the same /in/{publicId}/.  Use the first
+  // anchor for the URL; find the first anchor with non-empty text for
+  // the display name.
+  //
+  // Defense-in-depth (lhremote#800): when the primary post-detail
+  // selector misses and we fall back to the SDUI screen or <main>, the
+  // scope includes the comment list as descendants.  Skip anchors that
+  // sit inside any [componentkey^="replaceableComment_"] subtree so a
+  // commenter never gets picked as the post author — which is exactly
+  // the failure mode this fallback chain is meant to recover from.
+  let authorLink = null;
+  for (const a of scope.querySelectorAll('a[href*="/in/"], a[href*="/company/"]')) {
+    if (a.closest('[componentkey^="replaceableComment_"]')) continue;
+    authorLink = a;
+    break;
+  }
   if (authorLink) {
-    authorProfileUrl = authorLink.href.split('?')[0] || null;
+    authorProfileUrl = (authorLink.href || '').split('?')[0] || null;
 
-    // Try name from span inside the link first
-    const nameSpan = authorLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]');
-    let rawName = nameSpan ? (nameSpan.textContent || '').trim() : '';
-
-    // Fallback: link's own textContent (trimmed, first line only)
-    if (!rawName) {
-      rawName = (authorLink.textContent || '').trim().split('\\n')[0].trim();
+    // Find a sibling anchor with the same href but non-empty text.  Iterate
+    // and compare attribute values directly rather than building a CSS
+    // attribute selector via concatenation — the latter throws on hrefs
+    // containing CSS-special characters (quotes, backslashes), and the raw
+    // attribute can include LinkedIn-injected query strings.
+    const targetHref = authorLink.getAttribute('href');
+    let nameText = '';
+    for (const a of scope.querySelectorAll('a')) {
+      if (a.getAttribute('href') !== targetHref) continue;
+      const t = (a.textContent || '').trim();
+      if (t.length > 0) { nameText = t; break; }
     }
 
-    // Fallback: look for a nearby heading or span that contains the name
-    // (LinkedIn sometimes renders the name outside the <a> tag)
-    if (!rawName) {
-      const parent = authorLink.closest('div');
-      if (parent) {
-        const nearby = parent.querySelector('span[dir="ltr"], span[aria-hidden="true"]');
-        if (nearby) rawName = (nearby.textContent || '').trim();
-      }
-    }
-
-    authorName = rawName || null;
+    // Strip the SDUI " • <degree>" suffix from the name link text.
+    // Format: "<Name>  • 1st" / "<Name> • 2nd" / "<Name>  • You" /
+    // "<Name>  • 3rd".  Connection-degree separator is bullet (•).
+    const m = nameText.match(/^(.+?)\\s+•\\s+(?:1st|2nd|3rd|Out of network|You)\\s*$/);
+    authorName = (m ? m[1] : nameText).trim() || null;
   }
 
   // --- Author headline ---
-  // Search within <main> scope, skip navigation text and the author name
-  const allSpans = scope.querySelectorAll('span');
-  for (const span of allSpans) {
-    const txt = (span.textContent || '').trim();
+  // After the author block, there's a headline element in <p> or <span>
+  // form. Scan post container for a non-empty text leaf with length
+  // 5..200 that is NOT the author name, NOT a relative-time marker,
+  // NOT a UI label, and NOT a composite "<Name> • <degree>" span.
+  //
+  // Defense-in-depth (lhremote#800): same filter as the author-link
+  // lookup above — when the SDUI-screen / <main> fallback fires, the
+  // comment list is a descendant of scope, and a commenter's headline
+  // would otherwise win.
+  const headlineCandidates = scope.querySelectorAll('p, span');
+  for (const el of headlineCandidates) {
+    if (el.closest('[componentkey^="replaceableComment_"]')) continue;
+    const txt = (el.textContent || '').trim();
     if (
       txt &&
       txt.length > 5 &&
@@ -144,9 +170,13 @@ const SCRAPE_POST_DETAIL_SCRIPT = `(() => {
       txt !== authorName &&
       !txt.match(/^\\d+[smhdw]$/) &&
       !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
-      !txt.match(/^Follow$|^Promoted$/i) &&
+      !txt.match(/^Follow$|^Promoted$|^Boost$|^Author$|^You$/i) &&
       !txt.match(/^Skip to|^Keyboard shortcuts$|^Close jump menu$/i) &&
-      !txt.match(/^Feed detail update$|^Feed post$/i)
+      !txt.match(/^Feed\\s+(?:post|detail\\s+update)$/i) &&
+      !txt.match(/^Promote\\s+this\\s+post/i) &&
+      !txt.match(/Reaction button state:/) &&
+      !txt.includes('•') &&
+      !txt.match(/^https?:\\/\\//)
     ) {
       authorHeadline = txt;
       break;
@@ -154,19 +184,22 @@ const SCRAPE_POST_DETAIL_SCRIPT = `(() => {
   }
 
   // --- Post text ---
-  const ltrSpans = scope.querySelectorAll('span[dir="ltr"]');
-  let longestText = '';
-  for (const span of ltrSpans) {
-    const txt = (span.textContent || '').trim();
-    if (txt.length > longestText.length && txt !== authorName && txt !== authorHeadline) {
-      longestText = txt;
-    }
+  // Cascade per research: data-testid leaf -> componentkey wrapper.
+  // Both selectors are stable and verified across all 4 post types
+  // (regular / share / ugcPost / self).  Very short posts may have
+  // neither — accept null in that case rather than synthesizing.
+  let textEl = scope.querySelector('[data-testid="expandable-text-box"]');
+  if (!textEl) {
+    textEl = scope.querySelector('[componentkey^="feed-commentary_"]');
   }
-  if (longestText.length > 20) {
-    text = longestText;
+  if (textEl) {
+    const t = (textEl.textContent || '').trim();
+    if (t.length > 0) text = t;
   }
 
-  // --- Engagement counts ---
+  // --- Engagement counts (UNCHANGED — text-content regex survives
+  // the DOM rewrite; verified by lhremote#800 reporting correct counts
+  // even when other fields are placeholder data) ---
   const countText = document.body.textContent || '';
 
   function parseCount(pattern) {
@@ -182,16 +215,15 @@ const SCRAPE_POST_DETAIL_SCRIPT = `(() => {
   shareCount = parseCount(/(\\d[\\d,]*)\\s+reposts?/i);
 
   // --- Timestamp ---
-  const timeEl = scope.querySelector('time');
-  if (timeEl) {
-    const dt = timeEl.getAttribute('datetime');
-    if (dt) timestamp = dt;
-  }
-  if (!timestamp) {
-    const scopeText = scope.textContent || '';
-    const timeMatch = scopeText.match(/(?:^|\\s)(\\d+[smhdw])(?:\\s|$|\\u00B7|\\xB7)/);
-    if (timeMatch) timestamp = timeMatch[1];
-  }
+  // The SDUI post-detail page has NO <time> element inside the post
+  // container (verified across all 4 post types).  Extract the
+  // relative-time prefix from container textContent: "<degree>2w •",
+  // "<degree>1mo •", etc.  "Edited" is a status flag, not a timestamp,
+  // so it is intentionally excluded from the alternation.
+  const scopeText = scope.textContent || '';
+  const timeMatch = scopeText.match(/(?:1st|2nd|3rd|You)(\\d+[smhdw]|[1-9]\\d*mo)\\s+•/) ||
+                     scopeText.match(/(?:^|\\s)(\\d+[smhdw]|[1-9]\\d*mo)\\s+•/);
+  if (timeMatch) timestamp = timeMatch[1];
 
   return {
     authorName,
@@ -209,46 +241,85 @@ const SCRAPE_POST_DETAIL_SCRIPT = `(() => {
  * JavaScript source evaluated inside the LinkedIn post detail page to
  * extract visible comments from the DOM.
  *
- * Comments are rendered as `article` elements containing an author link
- * and text content.  Only first-page (visible) comments are extracted;
- * "Load more" is not clicked.
+ * Post-2026-05 LinkedIn migrated comments from
+ * `<article class="comments-comment-entity" data-id="urn:li:comment:..." />`
+ * to `<div componentkey="replaceableComment_<URN>">` (lhremote#776).
+ * Each logical comment renders as 3 nested elements sharing the same
+ * `componentkey`; pick the OUTERMOST (max descendants) per URN to avoid
+ * triple-counting.  See `research/linkedin/post-detail-comment-dom-react-sdui-20260506.md`
+ * § 3 (comment DOM) and `post-detail-body-dom-react-sdui-20260507.md` § 6
+ * (sister regression for `get-post.ts`).
  */
 const SCRAPE_COMMENTS_SCRIPT = `(() => {
-  const comments = [];
-  const articles = document.querySelectorAll('article');
+  // SDUI: dedupe by componentkey, picking the outermost element per URN.
+  // Each logical comment renders as 3 nested elements sharing the same
+  // componentkey (per the May 6 research).  The outermost element is the
+  // one whose parent does NOT share its componentkey — checking the
+  // parent is O(1) per element vs O(subtree-size) for descendant counting,
+  // which matters on long comment lists.
+  const allEls = document.querySelectorAll('[componentkey^="replaceableComment_"]');
+  const byUrn = new Map();
+  for (const el of allEls) {
+    const ck = el.getAttribute('componentkey') || '';
+    const parentCk = el.parentElement && el.parentElement.getAttribute('componentkey');
+    if (parentCk === ck) continue; // not outermost
+    const urn = ck.replace(/^replaceableComment_/, '');
+    byUrn.set(urn, el);
+  }
 
-  for (const article of articles) {
-    if (article.offsetHeight < 30) continue;
+  const comments = [];
+  for (const comment of byUrn.values()) {
+    if (comment.offsetHeight < 30) continue;
 
     // --- Author ---
     let authorName = '';
     let authorHeadline = null;
     let authorPublicId = null;
-    const authorLink = article.querySelector('a[href*="/in/"]');
 
+    const authorLink = comment.querySelector('a[href*="/in/"]');
     if (authorLink) {
-      const nameSpan = authorLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]');
-      authorName = nameSpan ? (nameSpan.textContent || '').trim() : '';
-      if (!authorName) {
-        authorName = (authorLink.textContent || '').trim().split('\\n')[0].trim();
-      }
-      if (!authorName) {
-        const parent = authorLink.closest('div');
-        if (parent) {
-          const nearby = parent.querySelector('span[dir="ltr"], span[aria-hidden="true"]');
-          if (nearby) authorName = (nearby.textContent || '').trim();
-        }
-      }
-
-      const href = authorLink.href.split('?')[0] || '';
+      const href = (authorLink.href || '').split('?')[0] || '';
       const idMatch = href.match(/\\/in\\/([^/?]+)/);
       if (idMatch) authorPublicId = idMatch[1];
+
+      // Find an anchor (same href as authorLink) with non-empty text.
+      // The textContent has these verified forms:
+      //   "<Name>Author<Headline>"          (post-author commenting)
+      //   "<Name>  • <degree><Name>  • <degree><Headline>" (regular other user)
+      //   "<Name> Verified Profile <degree><Name>  • <degree><Headline>"
+      //   "<Name> Premium Profile You<Name>  • You<Headline>"
+      // Take everything before the first " • <degree>" or "Author" suffix.
+      //
+      // Iterate and compare attribute values directly rather than building a
+      // CSS attribute selector via concatenation — see post-author scraper
+      // above (same defense against CSS-special characters in raw hrefs).
+      const targetHref = authorLink.getAttribute('href');
+      for (const a of comment.querySelectorAll('a')) {
+        if (a.getAttribute('href') !== targetHref) continue;
+        const t = (a.textContent || '').trim();
+        if (t.length === 0) continue;
+        const m = t.match(/^(.+?)(?:\\s+•\\s+(?:1st|2nd|3rd|Out of network|You)|Author)/);
+        let raw = m ? m[1] : t.split('\\n')[0];
+        // Strip "Verified Profile" / "Premium Profile" decorations and any
+        // duplicated name that LinkedIn injects after them.  The badge
+        // can appear mid-string in forms like
+        //   "Alexey Pelykh Premium Profile YouAlexey Pelykh" (regex match
+        //    captured up to the first " • You" position),
+        // so anchoring on Profile-end-of-string would miss it.  Truncate
+        // from the first badge-token occurrence onwards.
+        raw = raw.replace(/\\s+(?:Verified|Premium)\\s+Profile\\b.*$/, '').trim();
+        if (raw.length > 0) {
+          authorName = raw;
+          break;
+        }
+      }
     }
 
     // --- Author headline ---
-    const spans = article.querySelectorAll('span');
-    for (const span of spans) {
-      const txt = (span.textContent || '').trim();
+    // Apply same headline heuristics as the post body, scoped to comment.
+    const headlineCandidates = comment.querySelectorAll('p, span');
+    for (const el of headlineCandidates) {
+      const txt = (el.textContent || '').trim();
       if (
         txt &&
         txt.length > 5 &&
@@ -256,7 +327,10 @@ const SCRAPE_COMMENTS_SCRIPT = `(() => {
         txt !== authorName &&
         !txt.match(/^\\d+[smhdw]$/) &&
         !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
-        !txt.match(/^Reply$|^Like$/i)
+        !txt.match(/^Reply$|^Like$|^Author$|^You$/i) &&
+        !txt.match(/^(?:Verified|Premium)\\s+Profile$/) &&
+        !txt.match(/Reaction button state:/) &&
+        !txt.includes('•')
       ) {
         authorHeadline = txt;
         break;
@@ -264,11 +338,19 @@ const SCRAPE_COMMENTS_SCRIPT = `(() => {
     }
 
     // --- Comment text ---
+    // expandable-text-box does NOT exist inside comments (only in post
+    // body); use longest text leaf approach scoped to the comment.
     let text = '';
-    const ltrSpans = article.querySelectorAll('span[dir="ltr"]');
-    for (const span of ltrSpans) {
-      const txt = (span.textContent || '').trim();
+    const textCandidates = comment.querySelectorAll('p, span');
+    for (const el of textCandidates) {
+      const txt = (el.textContent || '').trim();
       if (txt.length > text.length && txt !== authorName && txt !== authorHeadline) {
+        // Skip composite spans that contain author info
+        if (authorName && authorHeadline && txt.includes(authorName) && txt.includes(authorHeadline)) continue;
+        // Skip Reaction button state mirrors
+        if (/Reaction button state:/.test(txt)) continue;
+        // Skip degree-suffix composites
+        if (/\\s+•\\s+(?:1st|2nd|3rd|You|Out of network)/.test(txt) && txt.length < 60) continue;
         text = txt;
       }
     }
@@ -276,21 +358,20 @@ const SCRAPE_COMMENTS_SCRIPT = `(() => {
     // Skip if no meaningful content
     if (!text && !authorName) continue;
 
-    // --- Comment URN ---
-    const commentUrn = article.getAttribute('data-id') || null;
+    // --- Comment URN (from componentkey, SDUI format) ---
+    const ck = comment.getAttribute('componentkey') || '';
+    const commentUrn = ck.replace(/^replaceableComment_/, '') || null;
 
-    // --- Timestamp ---
+    // --- Timestamp (relative time pattern; SDUI page has no <time>) ---
     let createdAt = null;
-    const timeEl = article.querySelector('time');
-    if (timeEl) {
-      const dt = timeEl.getAttribute('datetime');
-      if (dt) createdAt = dt;
-    }
+    const commentText = comment.textContent || '';
+    const timeMatch = commentText.match(/(?:1st|2nd|3rd|You)(\\d+[smhdw]|[1-9]\\d*mo)/) ||
+                      commentText.match(/(?:^|\\s)(\\d+[smhdw]|[1-9]\\d*mo)(?:\\s|$)/);
+    if (timeMatch) createdAt = timeMatch[1];
 
-    // --- Reaction count ---
+    // --- Reaction count (existing pattern) ---
     let reactionCount = 0;
-    const articleText = article.textContent || '';
-    const likesMatch = articleText.match(/(\\d[\\d,]*)\\s+reactions?/i);
+    const likesMatch = commentText.match(/(\\d[\\d,]*)\\s+reactions?/i);
     if (likesMatch) {
       reactionCount = parseInt(likesMatch[1].replace(/,/g, ''), 10) || 0;
     }
@@ -439,11 +520,18 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
     // --- Comment loading ---
     // Click "Load more comments" repeatedly until we have enough or no more
     // are available.  Each click loads an additional batch of comments.
+    //
+    // Post-2026-05 SDUI: comments are 3-nested elements sharing
+    // `componentkey="replaceableComment_<URN>"`.  Count distinct logical
+    // comments by picking the OUTERMOST element per URN (parent componentkey
+    // differs from this element's), matching the SCRAPE_COMMENTS_SCRIPT
+    // dedupe heuristic.  Raw element count would triple-overshoot
+    // maxComments.  See lhremote#776 / #800.
     const maxLoadMoreAttempts = 20;
     if (maxComments > 0) {
       for (let attempt = 0; attempt < maxLoadMoreAttempts; attempt++) {
         const currentCount = await client.evaluate<number>(
-          `document.querySelectorAll('article').length`,
+          `(function () { let n = 0; document.querySelectorAll('[componentkey^="replaceableComment_"]').forEach(function (el) { const ck = el.getAttribute('componentkey'); if (!ck) return; const parentCk = el.parentElement && el.parentElement.getAttribute('componentkey'); if (parentCk !== ck) n++; }); return n; })()`,
         );
         if (currentCount >= maxComments) break;
 
@@ -460,7 +548,12 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
     const limited = maxComments > 0 ? allRaw.slice(0, maxComments) : [];
 
     const comments: PostComment[] = limited.map((c) => ({
-      commentUrn: c.commentUrn,
+      // Renormalize to legacy URN shape so get-post's API output stays
+      // backward-compatible with pre-SDUI consumers (the SDUI rewrite
+      // changed the in-DOM URN format from `(activity:N,M)` to
+      // `(urn:li:activity:N,M)`; without renormalization we'd silently
+      // break that contract).
+      commentUrn: c.commentUrn ? denormalizeCommentUrnToLegacy(c.commentUrn) : null,
       authorName: c.authorName,
       authorHeadline: c.authorHeadline,
       authorPublicId: c.authorPublicId,

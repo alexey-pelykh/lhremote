@@ -352,8 +352,14 @@ export function extractHashtags(text: string | null): string[] {
 }
 
 /**
- * Parse a relative timestamp string (e.g. "52m", "16h", "2d", "1w") or an
- * ISO date into epoch milliseconds.  Returns null for unrecognised formats.
+ * Parse a relative timestamp string (e.g. "52m", "16h", "2d", "1w", "1mo") or
+ * an ISO date into epoch milliseconds.  Returns null for unrecognised formats.
+ *
+ * The `mo` (month) unit is approximated as 30 days — LinkedIn emits `Nmo`
+ * for posts ~30-330 days old (per `getPost`'s post-detail body extraction);
+ * without it, the `Nmo` regex match in `get-post.ts` would still produce
+ * `null` here, silently dropping `publishedAt` for older posts.  The 30-day
+ * approximation is consistent with LinkedIn's own UX (which also rounds).
  */
 export function parseTimestamp(raw: string | null): number | null {
   if (!raw) return null;
@@ -362,8 +368,10 @@ export function parseTimestamp(raw: string | null): number | null {
   const asDate = Date.parse(raw);
   if (!isNaN(asDate)) return asDate;
 
-  // Relative time: Ns, Nm, Nh, Nd, Nw
-  const match = raw.match(/^(\d+)([smhdw])$/);
+  // Relative time: Ns, Nm, Nh, Nd, Nw, Nmo (mo = ~30 days).  The alternation
+  // tries `mo` before `[smhdw]` so `1mo` matches `mo` (longer alternative),
+  // not `m` followed by leftover `o`.
+  const match = raw.match(/^(\d+)(mo|[smhdw])$/);
   if (!match) return null;
 
   const value = parseInt(match[1] ?? "0", 10);
@@ -376,6 +384,7 @@ export function parseTimestamp(raw: string | null): number | null {
     h: 3_600_000,
     d: 86_400_000,
     w: 604_800_000,
+    mo: 2_592_000_000,
   };
 
   return now - value * (multipliers[unit] ?? 0);

@@ -11,8 +11,8 @@ import type { CDPClient } from "./client.js";
 // Selectors used by both the readiness predicate ({@link waitForPostLoad}) and
 // the diagnostic probe ({@link capturePostLoadFailure}).  Centralizing them
 // keeps the two aligned: the predicate's joined disjunction is exactly the
-// union of the three probes the diagnostic reports individually, so a future
-// timeout's "which-of-three-is-missing" signal stays accurate by definition.
+// union of the probes the diagnostic reports individually, so a future
+// timeout's "which-of-N-is-missing" signal stays accurate by definition.
 // ----------------------------------------------------------------------------
 
 /**
@@ -39,19 +39,41 @@ const POST_AUTHOR_LINK_DOCUMENT_WIDE_SELECTOR =
 // the post has hydrated far enough for downstream extraction; any single
 // match satisfies the readiness predicate.  The diagnostic probe reports
 // each individually so a future timeout produces a precise
-// "which-of-three-is-missing" signal.
+// "which-of-N-is-missing" signal.
+//
+// Hardened 2026-05-07 (lhremote#800): the original `React Like to ` and
+// `Comment on` markers verified DEAD across all 4 probed post types in the
+// React/SDUI rewrite; only `Text editor for creating` survives at the
+// aria-label layer.  Adds `Open reactions menu` (new aria-label for the
+// post-level reactions opener — replaces the direct-Like trigger) and
+// the structural componentkey marker `expanded{POSTID_HASH}FeedType_FEED_DETAIL`
+// (the post-detail container — survives aria-label rotation).
 const POST_REACT_LIKE_SELECTOR =
   'main button[aria-label^="React Like to "]';
 const POST_COMMENT_ON_SELECTOR =
   'main button[aria-label^="Comment on"]';
 const POST_EDITOR_SELECTOR =
   'main [role="textbox"][aria-label^="Text editor for creating"]';
+const POST_REACTIONS_MENU_SELECTOR =
+  'main button[aria-label="Open reactions menu"]';
+const POST_DETAIL_CONTAINER_SELECTOR =
+  '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]';
 
-/** Comma-separated disjunction of the three interaction markers. */
+/**
+ * Comma-separated disjunction of all interaction markers.  The first
+ * three are the legacy aria-label-based signals (POST_REACT_LIKE_SELECTOR
+ * and POST_COMMENT_ON_SELECTOR are kept for defensive coverage in case
+ * LinkedIn restores them; both currently match 0 elements).  The last
+ * two are the lhremote#800 hardening — aria-label `Open reactions menu`
+ * (verified across 4 post types post-2026-05) plus the structural
+ * componentkey marker (immune to aria-label rotation).
+ */
 const POST_INTERACTION_SELECTOR = [
   POST_REACT_LIKE_SELECTOR,
   POST_COMMENT_ON_SELECTOR,
   POST_EDITOR_SELECTOR,
+  POST_REACTIONS_MENU_SELECTOR,
+  POST_DETAIL_CONTAINER_SELECTOR,
 ].join(", ");
 
 /**
@@ -172,7 +194,8 @@ interface CaptureCancellationState {
  * mainFeedListItemCount, mainFeedListItemsWithMenuButton,
  * mainFeedListItemsViableForPostScrape, hasAuthorLink,
  * hasAuthorLinkInMain, hasLtrSpans, hasArticles, hasReactLikeButton,
- * hasCommentOnButton, hasTopLevelEditor, bodyTextSnippet }` —
+ * hasCommentOnButton, hasTopLevelEditor, hasReactionsMenu,
+ * hasPostDetailContainer, bodyTextSnippet }` —
  * mirrors the container-selection logic in
  * `SCRAPE_POST_DETAIL_SCRIPT`: it scopes from `<main>` (fallback) →
  * `[data-testid="mainFeed"]` → `div[role="listitem"]` inside that
@@ -195,6 +218,15 @@ interface CaptureCancellationState {
  * `hasCommentOnButton`, `hasTopLevelEditor`) shadow
  * {@link waitForPostLoad}'s readiness selectors so a timeout pins
  * exactly which post-anchored signal is missing.
+ *
+ * The lhremote#800 hardening probes (`hasReactionsMenu`,
+ * `hasPostDetailContainer`) cover the new SDUI-era markers — the
+ * `Open reactions menu` aria-label that replaces the dead
+ * `React Like to ` trigger, and the structural componentkey marker
+ * for the post-detail container.  A future timeout that fires after
+ * `hasReactLikeButton` and `hasCommentOnButton` go dead but before
+ * `hasReactionsMenu` / `hasPostDetailContainer` arrive will pin the
+ * regression to the SDUI marker layer specifically.
  *
  * Mirrors the diagnostic-capture pattern documented in ADR-007 for
  * `navigateToProfile` — same env var, same artifact structure, same
@@ -270,6 +302,8 @@ async function capturePostLoadFailureInner(
     hasReactLikeButton: boolean;
     hasCommentOnButton: boolean;
     hasTopLevelEditor: boolean;
+    hasReactionsMenu: boolean;
+    hasPostDetailContainer: boolean;
     bodyTextSnippet: string;
   }>(`(() => {
     const mainFeed = document.querySelector('[data-testid="mainFeed"]');
@@ -303,6 +337,8 @@ async function capturePostLoadFailureInner(
       hasReactLikeButton: document.querySelector('${POST_REACT_LIKE_SELECTOR}') !== null,
       hasCommentOnButton: document.querySelector('${POST_COMMENT_ON_SELECTOR}') !== null,
       hasTopLevelEditor: document.querySelector('${POST_EDITOR_SELECTOR}') !== null,
+      hasReactionsMenu: document.querySelector('${POST_REACTIONS_MENU_SELECTOR}') !== null,
+      hasPostDetailContainer: document.querySelector('${POST_DETAIL_CONTAINER_SELECTOR}') !== null,
       bodyTextSnippet: (document.body ? document.body.innerText : "").slice(0, 800),
     };
   })()`);

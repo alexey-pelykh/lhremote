@@ -148,6 +148,86 @@ export const COMMENT_REACTIONS_MENU =
 // ── React-stack post detail (LinkedIn 2026-05 SDUI rewrite) ──────
 
 /**
+ * Outer post-detail container on the React/SDUI post-detail page.
+ *
+ * **Stack note**: as of LinkedIn's React/SDUI post-detail rewrite (live by
+ * 2026-05), the post body is wrapped by a div whose `componentkey` matches
+ * `expanded{POSTID_HASH}FeedType_FEED_DETAIL`.  Two nested elements share
+ * the same key.  This container's descendants are exactly the post body
+ * (author avatar/name links, headline, post text, post-level reaction
+ * trigger) — the comment list is a SIBLING, not a descendant, so this
+ * scope cleanly excludes comment-author and comment-text content.
+ *
+ * **Why this selector**: the legacy `[data-testid="mainFeed"]` →
+ * `div[role="listitem"]` cascade silently falls through to `<main>` after
+ * the SDUI rewrite, causing the FIRST `a[href*="/in/"]` inside `<main>`
+ * (which is the LinkedIn Premium upsell banner pointing at the current
+ * user's profile) to be selected as the post author.  Scoping by this
+ * componentkey prefix is the verified-stable mechanism for excluding
+ * sidebar / chrome / comment-list anchors.
+ *
+ * See `research/linkedin/post-detail-body-dom-react-sdui-20260507.md` and
+ * lhremote issue #800.
+ */
+export const POST_DETAIL_CONTAINER =
+  '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]';
+
+/**
+ * Fallback scope: SDUI screen wrapper for the post-detail page.
+ *
+ * Used when {@link POST_DETAIL_CONTAINER} doesn't match (e.g., LinkedIn
+ * renames the `expanded` prefix).  This selector targets the screen-level
+ * SDUI marker which has been stable since the May 2026 rewrite — but it
+ * INCLUDES the comment list as a descendant, so callers must additionally
+ * exclude `[data-component-type="LazyColumn"]` and
+ * `[componentkey^="replaceableComment_"]` when used as a post-author scope.
+ */
+export const POST_DETAIL_SDUI_SCREEN =
+  '[data-sdui-screen="com.linkedin.sdui.flagshipnav.feed.UpdateDetail"]';
+
+/**
+ * Post body text leaf — primary selector.
+ *
+ * The post body text is rendered as a `<span>` with `data-testid="expandable-text-box"`
+ * inside a `<p componentkey="feed-commentary_{UUID}">` wrapper.  This SPAN
+ * is a leaf (no nested elements split the text), so its `textContent` is
+ * the full post body verbatim.
+ *
+ * Absent on very short posts (below the truncation threshold — observed
+ * at ~25 characters).  Use {@link POST_DETAIL_BODY_COMMENTARY_WRAPPER} as
+ * the fallback when this selector returns null.
+ */
+export const POST_DETAIL_BODY_TEXT_LEAF =
+  '[data-testid="expandable-text-box"]';
+
+/**
+ * Post body wrapper — fallback selector.
+ *
+ * The `<p>` element wrapping {@link POST_DETAIL_BODY_TEXT_LEAF}.  Used
+ * when the leaf SPAN is absent (very short posts).  May contain
+ * additional whitespace from the wrapper's own structure, but is
+ * still scoped to the post body only.
+ */
+export const POST_DETAIL_BODY_COMMENTARY_WRAPPER =
+  '[componentkey^="feed-commentary_"]';
+
+/**
+ * Post-level reactions menu opener (NEW marker post-2026-05 rewrite).
+ *
+ * Replaces the legacy `button[aria-label^="React Like to "]` direct-Like
+ * trigger which is gone from the SDUI post-detail page (verified across
+ * regular / share / ugcPost / self-authored URLs).  The new aria-label is
+ * shared between post-level AND comment-level reaction openers; scope to
+ * the post container (or to a specific comment article) to disambiguate.
+ *
+ * For wait-for-post-load.ts readiness, this is the post-level analog of
+ * {@link COMMENT_REACTIONS_MENU} — they share the same selector but
+ * different scopes.
+ */
+export const POST_REACTIONS_MENU =
+  'button[aria-label="Open reactions menu"]';
+
+/**
  * Selects ANY comment article on the post-detail page.
  *
  * **Stack note**: as of LinkedIn's React/SDUI post-detail rewrite (live by
@@ -207,6 +287,35 @@ export function normalizeCommentUrnForReactStack(urn: string): string {
     const postId = legacy[2];
     const commentId = legacy[3];
     return `urn:li:comment:(urn:li:${type}:${postId},${commentId})`;
+  }
+  return urn;
+}
+
+/**
+ * Convert a React-stack comment URN (`urn:li:comment:(urn:li:activity:N,M)`)
+ * back to the legacy format (`urn:li:comment:(activity:N,M)`).
+ *
+ * Inverse of {@link normalizeCommentUrnForReactStack}.  Used by `get-post` to
+ * preserve API output stability — `get-post`'s `commentUrn` field has emitted
+ * the legacy shape since the operation existed; the SDUI rewrite would
+ * silently change the format if URNs were extracted directly from
+ * `componentkey` without renormalization.  Callers that downstream pass the
+ * URN to `comment-on-post` or `react-to-comment` are unaffected because
+ * those skills accept both forms (and re-normalize to SDUI for DOM lookups).
+ *
+ * @returns the legacy-format URN if the input matches the React-stack form;
+ *          otherwise returns the input unchanged (idempotent for legacy form
+ *          and inputs that don't match either pattern).
+ */
+export function denormalizeCommentUrnToLegacy(urn: string): string {
+  // SDUI:    urn:li:comment:(urn:li:activity:N,M)
+  // Legacy:  urn:li:comment:(activity:N,M)
+  const sdui = /^urn:li:comment:\(urn:li:(\w+):(\d+),(\d+)\)$/.exec(urn);
+  if (sdui) {
+    const type = sdui[1];
+    const postId = sdui[2];
+    const commentId = sdui[3];
+    return `urn:li:comment:(${type}:${postId},${commentId})`;
   }
   return urn;
 }

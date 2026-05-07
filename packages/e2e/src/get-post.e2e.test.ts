@@ -21,14 +21,33 @@ import { createMockServer } from "@lhremote/mcp/testing";
 
 /**
  * Fetch a fresh post URL by scraping the feed.  Returns the URL of the
- * first feed post, or `undefined` when the feed returns no posts or the
- * first post has no URL.
+ * first member-authored feed post that ALSO has at least one comment
+ * (i.e. `authorProfileUrl` contains `/in/{publicId}/` AND
+ * `commentCount > 0`).  Two filters, both load-bearing for the
+ * lhremote#800 regression guards below:
+ *
+ * - The `/in/` filter excludes company posts, promoted slots, and edge
+ *   feed items that legitimately yield `authorPublicId: null` and
+ *   would trip the `authorPublicId !== null` regression guard.
+ * - The `commentCount > 0` filter ensures the
+ *   `commentCount > 0 → comments.length > 0` regression guard
+ *   actually fires; without it, picking a comment-less post would
+ *   silently bypass that check and leave broken comment scraping
+ *   undetected.
+ *
+ * Returns `undefined` when no qualifying post is in the first 10 feed
+ * items.
  */
 async function fetchPostUrlFromFeed(cdpPort: number): Promise<string | undefined> {
   const { getFeed } = await import("@lhremote/core");
-  const result = await getFeed({ cdpPort, count: 1 });
-  const first = result.posts[0];
-  return first?.url ?? undefined;
+  const result = await getFeed({ cdpPort, count: 10 });
+  for (const post of result.posts) {
+    if (!post.url) continue;
+    if (!post.authorProfileUrl?.includes("/in/")) continue;
+    if (post.commentCount <= 0) continue;
+    return post.url;
+  }
+  return undefined;
 }
 
 describeE2E("get-post operation", () => {
@@ -128,6 +147,7 @@ describeE2E("get-post operation", () => {
         .join("");
       const parsed = JSON.parse(output) as GetPostOutput;
 
+      // ── Structural assertions ──────────────────────────────────
       expect(parsed.post).toHaveProperty("postUrn");
       expect(typeof parsed.post.postUrn).toBe("string");
       expect(typeof parsed.post.authorName).toBe("string");
@@ -137,7 +157,51 @@ describeE2E("get-post operation", () => {
       expect(Array.isArray(parsed.comments)).toBe(true);
       expect(parsed.commentsPaging).toHaveProperty("total");
 
-      // Verify commentUrn extraction (was previously hardcoded to null)
+      // ── Semantic assertions (lhremote#800 regression guards) ───
+      // The 2026-05 regression returned `authorName === "Premium"`,
+      // empty text, and empty comments[] even when commentCount > 0.
+      // These assertions catch that exact failure mode.
+
+      // (1) authorName must NOT be a LinkedIn UI string (the regression's
+      // signature value was "Premium" — the badge text from the Premium
+      // upsell banner).
+      const UI_STRING_BLOCKLIST = [
+        "Premium",
+        "Following",
+        "Follow",
+        "Connect",
+        "Pending",
+        "Comment",
+        "Share",
+        "Like",
+        "Repost",
+        "Send",
+        "Save",
+        "Report",
+        "Promoted",
+        "Boost",
+      ];
+      expect(parsed.post.authorName).not.toBe("");
+      expect(UI_STRING_BLOCKLIST).not.toContain(parsed.post.authorName);
+
+      // (2) authorPublicId must be set (the regression returned the
+      // current user's publicId — without an account-publicId helper the
+      // strict "!== currentAccountPublicId" check is deferred; use the
+      // weaker "non-null" check here).
+      expect(parsed.post.authorPublicId).not.toBeNull();
+
+      // (3) Comments array must populate.  fetchPostUrlFromFeed
+      // selected a post with commentCount > 0, so this assertion is
+      // unconditional — the regression returned `comments: []` even
+      // for posts with non-zero commentCount, and a conditional guard
+      // would silently let comment-scraping regressions through if
+      // the precondition ever drifted.
+      expect(parsed.post.commentCount).toBeGreaterThan(0);
+      expect(parsed.commentsPaging.total).toBeGreaterThan(0);
+      expect(parsed.comments.length).toBeGreaterThan(0);
+
+      // (4) Verify commentUrn extraction (was previously hardcoded to
+      // null; SDUI format includes the `(urn:li:activity:` qualifier).
       if (parsed.comments.length > 0) {
         const firstComment = parsed.comments[0];
         expect(firstComment.commentUrn).not.toBeNull();

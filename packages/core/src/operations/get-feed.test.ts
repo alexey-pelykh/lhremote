@@ -733,6 +733,30 @@ describe("parseTimestamp", () => {
     expect(Math.abs((now - 604_800_000) - (result as number))).toBeLessThan(1000);
   });
 
+  it("parses months", () => {
+    const now = Date.now();
+    const result = parseTimestamp("1mo");
+    expect(result).toBeTypeOf("number");
+    expect(Math.abs((now - 2_592_000_000) - (result as number))).toBeLessThan(1000);
+  });
+
+  it("parses multi-digit months", () => {
+    const now = Date.now();
+    const result = parseTimestamp("11mo");
+    expect(result).toBeTypeOf("number");
+    expect(Math.abs((now - 11 * 2_592_000_000) - (result as number))).toBeLessThan(1000);
+  });
+
+  it("treats 'm' as minutes, not the start of 'mo'", () => {
+    // Regex alternation orders `mo` before `[smhdw]` so `1mo` matches `mo`,
+    // but `1m` (without `o`) must still match minutes — confirms the
+    // alternation does not over-eagerly consume `m`.
+    const now = Date.now();
+    const result = parseTimestamp("5m");
+    expect(result).toBeTypeOf("number");
+    expect(Math.abs((now - 5 * 60_000) - (result as number))).toBeLessThan(1000);
+  });
+
   it("parses ISO datetime", () => {
     expect(parseTimestamp("2026-03-25T10:00:00Z")).toBe(
       Date.parse("2026-03-25T10:00:00Z"),
