@@ -475,6 +475,12 @@ export {
   withLoggedInStateRetry,
   withLoggedInStateRetryAtPort,
   type WithLoggedInStateRetryOptions,
+  // LH-internal collect saga monitor (#792)
+  MonitorCollectingSagaTimeoutError,
+  monitorCollectingSaga,
+  type MonitorCollectingSagaOptions,
+  type MonitorCollectingSagaResult,
+  type UnrecoverablePopup,
 } from "./operations/index.js";
 
 // LinkedIn DOM automation & selectors

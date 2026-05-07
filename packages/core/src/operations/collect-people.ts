@@ -9,6 +9,11 @@ import { CollectionError } from "../services/errors.js";
 import { CampaignRepository } from "../db/index.js";
 import { detectSourceType, validateSourceType } from "../services/source-type-registry.js";
 import { buildCdpOptions, type ConnectionOptions } from "./types.js";
+import {
+  monitorCollectingSaga,
+  type MonitorCollectingSagaResult,
+  type UnrecoverablePopup,
+} from "./monitor-collecting-saga.js";
 import { waitForLoggedInState } from "./wait-for-logged-in-state.js";
 
 /**
@@ -27,6 +32,22 @@ export interface CollectPeopleInput extends ConnectionOptions {
   readonly pageSize?: number;
   /** Explicit source type to bypass URL detection. */
   readonly sourceType?: string;
+  /**
+   * When `true`, after firing the LH-internal collect saga, monitor the
+   * saga to completion and auto-dismiss recoverable
+   * `IncorrectContentStateError` popups (LH's transient retry noise — see
+   * #792).  Default `false` preserves the historical fire-and-forget
+   * contract: callers that want a quick return continue to poll
+   * `campaign-status` for progress.
+   *
+   * When set, the operation BLOCKS until either the saga reaches idle or
+   * {@link CollectPeopleInput.monitorTimeout} elapses.  Saga durations
+   * are measured in minutes (≤9 min observed empirically), so callers
+   * should size their own timeouts accordingly.
+   */
+  readonly monitor?: boolean;
+  /** Timeout in ms for the saga monitor (default 600_000 — 10 min). Ignored when {@link CollectPeopleInput.monitor} is not `true`. */
+  readonly monitorTimeout?: number;
 }
 
 /**
@@ -36,6 +57,14 @@ export interface CollectPeopleOutput {
   readonly success: true;
   readonly campaignId: number;
   readonly sourceType: SourceType;
+  /** Total time the saga monitor ran, in ms.  Only populated when {@link CollectPeopleInput.monitor} is `true` and the saga reached idle. */
+  readonly sagaDurationMs?: number;
+  /** Number of polling iterations on which a recoverable popup was dismissed.  Only populated when {@link CollectPeopleInput.monitor} is `true`. */
+  readonly recoveryEvents?: number;
+  /** Total individual popups dismissed during the monitored saga.  Only populated when {@link CollectPeopleInput.monitor} is `true`. */
+  readonly popupsDismissed?: number;
+  /** Unrecoverable popups observed during the monitored saga, deduplicated by title.  Only populated when {@link CollectPeopleInput.monitor} is `true`. */
+  readonly unrecoverablePopups?: readonly UnrecoverablePopup[];
 }
 
 /**
@@ -98,10 +127,26 @@ export async function collectPeople(
     const collectionService = new CollectionService(instance);
     await collectionService.collect(input.sourceUrl, input.campaignId, actionId);
 
+    let monitorResult: MonitorCollectingSagaResult | undefined;
+    if (input.monitor === true) {
+      monitorResult = await monitorCollectingSaga(
+        instance,
+        input.monitorTimeout !== undefined
+          ? { timeout: input.monitorTimeout }
+          : {},
+      );
+    }
+
     return {
       success: true as const,
       campaignId: input.campaignId,
       sourceType,
+      ...(monitorResult && {
+        sagaDurationMs: monitorResult.durationMs,
+        recoveryEvents: monitorResult.recoveryEvents,
+        popupsDismissed: monitorResult.popupsDismissed,
+        unrecoverablePopups: monitorResult.unrecoverablePopups,
+      }),
     };
   });
 }

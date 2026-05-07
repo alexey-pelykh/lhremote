@@ -378,6 +378,15 @@ export {
   type WithLoggedInStateRetryOptions,
 } from "./with-logged-in-state-retry.js";
 
+// LH-internal collect saga monitor (see #792)
+export {
+  MonitorCollectingSagaTimeoutError,
+  monitorCollectingSaga,
+  type MonitorCollectingSagaOptions,
+  type MonitorCollectingSagaResult,
+  type UnrecoverablePopup,
+} from "./monitor-collecting-saga.js";
+
 // URL building & entity resolution
 export {
   buildLinkedInUrl,
