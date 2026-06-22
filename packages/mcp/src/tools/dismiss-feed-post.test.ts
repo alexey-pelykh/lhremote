@@ -3,12 +3,12 @@
 
 import { afterEach, beforeEach, describe, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return { ...actual, dismissFeedPost: vi.fn() };
 });
 
-import { dismissFeedPost } from "@lhremote/core";
+import { dismissFeedPost } from "@insoftex/lhremote-core";
 
 import { registerDismissFeedPost } from "./dismiss-feed-post.js";
 import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";

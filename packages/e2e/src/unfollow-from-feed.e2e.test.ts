@@ -10,7 +10,7 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
@@ -18,12 +18,12 @@ import {
   dismissErrors,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
-import type { UnfollowFromFeedOutput } from "@lhremote/core";
+} from "@insoftex/lhremote-core";
+import type { UnfollowFromFeedOutput } from "@insoftex/lhremote-core";
 
 // MCP tool registrations
-import { registerUnfollowFromFeed } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerUnfollowFromFeed } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("unfollow-from-feed operation", () => {
   let app: AppService;

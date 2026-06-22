@@ -7,11 +7,11 @@ import {
   discoverAllDatabases,
   ProfileNotFoundError,
   ProfileRepository,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#query-profile | query-profile} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#query-profile | query-profile} MCP tool. */
 export function registerQueryProfile(server: McpServer): void {
   server.tool(
     "query-profile",

@@ -4,11 +4,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   campaignRetry,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-retry | campaign-retry} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-retry | campaign-retry} MCP tool. */
 export function registerCampaignRetry(server: McpServer): void {
   server.tool(
     "campaign-retry",

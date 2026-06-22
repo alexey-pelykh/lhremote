@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, launchApp, quitApp } from "@lhremote/core/testing";
-import { type AppService, type DismissErrorsOutput, dismissErrors } from "@lhremote/core";
-import { handleDismissErrors, handleLaunchApp } from "@lhremote/cli/handlers";
-import { registerDismissErrors, registerLaunchApp } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { describeE2E, launchApp, quitApp } from "@insoftex/lhremote-core/testing";
+import { type AppService, type DismissErrorsOutput, dismissErrors } from "@insoftex/lhremote-core";
+import { handleDismissErrors, handleLaunchApp } from "@insoftex/lhremote-cli/handlers";
+import { registerDismissErrors, registerLaunchApp } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("Error handling and lifecycle", () => {
   let app: AppService;

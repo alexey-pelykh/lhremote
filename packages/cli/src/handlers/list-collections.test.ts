@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     DatabaseClient: vi.fn(),
@@ -13,7 +13,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   };
 });
 
-import { type CollectionSummary, CollectionListRepository } from "@lhremote/core";
+import { type CollectionSummary, CollectionListRepository } from "@insoftex/lhremote-core";
 
 import { handleListCollections } from "./list-collections.js";
 import { getStdout, mockDb, mockDiscovery } from "./testing/mock-helpers.js";

@@ -3,15 +3,16 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     AppService: vi.fn(),
+    resolveLauncherPort: vi.fn().mockRejectedValue(new Error("not running")),
   };
 });
 
-import { AppService } from "@lhremote/core";
+import { AppService, resolveLauncherPort } from "@insoftex/lhremote-core";
 
 import { registerQuitApp } from "./quit-app.js";
 import { createMockServer } from "./testing/mock-server.js";
@@ -19,6 +20,7 @@ import { createMockServer } from "./testing/mock-server.js";
 describe("registerQuitApp", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(resolveLauncherPort).mockRejectedValue(new Error("not running"));
   });
 
   afterEach(() => {
@@ -66,6 +68,35 @@ describe("registerQuitApp", () => {
     await handler({ cdpPort: 4567 });
 
     expect(AppService).toHaveBeenCalledWith(4567);
+  });
+
+  it("uses discovered launcher port when cdpPort is omitted", async () => {
+    const { server, getHandler } = createMockServer();
+    registerQuitApp(server);
+
+    vi.mocked(resolveLauncherPort).mockResolvedValue(51544);
+    vi.mocked(AppService).mockImplementation(function () {
+      return { quit: vi.fn().mockResolvedValue(undefined) } as unknown as AppService;
+    });
+
+    const handler = getHandler("quit-app");
+    await handler({});
+
+    expect(AppService).toHaveBeenCalledWith(51544);
+  });
+
+  it("falls back to default port when discovery fails", async () => {
+    const { server, getHandler } = createMockServer();
+    registerQuitApp(server);
+
+    vi.mocked(AppService).mockImplementation(function () {
+      return { quit: vi.fn().mockResolvedValue(undefined) } as unknown as AppService;
+    });
+
+    const handler = getHandler("quit-app");
+    await handler({});
+
+    expect(AppService).toHaveBeenCalledWith(9222);
   });
 
   it("returns error response on failure", async () => {

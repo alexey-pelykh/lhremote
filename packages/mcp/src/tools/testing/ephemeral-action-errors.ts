@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CampaignExecutionError, CampaignTimeoutError } from "@lhremote/core";
+import { CampaignExecutionError, CampaignTimeoutError } from "@insoftex/lhremote-core";
 import { describe, expect, it } from "vitest";
 
 import { createMockServer } from "./mock-server.js";

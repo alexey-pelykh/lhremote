@@ -2,12 +2,12 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { assertDefined, describeE2E, forceStopInstance, getE2EPersonId, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
+import { assertDefined, describeE2E, forceStopInstance, getE2EPersonId, launchApp, quitApp, resolveAccountId, retryAsync } from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 // CLI handlers
 import {
@@ -19,7 +19,7 @@ import {
   handleImportPeopleFromCollection,
   handleListCollections,
   handleRemovePeopleFromCollection,
-} from "@lhremote/cli/handlers";
+} from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registration
 import {
@@ -31,8 +31,8 @@ import {
   registerImportPeopleFromCollection,
   registerListCollections,
   registerRemovePeopleFromCollection,
-} from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+} from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 const TEST_COLLECTION_NAME = `E2E Test Collection ${Date.now()}`;
 

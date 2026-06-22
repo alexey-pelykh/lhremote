@@ -4,11 +4,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   campaignExport,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-export | campaign-export} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-export | campaign-export} MCP tool. */
 export function registerCampaignExport(server: McpServer): void {
   server.tool(
     "campaign-export",

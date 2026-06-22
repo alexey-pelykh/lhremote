@@ -6,11 +6,11 @@ import {
   ActionNotFoundError,
   ExcludeListNotFoundError,
   campaignExcludeList,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-exclude-list | campaign-exclude-list} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-exclude-list | campaign-exclude-list} MCP tool. */
 export function registerCampaignExcludeList(server: McpServer): void {
   server.tool(
     "campaign-exclude-list",

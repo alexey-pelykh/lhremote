@@ -2,7 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": ["src/index.ts"],
   "out": "../../build/gh-pages/api",
-  "name": "@lhremote/core",
+  "name": "@insoftex/lhremote-core",
   "readme": "none",
   "excludePrivate": true,
   "excludeInternal": true

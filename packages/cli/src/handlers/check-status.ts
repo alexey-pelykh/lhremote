@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { buildCdpOptions, checkStatus, errorMessage } from "@lhremote/core";
+import { buildCdpOptions, checkStatus, errorMessage } from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | check-status} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#account--instance | check-status} CLI command. */
 export async function handleCheckStatus(options: {
   cdpPort?: number;
   cdpHost?: string;
@@ -31,18 +31,18 @@ export async function handleCheckStatus(options: {
       process.stdout.write("Launcher: not available\n");
     }
 
-    // Instance status
+    // Instance status (process-inspection based — authoritative even when launcher is down)
     if (report.instances.length === 0) {
       process.stdout.write("Instances: none\n");
     } else {
       for (const instance of report.instances) {
         const port =
           instance.cdpPort !== null
-            ? `CDP port ${String(instance.cdpPort)}`
-            : "not running";
-        process.stdout.write(
-          `Instance: ${instance.accountName} (${String(instance.accountId)}) — ${port}\n`,
-        );
+            ? `CDP port ${String(instance.cdpPort)}${instance.connectable ? "" : " (not responding)"}`
+            : "no CDP port";
+        const name = instance.name ?? "unknown";
+        const id = instance.accountId !== null ? String(instance.accountId) : "?";
+        process.stdout.write(`Instance: ${name} (${id}) — ${port}\n`);
       }
     }
 

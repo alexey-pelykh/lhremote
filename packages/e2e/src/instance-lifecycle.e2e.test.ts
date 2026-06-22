@@ -9,7 +9,7 @@ import {
   launchApp,
   quitApp,
   resolveAccountId,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   AppService,
   discoverInstancePort,
@@ -17,10 +17,10 @@ import {
   LauncherService,
   startInstanceWithRecovery,
   WrongPortError,
-} from "@lhremote/core";
-import { handleStartInstance, handleStopInstance } from "@lhremote/cli/handlers";
-import { registerStartInstance, registerStopInstance } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+} from "@insoftex/lhremote-core";
+import { handleStartInstance, handleStopInstance } from "@insoftex/lhremote-cli/handlers";
+import { registerStartInstance, registerStopInstance } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("Instance lifecycle", () => {
   let app: AppService;

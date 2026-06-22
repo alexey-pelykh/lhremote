@@ -3,11 +3,19 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     LauncherService: vi.fn(),
+    waitForInstanceShutdown: vi.fn().mockResolvedValue(undefined),
+    withLauncherQueue: vi.fn(async (op: () => Promise<unknown>) => op()),
+    withLauncherRecovery: vi.fn(
+      async (_launcher: unknown, op: () => Promise<unknown>) => ({
+        result: await op(),
+        launcherRecovered: false,
+      }),
+    ),
   };
 });
 
@@ -15,7 +23,7 @@ import {
   type Account,
   LauncherService,
   LinkedHelperNotRunningError,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { registerStopInstance } from "./stop-instance.js";
 import { createMockServer } from "./testing/mock-server.js";

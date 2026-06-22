@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { enrichProfile } from "@lhremote/core";
+import { enrichProfile } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
@@ -12,7 +12,7 @@ const enrichmentCategorySchema = z.object({
   types: z.array(z.string()).optional(),
 });
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#enrich-profile | enrich-profile} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#enrich-profile | enrich-profile} MCP tool. */
 export function registerEnrichProfile(server: McpServer): void {
   server.tool(
     "enrich-profile",

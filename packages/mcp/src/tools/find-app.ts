@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { findApp } from "@lhremote/core";
+import { findApp } from "@insoftex/lhremote-core";
 import { mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#find-app | find-app} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#find-app | find-app} MCP tool. */
 export function registerFindApp(server: McpServer): void {
   server.tool(
     "find-app",

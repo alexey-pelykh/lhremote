@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getPost } from "@lhremote/core";
+import { getPost } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#get-post | get-post} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#get-post | get-post} MCP tool. */
 export function registerGetPost(server: McpServer): void {
   server.tool(
     "get-post",

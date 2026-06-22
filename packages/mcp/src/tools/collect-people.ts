@@ -7,11 +7,11 @@ import {
   CollectionError,
   collectPeople,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#collect-people | collect-people} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#collect-people | collect-people} MCP tool. */
 export function registerCollectPeople(server: McpServer): void {
   server.tool(
     "collect-people",

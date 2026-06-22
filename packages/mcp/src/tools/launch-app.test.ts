@@ -3,15 +3,15 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     AppService: vi.fn(),
   };
 });
 
-import { AppLaunchError, AppNotFoundError, AppService } from "@lhremote/core";
+import { AppLaunchError, AppNotFoundError, AppService } from "@insoftex/lhremote-core";
 
 import { registerLaunchApp } from "./launch-app.js";
 import { createMockServer } from "./testing/mock-server.js";
@@ -68,6 +68,21 @@ describe("registerLaunchApp", () => {
     await handler({ cdpPort: 4567 });
 
     expect(AppService).toHaveBeenCalledWith(4567, {});
+  });
+
+  it("passes force and visible to AppService constructor", async () => {
+    const { server, getHandler } = createMockServer();
+    registerLaunchApp(server);
+
+    const mockLaunch = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(AppService).mockImplementation(function () {
+      return { launch: mockLaunch, cdpPort: 4567 } as unknown as AppService;
+    });
+
+    const handler = getHandler("launch-app");
+    await handler({ cdpPort: 4567, force: true, visible: false });
+
+    expect(AppService).toHaveBeenCalledWith(4567, { force: true, visible: false });
   });
 
   it("returns error response on AppNotFoundError", async () => {

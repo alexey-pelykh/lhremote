@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { resolveLinkedInEntity } from "@lhremote/core";
+import { resolveLinkedInEntity } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#resolve-linkedin-entity | resolve-linkedin-entity} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#resolve-linkedin-entity | resolve-linkedin-entity} MCP tool. */
 export function registerResolveLinkedInEntity(server: McpServer): void {
   server.tool(
     "resolve-linkedin-entity",

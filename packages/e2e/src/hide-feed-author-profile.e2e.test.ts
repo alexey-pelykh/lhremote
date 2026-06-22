@@ -11,7 +11,7 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
@@ -19,12 +19,12 @@ import {
   dismissErrors,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
-import type { HideFeedAuthorProfileOutput } from "@lhremote/core";
+} from "@insoftex/lhremote-core";
+import type { HideFeedAuthorProfileOutput } from "@insoftex/lhremote-core";
 
 // MCP tool registrations
-import { registerHideFeedAuthorProfile } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerHideFeedAuthorProfile } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("hide-feed-author-profile operation", () => {
   let app: AppService;

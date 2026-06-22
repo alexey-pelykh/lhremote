@@ -3,12 +3,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return { ...actual, getActionBudget: vi.fn() };
 });
 
-import { getActionBudget } from "@lhremote/core";
+import { getActionBudget } from "@insoftex/lhremote-core";
 import { handleGetActionBudget } from "./get-action-budget.js";
 
 const MOCK_BUDGET = {

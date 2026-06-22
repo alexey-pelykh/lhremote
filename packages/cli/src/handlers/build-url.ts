@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { type BuildLinkedInUrlInput, buildLinkedInUrl } from "@lhremote/core";
+import { type BuildLinkedInUrlInput, buildLinkedInUrl } from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#build-url | build-url} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#build-url | build-url} CLI command. */
 export function handleBuildUrl(
   sourceType: string,
   options: {

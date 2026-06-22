@@ -22,8 +22,13 @@ vi.mock("./launcher.js", () => ({
   LauncherService: vi.fn(),
 }));
 
+vi.mock("../utils/cdp-port.js", () => ({
+  isCdpPort: vi.fn(),
+}));
+
 import { discoverInstancePort, findApp } from "../cdp/index.js";
 import { DatabaseClient, discoverDatabase } from "../db/index.js";
+import { isCdpPort } from "../utils/cdp-port.js";
 import { InstanceService } from "./instance.js";
 import { LauncherService } from "./launcher.js";
 import { InstanceNotRunningError, UIBlockedError } from "./errors.js";
@@ -33,6 +38,7 @@ const mockedDiscoverInstancePort = vi.mocked(discoverInstancePort);
 const mockedFindApp = vi.mocked(findApp);
 const mockedDiscoverDatabase = vi.mocked(discoverDatabase);
 const mockedDatabaseClient = vi.mocked(DatabaseClient);
+const mockedIsCdpPort = vi.mocked(isCdpPort);
 const mockedInstanceService = vi.mocked(InstanceService);
 const mockedLauncherService = vi.mocked(LauncherService);
 
@@ -170,6 +176,7 @@ describe("withDatabase", () => {
 describe("withInstanceDatabase", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedIsCdpPort.mockResolvedValue(false);
     createMockLauncher();
   });
 

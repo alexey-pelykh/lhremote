@@ -1,19 +1,18 @@
 {
-  "name": "lhremote",
-  "version": "0.1.0",
+  "name": "@insoftex/lhremote",
+  "version": "0.22.0",
   "description": "LinkedHelper automation toolkit — CLI & MCP server",
   "type": "module",
   "engines": {
     "node": ">=24"
   },
   "license": "AGPL-3.0-only",
-  "author": "Alexey Pelykh (https://github.com/alexey-pelykh)",
-  "homepage": "https://github.com/alexey-pelykh/lhremote",
-  "bugs": "https://github.com/alexey-pelykh/lhremote/issues",
-  "funding": "https://github.com/sponsors/alexey-pelykh",
+  "author": "Insoftex (https://github.com/insoftex-company)",
+  "homepage": "https://github.com/insoftex-company/insoftex-lhremote",
+  "bugs": "https://github.com/insoftex-company/insoftex-lhremote/issues",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alexey-pelykh/lhremote.git",
+    "url": "https://github.com/insoftex-company/insoftex-lhremote.git",
     "directory": "packages/lhremote"
   },
   "exports": {
@@ -25,7 +24,7 @@
   "bin": {
     "lhremote": "./dist/cli.js"
   },
-  "mcpName": "io.github.alexey-pelykh/lhremote",
+  "mcpName": "io.github.insoftex-company/insoftex-lhremote",
   "keywords": [
     "linkedhelper",
     "linkedin",
@@ -34,7 +33,8 @@
     "cli"
   ],
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.test.*"
   ],
   "scripts": {
     "prepack": "cp ../../README.md .",
@@ -44,8 +44,8 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@lhremote/cli": "workspace:^",
-    "@lhremote/mcp": "workspace:^"
+    "@insoftex/lhremote-cli": "workspace:^",
+    "@insoftex/lhremote-mcp": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { CDPClient, CDPConnectionError, findApp } from "../cdp/index.js";
+import { CDPClient, CDPConnectionError, findApp, resolveAppPort } from "../cdp/index.js";
 import { DEFAULT_CDP_PORT } from "../constants.js";
+
+/** Default cap for launcher CDP recovery attempts in milliseconds. */
+export const DEFAULT_LAUNCHER_RECOVERY_TIMEOUT_MS = 30_000;
 import type {
   Account,
   InstanceIssue,
@@ -118,7 +121,7 @@ export class LauncherService {
       }
     }`;
 
-  private readonly port: number;
+  private port: number;
   private readonly host: string;
   private readonly allowRemote: boolean;
   private client: CDPClient | null = null;
@@ -152,14 +155,77 @@ export class LauncherService {
       }
       throw error;
     }
+    await this.bindLauncherClient(client, this.port);
+  }
 
+  /**
+   * Reconnect to the LinkedHelper launcher after a CDP drop.
+   *
+   * Disconnects the current client, re-discovers the launcher's active CDP
+   * port (the port is dynamic — do NOT assume 9222; the launcher re-binds
+   * after a restart), and re-establishes the connection with the new port.
+   *
+   * Retries every second until the port is reachable, up to `timeoutMs`
+   * (default {@link DEFAULT_LAUNCHER_RECOVERY_TIMEOUT_MS}).
+   * The cap is also configurable via `LHREMOTE_LAUNCHER_RECOVERY_TIMEOUT_MS`.
+   *
+   * @throws {LinkedHelperNotRunningError}  if no launcher process is found.
+   * @throws {LinkedHelperUnreachableError} if processes are found but remain
+   *   unreachable within the timeout.
+   */
+  async reconnect(options?: { timeoutMs?: number }): Promise<void> {
+    this.disconnect();
+
+    const timeoutMs =
+      options?.timeoutMs ??
+      (process.env["LHREMOTE_LAUNCHER_RECOVERY_TIMEOUT_MS"]
+        ? Number(process.env["LHREMOTE_LAUNCHER_RECOVERY_TIMEOUT_MS"])
+        : DEFAULT_LAUNCHER_RECOVERY_TIMEOUT_MS);
+
+    const newPort = await resolveAppPort("launcher", timeoutMs);
+
+    const client = new CDPClient(newPort, { host: this.host, allowRemote: this.allowRemote });
+    try {
+      await client.connect();
+    } catch (error) {
+      if (error instanceof CDPConnectionError) {
+        const apps = await findApp();
+        throw apps.length > 0
+          ? new LinkedHelperUnreachableError(apps)
+          : new LinkedHelperNotRunningError(newPort);
+      }
+      throw error;
+    }
+    await this.bindLauncherClient(client, newPort);
+  }
+
+  /**
+   * Disconnect from the launcher.
+   */
+  disconnect(): void {
+    this.client?.disconnect();
+    this.client = null;
+    this.nodeContextId = undefined;
+  }
+
+  /**
+   * Validate and activate a freshly-opened CDP client as the launcher connection.
+   *
+   * Resolves the Node.js execution context inside the client, verifies that
+   * the target exposes the LinkedHelper launcher's `electronStore`, and then
+   * stores the client and context ID on the service instance.
+   *
+   * @param client   - An already-connected {@link CDPClient}.
+   * @param portHint - The port used to connect (surfaced in error messages).
+   */
+  private async bindLauncherClient(client: CDPClient, portHint: number): Promise<void> {
     let nodeContextId: number | undefined;
     try {
       nodeContextId = await this.resolveNodeContextId(client);
     } catch {
       // No Node.js context — likely a LinkedIn page on the instance port.
       client.disconnect();
-      throw new WrongPortError(this.port);
+      throw new WrongPortError(portHint);
     }
 
     // Validate that the target is the launcher (has electronStore),
@@ -176,20 +242,12 @@ export class LauncherService {
     );
     if (!isLauncher) {
       client.disconnect();
-      throw new WrongPortError(this.port);
+      throw new WrongPortError(portHint);
     }
 
+    this.port = portHint;
     this.client = client;
     this.nodeContextId = nodeContextId;
-  }
-
-  /**
-   * Disconnect from the launcher.
-   */
-  disconnect(): void {
-    this.client?.disconnect();
-    this.client = null;
-    this.nodeContextId = undefined;
   }
 
   /**

@@ -4,9 +4,9 @@
 import {
   createCollection,
   errorMessage,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#create-collection | create-collection} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#create-collection | create-collection} CLI command. */
 export async function handleCreateCollection(
   name: string,
   options: {

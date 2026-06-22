@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { accessSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,12 +9,13 @@ import { AppLaunchError, AppNotFoundError, LinkedHelperUnreachableError } from "
 import { AppService } from "./app.js";
 
 vi.mock("node:child_process", () => ({
+  execFile: vi.fn(),
   spawn: vi.fn(),
 }));
 
 vi.mock("node:fs", () => ({
   accessSync: vi.fn(),
-  constants: { X_OK: 1 },
+  constants: { F_OK: 0, X_OK: 1 },
 }));
 
 vi.mock("../cdp/index.js", () => ({
@@ -30,6 +31,7 @@ import { discoverTargets, findApp } from "../cdp/index.js";
 import getPort from "get-port";
 
 const mockedSpawn = vi.mocked(spawn);
+const mockedExecFile = vi.mocked(execFile);
 const mockedAccessSync = vi.mocked(accessSync);
 const mockedDiscoverTargets = vi.mocked(discoverTargets);
 const mockedFindApp = vi.mocked(findApp);
@@ -103,7 +105,11 @@ describe("AppService", () => {
       vi.stubGlobal("process", {
         ...process,
         platform: "win32",
-        env: { LOCALAPPDATA: "C:\\Users\\test\\AppData\\Local" },
+        env: {
+          LOCALAPPDATA: "C:\\Users\\test\\AppData\\Local",
+          PROGRAMFILES: "C:\\Program Files",
+          "PROGRAMFILES(X86)": "C:\\Program Files (x86)",
+        },
       });
       mockedAccessSync.mockReturnValue(undefined);
 
@@ -169,8 +175,18 @@ describe("AppService", () => {
 
   describe("launch", () => {
     beforeEach(() => {
+      vi.clearAllMocks();
       vi.stubGlobal("process", { ...process, platform: "darwin", env: {} });
       mockedFindApp.mockResolvedValue([]);
+      mockedExecFile.mockImplementation(((
+        _file: string,
+        _args: readonly string[],
+        _options: { windowsHide?: boolean },
+        callback: (error: Error | null, stdout: string, stderr: string) => void,
+      ) => {
+        callback(null, "", "");
+        return {} as ReturnType<typeof execFile>;
+      }) as typeof execFile);
     });
 
     it("skips launch if already running with explicit port", async () => {
@@ -195,7 +211,7 @@ describe("AppService", () => {
       expect(mockedSpawn).toHaveBeenCalledWith(
         "/Applications/linked-helper.app/Contents/MacOS/linked-helper",
         ["--remote-debugging-port=9222"],
-        { detached: true, stdio: "ignore", env: expect.objectContaining({ ELECTRON_RUN_AS_NODE: "" }) },
+        { detached: true, stdio: "ignore", windowsHide: true, env: expect.not.objectContaining({ ELECTRON_RUN_AS_NODE: expect.anything() }) },
       );
       expect(child.unref).toHaveBeenCalled();
     });
@@ -214,7 +230,7 @@ describe("AppService", () => {
       expect(mockedSpawn).toHaveBeenCalledWith(
         expect.any(String),
         ["--remote-debugging-port=54321"],
-        { detached: true, stdio: "ignore", env: expect.objectContaining({ ELECTRON_RUN_AS_NODE: "" }) },
+        { detached: true, stdio: "ignore", windowsHide: true, env: expect.not.objectContaining({ ELECTRON_RUN_AS_NODE: expect.anything() }) },
       );
       expect(service.cdpPort).toBe(54321);
     });
@@ -274,6 +290,99 @@ describe("AppService", () => {
       mockedSpawn.mockReturnValue(child);
 
       await expect(service.launch()).rejects.toThrow(AppLaunchError);
+    });
+
+    it("focuses an existing connectable launcher on Windows", async () => {
+      vi.stubGlobal("process", {
+        ...process,
+        platform: "win32",
+        env: {
+          LOCALAPPDATA: "C:\\Users\\test\\AppData\\Local",
+          PROGRAMFILES: "C:\\Program Files",
+          "PROGRAMFILES(X86)": "C:\\Program Files (x86)",
+        },
+      });
+      mockedFindApp.mockResolvedValue([
+        { pid: 111, cdpPort: 9222, connectable: true, role: "launcher" as const },
+        { pid: 222, cdpPort: null, connectable: false, role: "instance" as const },
+      ]);
+
+      const service = new AppService(undefined, FAST_OPTIONS);
+      await service.launch();
+
+      expect(mockedSpawn).not.toHaveBeenCalled();
+      expect(service.cdpPort).toBe(9222);
+      expect(mockedExecFile).toHaveBeenCalledWith(
+        "powershell.exe",
+        expect.arrayContaining(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", expect.stringContaining("111,222")]),
+        { windowsHide: true },
+        expect.any(Function),
+      );
+    });
+
+    it("restores and focuses LinkedHelper windows on Windows by default", async () => {
+      vi.stubGlobal("process", {
+        ...process,
+        platform: "win32",
+        env: {
+          LOCALAPPDATA: "C:\\Users\\test\\AppData\\Local",
+          PROGRAMFILES: "C:\\Program Files",
+          "PROGRAMFILES(X86)": "C:\\Program Files (x86)",
+        },
+      });
+      mockedDiscoverTargets.mockRejectedValue(new Error("not running"));
+      mockedAccessSync.mockReturnValue(undefined);
+      mockedFindApp
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { pid: 111, cdpPort: 9222, connectable: true, role: "launcher" as const },
+          { pid: 222, cdpPort: null, connectable: false, role: "instance" as const },
+        ]);
+
+      mockedExecFile.mockImplementation(((
+        _file: string,
+        _args: readonly string[],
+        _options: { windowsHide?: boolean },
+        callback: (error: Error | null, stdout: string, stderr: string) => void,
+      ) => {
+        callback(null, "LinkedHelper\n", "");
+        return {} as ReturnType<typeof execFile>;
+      }) as typeof execFile);
+
+      const child = makeMockChild();
+      mockedSpawn.mockReturnValue(child);
+
+      const service = new AppService(9222, FAST_OPTIONS);
+      await service.launch();
+
+      expect(mockedExecFile).toHaveBeenCalledWith(
+        "powershell.exe",
+        expect.arrayContaining(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", expect.stringContaining("111,222")]),
+        { windowsHide: true },
+        expect.any(Function),
+      );
+    });
+
+    it("does not try to focus windows when visibility is disabled", async () => {
+      vi.stubGlobal("process", {
+        ...process,
+        platform: "win32",
+        env: {
+          LOCALAPPDATA: "C:\\Users\\test\\AppData\\Local",
+          PROGRAMFILES: "C:\\Program Files",
+          "PROGRAMFILES(X86)": "C:\\Program Files (x86)",
+        },
+      });
+      mockedDiscoverTargets.mockRejectedValue(new Error("not running"));
+      mockedAccessSync.mockReturnValue(undefined);
+
+      const child = makeMockChild();
+      mockedSpawn.mockReturnValue(child);
+
+      const service = new AppService(9222, { ...FAST_OPTIONS, visible: false });
+      await service.launch();
+
+      expect(mockedExecFile).not.toHaveBeenCalled();
     });
   });
 
@@ -464,6 +573,65 @@ describe("AppService", () => {
       expect(mockFetch).toHaveBeenCalledWith(
         "http://127.0.0.1:9222/json/close/T1",
       );
+    });
+
+    it("closes the browser-level CDP target when no page targets exist", async () => {
+      const service = new AppService(9222);
+      mockedDiscoverTargets.mockResolvedValue([]);
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/browser/abc",
+        }),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      type Listener = (event?: unknown) => void;
+      class MockWebSocket {
+        static instances: MockWebSocket[] = [];
+        readonly sent: string[] = [];
+        private readonly listeners = new Map<string, Set<Listener>>();
+
+        constructor(readonly url: string) {
+          MockWebSocket.instances.push(this);
+          queueMicrotask(() => this.emit("open"));
+        }
+
+        addEventListener(event: string, listener: Listener): void {
+          if (!this.listeners.has(event)) this.listeners.set(event, new Set());
+          (this.listeners.get(event) as Set<Listener>).add(listener);
+        }
+
+        removeEventListener(event: string, listener: Listener): void {
+          this.listeners.get(event)?.delete(listener);
+        }
+
+        send(data: string): void {
+          this.sent.push(data);
+          queueMicrotask(() => this.emit("message", { data: JSON.stringify({ id: 1, result: {} }) }));
+        }
+
+        close(): void {
+          // no-op
+        }
+
+        private emit(event: string, payload?: unknown): void {
+          for (const listener of this.listeners.get(event) ?? []) {
+            listener(payload);
+          }
+        }
+      }
+
+      vi.stubGlobal("WebSocket", MockWebSocket);
+
+      await service.quit();
+
+      expect(mockFetch).toHaveBeenCalledWith("http://127.0.0.1:9222/json/version");
+      expect(MockWebSocket.instances[0]?.url).toBe("ws://127.0.0.1:9222/devtools/browser/abc");
+      expect(MockWebSocket.instances[0]?.sent).toEqual([
+        JSON.stringify({ id: 1, method: "Browser.close" }),
+      ]);
     });
 
     it("does not throw when CDP close fails", async () => {

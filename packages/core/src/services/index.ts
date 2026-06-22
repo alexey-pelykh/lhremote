@@ -8,16 +8,32 @@ export {
   waitForInstancePort,
   waitForInstanceShutdown,
   waitForInstanceTargets,
+  waitForPidExit,
   type StartInstanceOutcome,
 } from "./instance-lifecycle.js";
-export { LauncherService } from "./launcher.js";
+export {
+  restartInstance,
+  type RestartInstanceOptions,
+  type RestartInstanceResult,
+} from "./restart-instance.js";
+export { DEFAULT_LAUNCHER_RECOVERY_TIMEOUT_MS, LauncherService } from "./launcher.js";
+export {
+  type LauncherRecoveryOptions,
+  type LauncherRecoveryResult,
+  withLauncherRecovery,
+} from "./launcher-recovery.js";
 export {
   checkStatus,
   type AccountInstanceStatus,
   type DatabaseStatus,
+  type InstanceReadinessEntry,
   type LauncherStatus,
   type StatusReport,
 } from "./status.js";
+export {
+  ensureInstances,
+  type EnsureInstanceResult,
+} from "./ensure-instances.js";
 
 export { CampaignService } from "./campaign.js";
 export { EphemeralCampaignService } from "./ephemeral-campaign.js";

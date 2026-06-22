@@ -7,9 +7,9 @@ import {
   errorMessage,
   ProfileRepository,
   type ProfileSearchResult,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | query-profiles} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#profiles--messaging | query-profiles} CLI command. */
 export async function handleQueryProfiles(options: {
   query?: string;
   company?: string;

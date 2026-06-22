@@ -8,11 +8,11 @@ import {
   ExcludeListNotFoundError,
   campaignExcludeRemove,
   type CampaignExcludeRemoveOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { resolvePersonIds } from "./person-ids.js";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-targeting | campaign-exclude-remove} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-targeting | campaign-exclude-remove} CLI command. */
 export async function handleCampaignExcludeRemove(
   campaignId: number,
   options: {
@@ -22,6 +22,7 @@ export async function handleCampaignExcludeRemove(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    accountId?: number;
     json?: boolean;
   },
 ): Promise<void> {
@@ -44,6 +45,7 @@ export async function handleCampaignExcludeRemove(
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      accountId: options.accountId,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {

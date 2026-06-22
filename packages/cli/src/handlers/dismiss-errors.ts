@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { dismissErrors, errorMessage } from "@lhremote/core";
+import { dismissErrors, errorMessage } from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#dismiss-errors | dismiss-errors} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#dismiss-errors | dismiss-errors} CLI command. */
 export async function handleDismissErrors(options: {
   cdpPort?: number;
   cdpHost?: string;

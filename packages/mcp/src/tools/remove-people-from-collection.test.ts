@@ -3,12 +3,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return { ...actual, removePeopleFromCollection: vi.fn() };
 });
 
-import { removePeopleFromCollection } from "@lhremote/core";
+import { removePeopleFromCollection } from "@insoftex/lhremote-core";
 import { registerRemovePeopleFromCollection } from "./remove-people-from-collection.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";

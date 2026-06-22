@@ -34,7 +34,7 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   CDPClient,
@@ -43,7 +43,7 @@ import {
   discoverTargets,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 /** Navigate the LinkedIn target and wait for the load event. */
 async function navigateAndWait(client: CDPClient, url: string): Promise<void> {

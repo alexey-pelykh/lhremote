@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import {
   addPeopleToCollection,
   errorMessage,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 function parsePersonIds(raw: string): number[] {
   return raw
@@ -27,7 +27,7 @@ function readPersonIdsFile(filePath: string): number[] {
     .filter((n) => Number.isInteger(n) && n > 0);
 }
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#add-people-to-collection | add-people-to-collection} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#add-people-to-collection | add-people-to-collection} CLI command. */
 export async function handleAddPeopleToCollection(
   collectionId: number,
   options: {

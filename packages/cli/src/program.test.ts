@@ -109,7 +109,11 @@ describe("createProgram", () => {
     expect(commandNames).toContain("hide-feed-author");
     expect(commandNames).toContain("hide-feed-author-profile");
     expect(commandNames).toContain("unfollow-profile");
-    expect(commandNames).toHaveLength(74);
+    expect(commandNames).toContain("ensure-instances");
+    expect(commandNames).toContain("restart-instance");
+    expect(commandNames).toContain("list-orphans");
+    expect(commandNames).toContain("reap-orphans");
+    expect(commandNames).toHaveLength(78);
   });
 
   describe("launch-app", () => {
@@ -120,15 +124,31 @@ describe("createProgram", () => {
 
       expect(portOption).toBeUndefined();
     });
+
+    it("accepts --force option", () => {
+      const program = createProgram();
+      const cmd = program.commands.find((c) => c.name() === "launch-app");
+      const forceOption = cmd?.options.find((o) => o.long === "--force");
+
+      expect(forceOption).toBeDefined();
+    });
+
+    it("accepts --no-visible option", () => {
+      const program = createProgram();
+      const cmd = program.commands.find((c) => c.name() === "launch-app");
+      const visibleOption = cmd?.options.find((o) => o.long === "--no-visible");
+
+      expect(visibleOption).toBeDefined();
+    });
   });
 
   describe("quit-app", () => {
-    it("does not have --cdp-port option", () => {
+    it("accepts --cdp-port option", () => {
       const program = createProgram();
       const cmd = program.commands.find((c) => c.name() === "quit-app");
       const portOption = cmd?.options.find((o) => o.long === "--cdp-port");
 
-      expect(portOption).toBeUndefined();
+      expect(portOption).toBeDefined();
     });
   });
 
@@ -215,6 +235,24 @@ describe("createProgram", () => {
           "--max-results", "-2",
         ]),
       ).rejects.toThrow();
+    });
+  });
+
+  describe("campaign-list", () => {
+    it("accepts --account-id option", () => {
+      const program = createProgram();
+      const cmd = program.commands.find((c) => c.name() === "campaign-list");
+      const accountIdOption = cmd?.options.find((o) => o.long === "--account-id");
+
+      expect(accountIdOption).toBeDefined();
+    });
+
+    it("accepts --cdp-port option", () => {
+      const program = createProgram();
+      const cmd = program.commands.find((c) => c.name() === "campaign-list");
+      const portOption = cmd?.options.find((o) => o.long === "--cdp-port");
+
+      expect(portOption).toBeDefined();
     });
   });
 

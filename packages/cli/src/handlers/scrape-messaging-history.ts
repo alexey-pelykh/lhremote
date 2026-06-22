@@ -8,9 +8,9 @@ import {
   scrapeMessagingHistory,
   type ScrapeMessagingHistoryOutput,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | scrape-messaging-history} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#profiles--messaging | scrape-messaging-history} CLI command. */
 export async function handleScrapeMessagingHistory(options: {
   personId: number[];
   pauseOthers?: boolean;

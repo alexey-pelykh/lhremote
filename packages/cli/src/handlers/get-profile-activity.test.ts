@@ -3,15 +3,15 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return { ...actual, getProfileActivity: vi.fn() };
 });
 
 import {
   getProfileActivity,
   type GetProfileActivityOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { handleGetProfileActivity } from "./get-profile-activity.js";
 import { getStderr, getStdout } from "./testing/mock-helpers.js";
 

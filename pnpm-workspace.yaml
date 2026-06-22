@@ -1,6 +1,9 @@
 packages:
   - "packages/*"
 
+allowBuilds:
+  esbuild: set this to true or false
+
 catalog:
   typescript: "^5.9.3"
   "@types/node": "^25"
@@ -20,5 +23,5 @@ catalog:
   zod: "^4.4.2"
   commander: "^14.0.3"
   typedoc: "^0.28.19"
-  turbo: "^2.9.7"
+  turbo: "^2.9.18"
   yaml: "^2.8.3"

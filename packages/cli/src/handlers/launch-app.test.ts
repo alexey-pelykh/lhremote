@@ -3,15 +3,15 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     AppService: vi.fn(),
   };
 });
 
-import { AppNotFoundError, AppService } from "@lhremote/core";
+import { AppNotFoundError, AppService } from "@insoftex/lhremote-core";
 
 import { handleLaunchApp } from "./launch-app.js";
 
@@ -60,7 +60,45 @@ describe("handleLaunchApp", () => {
 
     await handleLaunchApp();
 
-    expect(AppService).toHaveBeenCalledWith();
+    expect(AppService).toHaveBeenCalledWith(undefined, {
+      launchProbeDelay: 10000,
+    });
+  });
+
+  it("passes force through to AppService when requested", async () => {
+    vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+    vi.mocked(AppService).mockImplementation(function () {
+      return {
+        launch: vi.fn().mockResolvedValue(undefined),
+        cdpPort: 9222,
+      } as unknown as AppService;
+    });
+
+    await handleLaunchApp({ force: true });
+
+    expect(AppService).toHaveBeenCalledWith(undefined, {
+      launchProbeDelay: 10000,
+      force: true,
+    });
+  });
+
+  it("passes visible through to AppService when explicitly disabled", async () => {
+    vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+    vi.mocked(AppService).mockImplementation(function () {
+      return {
+        launch: vi.fn().mockResolvedValue(undefined),
+        cdpPort: 9222,
+      } as unknown as AppService;
+    });
+
+    await handleLaunchApp({ visible: false });
+
+    expect(AppService).toHaveBeenCalledWith(undefined, {
+      launchProbeDelay: 10000,
+      visible: false,
+    });
   });
 
   it("sets exitCode 1 on error", async () => {

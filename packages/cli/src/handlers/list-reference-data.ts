@@ -5,7 +5,7 @@ import {
   type ReferenceDataType,
   getLinkedInReferenceData,
   isReferenceDataType,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 const VALID_DATA_TYPES: readonly ReferenceDataType[] = [
   "INDUSTRY",
@@ -16,7 +16,7 @@ const VALID_DATA_TYPES: readonly ReferenceDataType[] = [
   "PROFILE_LANGUAGE",
 ];
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#list-reference-data | list-reference-data} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#list-reference-data | list-reference-data} CLI command. */
 export function handleListReferenceData(
   dataType: string,
   options: {

@@ -7,9 +7,9 @@ import {
   type ReactToPostOutput,
   type ReactionType,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#react-to-post | react-to-post} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#react-to-post | react-to-post} CLI command. */
 export async function handleReactToPost(
   postUrl: string,
   options: {

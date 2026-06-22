@@ -9,12 +9,12 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 describeE2E("stopInstanceWithDialogDismissal", () => {
   let app: AppService;

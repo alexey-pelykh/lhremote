@@ -5,7 +5,7 @@ import {
   type EntityType,
   resolveLinkedInEntity,
   errorMessage,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 const VALID_ENTITY_TYPES: readonly EntityType[] = [
   "COMPANY",
@@ -13,7 +13,7 @@ const VALID_ENTITY_TYPES: readonly EntityType[] = [
   "SCHOOL",
 ];
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#resolve-entity | resolve-entity} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#resolve-entity | resolve-entity} CLI command. */
 export async function handleResolveEntity(
   entityType: string,
   query: string,

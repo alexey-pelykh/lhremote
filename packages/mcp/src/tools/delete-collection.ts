@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { deleteCollection } from "@lhremote/core";
+import { deleteCollection } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#delete-collection | delete-collection} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#delete-collection | delete-collection} MCP tool. */
 export function registerDeleteCollection(server: McpServer): void {
   server.tool(
     "delete-collection",

@@ -9,9 +9,9 @@ import {
   InstanceNotRunningError,
   campaignReorderActions,
   type CampaignReorderActionsOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-actions | campaign-reorder-actions} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-actions | campaign-reorder-actions} CLI command. */
 export async function handleCampaignReorderActions(
   campaignId: number,
   options: {
@@ -19,6 +19,7 @@ export async function handleCampaignReorderActions(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    accountId?: number;
     json?: boolean;
   },
 ): Promise<void> {
@@ -55,6 +56,7 @@ export async function handleCampaignReorderActions(
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      accountId: options.accountId,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {

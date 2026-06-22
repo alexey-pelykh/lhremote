@@ -8,9 +8,9 @@ import {
   errorMessage,
   importPeopleFromCollection,
   type ImportPeopleFromCollectionOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#import-people-from-collection | import-people-from-collection} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#import-people-from-collection | import-people-from-collection} CLI command. */
 export async function handleImportPeopleFromCollection(
   collectionId: number,
   campaignId: number,

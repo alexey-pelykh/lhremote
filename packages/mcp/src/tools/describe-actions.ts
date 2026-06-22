@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getActionTypeCatalog, getActionTypeInfo } from "@lhremote/core";
+import { getActionTypeCatalog, getActionTypeInfo } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#describe-actions | describe-actions} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#describe-actions | describe-actions} MCP tool. */
 export function registerDescribeActions(server: McpServer): void {
   server.tool(
     "describe-actions",

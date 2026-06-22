@@ -3,20 +3,36 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     checkStatus: vi.fn(),
   };
 });
 
-import { type StatusReport, checkStatus } from "@lhremote/core";
+import { type InstanceReadinessEntry, type StatusReport, checkStatus } from "@insoftex/lhremote-core";
 
 import { registerCheckStatus } from "./check-status.js";
 import { createMockServer } from "./testing/mock-server.js";
 
 const mockedCheckStatus = vi.mocked(checkStatus);
+
+function makeRunningInstance(overrides: Partial<InstanceReadinessEntry> = {}): InstanceReadinessEntry {
+  return {
+    accountId: 1,
+    name: "Alice",
+    email: "alice@example.com",
+    pid: 12345,
+    cdpPort: 54321,
+    connectable: true,
+    helperChildCount: 0,
+    source: "cmdline",
+    confidence: "high",
+    readiness: "connectable",
+    ...overrides,
+  };
+}
 
 describe("registerCheckStatus", () => {
   beforeEach(() => {
@@ -46,12 +62,9 @@ describe("registerCheckStatus", () => {
 
     const report: StatusReport = {
       launcher: { reachable: true, port: 9222 },
-      instances: [
-        { accountId: 1, accountName: "Alice", cdpPort: 54321 },
-      ],
-      databases: [
-        { accountId: 1, path: "/path/to/db.db", profileCount: 100 },
-      ],
+      instances: [makeRunningInstance()],
+      runningInstances: [makeRunningInstance()],
+      databases: [{ accountId: 1, path: "/path/to/db.db", profileCount: 100 }],
     };
 
     mockedCheckStatus.mockResolvedValue(report);
@@ -64,6 +77,81 @@ describe("registerCheckStatus", () => {
     expect(JSON.parse(result.content[0].text)).toEqual(report);
   });
 
+  it("instances[] contains exactly 3 running entries (not 7 from launcher roster)", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCheckStatus(server);
+
+    const runningInstances: InstanceReadinessEntry[] = [
+      makeRunningInstance({ accountId: 347559, name: "Vira Lyn", cdpPort: 50297, pid: 13004 }),
+      makeRunningInstance({ accountId: 329925, name: "Mike Florko", cdpPort: 56429, pid: 13640 }),
+      makeRunningInstance({ accountId: 331874, name: "Michael Fliorko", cdpPort: 49530, pid: 7044 }),
+    ];
+
+    mockedCheckStatus.mockResolvedValue({
+      launcher: { reachable: false, port: null },
+      instances: runningInstances,
+      runningInstances,
+      databases: [],
+    });
+
+    const handler = getHandler("check-status");
+    const result = (await handler({})) as { content: [{ text: string }] };
+    const parsed = JSON.parse(result.content[0].text) as StatusReport;
+
+    // 3 running instances — never 7 configured accounts
+    expect(parsed.instances).toHaveLength(3);
+    const accountIds = parsed.instances.map((i) => i.accountId).sort((a, b) => (a ?? 0) - (b ?? 0));
+    expect(accountIds).toEqual([329925, 331874, 347559]);
+  });
+
+  it("instances[] entries have real cdpPort and connectable from process inspection", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCheckStatus(server);
+
+    mockedCheckStatus.mockResolvedValue({
+      launcher: { reachable: false, port: null },
+      instances: [
+        makeRunningInstance({ accountId: 347559, cdpPort: 50297, connectable: true }),
+        makeRunningInstance({ accountId: 329925, cdpPort: 56429, connectable: true }),
+      ],
+      runningInstances: [
+        makeRunningInstance({ accountId: 347559, cdpPort: 50297, connectable: true }),
+        makeRunningInstance({ accountId: 329925, cdpPort: 56429, connectable: true }),
+      ],
+      databases: [],
+    });
+
+    const handler = getHandler("check-status");
+    const result = (await handler({})) as { content: [{ text: string }] };
+    const parsed = JSON.parse(result.content[0].text) as StatusReport;
+
+    for (const instance of parsed.instances) {
+      expect(instance.cdpPort).not.toBeNull();
+      expect(instance.connectable).toBe(true);
+    }
+  });
+
+  it("instances[] never contains credentials or proxy info", async () => {
+    const { server, getHandler } = createMockServer();
+    registerCheckStatus(server);
+
+    mockedCheckStatus.mockResolvedValue({
+      launcher: { reachable: false, port: null },
+      instances: [makeRunningInstance({ accountId: 347559, name: "Vira Lyn" })],
+      runningInstances: [makeRunningInstance({ accountId: 347559, name: "Vira Lyn" })],
+      databases: [],
+    });
+
+    const handler = getHandler("check-status");
+    const result = (await handler({})) as { content: [{ text: string }] };
+    const text = result.content[0].text;
+
+    expect(text).not.toContain("app-credentials");
+    expect(text).not.toContain("socks5://");
+    expect(text).not.toContain("upstream-proxy");
+    expect(text).not.toContain("sentry.io");
+  });
+
   it("returns status when launcher is not reachable", async () => {
     const { server, getHandler } = createMockServer();
     registerCheckStatus(server);
@@ -71,6 +159,7 @@ describe("registerCheckStatus", () => {
     const report: StatusReport = {
       launcher: { reachable: false, port: 9222 },
       instances: [],
+      runningInstances: [],
       databases: [],
     };
 
@@ -92,6 +181,7 @@ describe("registerCheckStatus", () => {
     mockedCheckStatus.mockResolvedValue({
       launcher: { reachable: false, port: 4567 },
       instances: [],
+      runningInstances: [],
       databases: [],
     });
 
@@ -128,6 +218,7 @@ describe("registerCheckStatus", () => {
     mockedCheckStatus.mockResolvedValue({
       launcher: { reachable: false, port: 9222 },
       instances: [],
+      runningInstances: [],
       databases: [],
     });
 

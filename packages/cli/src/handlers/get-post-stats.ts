@@ -5,9 +5,9 @@ import {
   errorMessage,
   getPostStats,
   type GetPostStatsOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#get-post-stats | get-post-stats} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#get-post-stats | get-post-stats} CLI command. */
 export async function handleGetPostStats(
   postUrl: string,
   options: {

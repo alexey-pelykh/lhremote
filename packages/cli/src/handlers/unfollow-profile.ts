@@ -6,9 +6,9 @@ import {
   unfollowProfile,
   type UnfollowProfileOutput,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#unfollow-profile | unfollow-profile} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#unfollow-profile | unfollow-profile} CLI command. */
 export async function handleUnfollowProfile(
   profileUrl: string,
   options: {

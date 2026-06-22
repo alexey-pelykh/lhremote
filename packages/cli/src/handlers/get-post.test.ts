@@ -3,12 +3,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return { ...actual, getPost: vi.fn() };
 });
 
-import { getPost, type GetPostOutput } from "@lhremote/core";
+import { getPost, type GetPostOutput } from "@insoftex/lhremote-core";
 import { handleGetPost } from "./get-post.js";
 import { getStderr, getStdout } from "./testing/mock-helpers.js";
 

@@ -2,22 +2,22 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
+import { describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
   discoverTargets,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
-import type { SearchPostsOutput } from "@lhremote/core";
+} from "@insoftex/lhremote-core";
+import type { SearchPostsOutput } from "@insoftex/lhremote-core";
 
 // CLI handlers
-import { handleSearchPosts } from "@lhremote/cli/handlers";
+import { handleSearchPosts } from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registrations
-import { registerSearchPosts } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerSearchPosts } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("search-posts operation", () => {
   let app: AppService;

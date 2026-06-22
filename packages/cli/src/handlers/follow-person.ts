@@ -8,9 +8,9 @@ import {
   CampaignExecutionError,
   CampaignTimeoutError,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#follow-person | follow-person} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#follow-person | follow-person} CLI command. */
 export async function handleFollowPerson(options: {
   personId?: number;
   url?: string;

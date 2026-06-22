@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getActionBudget } from "@lhremote/core";
+import { getActionBudget } from "@insoftex/lhremote-core";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#get-action-budget | get-action-budget} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#get-action-budget | get-action-budget} MCP tool. */
 export function registerGetActionBudget(server: McpServer): void {
   server.tool(
     "get-action-budget",

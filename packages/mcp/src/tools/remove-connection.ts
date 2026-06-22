@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { removeConnection } from "@lhremote/core";
+import { removeConnection } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#remove-connection | remove-connection} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#remove-connection | remove-connection} MCP tool. */
 export function registerRemoveConnection(server: McpServer): void {
   server.tool(
     "remove-connection",

@@ -47,5 +47,5 @@ Commit messages must **not** contain issue references like `(#12)` or `fixes #12
 - `any` types without justification.
 - Missing error handling on CDP calls.
 - Test files without assertions (empty or no-op tests).
-- Duplicated helpers that exist in `@lhremote/core/testing`.
+- Duplicated helpers that exist in `@insoftex/lhremote-core/testing`.
 - Magic numbers or strings without named constants.

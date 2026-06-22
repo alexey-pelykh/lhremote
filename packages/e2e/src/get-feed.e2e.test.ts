@@ -2,22 +2,22 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
+import { describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
   discoverTargets,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
-import type { FeedPost, GetFeedOutput } from "@lhremote/core";
+} from "@insoftex/lhremote-core";
+import type { FeedPost, GetFeedOutput } from "@insoftex/lhremote-core";
 
 // CLI handlers
-import { handleGetFeed } from "@lhremote/cli/handlers";
+import { handleGetFeed } from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registrations
-import { registerGetFeed } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerGetFeed } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("get-feed operation", () => {
   let app: AppService;

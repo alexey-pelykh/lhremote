@@ -27,7 +27,7 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   CDPClient,
@@ -36,7 +36,7 @@ import {
   InstanceService,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 /** LinkedIn feed URL — the canonical logged-in URL where checkIfInLoggedInState should return true. */
 const FEED_URL = "https://www.linkedin.com/feed/";

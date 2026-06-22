@@ -5,9 +5,9 @@ import {
   errorMessage,
   getActionBudget,
   type GetActionBudgetOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#get-action-budget | get-action-budget} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#get-action-budget | get-action-budget} CLI command. */
 export async function handleGetActionBudget(
   options: {
     cdpPort?: number;

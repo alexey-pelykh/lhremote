@@ -7,9 +7,9 @@ import {
   discoverAllDatabases,
   errorMessage,
   ProfileRepository,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | query-profiles-bulk} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#profiles--messaging | query-profiles-bulk} CLI command. */
 export async function handleQueryProfilesBulk(options: {
   personId?: number[];
   publicId?: string[];

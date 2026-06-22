@@ -3,12 +3,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return { ...actual, getThrottleStatus: vi.fn() };
 });
 
-import { getThrottleStatus } from "@lhremote/core";
+import { getThrottleStatus } from "@insoftex/lhremote-core";
 import { handleGetThrottleStatus } from "./get-throttle-status.js";
 
 describe("handleGetThrottleStatus", () => {

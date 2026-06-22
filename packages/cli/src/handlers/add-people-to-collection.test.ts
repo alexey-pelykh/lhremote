@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     addPeopleToCollection: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock("node:fs", async (importOriginal) => {
 import {
   type AddPeopleToCollectionOutput,
   addPeopleToCollection,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { readFileSync } from "node:fs";
 
 import { handleAddPeopleToCollection } from "./add-people-to-collection.js";

@@ -3,15 +3,15 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     findApp: vi.fn(),
   };
 });
 
-import { type DiscoveredApp, findApp } from "@lhremote/core";
+import { type DiscoveredApp, findApp } from "@insoftex/lhremote-core";
 
 import { handleFindApp } from "./find-app.js";
 import { getStdout } from "./testing/mock-helpers.js";

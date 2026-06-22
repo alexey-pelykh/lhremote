@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { dismissErrors } from "@lhremote/core";
+import { dismissErrors } from "@insoftex/lhremote-core";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#dismiss-errors | dismiss-errors} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#dismiss-errors | dismiss-errors} MCP tool. */
 export function registerDismissErrors(server: McpServer): void {
   server.tool(
     "dismiss-errors",

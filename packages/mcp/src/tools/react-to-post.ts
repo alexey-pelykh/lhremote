@@ -6,11 +6,11 @@ import {
   reactToPost,
   REACTION_TYPES,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#react-to-post | react-to-post} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#react-to-post | react-to-post} MCP tool. */
 export function registerReactToPost(server: McpServer): void {
   server.tool(
     "react-to-post",

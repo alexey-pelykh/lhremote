@@ -5,9 +5,9 @@ import {
   errorMessage,
   getThrottleStatus,
   type GetThrottleStatusOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#get-throttle-status | get-throttle-status} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#get-throttle-status | get-throttle-status} CLI command. */
 export async function handleGetThrottleStatus(
   options: {
     cdpPort?: number;

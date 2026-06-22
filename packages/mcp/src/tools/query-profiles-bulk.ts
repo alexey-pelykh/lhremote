@@ -2,16 +2,16 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Profile } from "@lhremote/core";
+import type { Profile } from "@insoftex/lhremote-core";
 import {
   DatabaseClient,
   discoverAllDatabases,
   ProfileRepository,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#query-profiles-bulk | query-profiles-bulk} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#query-profiles-bulk | query-profiles-bulk} MCP tool. */
 export function registerQueryProfilesBulk(server: McpServer): void {
   server.tool(
     "query-profiles-bulk",

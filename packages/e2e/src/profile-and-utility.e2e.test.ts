@@ -11,13 +11,13 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   dismissErrors,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 // CLI handlers
 import {
@@ -29,7 +29,7 @@ import {
   handleListReferenceData,
   handleQueryProfilesBulk,
   handleResolveEntity,
-} from "@lhremote/cli/handlers";
+} from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registrations
 import {
@@ -41,8 +41,8 @@ import {
   registerListLinkedInReferenceData,
   registerQueryProfilesBulk,
   registerResolveLinkedInEntity,
-} from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+} from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("profile enrichment and utilities", () => {
   // ── describe-actions ─────────────────────────────────────────────

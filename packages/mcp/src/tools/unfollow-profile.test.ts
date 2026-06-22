@@ -3,12 +3,12 @@
 
 import { afterEach, beforeEach, describe, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return { ...actual, unfollowProfile: vi.fn() };
 });
 
-import { unfollowProfile } from "@lhremote/core";
+import { unfollowProfile } from "@insoftex/lhremote-core";
 
 import { registerUnfollowProfile } from "./unfollow-profile.js";
 import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";

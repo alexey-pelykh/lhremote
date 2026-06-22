@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     collectPeople: vi.fn(),
@@ -16,7 +16,7 @@ import {
   CollectionBusyError,
   CollectionError,
   collectPeople,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { handleCollectPeople } from "./collect-people.js";
 import { getStdout } from "./testing/mock-helpers.js";
@@ -94,6 +94,18 @@ describe("handleCollectPeople", () => {
         cdpHost: "192.168.1.1",
         allowRemote: true,
       }),
+    );
+  });
+
+  it("forwards accountId to collectPeople", async () => {
+    vi.mocked(collectPeople).mockResolvedValue(MOCK_RESULT);
+
+    await handleCollectPeople(42, "https://www.linkedin.com/search/results/people/", {
+      accountId: 3,
+    });
+
+    expect(collectPeople).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 3 }),
     );
   });
 

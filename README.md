@@ -1,15 +1,15 @@
 # lhremote: LinkedHelper Automation Toolkit
 
-[![CI](https://github.com/alexey-pelykh/lhremote/actions/workflows/ci.yml/badge.svg)](https://github.com/alexey-pelykh/lhremote/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/alexey-pelykh/lhremote/graph/badge.svg)](https://codecov.io/gh/alexey-pelykh/lhremote)
-[![npm version](https://img.shields.io/npm/v/lhremote?logo=npm)](https://www.npmjs.com/package/lhremote)
-[![npm downloads](https://img.shields.io/npm/dm/lhremote?logo=npm)](https://www.npmjs.com/package/lhremote)
-[![GitHub Repo stars](https://img.shields.io/github/stars/alexey-pelykh/lhremote?style=flat&logo=github)](https://github.com/alexey-pelykh/lhremote)
-[![License](https://img.shields.io/github/license/alexey-pelykh/lhremote)](LICENSE)
+[![CI](https://github.com/insoftex-company/insoftex-lhremote/actions/workflows/ci.yml/badge.svg)](https://github.com/insoftex-company/insoftex-lhremote/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/insoftex-company/insoftex-lhremote/graph/badge.svg)](https://codecov.io/gh/insoftex-company/insoftex-lhremote)
+[![npm version](https://img.shields.io/npm/v/@insoftex/lhremote?logo=npm)](https://www.npmjs.com/package/@insoftex/lhremote)
+[![npm downloads](https://img.shields.io/npm/dm/@insoftex/lhremote?logo=npm)](https://www.npmjs.com/package/@insoftex/lhremote)
+[![GitHub Repo stars](https://img.shields.io/github/stars/insoftex-company/insoftex-lhremote?style=flat&logo=github)](https://github.com/insoftex-company/insoftex-lhremote)
+[![License](https://img.shields.io/github/license/insoftex-company/insoftex-lhremote)](LICENSE)
 
 CLI and MCP server for [LinkedHelper](https://linkedhelper.com) automation.
 
-This project is brought to you by [Alexey Pelykh](https://github.com/alexey-pelykh).
+This project is brought to you by [Insoftex](https://github.com/insoftex-company).
 
 ## What It Does
 
@@ -31,7 +31,7 @@ lhremote lets AI assistants (Claude, etc.) control LinkedHelper through the [Mod
 ## Quick Start
 
 ```sh
-npm install -g lhremote        # or: npx lhremote --help
+npm install -g @insoftex/lhremote        # or: npx @insoftex/lhremote --help
 lhremote launch-app            # start LinkedHelper with remote debugging
 lhremote list-accounts         # find your LinkedIn account ID
 lhremote start-instance        # start an instance (auto-selects single account)
@@ -43,6 +43,8 @@ lhremote campaign-status <campaignId>              # monitor progress
 
 > **Pacing**: LinkedIn monitors automated activity. See the [Rate Limiting guide](docs/rate-limiting.md) for recommended settings.
 
+Agent workflow guidance lives in the [MCP Agent Capabilities guide](docs/mcp-agent-capabilities.md). Developer notes and implementation requirements live in the [Development Specification](docs/development-specification.md).
+
 ## Prerequisites
 
 - **Node.js** >= 24
@@ -51,13 +53,13 @@ lhremote campaign-status <campaignId>              # monitor progress
 ## Installation
 
 ```sh
-npm install -g lhremote
+npm install -g @insoftex/lhremote
 ```
 
 Or run directly with npx:
 
 ```sh
-npx lhremote --help
+npx @insoftex/lhremote --help
 ```
 
 ## Usage with Claude Desktop
@@ -69,13 +71,13 @@ Add to your Claude Desktop configuration (`claude_desktop_config.json`):
     "mcpServers": {
         "lhremote": {
             "command": "npx",
-            "args": ["lhremote", "mcp"]
+            "args": ["@insoftex/lhremote", "mcp"]
         }
     }
 }
 ```
 
-Once configured, Claude can use all 68 tools directly. A typical workflow:
+Once configured, Claude can use all 78 tools directly. A typical workflow:
 
 1. **`find-app`** — Detect a running LinkedHelper instance (or **`launch-app`** to start one)
 2. **`list-accounts`** — See available LinkedIn accounts
@@ -94,10 +96,12 @@ The `lhremote` command provides the same functionality as the MCP server. Every 
 ### App Management
 
 ```sh
-lhremote find-app [--json]
-lhremote launch-app
-lhremote quit-app
+lhremote find-app [--json] [--verbose]
+lhremote launch-app [--force] [--verbose] [--no-visible]
+lhremote quit-app [--cdp-port <port>] [--verbose]
 ```
+
+On Windows, `launch-app` also restores and focuses the LinkedHelper launcher window so the user can interact with it on the desktop. This is done with native window management because the launcher CDP endpoint can be reachable before it exposes any page target.
 
 ### Account & Instance
 
@@ -105,46 +109,47 @@ lhremote quit-app
 lhremote list-accounts [--cdp-port <port>] [--json]
 lhremote start-instance <accountId> [--cdp-port <port>]
 lhremote stop-instance <accountId> [--cdp-port <port>]
+lhremote restart-instance <accountId> [--cdp-port <port>] [--force]
 lhremote check-status [--cdp-port <port>] [--json]
 ```
 
 ### Campaigns
 
 ```sh
-lhremote campaign-list [--include-archived] [--json]
-lhremote campaign-create --file <path> | --yaml <config> | --json-input <config> [--cdp-port <port>] [--json]
-lhremote campaign-get <campaignId> [--cdp-port <port>] [--json]
-lhremote campaign-export <campaignId> [--format yaml|json] [--output <path>] [--cdp-port <port>]
-lhremote campaign-update <campaignId> [--name <name>] [--description <text>] [--clear-description] [--cdp-port <port>] [--json]
-lhremote campaign-delete <campaignId> [--cdp-port <port>] [--json]
-lhremote campaign-erase <campaignId> [--cdp-port <port>] [--json]
-lhremote campaign-start <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
-lhremote campaign-stop <campaignId> [--cdp-port <port>] [--json]
-lhremote campaign-status <campaignId> [--include-results] [--limit <n>] [--cdp-port <port>] [--json]
-lhremote campaign-statistics <campaignId> [--action-id <id>] [--max-errors <n>] [--cdp-port <port>] [--json]
-lhremote campaign-retry <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
-lhremote campaign-list-people <campaignId> [--action-id <id>] [--status <status>] [--limit <n>] [--offset <n>] [--cdp-port <port>] [--json]
+lhremote campaign-list [--include-archived] [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-create --file <path> | --yaml <config> | --json-input <config> [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-get <campaignId> [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-export <campaignId> [--format yaml|json] [--output <path>] [--cdp-port <port>] [--account-id <id>]
+lhremote campaign-update <campaignId> [--name <name>] [--description <text>] [--clear-description] [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-delete <campaignId> [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-erase <campaignId> [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-start <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-stop <campaignId> [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-status <campaignId> [--include-results] [--limit <n>] [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-statistics <campaignId> [--action-id <id>] [--max-errors <n>] [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-retry <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-list-people <campaignId> [--action-id <id>] [--status <status>] [--limit <n>] [--offset <n>] [--cdp-port <port>] [--account-id <id>] [--json]
 ```
 
 ### Campaign Actions
 
 ```sh
-lhremote campaign-add-action <campaignId> --name <name> --action-type <type> [--description <text>] [--cool-down <ms>] [--max-results <n>] [--action-settings <json>] [--cdp-port <port>] [--json]
-lhremote campaign-remove-action <campaignId> <actionId> [--cdp-port <port>] [--json]
-lhremote campaign-update-action <campaignId> <actionId> [--name <name>] [--description <text>] [--clear-description] [--cool-down <ms>] [--max-results <n>] [--action-settings <json>] [--cdp-port <port>] [--json]
-lhremote campaign-reorder-actions <campaignId> --action-ids <ids> [--cdp-port <port>] [--json]
-lhremote campaign-move-next <campaignId> <actionId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
+lhremote campaign-add-action <campaignId> --name <name> --action-type <type> [--description <text>] [--cool-down <ms>] [--max-results <n>] [--action-settings <json>] [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-remove-action <campaignId> <actionId> [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-update-action <campaignId> <actionId> [--name <name>] [--description <text>] [--clear-description] [--cool-down <ms>] [--max-results <n>] [--action-settings <json>] [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-reorder-actions <campaignId> --action-ids <ids> [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-move-next <campaignId> <actionId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--account-id <id>] [--json]
 ```
 
 ### Campaign Targeting
 
 ```sh
-lhremote campaign-exclude-list <campaignId> [--action-id <id>] [--cdp-port <port>] [--json]
-lhremote campaign-exclude-add <campaignId> --person-ids <ids> | --person-ids-file <path> [--action-id <id>] [--cdp-port <port>] [--json]
-lhremote campaign-exclude-remove <campaignId> --person-ids <ids> | --person-ids-file <path> [--action-id <id>] [--cdp-port <port>] [--json]
-lhremote campaign-remove-people <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
-lhremote import-people-from-urls <campaignId> --urls <urls> | --urls-file <path> [--cdp-port <port>] [--json]
-lhremote collect-people <campaignId> <sourceUrl> [--limit <n>] [--max-pages <n>] [--page-size <n>] [--source-type <type>] [--cdp-port <port>] [--json]
+lhremote campaign-exclude-list <campaignId> [--action-id <id>] [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-exclude-add <campaignId> --person-ids <ids> | --person-ids-file <path> [--action-id <id>] [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-exclude-remove <campaignId> --person-ids <ids> | --person-ids-file <path> [--action-id <id>] [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote campaign-remove-people <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote import-people-from-urls <campaignId> --urls <urls> | --urls-file <path> [--cdp-port <port>] [--account-id <id>] [--json]
+lhremote collect-people <campaignId> <sourceUrl> [--limit <n>] [--max-pages <n>] [--page-size <n>] [--source-type <type>] [--cdp-port <port>] [--account-id <id>] [--json]
 ```
 
 ### Collections
@@ -226,15 +231,24 @@ Most tools and CLI commands connect to LinkedHelper via the Chrome DevTools Prot
 | `cdpHost` | `--cdp-host` | string | `127.0.0.1` | CDP host address |
 | `allowRemote` | `--allow-remote` | boolean | false | Allow connections to non-loopback addresses |
 
+All **campaign, campaign-targeting, and people-import** commands additionally accept:
+
+| Parameter | CLI Flag | Type | Default | Description |
+|-----------|----------|------|---------|-------------|
+| `accountId` | `--account-id` | number | auto-select if single account | Target a specific LinkedHelper account when multiple are configured |
+
 > **Security warning:** Enabling `allowRemote` permits CDP connections to remote hosts. CDP is an unsandboxed protocol that grants full control over the target browser — equivalent to remote code execution. Only enable this when the network path between your machine and the target host is fully secured (e.g., SSH tunnel, VPN, or trusted LAN).
 
 ### App Management
 
 #### `find-app`
 
-Detect running LinkedHelper application instances and their CDP connection details.
+Detect running LinkedHelper processes and classify each as `launcher`, `instance`, or `helper-child`. Each entry includes its CDP port, `connectable` status, and `helperChildCount` (number of gpu/renderer/utility/crashpad children). By default helper children are omitted; `--verbose` includes them.
 
-*No parameters.*
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `json` | boolean | No | false | Output machine-readable JSON |
+| `verbose` | boolean | No | false | Include `helper-child` processes in output |
 
 #### `launch-app`
 
@@ -244,6 +258,9 @@ Launch the LinkedHelper application with remote debugging enabled.
 |-----------|------|----------|---------|-------------|
 | `cdpPort` | number | No | auto-select | CDP port to use |
 | `force` | boolean | No | false | Kill existing LinkedHelper processes before launching |
+| `visible` | boolean | No | Windows: true, other platforms: false | Restore and focus the LinkedHelper launcher window for desktop interaction. Use `--no-visible` in the CLI to disable. |
+
+On Windows, visible launch is best-effort and does not depend on CDP page targets. If LinkedHelper is already running, `launch-app` reuses a connectable launcher and still attempts to bring its desktop window forward.
 
 #### `quit-app`
 
@@ -251,7 +268,8 @@ Quit the LinkedHelper application.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discover launcher, then 9222 fallback | CDP port |
+| `verbose` | boolean | No | false | Print diagnostic messages while quitting |
 
 ### Account & Instance
 
@@ -281,13 +299,23 @@ Stop a running LinkedHelper instance.
 | `accountId` | number | No | auto-select if single account | Account ID |
 | `cdpPort` | number | No | 9222 | CDP port |
 
-#### `check-status`
+#### `restart-instance`
 
-Check LinkedHelper connection status, running instances, and database health.
+Restart a single LinkedHelper account instance cleanly. Stops the running process, waits for it to exit, starts it again, and waits until it is connectable on a verified port. Idempotent: if the instance is already healthy, returns `restarted: false` without touching it (unless `force: true`). Only the target account's process is affected — other instances keep running.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
+| `accountId` | number | **Yes** | — | Account ID to restart |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `force` | boolean | No | false | Restart even when the instance is already connectable |
+
+#### `check-status`
+
+Report which LinkedHelper account instances are running, their CDP ports, and database health. Instance data comes from OS process inspection — it is accurate and launcher-independent even when the launcher CDP is unreachable. Each entry includes `accountId`, `name`, `email`, `cdpPort`, `connectable`, and `readiness` (`connectable` | `starting` | `degraded` | `stuck`).
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `cdpPort` | number | No | auto-discover | Launcher CDP port (optional; instance data is always available regardless) |
 
 ### Campaigns
 
@@ -299,6 +327,7 @@ List existing campaigns with summary statistics.
 |-----------|------|----------|---------|-------------|
 | `includeArchived` | boolean | No | false | Include archived campaigns |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-create`
 
@@ -309,6 +338,7 @@ Create a new campaign from YAML or JSON configuration.
 | `config` | string | Yes | — | Campaign configuration in YAML or JSON format |
 | `format` | string | No | yaml | Configuration format (`yaml` or `json`) |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-get`
 
@@ -318,6 +348,21 @@ Get detailed campaign information including action chain.
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
+
+#### `campaign-clone-action`
+
+Duplicate an existing campaign action/node, preserving its type, cooldown, max results, and settings with optional setting overrides.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID |
+| `actionId` | number | Yes | — | Source action ID to clone |
+| `name` | string | No | `<source name> copy` | Name for the cloned action |
+| `description` | string \| null | No | preserve source | Description for the cloned action |
+| `actionSettingsOverrides` | string | No | — | JSON object merged into the cloned action settings |
+| `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-export`
 
@@ -328,6 +373,7 @@ Export campaign configuration as YAML or JSON.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `format` | string | No | yaml | Export format (`yaml` or `json`) |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-update`
 
@@ -339,6 +385,7 @@ Update a campaign's name and/or description.
 | `name` | string | No | — | New campaign name |
 | `description` | string | No | — | New description (empty string to clear) |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-delete`
 
@@ -348,6 +395,7 @@ Delete (archive) a campaign.
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-erase`
 
@@ -357,6 +405,7 @@ Permanently erase a campaign and all related data from the database. This is irr
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-start`
 
@@ -367,6 +416,7 @@ Start a campaign with specified target persons. Returns immediately (async execu
 | `campaignId` | number | Yes | — | Campaign ID |
 | `personIds` | number[] | Yes | — | Person IDs to target |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-stop`
 
@@ -376,6 +426,7 @@ Stop a running campaign.
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-status`
 
@@ -387,6 +438,7 @@ Check campaign execution status and results.
 | `includeResults` | boolean | No | false | Include execution results |
 | `limit` | number | No | 20 | Max results to return |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-statistics`
 
@@ -398,6 +450,7 @@ Get per-action statistics for a campaign.
 | `actionId` | number | No | — | Filter to a specific action |
 | `maxErrors` | number | No | 5 | Max top errors per action |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-retry`
 
@@ -408,6 +461,7 @@ Reset specified people for re-run in a campaign.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `personIds` | number[] | Yes | — | Person IDs to retry |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 ### Campaign Actions
 
@@ -425,6 +479,7 @@ Add a new action to a campaign's action chain. Use `describe-actions` to explore
 | `maxResults` | number | No | — | Max results per iteration (-1 for unlimited) |
 | `actionSettings` | object | No | — | Action-specific settings |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-remove-action`
 
@@ -435,6 +490,7 @@ Remove an action from a campaign's action chain.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `actionId` | number | Yes | — | Action ID to remove |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-update-action`
 
@@ -450,6 +506,16 @@ Update an existing action's configuration in a campaign. Only provided fields ar
 | `maxActionResultsPerIteration` | number | No | — | Max results per iteration (-1 for unlimited) |
 | `actionSettings` | string | No | — | Action-specific settings as JSON (merged with existing) |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
+
+#### `campaign-validate-action-settings`
+
+Validate action settings JSON against the known action schema before adding or updating a campaign action.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `actionType` | string | Yes | — | LinkedHelper action type |
+| `actionSettings` | string | No | `{}` | Action-specific settings as a JSON object string |
 
 #### `campaign-reorder-actions`
 
@@ -460,6 +526,7 @@ Reorder actions in a campaign's action chain.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `actionIds` | number[] | Yes | — | Action IDs in desired order |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-move-next`
 
@@ -471,6 +538,7 @@ Move people from one action to the next in a campaign.
 | `actionId` | number | Yes | — | Action ID to move people from |
 | `personIds` | number[] | Yes | — | Person IDs to move |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 ### Campaign Targeting
 
@@ -483,6 +551,7 @@ View the exclude list for a campaign or action.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `actionId` | number | No | — | Action ID (for action-level list) |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-exclude-add`
 
@@ -494,6 +563,7 @@ Add people to a campaign or action exclude list.
 | `personIds` | number[] | Yes | — | Person IDs to exclude |
 | `actionId` | number | No | — | Action ID (for action-level list) |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-exclude-remove`
 
@@ -505,6 +575,7 @@ Remove people from a campaign or action exclude list.
 | `personIds` | number[] | Yes | — | Person IDs to remove from exclude list |
 | `actionId` | number | No | — | Action ID (for action-level list) |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-list-people`
 
@@ -518,6 +589,7 @@ List people assigned to a campaign with their processing status.
 | `limit` | number | No | 20 | Max results |
 | `offset` | number | No | 0 | Pagination offset |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `campaign-remove-people`
 
@@ -528,6 +600,7 @@ Remove people from a campaign's target list entirely. This is the inverse of `im
 | `campaignId` | number | Yes | — | Campaign ID |
 | `personIds` | number[] | Yes | — | Person IDs to remove |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `import-people-from-urls`
 
@@ -538,6 +611,7 @@ Import LinkedIn profile URLs into a campaign action target list. Idempotent — 
 | `campaignId` | number | Yes | — | Campaign ID |
 | `urls` | string[] | Yes | — | LinkedIn profile URLs |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 #### `collect-people`
 
@@ -552,6 +626,22 @@ Collect people from a LinkedIn page into a campaign. Detects the source type fro
 | `pageSize` | number | No | — | Results per page |
 | `sourceType` | string | No | — | Explicit source type (bypasses URL detection) |
 | `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
+
+#### `campaign-import-from-source-url`
+
+Agent-friendly alias for importing people into a campaign from a LinkedIn source URL such as search results, company people, group members, or my connections.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `campaignId` | number | Yes | — | Campaign ID to import people into |
+| `sourceUrl` | string | Yes | — | LinkedIn source URL |
+| `limit` | number | No | — | Max profiles to collect |
+| `maxPages` | number | No | — | Max pages to process |
+| `pageSize` | number | No | — | Results per page |
+| `sourceType` | string | No | auto-detect | Explicit source type |
+| `cdpPort` | number | No | 9222 | CDP port |
+| `accountId` | number | No | auto-select if single account | Account ID to target when multiple accounts exist |
 
 ### Collections
 
@@ -983,7 +1073,7 @@ Check if LinkedIn is currently throttling the account.
 
 ## Known Limitations
 
-- **Platform support**: LinkedHelper runs on macOS, Windows, and Linux. Binary paths are detected automatically but can be overridden with the `LINKEDHELPER_PATH` environment variable.
+- **Platform support**: LinkedHelper runs on macOS, Windows, and Linux. Binary paths are detected automatically (Windows: checks `PROGRAMFILES`, `PROGRAMFILES(X86)`, and common install locations; macOS/Linux: checks standard application directories). If detection fails, the error message lists every path searched. Override with the `LINKEDHELPER_PATH` environment variable.
 - **Instance startup time**: Starting an instance loads LinkedIn, which may take up to 45 seconds.
 - **Profile data is cached**: `query-profile` and `query-profiles` search the local LinkedHelper database. Profiles must have been visited or imported by LinkedHelper to appear in results.
 - **Messaging scrape is slow**: `scrape-messaging-history` navigates LinkedIn's messaging UI and can take several minutes depending on conversation volume.
@@ -1005,9 +1095,9 @@ Check if LinkedIn is currently throttling the account.
 
 ### Application binary not found
 
-**Error**: `LinkedHelper application binary not found. Set LINKEDHELPER_PATH to override.`
+**Error**: `LinkedHelper binary not found. Searched: ...`
 
-**Solution**: Install LinkedHelper from [linkedhelper.com](https://linkedhelper.com). If installed in a non-standard location, set the `LINKEDHELPER_PATH` environment variable to the binary path.
+**Solution**: Install LinkedHelper from [linkedhelper.com](https://linkedhelper.com). The error message lists every path that was searched. If LinkedHelper is installed in a non-standard location, set the `LINKEDHELPER_PATH` environment variable to the exact binary path.
 
 ### No accounts found
 
@@ -1019,7 +1109,7 @@ Check if LinkedIn is currently throttling the account.
 
 **Error**: `Multiple accounts found. Specify accountId. Use list-accounts to see available accounts.`
 
-**Solution**: Use `list-accounts` to see available accounts, then pass the desired `accountId` to `start-instance`, `stop-instance`, or other tools.
+**Solution**: Use `list-accounts` to see available accounts, then pass the desired account ID via `--account-id <id>` (CLI) or the `accountId` parameter (MCP). All campaign, campaign-targeting, and people-import commands accept this parameter. For instance management use `start-instance`/`stop-instance`.
 
 ### No instance running
 

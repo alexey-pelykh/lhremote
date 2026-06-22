@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     resolveLinkedInEntity: vi.fn(),
@@ -10,7 +10,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 });
 
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { resolveLinkedInEntity } from "@lhremote/core";
+import { resolveLinkedInEntity } from "@insoftex/lhremote-core";
 
 import { registerResolveLinkedInEntity } from "./resolve-linkedin-entity.js";
 import { createMockServer } from "./testing/mock-server.js";

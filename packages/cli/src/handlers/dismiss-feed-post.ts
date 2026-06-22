@@ -6,9 +6,9 @@ import {
   dismissFeedPost,
   type DismissFeedPostOutput,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#dismiss-feed-post | dismiss-feed-post} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#dismiss-feed-post | dismiss-feed-post} CLI command. */
 export async function handleDismissFeedPost(
   feedIndex: number,
   options: {

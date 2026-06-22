@@ -7,9 +7,9 @@ import {
   collectPeople,
   errorMessage,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#collect-people | collect-people} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#collect-people | collect-people} CLI command. */
 export async function handleCollectPeople(
   campaignId: number,
   sourceUrl: string,
@@ -21,6 +21,7 @@ export async function handleCollectPeople(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    accountId?: number;
     json?: boolean;
   },
 ): Promise<void> {
@@ -40,6 +41,7 @@ export async function handleCollectPeople(
       cdpPort: options.cdpPort,
       ...(options.cdpHost !== undefined && { cdpHost: options.cdpHost }),
       ...(options.allowRemote !== undefined && { allowRemote: options.allowRemote }),
+      ...(options.accountId !== undefined && { accountId: options.accountId }),
       }),
     );
 

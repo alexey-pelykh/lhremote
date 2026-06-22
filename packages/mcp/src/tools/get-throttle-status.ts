@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getThrottleStatus } from "@lhremote/core";
+import { getThrottleStatus } from "@insoftex/lhremote-core";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#get-throttle-status | get-throttle-status} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#get-throttle-status | get-throttle-status} MCP tool. */
 export function registerGetThrottleStatus(server: McpServer): void {
   server.tool(
     "get-throttle-status",

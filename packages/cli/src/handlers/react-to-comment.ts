@@ -7,9 +7,9 @@ import {
   type ReactToCommentOutput,
   type ReactionType,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#react-to-comment | react-to-comment} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#react-to-comment | react-to-comment} CLI command. */
 export async function handleReactToComment(
   postUrl: string,
   commentUrn: string,

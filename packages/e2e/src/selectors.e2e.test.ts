@@ -9,7 +9,7 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   CDPClient,
@@ -29,7 +29,7 @@ import {
   REACTION_TRIGGER,
   SELECTORS,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 /**
  * Query the number of elements matching a CSS selector in the LinkedIn

@@ -13,7 +13,7 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
@@ -23,14 +23,14 @@ import {
   reactToComment,
   reactToPost,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import type {
   VisitProfileOutput,
   EphemeralActionResult,
   ReactToCommentOutput,
   ReactToPostOutput,
   CommentOnPostOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 // CLI handlers
 import {
@@ -41,7 +41,7 @@ import {
   handleReactToPost,
   handleReactToComment,
   handleCommentOnPost,
-} from "@lhremote/cli/handlers";
+} from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registrations
 import {
@@ -52,8 +52,8 @@ import {
   registerReactToPost,
   registerReactToComment,
   registerCommentOnPost,
-} from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+} from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("engagement operations", () => {
   let app: AppService;

@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import {
   getActionTypeCatalog,
   getActionTypeInfo,
+  validateActionSettings,
   type ActionType,
   type ActionCategory,
 } from "./action-types.js";
@@ -539,5 +540,39 @@ describe("getActionTypeInfo", () => {
     if (info === undefined) throw new Error("Expected info");
     expect(Object.isFrozen(info)).toBe(true);
     expect(Object.isFrozen(info.configSchema)).toBe(true);
+  });
+});
+
+describe("validateActionSettings", () => {
+  it("accepts settings that match the action schema", () => {
+    const result = validateActionSettings("VisitAndExtract", {
+      extractCurrentOrganizations: true,
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.issues).toEqual([]);
+  });
+
+  it("reports required, unknown, and type issues", () => {
+    const result = validateActionSettings("MessageToPerson", {
+      rejectIfReplied: "false",
+      extra: true,
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.missingRequiredKeys).toContain("messageTemplate");
+    expect(result.unknownKeys).toEqual(["extra"]);
+    expect(result.issues.map((issue) => issue.path)).toEqual(
+      expect.arrayContaining(["messageTemplate", "rejectIfReplied", "extra"]),
+    );
+  });
+
+  it("reports unknown action types", () => {
+    const result = validateActionSettings("Nope", {});
+
+    expect(result.valid).toBe(false);
+    expect(result.issues).toEqual([
+      { path: "actionType", message: "Unknown action type: Nope" },
+    ]);
   });
 });

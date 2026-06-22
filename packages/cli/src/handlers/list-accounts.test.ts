@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     LauncherService: vi.fn(),
@@ -17,7 +17,7 @@ import {
   LauncherService,
   LinkedHelperNotRunningError,
   resolveAppPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { handleListAccounts } from "./list-accounts.js";
 import { mockLauncher } from "./testing/mock-helpers.js";

@@ -2,15 +2,15 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
-import { type AppService, LauncherService, startInstanceWithRecovery } from "@lhremote/core";
+import { describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@insoftex/lhremote-core/testing";
+import { type AppService, LauncherService, startInstanceWithRecovery } from "@insoftex/lhremote-core";
 
 // CLI handler
-import { handleGetErrors } from "@lhremote/cli/handlers";
+import { handleGetErrors } from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registration
-import { registerGetErrors } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerGetErrors } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("get-errors operation", () => {
   let app: AppService;

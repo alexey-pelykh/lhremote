@@ -5,11 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   followPerson,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#follow-person | follow-person} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#follow-person | follow-person} MCP tool. */
 export function registerFollowPerson(server: McpServer): void {
   server.tool(
     "follow-person",

@@ -3,15 +3,15 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return { ...actual, importPeopleFromCollection: vi.fn() };
 });
 
 import {
   CampaignExecutionError,
   importPeopleFromCollection,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { registerImportPeopleFromCollection } from "./import-people-from-collection.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";
 import { createMockServer } from "./testing/mock-server.js";

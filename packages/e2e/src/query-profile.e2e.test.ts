@@ -2,15 +2,15 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, launchApp, quitApp } from "@lhremote/core/testing";
-import { AppService, type Profile } from "@lhremote/core";
+import { describeE2E, launchApp, quitApp } from "@insoftex/lhremote-core/testing";
+import { AppService, type Profile } from "@insoftex/lhremote-core";
 
 // CLI handler
-import { handleQueryProfile } from "@lhremote/cli/handlers";
+import { handleQueryProfile } from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registration
-import { registerQueryProfile } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerQueryProfile } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("query-profile", () => {
   let app: AppService;

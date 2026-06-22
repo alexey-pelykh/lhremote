@@ -6,9 +6,9 @@ import {
   LauncherService,
   resolveAppPort,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#account--instance | start-instance} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#account--instance | start-instance} CLI command. */
 export async function handleStartInstance(
   accountIdArg: string,
   options: { cdpPort?: number; cdpHost?: string; allowRemote?: boolean },

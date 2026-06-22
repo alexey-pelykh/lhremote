@@ -10,20 +10,20 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
-import type { CheckRepliesOutput } from "@lhremote/core";
+} from "@insoftex/lhremote-core";
+import type { CheckRepliesOutput } from "@insoftex/lhremote-core";
 
 // CLI handler
-import { handleCheckReplies } from "@lhremote/cli/handlers";
+import { handleCheckReplies } from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registration
-import { registerCheckReplies } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerCheckReplies } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("check-replies", () => {
   let app: AppService;

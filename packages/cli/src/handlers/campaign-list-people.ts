@@ -8,9 +8,9 @@ import {
   campaignListPeople,
   type CampaignListPeopleOutput,
   type CampaignPersonState,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-list-people} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#campaigns | campaign-list-people} CLI command. */
 export async function handleCampaignListPeople(
   campaignId: number,
   options: {
@@ -21,6 +21,7 @@ export async function handleCampaignListPeople(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    accountId?: number;
     json?: boolean;
   },
 ): Promise<void> {
@@ -35,6 +36,7 @@ export async function handleCampaignListPeople(
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      accountId: options.accountId,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {

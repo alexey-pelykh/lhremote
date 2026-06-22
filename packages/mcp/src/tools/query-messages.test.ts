@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     queryMessages: vi.fn(),
@@ -17,7 +17,7 @@ import {
   type Message,
   ChatNotFoundError,
   queryMessages,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { registerQueryMessages } from "./query-messages.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";

@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { listCollections } from "@lhremote/core";
+import { listCollections } from "@insoftex/lhremote-core";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#list-collections | list-collections} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#list-collections | list-collections} MCP tool. */
 export function registerListCollections(server: McpServer): void {
   server.tool(
     "list-collections",

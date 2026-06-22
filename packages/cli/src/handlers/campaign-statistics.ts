@@ -7,9 +7,9 @@ import {
   errorMessage,
   campaignStatistics,
   type CampaignStatisticsOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-statistics} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#campaigns | campaign-statistics} CLI command. */
 export async function handleCampaignStatistics(
   campaignId: number,
   options: {
@@ -18,6 +18,7 @@ export async function handleCampaignStatistics(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    accountId?: number;
     json?: boolean;
   },
 ): Promise<void> {
@@ -30,6 +31,7 @@ export async function handleCampaignStatistics(
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      accountId: options.accountId,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {

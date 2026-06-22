@@ -2,29 +2,29 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { assertDefined, describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
+import { assertDefined, describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
   discoverTargets,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
-import type { GetProfileActivityOutput } from "@lhremote/core";
+} from "@insoftex/lhremote-core";
+import type { GetProfileActivityOutput } from "@insoftex/lhremote-core";
 
 // CLI handlers
-import { handleGetProfileActivity } from "@lhremote/cli/handlers";
+import { handleGetProfileActivity } from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registrations
-import { registerGetProfileActivity } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerGetProfileActivity } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 /**
  * Fetch a profile public ID by reading the first feed post's author URL.
  * Extracts the vanity slug from URLs like `https://www.linkedin.com/in/janesmith`.
  */
 async function fetchProfilePublicIdFromFeed(cdpPort: number): Promise<string | undefined> {
-  const { getFeed } = await import("@lhremote/core");
+  const { getFeed } = await import("@insoftex/lhremote-core");
   const result = await getFeed({ cdpPort, count: 5 });
   for (const post of result.posts) {
     const url = post.authorProfileUrl;

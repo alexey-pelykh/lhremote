@@ -5,11 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   searchPosts,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#search-posts | search-posts} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#search-posts | search-posts} MCP tool. */
 export function registerSearchPosts(server: McpServer): void {
   server.tool(
     "search-posts",

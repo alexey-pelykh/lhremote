@@ -10,7 +10,7 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
@@ -18,15 +18,15 @@ import {
   dismissErrors,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
-import type { DismissFeedPostOutput } from "@lhremote/core";
+} from "@insoftex/lhremote-core";
+import type { DismissFeedPostOutput } from "@insoftex/lhremote-core";
 
 // CLI handlers
-import { handleDismissFeedPost } from "@lhremote/cli/handlers";
+import { handleDismissFeedPost } from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registrations
-import { registerDismissFeedPost } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerDismissFeedPost } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("feed dismissal operations", () => {
   let app: AppService;

@@ -9,7 +9,7 @@ import type {
   DatabaseContext,
   InstanceDatabaseContext,
   LauncherService,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import {
   DatabaseClient as DatabaseClientCtor,
   LauncherService as LauncherServiceCtor,
@@ -17,7 +17,7 @@ import {
   resolveAccount,
   withDatabase,
   withInstanceDatabase,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 /**
  * Collect all captured stdout output from a `process.stdout.write` spy.

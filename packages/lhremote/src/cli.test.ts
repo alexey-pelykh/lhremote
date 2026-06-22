@@ -3,11 +3,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createProgram } from "@lhremote/cli";
+import { createProgram } from "@insoftex/lhremote-cli";
 
 describe("lhremote meta-package CLI", () => {
-  it("composes @lhremote/cli program with mcp subcommand", async () => {
-    const { createProgram: createBase } = await import("@lhremote/cli");
+  it("composes @insoftex/lhremote-cli program with mcp subcommand", async () => {
+    const { createProgram: createBase } = await import("@insoftex/lhremote-cli");
     const program = createBase();
 
     // Simulate what cli.ts does: add the mcp command
@@ -21,7 +21,7 @@ describe("lhremote meta-package CLI", () => {
     expect(commandNames).toContain("mcp");
   });
 
-  it("mcp command does not conflict with existing @lhremote/cli commands", () => {
+  it("mcp command does not conflict with existing @insoftex/lhremote-cli commands", () => {
     const program = createProgram();
     const baseNames = program.commands.map((c) => c.name());
 

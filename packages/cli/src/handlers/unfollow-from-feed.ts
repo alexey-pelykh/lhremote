@@ -6,9 +6,9 @@ import {
   unfollowFromFeed,
   type UnfollowFromFeedOutput,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#unfollow-from-feed | unfollow-from-feed} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#unfollow-from-feed | unfollow-from-feed} CLI command. */
 export async function handleUnfollowFromFeed(
   feedIndex: number,
   options: {

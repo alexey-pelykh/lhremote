@@ -1,0 +1,31 @@
+{
+  "manifest_version": "0.2",
+  "name": "lhremote",
+  "version": "0.21.0",
+  "description": "LinkedHelper automation toolkit — MCP server and workflow guidance for Claude",
+  "author": {
+    "name": "Insoftex",
+    "url": "https://github.com/insoftex-company"
+  },
+  "license": "AGPL-3.0-only",
+  "server": {
+    "type": "node",
+    "entry_point": "lhremote-mcp.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/lhremote-mcp.mjs",
+        "mcp"
+      ],
+      "env": {
+        "LINKEDHELPER_PATH": "C:\\Users\\xuser\\AppData\\Local\\linked-helper\\linked-helper.exe"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": ["win32"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}

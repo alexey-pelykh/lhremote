@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { errorMessage, findApp } from "@lhremote/core";
+import { errorMessage, findApp } from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#app-management | find-app} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#app-management | find-app} CLI command. */
 export async function handleFindApp(options: {
   json?: boolean;
+  verbose?: boolean;
 }): Promise<void> {
   try {
-    const apps = await findApp();
+    const apps = await findApp(options.verbose ? { includeHelpers: true } : {});
 
     if (options.json) {
       process.stdout.write(JSON.stringify(apps, null, 2) + "\n");
@@ -27,6 +28,9 @@ export async function handleFindApp(options: {
       process.stdout.write(
         `PID ${String(app.pid)} — ${port} — ${status} — ${app.role}\n`,
       );
+      if (options.verbose) {
+        process.stdout.write(JSON.stringify(app, null, 2) + "\n");
+      }
     }
   } catch (error) {
     const message = errorMessage(error);

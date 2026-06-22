@@ -1,0 +1,16 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^pwsh -NoProfile -Command \"Get-Command lhremote \\| Format-List -Property Name,Source,CommandType\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^node \\.\\\\packages\\\\lhremote\\\\dist\\\\cli\\.js launch-app --help$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^node \"C:\\\\Users\\\\xuser\\\\Documents\\\\PROJECTS\\\\Insoftex\\\\insoftex-lhremote\\\\packages\\\\lhremote\\\\dist\\\\cli\\.js\" launch-app --help$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

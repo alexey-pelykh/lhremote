@@ -1,10 +1,10 @@
 {
-  "name": "lhremote",
-  "version": "0.0.0",
+  "name": "@insoftex/lhremote-workspace",
+  "version": "0.22.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
-  "packageManager": "pnpm@9.15.4",
+  "packageManager": "pnpm@11.8.0",
   "engines": {
     "node": ">=24"
   },
@@ -19,6 +19,7 @@
   "devDependencies": {
     "@eslint/js": "catalog:",
     "@vitest/coverage-v8": "catalog:",
+    "esbuild": "^0.28.1",
     "eslint": "catalog:",
     "eslint-config-prettier": "catalog:",
     "eslint-plugin-header": "catalog:",

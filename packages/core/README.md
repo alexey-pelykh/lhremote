@@ -1,13 +1,13 @@
-# @lhremote/core
+# @insoftex/lhremote-core
 
-Core library for [lhremote](https://github.com/alexey-pelykh/lhremote) — LinkedHelper automation toolkit.
+Core library for [lhremote](https://github.com/insoftex-company/insoftex-lhremote) — LinkedHelper automation toolkit.
 
-This package provides services, data access, and CDP communication for controlling LinkedHelper. It is the foundation that both [`@lhremote/mcp`](../mcp) and [`@lhremote/cli`](../cli) build on.
+This package provides services, data access, and CDP communication for controlling LinkedHelper. It is the foundation that both [`@insoftex/lhremote-mcp`](../mcp) and [`@insoftex/lhremote-cli`](../cli) build on.
 
 ## Installation
 
 ```bash
-npm install @lhremote/core
+npm install @insoftex/lhremote-core
 ```
 
 ## Key Exports
@@ -16,7 +16,7 @@ npm install @lhremote/core
 
 | Export | Description |
 |--------|-------------|
-| `AppService` | Detect, launch, and quit the LinkedHelper application |
+| `AppService` | Detect, launch, show, and quit the LinkedHelper application |
 | `InstanceService` | Start and stop LinkedHelper instances for individual accounts |
 | `LauncherService` | Low-level launcher interaction via CDP |
 | `CampaignService` | Create, configure, start, stop, and monitor campaigns |
@@ -154,7 +154,7 @@ import {
   resolveAccount,
   CampaignService,
   withInstanceDatabase,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 // Detect LinkedHelper
 const apps = await findApp();
@@ -171,6 +171,10 @@ await withInstanceDatabase(cdpPort, accountId, async ({ instance, db }) => {
 });
 ```
 
+## Development Notes
+
+`AppService` is responsible for process discovery, launch conflict handling, and Windows desktop visibility. On Windows, visible launch uses native top-level window enumeration instead of CDP `Page.bringToFront`, because the launcher CDP endpoint can be reachable before it has any page targets. See the [Development Specification](../../docs/development-specification.md) for app lifecycle requirements.
+
 ## License
 
-[AGPL-3.0-only](https://github.com/alexey-pelykh/lhremote/blob/main/LICENSE)
+[AGPL-3.0-only](https://github.com/insoftex-company/insoftex-lhremote/blob/main/LICENSE)

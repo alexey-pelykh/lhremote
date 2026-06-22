@@ -91,6 +91,11 @@ export {
   type CampaignUpdateActionOutput,
 } from "./campaign-update-action.js";
 export {
+  campaignCloneAction,
+  type CampaignCloneActionInput,
+  type CampaignCloneActionOutput,
+} from "./campaign-clone-action.js";
+export {
   campaignReorderActions,
   type CampaignReorderActionsInput,
   type CampaignReorderActionsOutput,

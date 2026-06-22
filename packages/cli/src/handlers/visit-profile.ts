@@ -8,9 +8,9 @@ import {
   visitProfile,
   type VisitProfileOutput,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#visit-profile | visit-profile} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#visit-profile | visit-profile} CLI command. */
 export async function handleVisitProfile(options: {
   personId?: number;
   url?: string;

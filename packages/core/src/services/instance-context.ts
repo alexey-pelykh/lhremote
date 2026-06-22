@@ -139,7 +139,7 @@ async function resolveInstancePort(
     // Try to find a launcher port for health checking
     let launcherPort: number | null = null;
     try {
-      launcherPort = await resolveAppPort("launcher");
+      launcherPort = await resolveAppPort("launcher", 0);
     } catch {
       // Launcher not available — proceed without it
     }

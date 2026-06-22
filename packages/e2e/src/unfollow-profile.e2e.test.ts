@@ -12,7 +12,7 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
@@ -20,12 +20,12 @@ import {
   dismissErrors,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
-import type { UnfollowProfileOutput } from "@lhremote/core";
+} from "@insoftex/lhremote-core";
+import type { UnfollowProfileOutput } from "@insoftex/lhremote-core";
 
 // MCP tool registrations
-import { registerUnfollowProfile } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerUnfollowProfile } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("unfollow-profile operation", () => {
   let app: AppService;

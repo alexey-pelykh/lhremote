@@ -5,11 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ActionNotFoundError,
   campaignUpdateAction,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-update-action | campaign-update-action} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-update-action | campaign-update-action} MCP tool. */
 export function registerCampaignUpdateAction(server: McpServer): void {
   server.tool(
     "campaign-update-action",

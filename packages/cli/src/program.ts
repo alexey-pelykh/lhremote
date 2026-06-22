@@ -39,6 +39,9 @@ import {
   handleListCollections,
   handleCheckReplies,
   handleCheckStatus,
+  handleEnsureInstances,
+  handleListOrphans,
+  handleReapOrphans,
   handleCommentOnPost,
   handleCollectPeople,
   handleDescribeActions,
@@ -76,6 +79,7 @@ import {
   handleQuitApp,
   handleReactToPost,
   handleReactToComment,
+  handleRestartInstance,
   handleStartInstance,
   handleStopInstance,
   handleUnfollowFromFeed,
@@ -129,26 +133,45 @@ function collectString(value: string, previous: string[]): string[] {
 /**
  * Create the CLI program with all subcommands registered.
  */
-export function createProgram(): Command {
+export interface CreateProgramOptions {
+  version?: string;
+}
+
+export function createProgram(options: CreateProgramOptions = {}): Command {
   const program = new Command()
     .name("lhremote")
     .description("CLI for LinkedHelper automation")
-    .version(version);
+    .version(options.version ?? version);
 
-  program
+  const findAppCmd = program
     .command("find-app")
     .description("Detect running LinkedHelper instances")
     .option("--json", "Output as JSON")
+    .option("--verbose", "Print diagnostic messages during discovery")
     .action(handleFindApp);
+
+  findAppCmd.addHelpText(
+    "after",
+    `
+Examples:
+  lhremote find-app --verbose    Print diagnostics while discovering instances
+  lhremote find-app --json       Machine-readable JSON output
+`,
+  );
 
   program
     .command("launch-app")
     .description("Launch the LinkedHelper application")
+    .option("--force", "Kill existing LinkedHelper processes before launching")
+    .option("--verbose", "Print diagnostic messages during launch (binary path, CDP probe status)")
+    .option("--no-visible", "Do not restore/focus the LinkedHelper launcher window on Windows")
     .action(handleLaunchApp);
 
   program
     .command("quit-app")
     .description("Quit the LinkedHelper application")
+    .option("--verbose", "Print diagnostic messages while quitting")
+    .option("--cdp-port <port>", "CDP debugging port to target", parsePositiveInt)
     .action(handleQuitApp);
 
   program
@@ -189,9 +212,51 @@ export function createProgram(): Command {
     .action(handleStopInstance);
 
   program
+    .command("restart-instance")
+    .description(
+      "Restart a single LinkedHelper account instance. " +
+        "Stops it, waits for exit, starts it, and waits until connectable. " +
+        "No-op when already healthy unless --force is used.",
+    )
+    .argument("<accountId>", "Account ID to restart", parsePositiveInt)
+    .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--force", "Restart even when the instance is already healthy")
+    .option("--json", "Output as JSON")
+    .action(handleRestartInstance);
+
+  program
+    .command("ensure-instances")
+    .description("Idempotently start the specified account instances (skips already-running ones)")
+    .argument("<accountId...>", "Account IDs to ensure are running", (v, prev: number[]) => collectPositiveInt(v, prev))
+    .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--json", "Output as JSON")
+    .action(handleEnsureInstances);
+
+  program
+    .command("list-orphans")
+    .description("List orphaned LinkedHelper account-instance processes")
+    .option("--json", "Output as JSON")
+    .action(handleListOrphans);
+
+  program
+    .command("reap-orphans")
+    .description("Terminate orphaned LinkedHelper account-instance processes (dry-run by default)")
+    .option("--confirm", "Actually terminate orphaned processes (without this flag, performs a dry-run)")
+    .option("--json", "Output kill results as JSON")
+    .action(handleReapOrphans);
+
+  program
     .command("campaign-list")
     .description("List LinkedHelper campaigns")
     .option("--include-archived", "Include archived campaigns")
+    .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
+    .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignList);
 
@@ -206,6 +271,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignListPeople);
 
@@ -218,6 +284,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignCreate);
 
@@ -228,6 +295,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignGet);
 
@@ -239,6 +307,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignDelete);
 
@@ -249,6 +318,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignErase);
 
@@ -264,6 +334,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignExcludeList);
 
@@ -281,6 +352,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignExcludeAdd);
 
@@ -298,6 +370,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignExcludeRemove);
 
@@ -314,6 +387,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .action(handleCampaignExport);
 
   program
@@ -325,6 +399,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignStatus);
 
@@ -337,6 +412,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignStatistics);
 
@@ -350,6 +426,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignMoveNext);
 
@@ -362,6 +439,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignRetry);
 
@@ -374,6 +452,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignStart);
 
@@ -384,6 +463,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignStop);
 
@@ -397,6 +477,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignUpdate);
 
@@ -424,6 +505,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignAddAction);
 
@@ -435,6 +517,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignRemoveAction);
 
@@ -460,6 +543,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignUpdateAction);
 
@@ -474,6 +558,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignReorderActions);
 
@@ -486,6 +571,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleImportPeopleFromUrls);
 
@@ -501,6 +587,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCollectPeople);
 
@@ -513,6 +600,7 @@ export function createProgram(): Command {
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
+    .option("--account-id <id>", "Account ID to select when multiple accounts exist", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(handleCampaignRemovePeople);
 

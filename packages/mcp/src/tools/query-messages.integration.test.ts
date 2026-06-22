@@ -31,8 +31,8 @@ const FIXTURE_ORIGIN = join(
  */
 let fixturePath: string;
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     queryMessages: vi.fn(),
@@ -45,7 +45,7 @@ import {
   MessageRepository,
   queryMessages,
   type QueryMessagesInput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { registerQueryMessages } from "./query-messages.js";
 import { createMockServer } from "./testing/mock-server.js";

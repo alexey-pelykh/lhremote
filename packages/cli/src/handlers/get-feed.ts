@@ -6,9 +6,9 @@ import {
   getFeed,
   type GetFeedOutput,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#get-feed | get-feed} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#get-feed | get-feed} CLI command. */
 export async function handleGetFeed(
   options: {
     count?: number;

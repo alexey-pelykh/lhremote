@@ -5,9 +5,9 @@ import {
   errorMessage,
   getPost,
   type GetPostOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#get-post | get-post} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#get-post | get-post} CLI command. */
 export async function handleGetPost(
   postUrl: string,
   options: {

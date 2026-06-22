@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     sendInmail: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import {
   type EphemeralActionResult,
   sendInmail,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { registerSendInmail } from "./send-inmail.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";

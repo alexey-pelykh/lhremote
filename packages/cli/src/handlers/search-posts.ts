@@ -6,9 +6,9 @@ import {
   searchPosts,
   type SearchPostsOutput,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#search-posts | search-posts} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#search-posts | search-posts} CLI command. */
 export async function handleSearchPosts(
   query: string,
   options: {

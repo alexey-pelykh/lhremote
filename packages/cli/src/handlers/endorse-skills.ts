@@ -8,9 +8,9 @@ import {
   CampaignExecutionError,
   CampaignTimeoutError,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#endorse-skills | endorse-skills} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#endorse-skills | endorse-skills} CLI command. */
 export async function handleEndorseSkills(options: {
   personId?: number;
   url?: string;

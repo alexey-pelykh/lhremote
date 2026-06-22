@@ -9,7 +9,7 @@ import {
   LinkedHelperNotRunningError,
   LinkedHelperUnreachableError,
   UIBlockedError,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 
 type TextContent = { type: "text"; text: string };
@@ -47,7 +47,7 @@ export const cdpConnectionSchema = {
 };
 
 // Re-export from core so existing MCP tool files keep working.
-export { buildCdpOptions } from "@lhremote/core";
+export { buildCdpOptions } from "@insoftex/lhremote-core";
 
 /**
  * Build an MCP error response from a plain message string.

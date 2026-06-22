@@ -6,10 +6,13 @@ import {
   type Account,
   LauncherService,
   resolveLauncherPort,
-} from "@lhremote/core";
+  waitForInstanceShutdown,
+  withLauncherQueue,
+  withLauncherRecovery,
+} from "@insoftex/lhremote-core";
 import { buildCdpOptions, cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#stop-instance | stop-instance} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#stop-instance | stop-instance} MCP tool. */
 export function registerStopInstance(server: McpServer): void {
   server.tool(
     "stop-instance",
@@ -29,10 +32,15 @@ export function registerStopInstance(server: McpServer): void {
         }
 
         try {
+          // Phase 1: resolve account ID (auto-select when not provided).
           let resolvedId = accountId;
 
           if (resolvedId === undefined) {
-            const accounts = await launcher.listAccounts();
+            const { result: accounts } = await withLauncherRecovery(
+              launcher,
+              () => launcher.listAccounts(),
+            );
+
             if (accounts.length === 0) {
               return mcpError("No accounts found.");
             }
@@ -44,11 +52,22 @@ export function registerStopInstance(server: McpServer): void {
             resolvedId = (accounts[0] as Account).id;
           }
 
-          await launcher.stopInstance(resolvedId);
-
-          return mcpSuccess(
-            `Instance stopped for account ${String(resolvedId)}`,
+          // Phase 2: stop through the launcher queue (T1/T5).
+          // Settle barrier waits for the launcher to recover after the stop.
+          await withLauncherQueue(
+            () =>
+              withLauncherRecovery(
+                launcher,
+                async () => {
+                  await launcher.stopInstance(resolvedId as number);
+                  // Confirm the instance port has actually disappeared (T5).
+                  await waitForInstanceShutdown(port);
+                },
+              ),
+            { type: "stop", launcherPort: port },
           );
+
+          return mcpSuccess(`Instance stopped for account ${resolvedId}`);
         } catch (error) {
           return mcpCatchAll(error, "Failed to stop instance");
         } finally {

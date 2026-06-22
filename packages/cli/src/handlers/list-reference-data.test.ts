@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     isReferenceDataType: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
 import {
   isReferenceDataType,
   getLinkedInReferenceData,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { handleListReferenceData } from "./list-reference-data.js";
 import { getStderr, getStdout } from "./testing/mock-helpers.js";
 

@@ -4,9 +4,9 @@
 import {
   deleteCollection,
   errorMessage,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#delete-collection | delete-collection} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#delete-collection | delete-collection} CLI command. */
 export async function handleDeleteCollection(
   collectionId: number,
   options: {

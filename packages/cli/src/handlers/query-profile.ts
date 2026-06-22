@@ -8,9 +8,9 @@ import {
   errorMessage,
   ProfileNotFoundError,
   ProfileRepository,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#profiles--messaging | query-profile} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#profiles--messaging | query-profile} CLI command. */
 export async function handleQueryProfile(options: {
   personId?: number;
   publicId?: string;

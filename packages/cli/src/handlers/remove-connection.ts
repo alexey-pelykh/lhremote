@@ -7,9 +7,9 @@ import {
   type EphemeralActionResult,
   CampaignExecutionError,
   CampaignTimeoutError,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#remove-connection | remove-connection} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#remove-connection | remove-connection} CLI command. */
 export async function handleRemoveConnection(options: {
   personId?: number;
   url?: string;

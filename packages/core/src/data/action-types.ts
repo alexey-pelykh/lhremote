@@ -46,6 +46,19 @@ export interface ActionTypeCatalog {
   actionTypes: ActionTypeInfo[];
 }
 
+export interface ActionSettingsValidationIssue {
+  path: string;
+  message: string;
+}
+
+export interface ActionSettingsValidationResult {
+  valid: boolean;
+  actionType: string;
+  issues: ActionSettingsValidationIssue[];
+  unknownKeys: string[];
+  missingRequiredKeys: string[];
+}
+
 const ACTION_TYPE_INFOS: ActionTypeInfo[] = [
   {
     name: "VisitAndExtract",
@@ -597,4 +610,71 @@ export function getActionTypeInfo(
   actionType: string,
 ): Readonly<ActionTypeInfo> | undefined {
   return ACTION_TYPE_MAP.get(actionType as ActionType);
+}
+
+export function validateActionSettings(
+  actionType: string,
+  settings: Record<string, unknown>,
+): ActionSettingsValidationResult {
+  const info = getActionTypeInfo(actionType);
+  if (info === undefined) {
+    return {
+      valid: false,
+      actionType,
+      issues: [{ path: "actionType", message: `Unknown action type: ${actionType}` }],
+      unknownKeys: [],
+      missingRequiredKeys: [],
+    };
+  }
+
+  const issues: ActionSettingsValidationIssue[] = [];
+  const schema = info.configSchema;
+  const knownKeys = new Set(Object.keys(schema));
+  const missingRequiredKeys: string[] = [];
+
+  for (const [key, field] of Object.entries(schema)) {
+    if (field.required && !(key in settings)) {
+      missingRequiredKeys.push(key);
+      issues.push({ path: key, message: "Required setting is missing" });
+    }
+  }
+
+  const unknownKeys = Object.keys(settings).filter((key) => !knownKeys.has(key));
+  for (const key of unknownKeys) {
+    issues.push({ path: key, message: "Unknown setting for this action type" });
+  }
+
+  for (const [key, value] of Object.entries(settings)) {
+    const field = schema[key];
+    if (field === undefined || value === undefined || value === null) {
+      continue;
+    }
+    if (!matchesConfigFieldType(value, field.type)) {
+      issues.push({
+        path: key,
+        message: `Expected ${field.type}, got ${Array.isArray(value) ? "array" : typeof value}`,
+      });
+    }
+  }
+
+  return {
+    valid: issues.length === 0,
+    actionType,
+    issues,
+    unknownKeys,
+    missingRequiredKeys,
+  };
+}
+
+function matchesConfigFieldType(value: unknown, type: ConfigFieldSchema["type"]): boolean {
+  switch (type) {
+    case "array":
+      return Array.isArray(value);
+    case "object":
+      return typeof value === "object" && value !== null && !Array.isArray(value);
+    case "string":
+    case "number":
+    case "boolean":
+      return typeof value === type;
+  }
 }

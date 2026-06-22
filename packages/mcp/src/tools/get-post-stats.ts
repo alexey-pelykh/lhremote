@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getPostStats } from "@lhremote/core";
+import { getPostStats } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#get-post-stats | get-post-stats} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#get-post-stats | get-post-stats} MCP tool. */
 export function registerGetPostStats(server: McpServer): void {
   server.tool(
     "get-post-stats",

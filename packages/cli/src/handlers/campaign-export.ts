@@ -8,9 +8,9 @@ import {
   errorMessage,
   campaignExport,
   type CampaignExportOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-export} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#campaigns | campaign-export} CLI command. */
 export async function handleCampaignExport(
   campaignId: number,
   options: {
@@ -19,6 +19,7 @@ export async function handleCampaignExport(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    accountId?: number;
   },
 ): Promise<void> {
   const format = options.format ?? "yaml";
@@ -39,6 +40,7 @@ export async function handleCampaignExport(
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      accountId: options.accountId,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {

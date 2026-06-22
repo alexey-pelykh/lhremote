@@ -3,20 +3,18 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
-    DatabaseClient: vi.fn(),
-    CampaignRepository: vi.fn(),
-    discoverAllDatabases: vi.fn(),
+    campaignList: vi.fn(),
   };
 });
 
-import { type CampaignSummary, CampaignRepository } from "@lhremote/core";
+import { type CampaignListOutput, type CampaignSummary, campaignList, InstanceNotRunningError } from "@insoftex/lhremote-core";
 
 import { handleCampaignList } from "./campaign-list.js";
-import { getStdout, mockDb, mockDiscovery } from "./testing/mock-helpers.js";
+import { getStdout } from "./testing/mock-helpers.js";
 
 const MOCK_CAMPAIGNS: CampaignSummary[] = [
   {
@@ -39,19 +37,10 @@ const MOCK_CAMPAIGNS: CampaignSummary[] = [
   },
 ];
 
-function mockRepo(campaigns: CampaignSummary[] = MOCK_CAMPAIGNS) {
-  vi.mocked(CampaignRepository).mockImplementation(function () {
-    return {
-      listCampaigns: vi.fn().mockReturnValue(campaigns),
-    } as unknown as CampaignRepository;
-  });
-}
-
-function setupSuccessPath() {
-  mockDiscovery();
-  mockDb();
-  mockRepo();
-}
+const MOCK_RESULT: CampaignListOutput = {
+  campaigns: MOCK_CAMPAIGNS,
+  total: MOCK_CAMPAIGNS.length,
+};
 
 describe("handleCampaignList", () => {
   const originalExitCode = process.exitCode;
@@ -71,7 +60,7 @@ describe("handleCampaignList", () => {
   });
 
   it("prints JSON with --json", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignList).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignList({ json: true });
 
@@ -82,7 +71,7 @@ describe("handleCampaignList", () => {
   });
 
   it("prints human-readable output", async () => {
-    setupSuccessPath();
+    vi.mocked(campaignList).mockResolvedValue(MOCK_RESULT);
 
     await handleCampaignList({});
 
@@ -98,9 +87,7 @@ describe("handleCampaignList", () => {
   });
 
   it("prints 'No campaigns found' when empty", async () => {
-    mockDiscovery();
-    mockDb();
-    mockRepo([]);
+    vi.mocked(campaignList).mockResolvedValue({ campaigns: [], total: 0 });
 
     await handleCampaignList({});
 
@@ -108,50 +95,41 @@ describe("handleCampaignList", () => {
     expect(getStdout(stdoutSpy)).toContain("No campaigns found.");
   });
 
-  it("sets exitCode 1 when no databases found", async () => {
-    mockDiscovery(new Map());
+  it("passes includeArchived to campaignList", async () => {
+    vi.mocked(campaignList).mockResolvedValue({ campaigns: [], total: 0 });
+
+    await handleCampaignList({ includeArchived: true });
+
+    expect(campaignList).toHaveBeenCalledWith(
+      expect.objectContaining({ includeArchived: true }),
+    );
+  });
+
+  it("forwards accountId to campaignList", async () => {
+    vi.mocked(campaignList).mockResolvedValue(MOCK_RESULT);
+
+    await handleCampaignList({ accountId: 7 });
+
+    expect(campaignList).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 7 }),
+    );
+  });
+
+  it("sets exitCode 1 on InstanceNotRunningError", async () => {
+    vi.mocked(campaignList).mockRejectedValue(
+      new InstanceNotRunningError("No LinkedHelper instance is running."),
+    );
 
     await handleCampaignList({});
 
     expect(process.exitCode).toBe(1);
     expect(stderrSpy).toHaveBeenCalledWith(
-      "No LinkedHelper databases found.\n",
+      "No LinkedHelper instance is running.\n",
     );
   });
 
-  it("passes includeArchived option to repository", async () => {
-    mockDiscovery();
-    mockDb();
-    const listCampaigns = vi.fn().mockReturnValue([]);
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return { listCampaigns } as unknown as CampaignRepository;
-    });
-
-    await handleCampaignList({ includeArchived: true });
-
-    expect(listCampaigns).toHaveBeenCalledWith({ includeArchived: true });
-  });
-
-  it("closes database after listing", async () => {
-    mockDiscovery();
-    const { close } = mockDb();
-    mockRepo();
-
-    await handleCampaignList({});
-
-    expect(close).toHaveBeenCalledOnce();
-  });
-
-  it("sets exitCode 1 on database error", async () => {
-    mockDiscovery();
-    mockDb();
-    vi.mocked(CampaignRepository).mockImplementation(function () {
-      return {
-        listCampaigns: vi.fn().mockImplementation(() => {
-          throw new Error("database locked");
-        }),
-      } as unknown as CampaignRepository;
-    });
+  it("sets exitCode 1 on general error", async () => {
+    vi.mocked(campaignList).mockRejectedValue(new Error("database locked"));
 
     await handleCampaignList({});
 

@@ -303,7 +303,7 @@ const SCRAPE_COMMENTS_SCRIPT = `(() => {
         // Strip "Verified Profile" / "Premium Profile" decorations and any
         // duplicated name that LinkedIn injects after them.  The badge
         // can appear mid-string in forms like
-        //   "Alexey Pelykh Premium Profile YouAlexey Pelykh" (regex match
+        //   "Insoftex Premium Profile YouInsoftex" (regex match
         //    captured up to the first " • You" position),
         // so anchoring on Profile-end-of-string would miss it.  Truncate
         // from the first badge-token occurrence onwards.

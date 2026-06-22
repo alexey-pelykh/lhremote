@@ -1,13 +1,18 @@
 {
-  "name": "lhremote",
-  "version": "0.20.1",
+  "name": "insoftex-lhremote",
+  "version": "0.22.0",
   "description": "LinkedHelper automation toolkit — MCP server and workflow guidance for Claude Code",
   "author": {
-    "name": "Alexey Pelykh",
-    "url": "https://github.com/alexey-pelykh"
+    "name": "Insoftex",
+    "url": "https://github.com/insoftex-company"
   },
-  "homepage": "https://github.com/alexey-pelykh/lhremote",
-  "repository": "https://github.com/alexey-pelykh/lhremote",
+  "homepage": "https://github.com/insoftex-company/insoftex-lhremote",
+  "repository": "https://github.com/insoftex-company/insoftex-lhremote",
   "license": "AGPL-3.0-only",
-  "keywords": ["linkedhelper", "linkedin", "automation", "mcp"]
+  "keywords": [
+    "linkedhelper",
+    "linkedin",
+    "automation",
+    "mcp"
+  ]
 }

@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     campaignMoveNext: vi.fn(),
@@ -25,7 +25,7 @@ import {
   CampaignNotFoundError,
   NoNextActionError,
   campaignMoveNext,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { readFileSync } from "node:fs";
 
 import { handleCampaignMoveNext } from "./campaign-move-next.js";

@@ -6,11 +6,11 @@ import {
   reactToComment,
   REACTION_TYPES,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#react-to-comment | react-to-comment} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#react-to-comment | react-to-comment} MCP tool. */
 export function registerReactToComment(server: McpServer): void {
   server.tool(
     "react-to-comment",

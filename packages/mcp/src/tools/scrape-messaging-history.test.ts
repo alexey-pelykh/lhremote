@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     scrapeMessagingHistory: vi.fn(),
@@ -15,7 +15,7 @@ import {
   type MessageStats,
   AccountResolutionError,
   scrapeMessagingHistory,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { registerScrapeMessagingHistory } from "./scrape-messaging-history.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";

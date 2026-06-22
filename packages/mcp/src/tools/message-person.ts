@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { messagePerson } from "@lhremote/core";
+import { messagePerson } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#message-person | message-person} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#message-person | message-person} MCP tool. */
 export function registerMessagePerson(server: McpServer): void {
   server.tool(
     "message-person",

@@ -5,11 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CampaignExecutionError,
   campaignStatus,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-status | campaign-status} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-status | campaign-status} MCP tool. */
 export function registerCampaignStatus(server: McpServer): void {
   server.tool(
     "campaign-status",

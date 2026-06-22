@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { addPeopleToCollection } from "@lhremote/core";
+import { addPeopleToCollection } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#add-people-to-collection | add-people-to-collection} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#add-people-to-collection | add-people-to-collection} MCP tool. */
 export function registerAddPeopleToCollection(server: McpServer): void {
   server.tool(
     "add-people-to-collection",

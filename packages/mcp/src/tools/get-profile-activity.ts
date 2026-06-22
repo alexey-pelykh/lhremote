@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getProfileActivity } from "@lhremote/core";
+import { getProfileActivity } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#get-profile-activity | get-profile-activity} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#get-profile-activity | get-profile-activity} MCP tool. */
 export function registerGetProfileActivity(server: McpServer): void {
   server.tool(
     "get-profile-activity",

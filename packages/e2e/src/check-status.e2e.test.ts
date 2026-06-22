@@ -2,15 +2,15 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, launchApp, quitApp, retryAsync } from "@lhremote/core/testing";
-import { AppService, checkStatus, type StatusReport } from "@lhremote/core";
+import { describeE2E, launchApp, quitApp, retryAsync } from "@insoftex/lhremote-core/testing";
+import { AppService, checkStatus, type StatusReport } from "@insoftex/lhremote-core";
 
 // CLI handler
-import { handleCheckStatus } from "@lhremote/cli/handlers";
+import { handleCheckStatus } from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registration
-import { registerCheckStatus } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerCheckStatus } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("check-status", () => {
   let app: AppService;

@@ -6,11 +6,11 @@ import {
   ActionNotFoundError,
   CampaignExecutionError,
   campaignRemoveAction,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-remove-action | campaign-remove-action} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-remove-action | campaign-remove-action} MCP tool. */
 export function registerCampaignRemoveAction(server: McpServer): void {
   server.tool(
     "campaign-remove-action",

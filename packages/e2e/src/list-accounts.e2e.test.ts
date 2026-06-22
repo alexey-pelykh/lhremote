@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E, launchApp, quitApp, retryAsync } from "@lhremote/core/testing";
-import { AppService, LauncherService } from "@lhremote/core";
+import { describeE2E, launchApp, quitApp, retryAsync } from "@insoftex/lhremote-core/testing";
+import { AppService, LauncherService } from "@insoftex/lhremote-core";
 
 // CLI handler
-import { handleListAccounts } from "@lhremote/cli/handlers";
+import { handleListAccounts } from "@insoftex/lhremote-cli/handlers";
 
 describeE2E("list-accounts", () => {
   let app: AppService;

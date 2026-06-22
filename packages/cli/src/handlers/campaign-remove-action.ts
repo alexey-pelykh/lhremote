@@ -9,9 +9,9 @@ import {
   InstanceNotRunningError,
   campaignRemoveAction,
   type CampaignRemoveActionOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-actions | campaign-remove-action} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-actions | campaign-remove-action} CLI command. */
 export async function handleCampaignRemoveAction(
   campaignId: number,
   actionId: number,
@@ -19,6 +19,7 @@ export async function handleCampaignRemoveAction(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    accountId?: number;
     json?: boolean;
   },
 ): Promise<void> {
@@ -30,6 +31,7 @@ export async function handleCampaignRemoveAction(
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      accountId: options.accountId,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {

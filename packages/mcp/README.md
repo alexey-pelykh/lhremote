@@ -1,15 +1,15 @@
-# @lhremote/mcp
+# @insoftex/lhremote-mcp
 
-MCP server for [lhremote](https://github.com/alexey-pelykh/lhremote) — LinkedHelper automation toolkit.
+MCP server for [lhremote](https://github.com/insoftex-company/insoftex-lhremote) — LinkedHelper automation toolkit.
 
-This package exposes the full LinkedHelper automation surface as a [Model Context Protocol](https://modelcontextprotocol.io) server. AI assistants (Claude, etc.) connect over stdio and use the 68 registered tools to control LinkedHelper.
+This package exposes the full LinkedHelper automation surface as a [Model Context Protocol](https://modelcontextprotocol.io) server. AI assistants (Claude, etc.) connect over stdio and use the 78 registered tools to control LinkedHelper.
 
-Built on [`@lhremote/core`](../core).
+Built on [`@insoftex/lhremote-core`](../core).
 
 ## Installation
 
 ```bash
-npm install @lhremote/mcp
+npm install @insoftex/lhremote-mcp
 ```
 
 ## Usage with Claude Desktop
@@ -21,7 +21,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "lhremote": {
       "command": "npx",
-      "args": ["lhremote", "mcp"]
+      "args": ["@insoftex/lhremote", "mcp"]
     }
   }
 }
@@ -30,7 +30,7 @@ Add to `claude_desktop_config.json`:
 ## Programmatic Usage
 
 ```typescript
-import { createServer } from "@lhremote/mcp";
+import { createServer } from "@insoftex/lhremote-mcp";
 
 const server = createServer();
 // server is a fully configured McpServer with all tools registered
@@ -39,7 +39,7 @@ const server = createServer();
 Or start the stdio transport directly:
 
 ```typescript
-import { runStdioServer } from "@lhremote/mcp/stdio";
+import { runStdioServer } from "@insoftex/lhremote-mcp/stdio";
 
 await runStdioServer();
 ```
@@ -61,15 +61,15 @@ await runStdioServer();
 | Profiles & Messaging | `query-profile`, `query-profiles`, `query-profiles-bulk`, `query-messages`, `check-replies`, `scrape-messaging-history` |
 | Utilities | `describe-actions`, `get-errors`, `dismiss-errors`, `get-action-budget`, `get-throttle-status` |
 
-See the [root README](https://github.com/alexey-pelykh/lhremote#mcp-tools) for parameter details on each tool.
+See the [root README](https://github.com/insoftex-company/insoftex-lhremote#mcp-tools) for parameter details on each tool, and the [MCP Agent Capabilities guide](../../docs/mcp-agent-capabilities.md) for recommended agent workflows.
 
 ## Exports
 
 | Export | Description |
 |--------|-------------|
 | `createServer()` | Create a configured `McpServer` with all tools registered |
-| `runStdioServer()` | Start the MCP server on stdio (from `@lhremote/mcp/stdio`) |
+| `runStdioServer()` | Start the MCP server on stdio (from `@insoftex/lhremote-mcp/stdio`) |
 
 ## License
 
-[AGPL-3.0-only](https://github.com/alexey-pelykh/lhremote/blob/main/LICENSE)
+[AGPL-3.0-only](https://github.com/insoftex-company/insoftex-lhremote/blob/main/LICENSE)

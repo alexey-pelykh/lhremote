@@ -1,6 +1,9 @@
 ## Project-specific
 *.local.*
 
+# pnpm store (created when PNPM_STORE_PATH points inside the project)
+.pnpm-store/
+
 # Turbo
 .turbo/
 

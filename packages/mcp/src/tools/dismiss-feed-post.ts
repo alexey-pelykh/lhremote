@@ -5,11 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   dismissFeedPost,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#dismiss-feed-post | dismiss-feed-post} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#dismiss-feed-post | dismiss-feed-post} MCP tool. */
 export function registerDismissFeedPost(server: McpServer): void {
   server.tool(
     "dismiss-feed-post",

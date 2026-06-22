@@ -31,15 +31,15 @@ const FIXTURE_ORIGIN = join(
  */
 let fixturePath: string;
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     discoverAllDatabases: vi.fn(),
   };
 });
 
-import { discoverAllDatabases } from "@lhremote/core";
+import { discoverAllDatabases } from "@insoftex/lhremote-core";
 
 import { handleQueryMessages } from "./query-messages.js";
 

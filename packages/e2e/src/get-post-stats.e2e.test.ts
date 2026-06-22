@@ -2,22 +2,22 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { assertDefined, describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
+import { assertDefined, describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
   discoverTargets,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
-import type { GetPostStatsOutput } from "@lhremote/core";
+} from "@insoftex/lhremote-core";
+import type { GetPostStatsOutput } from "@insoftex/lhremote-core";
 
 // CLI handlers
-import { handleGetPostStats } from "@lhremote/cli/handlers";
+import { handleGetPostStats } from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registrations
-import { registerGetPostStats } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerGetPostStats } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 /**
  * Fetch a fresh post URL by scraping the feed.  Returns the URL of the
@@ -25,7 +25,7 @@ import { createMockServer } from "@lhremote/mcp/testing";
  * first post has no URL.
  */
 async function fetchPostUrlFromFeed(cdpPort: number): Promise<string | undefined> {
-  const { getFeed } = await import("@lhremote/core");
+  const { getFeed } = await import("@insoftex/lhremote-core");
   const result = await getFeed({ cdpPort, count: 1 });
   const first = result.posts[0];
   return first?.url ?? undefined;

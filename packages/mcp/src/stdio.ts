@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { errorMessage } from "@lhremote/core";
+import { errorMessage } from "@insoftex/lhremote-core";
 
 import { createServer } from "./server.js";
 

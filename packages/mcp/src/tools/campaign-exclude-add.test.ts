@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     campaignExcludeAdd: vi.fn(),
@@ -16,7 +16,7 @@ import {
   CampaignNotFoundError,
   ExcludeListNotFoundError,
   campaignExcludeAdd,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { registerCampaignExcludeAdd } from "./campaign-exclude-add.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";

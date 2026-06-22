@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     checkReplies: vi.fn(),
@@ -15,7 +15,7 @@ import {
   type ConversationMessages,
   AccountResolutionError,
   checkReplies,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { registerCheckReplies } from "./check-replies.js";
 import { describeInfrastructureErrors } from "./testing/infrastructure-errors.js";

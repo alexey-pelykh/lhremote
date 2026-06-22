@@ -3,12 +3,19 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     LauncherService: vi.fn(),
     startInstanceWithRecovery: vi.fn(),
+    withLauncherQueue: vi.fn(async (op: () => Promise<unknown>) => op()),
+    withLauncherRecovery: vi.fn(
+      async (_launcher: unknown, op: () => Promise<unknown>) => ({
+        result: await op(),
+        launcherRecovered: false,
+      }),
+    ),
   };
 });
 
@@ -17,7 +24,7 @@ import {
   LauncherService,
   LinkedHelperNotRunningError,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { registerStartInstance } from "./start-instance.js";
 import { createMockServer } from "./testing/mock-server.js";
@@ -72,11 +79,61 @@ describe("registerStartInstance", () => {
     const handler = getHandler("start-instance");
     const result = await handler({ accountId: 42, cdpPort: 9222 });
 
+    // Without pid/verified fields the base text is unchanged
     expect(result).toEqual({
       content: [
         {
           type: "text",
           text: "Instance started for account 42 on CDP port 55123",
+        },
+      ],
+    });
+  });
+
+  it("includes PID and verified flag when outcome carries them", async () => {
+    const { server, getHandler } = createMockServer();
+    registerStartInstance(server);
+
+    mockLauncher();
+    vi.mocked(startInstanceWithRecovery).mockResolvedValue({
+      status: "started",
+      port: 55123,
+      pid: 13004,
+      verified: true,
+    });
+
+    const handler = getHandler("start-instance");
+    const result = await handler({ accountId: 42, cdpPort: 9222 });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "Instance started for account 42 on CDP port 55123 — PID 13004 — verified",
+        },
+      ],
+    });
+  });
+
+  it("reports NOT verified when verification failed", async () => {
+    const { server, getHandler } = createMockServer();
+    registerStartInstance(server);
+
+    mockLauncher();
+    vi.mocked(startInstanceWithRecovery).mockResolvedValue({
+      status: "started",
+      port: 55123,
+      verified: false,
+    });
+
+    const handler = getHandler("start-instance");
+    const result = await handler({ accountId: 42, cdpPort: 9222 });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "Instance started for account 42 on CDP port 55123 — NOT verified — duplicate port suspected",
         },
       ],
     });
@@ -200,6 +257,7 @@ describe("registerStartInstance", () => {
     const handler = getHandler("start-instance");
     const result = await handler({ accountId: 42, cdpPort: 9222 });
 
+    // Without pid/verified fields the base text is unchanged
     expect(result).toEqual({
       content: [
         {

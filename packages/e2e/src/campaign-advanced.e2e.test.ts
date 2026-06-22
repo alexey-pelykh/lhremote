@@ -2,13 +2,13 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { assertDefined, describeE2E, forceStopInstance, installErrorDetection, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
+import { assertDefined, describeE2E, forceStopInstance, installErrorDetection, launchApp, quitApp, resolveAccountId, retryAsync } from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   dismissErrors,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 // CLI handlers
 import {
@@ -16,7 +16,7 @@ import {
   handleCampaignErase,
   handleCampaignGet,
   handleCampaignUpdateAction,
-} from "@lhremote/cli/handlers";
+} from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registration
 import {
@@ -24,8 +24,8 @@ import {
   registerCampaignErase,
   registerCampaignGet,
   registerCampaignUpdateAction,
-} from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+} from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 /**
  * Campaign config with one action so we have an action to update.

@@ -5,9 +5,9 @@ import {
   type ActionTypeInfo,
   getActionTypeCatalog,
   getActionTypeInfo,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#utilities | describe-actions} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#utilities | describe-actions} CLI command. */
 export function handleDescribeActions(options: {
   category?: string;
   type?: string;

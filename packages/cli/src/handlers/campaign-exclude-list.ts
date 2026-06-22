@@ -8,9 +8,9 @@ import {
   ExcludeListNotFoundError,
   campaignExcludeList,
   type CampaignExcludeListOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-targeting | campaign-exclude-list} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-targeting | campaign-exclude-list} CLI command. */
 export async function handleCampaignExcludeList(
   campaignId: number,
   options: {
@@ -18,6 +18,7 @@ export async function handleCampaignExcludeList(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    accountId?: number;
     json?: boolean;
   },
 ): Promise<void> {
@@ -29,6 +30,7 @@ export async function handleCampaignExcludeList(
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      accountId: options.accountId,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {

@@ -2,19 +2,19 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { assertDefined, describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
+import { assertDefined, describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
   discoverTargets,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
-import type { GetFeedOutput, GetPostEngagersOutput } from "@lhremote/core";
+} from "@insoftex/lhremote-core";
+import type { GetFeedOutput, GetPostEngagersOutput } from "@insoftex/lhremote-core";
 
 // MCP tool registrations
-import { registerGetFeed, registerGetPostEngagers } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerGetFeed, registerGetPostEngagers } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("get-post-engagers operation", () => {
   let app: AppService;

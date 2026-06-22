@@ -1,63 +1,52 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import {
-  CampaignRepository,
-  type CampaignSummary,
-  DatabaseClient,
-  discoverAllDatabases,
-  errorMessage,
-} from "@lhremote/core";
+import { campaignList, errorMessage, InstanceNotRunningError } from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-list} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#campaigns | campaign-list} CLI command. */
 export async function handleCampaignList(options: {
   includeArchived?: boolean;
+  cdpPort?: number;
+  cdpHost?: string;
+  allowRemote?: boolean;
+  accountId?: number;
   json?: boolean;
 }): Promise<void> {
   const { includeArchived = false } = options;
 
-  const databases = discoverAllDatabases();
-  if (databases.size === 0) {
-    process.stderr.write("No LinkedHelper databases found.\n");
+  let result: Awaited<ReturnType<typeof campaignList>>;
+  try {
+    result = await campaignList({
+      includeArchived,
+      cdpPort: options.cdpPort,
+      cdpHost: options.cdpHost,
+      allowRemote: options.allowRemote,
+      accountId: options.accountId,
+    });
+  } catch (error) {
+    if (error instanceof InstanceNotRunningError) {
+      process.stderr.write(`${error.message}\n`);
+    } else {
+      const message = errorMessage(error);
+      process.stderr.write(`${message}\n`);
+    }
     process.exitCode = 1;
     return;
   }
 
-  const allCampaigns: CampaignSummary[] = [];
-
-  for (const [, dbPath] of databases) {
-    const db = new DatabaseClient(dbPath);
-    try {
-      const repo = new CampaignRepository(db);
-      const campaigns = repo.listCampaigns({ includeArchived });
-      allCampaigns.push(...campaigns);
-    } catch (error) {
-      const message = errorMessage(error);
-      process.stderr.write(`Error in database at ${dbPath}: ${message}\n`);
-      process.exitCode = 1;
-      return;
-    } finally {
-      db.close();
-    }
-  }
+  const { campaigns } = result;
 
   if (options.json) {
-    const response = {
-      campaigns: allCampaigns,
-      total: allCampaigns.length,
-    };
-    process.stdout.write(JSON.stringify(response, null, 2) + "\n");
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
   } else {
-    if (allCampaigns.length === 0) {
+    if (campaigns.length === 0) {
       process.stdout.write("No campaigns found.\n");
       return;
     }
 
-    process.stdout.write(
-      `Campaigns (${String(allCampaigns.length)} total):\n\n`,
-    );
+    process.stdout.write(`Campaigns (${String(campaigns.length)} total):\n\n`);
 
-    for (const campaign of allCampaigns) {
+    for (const campaign of campaigns) {
       const parts: string[] = [`#${campaign.id}  ${campaign.name}`];
       parts.push(`[${campaign.state}]`);
       parts.push(`${String(campaign.actionCount)} actions`);

@@ -5,9 +5,9 @@ import {
   errorMessage,
   getProfileActivity,
   type GetProfileActivityOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#get-profile-activity | get-profile-activity} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#get-profile-activity | get-profile-activity} CLI command. */
 export async function handleGetProfileActivity(
   profile: string,
   options: {

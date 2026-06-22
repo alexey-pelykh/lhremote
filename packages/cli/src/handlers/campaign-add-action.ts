@@ -6,9 +6,9 @@ import {
   errorMessage,
   campaignAddAction,
   type CampaignAddActionOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-actions | campaign-add-action} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-actions | campaign-add-action} CLI command. */
 export async function handleCampaignAddAction(
   campaignId: number,
   options: {
@@ -21,6 +21,7 @@ export async function handleCampaignAddAction(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    accountId?: number;
     json?: boolean;
   },
 ): Promise<void> {
@@ -52,6 +53,7 @@ export async function handleCampaignAddAction(
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      accountId: options.accountId,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {

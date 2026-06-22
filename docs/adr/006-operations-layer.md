@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-lhremote exposes automation capabilities through two user-facing interfaces — a CLI (`@lhremote/cli`) and an MCP server (`@lhremote/mcp`). Both interfaces need to perform the same business flows: resolve an account, open a database/instance context, call one or more services, and return a typed result.
+lhremote exposes automation capabilities through two user-facing interfaces — a CLI (`@insoftex/lhremote-cli`) and an MCP server (`@insoftex/lhremote-mcp`). Both interfaces need to perform the same business flows: resolve an account, open a database/instance context, call one or more services, and return a typed result.
 
 Before the operations layer, this orchestration logic was duplicated across MCP tool handlers and CLI command handlers. With 30+ tool/command pairs, the duplication created divergence risk — a bug fix in one handler might not be applied to its counterpart — and made it harder to test business flows in isolation from interface concerns.
 

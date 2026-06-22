@@ -2,12 +2,12 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { assertDefined, describeE2E, launchApp, quitApp } from "@lhremote/core/testing";
-import { AppService, findApp } from "@lhremote/core";
-import type { DiscoveredApp } from "@lhremote/core";
-import { handleFindApp } from "@lhremote/cli/handlers";
-import { registerFindApp } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { assertDefined, describeE2E, launchApp, quitApp } from "@insoftex/lhremote-core/testing";
+import { AppService, findApp } from "@insoftex/lhremote-core";
+import type { DiscoveredApp } from "@insoftex/lhremote-core";
+import { handleFindApp } from "@insoftex/lhremote-cli/handlers";
+import { registerFindApp } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("find-app", () => {
   let app: AppService;

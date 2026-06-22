@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { AppLaunchError, AppNotFoundError, AppService } from "@lhremote/core";
+import { AppLaunchError, AppNotFoundError, AppService } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#launch-app | launch-app} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#launch-app | launch-app} MCP tool. */
 export function registerLaunchApp(server: McpServer): void {
   server.tool(
     "launch-app",
@@ -22,10 +22,15 @@ export function registerLaunchApp(server: McpServer): void {
         .boolean()
         .optional()
         .describe("Kill existing LinkedHelper processes before launching"),
+      visible: z
+        .boolean()
+        .optional()
+        .describe("Restore and focus the LinkedHelper launcher window on Windows"),
     },
-    async ({ cdpPort, force }) => {
+    async ({ cdpPort, force, visible }) => {
       const app = new AppService(cdpPort, {
         ...(force !== undefined && { force }),
+        ...(visible !== undefined && { visible }),
       });
 
       try {

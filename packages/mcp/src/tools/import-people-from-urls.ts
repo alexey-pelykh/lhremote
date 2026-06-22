@@ -5,11 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CampaignExecutionError,
   importPeopleFromUrls,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#import-people-from-urls | import-people-from-urls} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#import-people-from-urls | import-people-from-urls} MCP tool. */
 export function registerImportPeopleFromUrls(server: McpServer): void {
   server.tool(
     "import-people-from-urls",

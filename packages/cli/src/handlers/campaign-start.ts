@@ -9,11 +9,11 @@ import {
   InstanceNotRunningError,
   campaignStart,
   type CampaignStartOutput,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { resolvePersonIds } from "./person-ids.js";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-start} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#campaigns | campaign-start} CLI command. */
 export async function handleCampaignStart(
   campaignId: number,
   options: {
@@ -22,6 +22,7 @@ export async function handleCampaignStart(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    accountId?: number;
     json?: boolean;
   },
 ): Promise<void> {
@@ -43,6 +44,7 @@ export async function handleCampaignStart(
       cdpPort: options.cdpPort,
       cdpHost: options.cdpHost,
       allowRemote: options.allowRemote,
+      accountId: options.accountId,
     });
   } catch (error) {
     if (error instanceof CampaignNotFoundError) {

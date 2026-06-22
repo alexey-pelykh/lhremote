@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     campaignCreate: vi.fn(),
@@ -29,7 +29,7 @@ import {
   campaignCreate,
   parseCampaignJson,
   parseCampaignYaml,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { readFileSync } from "node:fs";
 
 import { handleCampaignCreate } from "./campaign-create.js";
@@ -162,6 +162,17 @@ describe("handleCampaignCreate", () => {
     expect(process.exitCode).toBe(1);
     expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("Failed to parse campaign configuration"),
+    );
+  });
+
+  it("forwards accountId to campaignCreate", async () => {
+    vi.mocked(parseCampaignJson).mockReturnValue(MOCK_CONFIG as never);
+    vi.mocked(campaignCreate).mockResolvedValue(MOCK_RESULT);
+
+    await handleCampaignCreate({ jsonInput: '{"name":"Test"}', accountId: 42 });
+
+    expect(campaignCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 42 }),
     );
   });
 

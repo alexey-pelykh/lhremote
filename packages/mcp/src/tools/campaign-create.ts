@@ -9,7 +9,7 @@ import {
   errorMessage,
   parseCampaignJson,
   parseCampaignYaml,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import {
   cdpConnectionSchema,
@@ -18,7 +18,7 @@ import {
   mcpSuccess,
 } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-create | campaign-create} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-create | campaign-create} MCP tool. */
 export function registerCampaignCreate(server: McpServer): void {
   server.tool(
     "campaign-create",

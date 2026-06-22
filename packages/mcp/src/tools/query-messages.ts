@@ -5,11 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ChatNotFoundError,
   queryMessages,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#query-messages | query-messages} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#query-messages | query-messages} MCP tool. */
 export function registerQueryMessages(server: McpServer): void {
   server.tool(
     "query-messages",

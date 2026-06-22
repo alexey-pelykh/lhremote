@@ -8,9 +8,9 @@ import {
   type CommentOnPostOutput,
   type MentionEntry,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#comment-on-post | comment-on-post} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#comment-on-post | comment-on-post} CLI command. */
 export async function handleCommentOnPost(options: {
   url: string;
   text: string;

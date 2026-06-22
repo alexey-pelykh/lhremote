@@ -8,7 +8,25 @@ vi.mock("../cdp/index.js", () => ({
   findApp: vi.fn(),
   resolveAppPort: vi.fn(),
   resolveLauncherPort: vi.fn(),
+  scanRunningInstances: vi.fn().mockResolvedValue([]),
+  readinessTracker: {
+    update: vi.fn().mockReturnValue(new Map()),
+  },
 }));
+
+// Helper: a minimal RunningInstance (process-inspection based)
+function makeRunningInstance(overrides: Partial<{
+  accountId: number | null; name: string; email: string; pid: number;
+  cdpPort: number | null; connectable: boolean; helperChildCount: number;
+  source: "cmdline" | "cdp" | "launcher"; confidence: "high" | "low" | "unknown";
+}> = {}) {
+  return {
+    accountId: 1, name: "Alice", email: "alice@example.com",
+    pid: 12345, cdpPort: 54321, connectable: true,
+    helperChildCount: 0, source: "cmdline" as const, confidence: "high" as const,
+    ...overrides,
+  };
+}
 
 vi.mock("../db/index.js", () => ({
   DatabaseClient: vi.fn(),
@@ -19,7 +37,7 @@ vi.mock("./launcher.js", () => ({
   LauncherService: vi.fn(),
 }));
 
-import { discoverInstancePort, findApp, resolveLauncherPort } from "../cdp/index.js";
+import { discoverInstancePort, findApp, resolveLauncherPort, scanRunningInstances } from "../cdp/index.js";
 import { DatabaseClient, discoverAllDatabases } from "../db/index.js";
 import { LauncherService } from "./launcher.js";
 import { checkStatus } from "./status.js";
@@ -28,6 +46,7 @@ const mockedLauncherService = vi.mocked(LauncherService);
 const mockedDiscoverInstancePort = vi.mocked(discoverInstancePort);
 const mockedFindApp = vi.mocked(findApp);
 const mockedResolveLauncherPort = vi.mocked(resolveLauncherPort);
+const mockedScanRunningInstances = vi.mocked(scanRunningInstances);
 const mockedDiscoverAllDatabases = vi.mocked(discoverAllDatabases);
 const mockedDatabaseClient = vi.mocked(DatabaseClient);
 
@@ -138,71 +157,74 @@ describe("checkStatus", () => {
 
     const report = await checkStatus();
 
-    expect(mockedResolveLauncherPort).toHaveBeenCalledWith(undefined, undefined);
+    expect(mockedResolveLauncherPort).toHaveBeenCalledWith(undefined, undefined, 0);
     expect(report.launcher.port).toBe(9222);
   });
 
-  it("reports single account with instance port", async () => {
-    mockLauncher({
-      listAccounts: vi.fn().mockResolvedValue([
-        { id: 1, liId: 100, name: "Alice" },
-      ]),
-    });
+  it("instances[] comes from process inspection (not launcher listAccounts)", async () => {
+    mockLauncher();
     mockedDiscoverInstancePort.mockResolvedValue(54321);
     mockedDiscoverAllDatabases.mockReturnValue(new Map());
+    mockedScanRunningInstances.mockResolvedValue([
+      makeRunningInstance({ accountId: 347559, name: "Vira Lyn", cdpPort: 50297 }),
+    ]);
 
     const report = await checkStatus(9222);
 
-    expect(report.instances).toEqual([
-      { accountId: 1, accountName: "Alice", cdpPort: 54321 },
-    ]);
+    // instances[] reflects what scanRunningInstances() returns, not listAccounts()
+    expect(report.instances).toHaveLength(1);
+    expect(report.instances[0]).toMatchObject({ accountId: 347559, name: "Vira Lyn", cdpPort: 50297 });
   });
 
-  it("reports null cdpPort for all accounts when multiple accounts exist", async () => {
-    mockLauncher({
-      listAccounts: vi.fn().mockResolvedValue([
-        { id: 1, liId: 100, name: "Alice" },
-        { id: 2, liId: 200, name: "Bob" },
-      ]),
-    });
-    mockedDiscoverInstancePort.mockResolvedValue(54321);
-    mockedDiscoverAllDatabases.mockReturnValue(new Map());
-
-    const report = await checkStatus(9222);
-
-    expect(report.instances).toEqual([
-      { accountId: 1, accountName: "Alice", cdpPort: null },
-      { accountId: 2, accountName: "Bob", cdpPort: null },
-    ]);
-  });
-
-  it("reports null cdpPort when no instance is running", async () => {
-    mockLauncher({
-      listAccounts: vi.fn().mockResolvedValue([
-        { id: 1, liId: 100, name: "Alice" },
-      ]),
-    });
+  it("instances[] and runningInstances[] are the same array reference", async () => {
+    mockLauncher();
     mockedDiscoverInstancePort.mockResolvedValue(null);
     mockedDiscoverAllDatabases.mockReturnValue(new Map());
+    mockedScanRunningInstances.mockResolvedValue([
+      makeRunningInstance({ accountId: 347559, cdpPort: 50297 }),
+      makeRunningInstance({ accountId: 329925, cdpPort: 56429, pid: 13640 }),
+    ]);
 
     const report = await checkStatus(9222);
 
-    expect(report.instances[0]?.cdpPort).toBeNull();
+    // instances is an alias for runningInstances
+    expect(report.instances).toBe(report.runningInstances);
+    expect(report.instances).toHaveLength(2);
   });
 
-  it("reports empty instances when listAccounts fails", async () => {
-    mockLauncher({
-      listAccounts: vi.fn().mockRejectedValue(new Error("eval error")),
-    });
+  it("reports empty instances when no instances are running (launcher up)", async () => {
+    mockLauncher();
+    mockedDiscoverInstancePort.mockResolvedValue(null);
     mockedDiscoverAllDatabases.mockReturnValue(new Map());
+    mockedScanRunningInstances.mockResolvedValue([]);
 
     const report = await checkStatus(9222);
 
     expect(report.instances).toEqual([]);
     expect(report.launcher.reachable).toBe(true);
-    expect(report.warnings).toEqual([
-      "Failed to query accounts: eval error",
+    // No warning when launcher is reachable and no instances is valid state
+    expect(report.warnings).toBeUndefined();
+  });
+
+  it("instances[] is populated even when launcher CDP is down", async () => {
+    mockedLauncherService.mockImplementation(function () {
+      return {
+        connect: vi.fn().mockRejectedValue(new Error("connection refused")),
+        disconnect: vi.fn(),
+      } as unknown as LauncherService;
+    });
+    mockedFindApp.mockResolvedValue([]);
+    mockedDiscoverAllDatabases.mockReturnValue(new Map());
+    mockedScanRunningInstances.mockResolvedValue([
+      makeRunningInstance({ accountId: 347559, cdpPort: 50297 }),
     ]);
+
+    const report = await checkStatus(9222);
+
+    expect(report.launcher.reachable).toBe(false);
+    // instances still populated from process inspection despite launcher being down
+    expect(report.instances).toHaveLength(1);
+    expect(report.instances[0]).toMatchObject({ accountId: 347559, cdpPort: 50297 });
   });
 
   it("reports databases with profile counts", async () => {

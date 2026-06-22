@@ -2,11 +2,15 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { LauncherService, resolveLauncherPort } from "@lhremote/core";
+import {
+  LauncherService,
+  resolveLauncherPort,
+  withLauncherRecovery,
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { buildCdpOptions, cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#list-accounts | list-accounts} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#list-accounts | list-accounts} MCP tool. */
 export function registerListAccounts(server: McpServer): void {
   server.tool(
     "list-accounts",
@@ -35,7 +39,12 @@ export function registerListAccounts(server: McpServer): void {
           const options = includeAllWorkspaces === true
             ? { includeAllWorkspaces: true }
             : undefined;
-          const accounts = await launcher.listAccounts(options);
+
+          const { result: accounts } = await withLauncherRecovery(
+            launcher,
+            () => launcher.listAccounts(options),
+          );
+
           return mcpSuccess(JSON.stringify(accounts, null, 2));
         } catch (error) {
           return mcpCatchAll(error, "Failed to list accounts");

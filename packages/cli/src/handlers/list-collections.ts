@@ -7,9 +7,9 @@ import {
   DatabaseClient,
   discoverAllDatabases,
   errorMessage,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#list-collections | list-collections} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#list-collections | list-collections} CLI command. */
 export async function handleListCollections(options: {
   json?: boolean;
 }): Promise<void> {

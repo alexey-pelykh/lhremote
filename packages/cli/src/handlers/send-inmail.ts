@@ -7,9 +7,9 @@ import {
   type EphemeralActionResult,
   CampaignExecutionError,
   CampaignTimeoutError,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#send-inmail | send-inmail} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#send-inmail | send-inmail} CLI command. */
 export async function handleSendInmail(options: {
   personId?: number;
   url?: string;

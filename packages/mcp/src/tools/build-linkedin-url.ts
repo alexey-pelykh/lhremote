@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { type BuildLinkedInUrlInput, buildLinkedInUrl } from "@lhremote/core";
+import { type BuildLinkedInUrlInput, buildLinkedInUrl } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { mcpError, mcpSuccess } from "../helpers.js";
 
@@ -38,7 +38,7 @@ const booleanExpressionSchema = z.union([
   }),
 ]);
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#build-linkedin-url | build-linkedin-url} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#build-linkedin-url | build-linkedin-url} MCP tool. */
 export function registerBuildLinkedInUrl(server: McpServer): void {
   server.tool(
     "build-linkedin-url",

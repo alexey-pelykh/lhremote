@@ -3,12 +3,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return { ...actual, reactToComment: vi.fn() };
 });
 
-import { reactToComment, type ReactToCommentOutput } from "@lhremote/core";
+import { reactToComment, type ReactToCommentOutput } from "@insoftex/lhremote-core";
 import { handleReactToComment } from "./react-to-comment.js";
 import { getStderr, getStdout } from "./testing/mock-helpers.js";
 

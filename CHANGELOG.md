@@ -4,6 +4,137 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-06-22
+
+### Added
+
+- **`restart-instance` MCP tool and CLI command (T3)**: Recycles a single stuck
+  instance — stop → wait for PID exit → start → wait until connectable →
+  verify `--app-id` match on a distinct port. Idempotent: no-op when already
+  healthy unless `force:true`. Only the target account's process is touched;
+  all other instances keep running. Returns
+  `{ accountId, restarted, oldPid, newPid, cdpPort, verified, launcherRecovered }`.
+- **Launcher operation queue (T1)**: All write/lifecycle operations
+  (`start-instance`, `stop-instance`, `restart-instance`, `launch-app`,
+  `quit-app`, and each internal start within `ensure-instances`) are serialised
+  through a single in-process async mutex. After each op, a settle barrier waits
+  for the launcher CDP to be reachable again and (for starts) the target instance
+  to become connectable, before releasing the queue for the next operation. Converts
+  "rapid starts → launcher drop → cascade" into "op → settle → op".
+- **Instance readiness model (T2)**: `InstanceReadinessTracker` tracks per-PID
+  state across successive scans; distinguishes `connectable | starting | degraded |
+  stuck`. `waitForConnectable(accountId, opts)` polls until the account's instance
+  is connectable on a real distinct port (or timeout), with optional cheap
+  `isCdpPort` re-probe when a known port is supplied. `check-status` now includes
+  a `readiness` field per instance.
+- **Process inspection cache (T6)**: `gatherRawProcesses` results are cached for
+  ~1 500 ms (configurable via `LHREMOTE_INSPECTION_CACHE_TTL_MS`) to avoid
+  redundant Win32_Process WMI queries during poll loops. Cache is invalidated
+  immediately after every lifecycle op via `invalidateProcessCache()`.
+- **`waitForPidExit(pid, timeoutMs?)` (T5)**: Polls until a PID fully exits using
+  signal-0 probing; used by `restart-instance` and the hardened `stop-instance`.
+- **`docs/instance-stability.md`**: Explains the launcher-queue + readiness model,
+  grace-window/transient-vs-stuck semantics, all config knobs with defaults and
+  rationale, and the read-vs-write reliability boundary.
+
+### Changed
+
+- **`start-instance` (T5)**: Routes through the launcher queue; the settle barrier
+  waits for the launcher to recover and the instance to become connectable before
+  the next queued op can start. Verification uses `waitForConnectable` so a
+  phantom/duplicate port is only declared `verified:false` after the full
+  connectable timeout.
+- **`stop-instance` (T5)**: Routes through the launcher queue; waits for the
+  instance port to disappear via `waitForInstanceShutdown` before returning.
+- **`ensure-instances` (T4)**: Each internal start is serialised through the
+  launcher queue with a settle barrier between accounts (no more cascade).
+  Verification uses parallel `waitForConnectable` in Phase 2 so accounts that
+  take longer to settle are not mis-reported as `verified:false`. An unlicensed
+  account with no process ever appearing is now reported as `status:"failed"` with
+  a clear reason rather than a phantom success.
+- **`check-status`**: `instances[]` entries now include `readiness:
+  "connectable"|"starting"|"degraded"|"stuck"` alongside existing fields.
+
+### Configuration (T7)
+
+All new timings ship with sane defaults and are overridable via environment variables:
+
+| Env var | Default | Meaning |
+|---------|---------|---------|
+| `LHREMOTE_GRACE_WINDOW_MS` | 30 000 | Grace window before a non-connectable instance is considered `stuck` |
+| `LHREMOTE_CONNECTABLE_TIMEOUT_MS` | 45 000 | `waitForConnectable` overall timeout |
+| `LHREMOTE_CONNECTABLE_INTERVAL_MS` | 1 500 | Poll interval inside `waitForConnectable` |
+| `LHREMOTE_SETTLE_BARRIER_TIMEOUT_MS` | 30 000 | Queue settle barrier timeout |
+| `LHREMOTE_INSPECTION_CACHE_TTL_MS` | 1 500 | Process inspection cache TTL |
+| `LHREMOTE_LAUNCHER_RECOVERY_TIMEOUT_MS` | 30 000 | (existing) Launcher recovery cap |
+
+## [0.21.0] — 2026-06-21
+
+Baseline: upstream 0.20.1. This fork branches above upstream to eliminate the
+`0.3.x < 0.20.1` semver confusion. All changes below are relative to upstream
+0.20.1.
+
+### Added
+
+- **Launcher CDP auto-recovery (F3)**: before any launcher-dependent operation
+  (`list-accounts`, `start-instance`, `stop-instance`, `list-workspaces`, …)
+  the service detects an unreachable CDP endpoint and automatically re-discovers
+  the launcher's current debugging port (dynamic; never assumed to be 9222) then
+  reconnects with exponential backoff up to a configurable cap (default 30 s).
+  Results include a `launcherRecovered: boolean` field so callers know a
+  recovery took place.
+- `LauncherService.reconnect(options?)` — explicit reconnect with port
+  re-discovery and bounded backoff; cap configurable via `timeoutMs` option or
+  `LHREMOTE_LAUNCHER_RECOVERY_TIMEOUT_MS` env var.
+- `withLauncherRecovery(launcher, op, options?)` utility exported from core —
+  runs an operation, catches launcher-CDP errors, calls `reconnect()` once, and
+  retries; returns `{ result, launcherRecovered }`.
+- Self-contained ESM bundle (`dist-bundle/lhremote-mcp.mjs`) and matching
+  `.mcpb` package (`dist-mcpb/lhremote-0.21.0.mcpb`) for durable Claude
+  Desktop extension deployment that does not depend on workspace symlinks.
+- `docs/packaging.md` — how to rebuild the bundle and `.mcpb`, install steps,
+  and the invariant that the shipped manifest must point at the bundled path.
+
+### Fixed
+
+- **Instance visibility (R1–R5)** (backport from 0.3.1): `check-status`
+  `instances[]` now reflects OS-process-inspected running processes only
+  (Win32_Process on Windows), not the full 7-account launcher roster.
+  `instances[].cdpPort` / `connectable` carry live-probe values. Identity
+  parsed from `--app-id`/`--user-li-id`/`--user-li` only; `--lh-account`
+  (license-owner decoy) is ignored. Instances array remains correct when
+  launcher CDP is unreachable.
+- **Name-resolution** (backport from 0.3.1): `find-app` role classification
+  uses `--type=` presence for helper-child detection and `resources\out\` path
+  for instance main processes; `helperChildCount` added per entry.
+
+### Security
+
+- Command-line secrets (`--app-credentials`, `--upstream-proxy`, `--sentry` DSN,
+  `socks5://` proxy URLs, encrypted passwords) are never captured, stored, or
+  surfaced in any tool output, log, or auto-recovery path.
+
+## [0.3.1] — 2026-06-21
+
+### Fixed
+
+- `check-status` `instances[]` now reflects only genuinely running processes from OS process inspection (Win32_Process on Windows), not all 7 configured accounts from the launcher roster (R1)
+- `instances[].cdpPort` and `instances[].connectable` now carry real values from live process probing instead of always being `null` (R2)
+- Instance identity (`accountId`, `name`, `email`) is parsed from `--app-id`/`--user-li-id`/`--user-li` only — `--lh-account` (license-owner decoy, identical across all instances) is now explicitly ignored (R3)
+- `instances[]` remains correct when the launcher CDP is unreachable; `launcher.reachable` is a separate flag (R4)
+- `find-app` role classification: `--type=` present → `helper-child` (excluded by default); `resources\out\` path → `instance`; otherwise `launcher`; added `helperChildCount` per entry (R5)
+
+### Added
+
+- `gather-raw-processes` shared utility — abstracts OS process listing with cmdlines (Win32_Process via PowerShell on Windows; ps-list `cmd` on other platforms)
+- `FindAppOptions.includeHelpers` — opt-in to show helper-child processes in `find-app` output (CLI `--verbose` flag)
+- `StatusReport.instances` — authoritative process-inspection-based array (same data as `runningInstances`, which is retained for backward compatibility)
+- `docs/instance-visibility.md` — process taxonomy, cmdline identity fields, `--lh-account` trap, redaction requirements
+
+### Security
+
+- Command line secrets (`--app-credentials`, `--upstream-proxy`, `--sentry` DSN) are never captured, stored, or returned in any tool output or log
+
 ## [0.9.0] — 2026-04-01
 
 ### Added
@@ -12,7 +143,7 @@ All notable changes to this project will be documented in this file.
 - Smart port resolution with direct instance connection — auto-discovers instance CDP port without manual configuration
 - Dialog dismissal on LauncherService (`dismissInstanceDialog`, `stopInstanceWithDialogDismissal`)
 - `connectUiOnly()` on InstanceService for partial-start resilience
-- `CDPClient` export from `@lhremote/core`
+- `CDPClient` export from `@insoftex/lhremote-core`
 
 ### Changed
 

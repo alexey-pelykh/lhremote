@@ -10,20 +10,20 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
-import type { ScrapeMessagingHistoryOutput } from "@lhremote/core";
+} from "@insoftex/lhremote-core";
+import type { ScrapeMessagingHistoryOutput } from "@insoftex/lhremote-core";
 
 // CLI handler
-import { handleScrapeMessagingHistory } from "@lhremote/cli/handlers";
+import { handleScrapeMessagingHistory } from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registration
-import { registerScrapeMessagingHistory } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerScrapeMessagingHistory } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("scrape-messaging-history", () => {
   let app: AppService;

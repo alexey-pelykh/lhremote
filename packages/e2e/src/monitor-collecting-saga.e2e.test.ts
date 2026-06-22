@@ -30,7 +30,7 @@ import {
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
@@ -39,7 +39,7 @@ import {
   MonitorCollectingSagaTimeoutError,
   monitorCollectingSaga,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 describeE2E("monitor-collecting-saga", () => {
   let app: AppService;

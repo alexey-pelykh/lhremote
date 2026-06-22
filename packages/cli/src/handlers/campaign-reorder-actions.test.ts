@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     campaignReorderActions: vi.fn(),
@@ -18,7 +18,7 @@ import {
   CampaignNotFoundError,
   InstanceNotRunningError,
   campaignReorderActions,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 import { handleCampaignReorderActions } from "./campaign-reorder-actions.js";
 import { getStdout } from "./testing/mock-helpers.js";

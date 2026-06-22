@@ -5,11 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   hideFeedAuthorProfile,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#hide-feed-author-profile | hide-feed-author-profile} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#hide-feed-author-profile | hide-feed-author-profile} MCP tool. */
 export function registerHideFeedAuthorProfile(server: McpServer): void {
   server.tool(
     "hide-feed-author-profile",

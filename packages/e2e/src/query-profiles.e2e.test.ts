@@ -2,14 +2,14 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeE2E } from "@lhremote/core/testing";
+import { describeE2E } from "@insoftex/lhremote-core/testing";
 
 // CLI handler
-import { handleQueryProfiles } from "@lhremote/cli/handlers";
+import { handleQueryProfiles } from "@insoftex/lhremote-cli/handlers";
 
 // MCP tool registration
-import { registerQueryProfiles } from "@lhremote/mcp/tools";
-import { createMockServer } from "@lhremote/mcp/testing";
+import { registerQueryProfiles } from "@insoftex/lhremote-mcp/tools";
+import { createMockServer } from "@insoftex/lhremote-mcp/testing";
 
 describeE2E("query-profiles operation", () => {
   describe("CLI handlers", () => {

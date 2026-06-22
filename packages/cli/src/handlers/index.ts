@@ -42,7 +42,10 @@ export { handleSendInvite } from "./send-invite.js";
 export { handleCollectPeople } from "./collect-people.js";
 export { handleDescribeActions } from "./describe-actions.js";
 export { handleCheckStatus } from "./check-status.js";
+export { handleEnsureInstances } from "./ensure-instances.js";
 export { handleFindApp } from "./find-app.js";
+export { handleListOrphans } from "./list-orphans.js";
+export { handleReapOrphans } from "./reap-orphans.js";
 export { handleGetActionBudget } from "./get-action-budget.js";
 export { handleGetErrors } from "./get-errors.js";
 export { handleGetFeed } from "./get-feed.js";
@@ -67,6 +70,7 @@ export { handleRemovePeopleFromCollection } from "./remove-people-from-collectio
 export { handleQuitApp } from "./quit-app.js";
 export { handleReactToPost } from "./react-to-post.js";
 export { handleReactToComment } from "./react-to-comment.js";
+export { handleRestartInstance } from "./restart-instance.js";
 export { handleStartInstance } from "./start-instance.js";
 export { handleStopInstance } from "./stop-instance.js";
 export { handleVisitProfile } from "./visit-profile.js";

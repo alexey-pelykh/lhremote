@@ -3,12 +3,12 @@
 
 import { afterEach, beforeEach, describe, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return { ...actual, hideFeedAuthorProfile: vi.fn() };
 });
 
-import { hideFeedAuthorProfile } from "@lhremote/core";
+import { hideFeedAuthorProfile } from "@insoftex/lhremote-core";
 
 import { registerHideFeedAuthorProfile } from "./hide-feed-author-profile.js";
 import { describeAccountIdForwarding } from "./testing/account-id-forwarding.js";

@@ -5,11 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   endorseSkills,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#endorse-skills | endorse-skills} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#endorse-skills | endorse-skills} MCP tool. */
 export function registerEndorseSkills(server: McpServer): void {
   server.tool(
     "endorse-skills",

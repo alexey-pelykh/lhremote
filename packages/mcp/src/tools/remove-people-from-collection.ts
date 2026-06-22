@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { removePeopleFromCollection } from "@lhremote/core";
+import { removePeopleFromCollection } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#remove-people-from-collection | remove-people-from-collection} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#remove-people-from-collection | remove-people-from-collection} MCP tool. */
 export function registerRemovePeopleFromCollection(server: McpServer): void {
   server.tool(
     "remove-people-from-collection",

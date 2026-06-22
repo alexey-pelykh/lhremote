@@ -9,7 +9,13 @@ export type {
   ConfigFieldSchema,
 } from "./action-types.js";
 
-export { getActionTypeCatalog, getActionTypeInfo } from "./action-types.js";
+export {
+  getActionTypeCatalog,
+  getActionTypeInfo,
+  validateActionSettings,
+  type ActionSettingsValidationIssue,
+  type ActionSettingsValidationResult,
+} from "./action-types.js";
 
 export {
   getFunctionById,

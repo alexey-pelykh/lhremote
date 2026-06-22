@@ -36,7 +36,7 @@ You can add this automatically with `git commit -s`.
 ### Setup
 
 ```sh
-git clone https://github.com/alexey-pelykh/lhremote.git
+git clone https://github.com/insoftex-company/insoftex-lhremote.git
 cd lhremote
 pnpm install
 pnpm build

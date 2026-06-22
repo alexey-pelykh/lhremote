@@ -6,11 +6,11 @@ import {
   ActionNotFoundError,
   NoNextActionError,
   campaignMoveNext,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#campaign-move-next | campaign-move-next} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#campaign-move-next | campaign-move-next} MCP tool. */
 export function registerCampaignMoveNext(server: McpServer): void {
   server.tool(
     "campaign-move-next",

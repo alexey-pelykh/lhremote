@@ -21,25 +21,25 @@ Organize as a pnpm workspace monorepo with five packages in a layered dependency
 
 ```
 lhremote (distribution package)
-├── @lhremote/cli   (CLI interface)
-└── @lhremote/mcp   (MCP server interface)
-    └── @lhremote/core (shared foundation)
+├── @insoftex/lhremote-cli   (CLI interface)
+└── @insoftex/lhremote-mcp   (MCP server interface)
+    └── @insoftex/lhremote-core (shared foundation)
 
-@lhremote/e2e (private, not published)
-├── @lhremote/cli
-├── @lhremote/mcp
-└── @lhremote/core
+@insoftex/lhremote-e2e (private, not published)
+├── @insoftex/lhremote-cli
+├── @insoftex/lhremote-mcp
+└── @insoftex/lhremote-core
 ```
 
 **Package responsibilities:**
 
 | Package | Role | Dependencies |
 |---------|------|-------------|
-| `@lhremote/core` | CDP client, database access, services, domain types | External only (devtools-protocol, ps-list, etc.) |
-| `@lhremote/mcp` | MCP server with tool definitions and Zod validation | `@lhremote/core`, `@modelcontextprotocol/sdk`, `zod` |
-| `@lhremote/cli` | Commander.js CLI with command handlers | `@lhremote/core`, `commander` |
-| `lhremote` | Published npm package, combines CLI + MCP binaries | `@lhremote/cli`, `@lhremote/mcp` |
-| `@lhremote/e2e` | E2E tests against real LinkedHelper (private, not published) | `@lhremote/core`, `@lhremote/mcp`, `@lhremote/cli` |
+| `@insoftex/lhremote-core` | CDP client, database access, services, domain types | External only (devtools-protocol, ps-list, etc.) |
+| `@insoftex/lhremote-mcp` | MCP server with tool definitions and Zod validation | `@insoftex/lhremote-core`, `@modelcontextprotocol/sdk`, `zod` |
+| `@insoftex/lhremote-cli` | Commander.js CLI with command handlers | `@insoftex/lhremote-core`, `commander` |
+| `@insoftex/lhremote` | Published npm package, combines CLI + MCP binaries | `@insoftex/lhremote-cli`, `@insoftex/lhremote-mcp` |
+| `@insoftex/lhremote-e2e` | E2E tests against real LinkedHelper (private, not published) | `@insoftex/lhremote-core`, `@insoftex/lhremote-mcp`, `@insoftex/lhremote-cli` |
 
 **Key constraints:**
 

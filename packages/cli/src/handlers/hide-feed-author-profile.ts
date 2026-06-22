@@ -6,9 +6,9 @@ import {
   hideFeedAuthorProfile,
   type HideFeedAuthorProfileOutput,
   withLoggedInStateRetryAtPort,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#hide-feed-author-profile | hide-feed-author-profile} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#hide-feed-author-profile | hide-feed-author-profile} CLI command. */
 export async function handleHideFeedAuthorProfile(
   profileUrl: string,
   options: {

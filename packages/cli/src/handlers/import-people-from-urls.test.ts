@@ -3,8 +3,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     importPeopleFromUrls: vi.fn(),
@@ -25,7 +25,7 @@ import {
   CampaignNotFoundError,
   InstanceNotRunningError,
   importPeopleFromUrls,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import { readFileSync } from "node:fs";
 
 import { handleImportPeopleFromUrls } from "./import-people-from-urls.js";
@@ -205,6 +205,19 @@ describe("handleImportPeopleFromUrls", () => {
     expect(process.exitCode).toBe(1);
     expect(stderrSpy).toHaveBeenCalledWith(
       "No LinkedHelper instance is running.\n",
+    );
+  });
+
+  it("forwards accountId to importPeopleFromUrls", async () => {
+    vi.mocked(importPeopleFromUrls).mockResolvedValue(MOCK_RESULT);
+
+    await handleImportPeopleFromUrls(1, {
+      urls: "https://linkedin.com/in/alice",
+      accountId: 7,
+    });
+
+    expect(importPeopleFromUrls).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 7 }),
     );
   });
 

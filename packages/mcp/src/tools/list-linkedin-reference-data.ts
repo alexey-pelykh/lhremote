@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getLinkedInReferenceData } from "@lhremote/core";
+import { getLinkedInReferenceData } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#list-linkedin-reference-data | list-linkedin-reference-data} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#list-linkedin-reference-data | list-linkedin-reference-data} MCP tool. */
 export function registerListLinkedInReferenceData(server: McpServer): void {
   server.tool(
     "list-linkedin-reference-data",

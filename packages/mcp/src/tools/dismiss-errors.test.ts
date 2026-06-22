@@ -3,15 +3,15 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@lhremote/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@lhremote/core")>();
+vi.mock("@insoftex/lhremote-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@insoftex/lhremote-core")>();
   return {
     ...actual,
     dismissErrors: vi.fn(),
   };
 });
 
-import { type DismissErrorsOutput, dismissErrors } from "@lhremote/core";
+import { type DismissErrorsOutput, dismissErrors } from "@insoftex/lhremote-core";
 
 import { registerDismissErrors } from "./dismiss-errors.js";
 import { createMockServer } from "./testing/mock-server.js";

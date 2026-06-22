@@ -2,14 +2,14 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { describeE2E, launchApp, quitApp, resolveAccountId } from "@lhremote/core/testing";
+import { describeE2E, launchApp, quitApp, resolveAccountId } from "@insoftex/lhremote-core/testing";
 import {
   AppService,
   CampaignRepository,
   DatabaseClient,
   discoverDatabase,
   type CampaignSummary,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 describeE2E("CampaignRepository", () => {
   let app: AppService;

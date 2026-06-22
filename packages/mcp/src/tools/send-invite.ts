@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { sendInvite } from "@lhremote/core";
+import { sendInvite } from "@insoftex/lhremote-core";
 import { z } from "zod";
 import { cdpConnectionSchema, mcpCatchAll, mcpError, mcpSuccess } from "../helpers.js";
 
-/** Register the {@link https://github.com/alexey-pelykh/lhremote#send-invite | send-invite} MCP tool. */
+/** Register the {@link https://github.com/insoftex-company/insoftex-lhremote#send-invite | send-invite} MCP tool. */
 export function registerSendInvite(server: McpServer): void {
   server.tool(
     "send-invite",

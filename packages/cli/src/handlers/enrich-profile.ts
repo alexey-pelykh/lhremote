@@ -7,9 +7,9 @@ import {
   type EphemeralActionResult,
   CampaignExecutionError,
   CampaignTimeoutError,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#enrich-profile | enrich-profile} CLI command. */
+/** Handle the {@link https://github.com/insoftex-company/insoftex-lhremote#enrich-profile | enrich-profile} CLI command. */
 export async function handleEnrichProfile(options: {
   personId?: number;
   url?: string;

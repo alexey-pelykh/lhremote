@@ -11,14 +11,14 @@ import {
   gateOnLoggedInState,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 import {
   forceStopInstance,
   launchApp,
   quitApp,
   resolveAccountId,
   retryAsync,
-} from "@lhremote/core/testing";
+} from "@insoftex/lhremote-core/testing";
 
 /**
  * Deadline for the suite-level health gate (120s).  Same shape as the
@@ -56,7 +56,7 @@ type Phase =
  * instance via `launchApp` + `startInstanceWithRecovery`).
  */
 export default async function globalSetup(): Promise<void> {
-  // Only run for the @lhremote/e2e package.  The shared vitest.e2e.config.ts
+  // Only run for the @insoftex/lhremote-e2e package.  The shared vitest.e2e.config.ts
   // is also used by core/cli/mcp/lhremote packages (which have no e2e test
   // files and rely on passWithNoTests).  Without this guard, globalSetup
   // would launch + quit LH four extra times per `pnpm test:e2e`.  Use

@@ -55,14 +55,14 @@ Do **not** dismiss or ignore Copilot feedback. Every comment must be explicitly 
 - Test helper `packages/core/src/cdp/testing/launch-chromium.ts` manages Chromium lifecycle.
 - Chromium is installed in CI via `npx playwright-core install chromium --with-deps`.
 - E2E tests live in `packages/e2e/src/` and are **not** run in CI. Always run `pnpm test:e2e` locally before submitting PRs that add or modify E2E tests.
-- Run a single E2E file: `pnpm --filter @lhremote/e2e test:e2e:file <pattern>` (e.g., `list-accounts`). Do **not** use `--` before the pattern — pnpm forwards it literally and vitest ignores args after `--` for file filtering.
-- E2E tests must assert preconditions explicitly — never silently skip via `if (accounts.length > 0)`. Use `resolveAccountId(port)` from `@lhremote/core/testing` which throws if no accounts exist.
-- Shared E2E helpers (`resolveAccountId`, `forceStopInstance`, `assertDefined`, `getE2EPersonId`) are exported from `@lhremote/core/testing` — do not duplicate them locally in test files.
+- Run a single E2E file: `pnpm --filter @insoftex/lhremote-e2e test:e2e:file <pattern>` (e.g., `list-accounts`). Do **not** use `--` before the pattern — pnpm forwards it literally and vitest ignores args after `--` for file filtering.
+- E2E tests must assert preconditions explicitly — never silently skip via `if (accounts.length > 0)`. Use `resolveAccountId(port)` from `@insoftex/lhremote-core/testing` which throws if no accounts exist.
+- Shared E2E helpers (`resolveAccountId`, `forceStopInstance`, `assertDefined`, `getE2EPersonId`) are exported from `@insoftex/lhremote-core/testing` — do not duplicate them locally in test files.
 - `navigateToProfile` and `waitForPostLoad` can capture timeout diagnostics (URL, `document.title`, DOM probes, full-page screenshot) into a per-invocation `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/` directory (created via `mkdtemp` for TOCTOU-safe atomic creation — see ADR-007 § 2026-05-05 Amendment). Trigger condition differs per helper: `navigateToProfile` captures on `CDPTimeoutError` from its underlying `waitForElement`; `waitForPostLoad` captures when its own polling deadline expires (throws a plain `Error("Timed out waiting for post detail to appear in the DOM")`). Activation in both cases is gated on `LHREMOTE_CAPTURE_DIAGNOSTICS=1`; E2E runs set it via `vitest.e2e.config.ts`, CLI/MCP are default-off. The trailing `console.warn` line emitted by the helper reports the actual artifact path. Inspect these artifacts before changing profile or post-detail selectors.
 
 ## Infrastructure
 
-- **Monorepo**: pnpm workspace with 4 packages: `core`, `mcp`, `cli`, `lhremote`
+- **Monorepo**: pnpm workspace with 5 packages: `core`, `mcp`, `cli`, `lhremote`, `e2e`
 - **Toolchain**: pnpm 9.15.4, Node 24, Turbo (cached via `.turbo/`)
 - **CI**: GitHub Actions (`ci.yml`) — `build`, `lint`, `test` on ubuntu/macos/windows matrix
   - GH Pages docs (README + rate-limiting guide) built via pandoc on every CI run, published on push to main
@@ -71,9 +71,19 @@ Do **not** dismiss or ignore Copilot feedback. Every comment must be explicitly 
 - **Release**: GitHub Actions (`release.yml`) — triggered by GitHub Release publish
   - Validates (build+lint+test), stamps version from tag, publishes to npm (OIDC trusted publishing)
   - Concurrency group `release`, never cancels in-progress
-- **claude-plugin**: `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `server.json` versions must match the npm package version (set by the release tag) and be bumped together on each release
-  - The release workflow does **not** auto-bump these files — after each release, open a PR to update their `"version"` fields to match the new tag
-  - All three files must always show the same version string
+- **Versioning**: every file that carries a version must match the release tag. All must change together on every release — no file may lag behind:
+  | File | Field(s) |
+  |------|----------|
+  | `package.json` | `version` |
+  | `packages/core/package.json` | `version` |
+  | `packages/cli/package.json` | `version` |
+  | `packages/mcp/package.json` | `version` |
+  | `packages/lhremote/package.json` | `version` |
+  | `packages/e2e/package.json` | `version` |
+  | `.claude-plugin/plugin.json` | `version` |
+  | `.claude-plugin/marketplace.json` | `plugins[0].version` |
+  | `server.json` | `version` and `packages[0].version` |
+  - The release workflow stamps the 6 `package.json` files from the git tag but does **not** auto-bump the plugin/server files — after each release, open a PR to update them to match the new tag.
 
 ## Design Decisions
 
@@ -88,10 +98,11 @@ Architecture Decision Records live in `docs/adr/` and explain *why* the codebase
 | [005](docs/adr/005-error-hierarchy-design.md) | Error hierarchy design | `packages/core/src/*/errors.ts` |
 | [006](docs/adr/006-operations-layer.md) | Operations layer | `packages/core/src/operations/` |
 | [007](docs/adr/007-profile-ready-selector-strategy.md) | Profile page readiness selector strategy | `packages/core/src/operations/navigate-to-profile.ts` |
+| [008](docs/adr/008-launcher-queue-readiness.md) | Launcher queue serialization and instance readiness model | `packages/core/src/cdp/launcher-queue.ts`, `instance-readiness.ts` |
 
 ## Task Tracking
 
-- **Issues**: https://github.com/alexey-pelykh/lhremote/issues
+- **Issues**: https://github.com/insoftex-company/insoftex-lhremote/issues
 - **Milestones**: used for grouping related issues into campaigns/phases
 - **Labels**: default GitHub set (bug, enhancement, documentation, etc.)
 - No GitHub Projects

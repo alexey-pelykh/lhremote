@@ -19,14 +19,14 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@lhremote/core/testing";
+import { describeE2E, forceStopInstance, launchApp, quitApp, resolveAccountId, retryAsync } from "@insoftex/lhremote-core/testing";
 import {
   type AppService,
   discoverInstancePort,
   InstanceService,
   LauncherService,
   startInstanceWithRecovery,
-} from "@lhremote/core";
+} from "@insoftex/lhremote-core";
 
 /** LinkedIn people search URL for testing collection. */
 const TEST_SEARCH_URL =

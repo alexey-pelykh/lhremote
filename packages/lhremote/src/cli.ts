@@ -2,10 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { createProgram } from "@lhremote/cli";
-import { runStdioServer } from "@lhremote/mcp/stdio";
+import { createRequire } from "node:module";
 
-const program = createProgram();
+import { createProgram } from "@insoftex/lhremote-cli";
+import { runStdioServer } from "@insoftex/lhremote-mcp/stdio";
+
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json") as { version: string };
+
+const program = createProgram({ version });
 
 program
   .command("mcp")
