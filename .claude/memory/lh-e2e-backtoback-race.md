@@ -3,6 +3,9 @@ name: LH E2E back-to-back runs race on CDP port discovery
 description: Running lhremote E2E tests in quick succession can fail in beforeAll with "Instance CDP port not discovered yet" — LH hasn't fully settled between runs; simple retry resolves
 type: project
 originSessionId: 69536507-4e39-489b-baa1-611af227cc15
+volatility: moderate
+last-verified: 2026-04-19
+verification: empirical-walk
 ---
 Running two lhremote E2E tests in quick succession (e.g. `unfollow-profile` then `hide-feed-author-profile`, or repeat runs of the same test) can fail with `Error: Instance CDP port not discovered yet` — thrown after `retryAsync({ retries: 10, delay: 2_000 })` in `beforeAll` exhausts. When this fires, the test case is SKIPPED, not executed.
 
