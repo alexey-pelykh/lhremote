@@ -10,7 +10,7 @@ import {
   LauncherService,
   startInstanceWithRecovery,
 } from "@lhremote/core";
-import type { GetFeedOutput, GetPostEngagersOutput } from "@lhremote/core";
+import type { GetFeedOutput, GetPostEngagersOutput, PostEngager } from "@lhremote/core";
 
 // MCP tool registrations
 import { registerGetFeed, registerGetPostEngagers } from "@lhremote/mcp/tools";
@@ -88,9 +88,13 @@ describeE2E("get-post-engagers operation", () => {
         (feedResult.content[0] as { text: string }).text,
       ) as GetFeedOutput;
 
-      // Pick first post with reactions > 0; fall back to first post
+      // Pick first post with reactions > 0; fall back to first post.
+      // Which branch was taken is what tells an empty-engagers failure
+      // apart from an extraction regression, so keep the picked post
+      // itself — the precondition below reports its reactionCount.
       const postWithReactions = feedParsed.posts.find((p) => p.reactionCount > 0);
-      const postUrl = postWithReactions?.url ?? feedParsed.posts[0]?.url;
+      const pickedPost = postWithReactions ?? feedParsed.posts[0];
+      const postUrl = pickedPost?.url;
       assertDefined(postUrl, "No posts returned from get-feed");
 
       const { server, getHandler } = createMockServer();
@@ -113,12 +117,26 @@ describeE2E("get-post-engagers operation", () => {
       expect(Array.isArray(parsed.engagers)).toBe(true);
       expect(parsed.paging).toHaveProperty("total");
 
-      if (parsed.engagers.length > 0) {
-        const engager = parsed.engagers[0] as (typeof parsed.engagers)[0];
-        expect(typeof engager.firstName).toBe("string");
-        expect(typeof engager.lastName).toBe("string");
-        expect(typeof engager.engagementType).toBe("string");
-      }
+      // Precondition, not a guard: a conditional here passes vacuously
+      // when extraction returns nothing (lhremote#829).  Zero engagers has
+      // two very different causes, and the pick above already settles
+      // which one applies — `find` misses only when no fetched post had
+      // reactions — so report the picked post's own reactionCount instead
+      // of leaving a red build to guess.  The reactions-modal path is
+      // still unprobed (lhremote#830).
+      expect(
+        parsed.engagers.length,
+        `precondition: expected at least one engager for ${postUrl} — got 0. ` +
+          `get-feed reported reactionCount=${String(pickedPost?.reactionCount)} for that post: ` +
+          "0 means no fetched post had reactions and the test fell back to posts[0] " +
+          "(fixture problem — re-run against a feed that has reactions), " +
+          "while >0 means engager extraction regressed",
+      ).toBeGreaterThan(0);
+
+      const engager = parsed.engagers[0] as PostEngager;
+      expect(typeof engager.firstName).toBe("string");
+      expect(typeof engager.lastName).toBe("string");
+      expect(typeof engager.engagementType).toBe("string");
     }, 120_000);
   });
 });
