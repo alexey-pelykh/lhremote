@@ -8,6 +8,9 @@ import {
   AppNotFoundError,
   CampaignExecutionError,
   CampaignTimeoutError,
+  DOMVariantAmbiguousError,
+  DOMVariantUnsupportedError,
+  ExtractionFailedError,
   ExtractionTimeoutError,
   InstanceNotRunningError,
   InvalidProfileUrlError,
@@ -155,5 +158,81 @@ describe("Service errors", () => {
   it("should allow CampaignTimeoutError without campaignId", () => {
     const error = new CampaignTimeoutError("timeout");
     expect(error.campaignId).toBeUndefined();
+  });
+
+  it("DOMVariantUnsupportedError names the surface and the variants tried", () => {
+    const error = new DOMVariantUnsupportedError("post-detail", ["sdui", "legacy"]);
+
+    expect(error).toBeInstanceOf(ServiceError);
+    expect(error.name).toBe("DOMVariantUnsupportedError");
+    expect(error.surface).toBe("post-detail");
+    expect(error.triedVariants).toEqual(["sdui", "legacy"]);
+    expect(error.message).toContain("post-detail");
+    expect(error.message).toContain("sdui, legacy");
+    expect(error.message).toContain("register an adapter");
+  });
+
+  it("DOMVariantUnsupportedError says so when no adapters are registered", () => {
+    const error = new DOMVariantUnsupportedError("post-detail", []);
+
+    expect(error.message).toContain("none registered");
+  });
+
+  it("ExtractionFailedError names the variant, the field and the corroborator", () => {
+    const error = new ExtractionFailedError({
+      surface: "post-detail",
+      variant: "legacy",
+      field: "comments",
+      corroborator: "commentCount=41",
+    });
+
+    expect(error).toBeInstanceOf(ServiceError);
+    expect(error.name).toBe("ExtractionFailedError");
+    expect(error.variant).toBe("legacy");
+    expect(error.field).toBe("comments");
+    expect(error.corroborator).toBe("commentCount=41");
+    // Naming both is load-bearing: an MCP consumer cannot diagnose otherwise.
+    expect(error.message).toContain("legacy");
+    expect(error.message).toContain("comments");
+    expect(error.message).toContain("commentCount=41");
+  });
+
+  it("DOMVariantAmbiguousError names every matching variant", () => {
+    const error = new DOMVariantAmbiguousError("feed", ["sdui", "legacy"]);
+
+    expect(error).toBeInstanceOf(ServiceError);
+    expect(error.name).toBe("DOMVariantAmbiguousError");
+    expect(error.matchedVariants).toEqual(["sdui", "legacy"]);
+    expect(error.message).toContain("sdui, legacy");
+    expect(error.message).toContain("transitional or hybrid");
+  });
+
+  it("the three variant errors are mutually distinguishable by instanceof", () => {
+    const unsupported = new DOMVariantUnsupportedError("post-detail", []);
+    const failed = new ExtractionFailedError({
+      surface: "post-detail",
+      variant: "legacy",
+      field: "text",
+      corroborator: "container matched",
+    });
+    const ambiguous = new DOMVariantAmbiguousError("post-detail", ["a", "b"]);
+
+    // Collapsing these would discard the routing signal they exist to carry.
+    expect(unsupported).not.toBeInstanceOf(ExtractionFailedError);
+    expect(unsupported).not.toBeInstanceOf(DOMVariantAmbiguousError);
+    expect(failed).not.toBeInstanceOf(DOMVariantUnsupportedError);
+    expect(failed).not.toBeInstanceOf(DOMVariantAmbiguousError);
+    expect(ambiguous).not.toBeInstanceOf(DOMVariantUnsupportedError);
+    expect(ambiguous).not.toBeInstanceOf(ExtractionFailedError);
+  });
+
+  it("ExtractionTimeoutError keeps its Profile default and accepts a subject", () => {
+    const legacy = new ExtractionTimeoutError("https://example.com/in/x", 5000);
+    expect(legacy.message).toContain("Profile extraction timed out after 5000ms");
+    expect(legacy.subject).toBe("Profile");
+
+    const post = new ExtractionTimeoutError("readiness selector main a", 15000, "Post-detail");
+    expect(post.message).toContain("Post-detail extraction timed out after 15000ms");
+    expect(post.subject).toBe("Post-detail");
   });
 });

@@ -32,6 +32,7 @@ vi.mock("./get-feed.js", () => ({
 
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
+import { DOMVariantUnsupportedError } from "../services/errors.js";
 import { getPost } from "./get-post.js";
 
 describe("getPost", () => {
@@ -199,12 +200,15 @@ describe("getPost", () => {
     });
   });
 
-  it("throws when post detail extraction fails", async () => {
+  it("throws a typed DOMVariantUnsupportedError when extraction yields nothing", async () => {
     setupMocks({ postDetail: null });
 
-    await expect(getPost({ postUrl: POST_URL, cdpPort: CDP_PORT })).rejects.toThrow(
-      "Failed to extract post detail from the DOM",
-    );
+    await expect(
+      getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toThrow(DOMVariantUnsupportedError);
+    await expect(
+      getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toThrow(/No DOM adapter matched the post-detail page/);
   });
 
   it("handles missing optional fields in post detail", async () => {

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { resolveInstancePort } from "../cdp/index.js";
+import { DOMVariantUnsupportedError } from "../services/errors.js";
 import type { PostComment, PostDetail } from "../types/post.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
@@ -500,9 +501,10 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
     // Extract post metadata from the DOM
     const rawPost = await client.evaluate<RawPostDetail>(SCRAPE_POST_DETAIL_SCRIPT);
     if (!rawPost) {
-      throw new Error(
-        "Failed to extract post detail from the DOM",
-      );
+      // No adapter registry exists yet (#831), so nothing has been offered
+      // the page — the empty `triedVariants` list is literally accurate and
+      // becomes the real list when the registry lands.
+      throw new DOMVariantUnsupportedError("post-detail", []);
     }
 
     const post: PostDetail = {
