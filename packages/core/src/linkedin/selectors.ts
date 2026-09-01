@@ -26,6 +26,26 @@
 /** Individual feed post wrapper (listitem inside the main feed). */
 export const FEED_POST_CONTAINER = '[data-testid="mainFeed"] [role="listitem"]';
 
+/**
+ * Three-dot control-menu button inside a feed post.
+ *
+ * Opens the per-post overflow menu carrying "Not interested",
+ * "Hide posts by {Name}" and "Unfollow {Name}".  Callers query it
+ * document-wide and index into the resulting NodeList to address a
+ * specific feed position, so the match set defines the index space.
+ *
+ * **Kept independent of {@link FEED_POST_CONTAINER}, not derived from
+ * it**: that constant matches a bare `[role="listitem"]`, so composing
+ * this selector from it would widen the match set — and since callers
+ * index positionally, a wider set silently shifts which post an action
+ * targets.  Whether a non-`div` `[role="listitem"]` actually occurs
+ * under `mainFeed` is unverified against the live DOM; the narrower
+ * `div[role="listitem"]` is carried over verbatim from the call sites
+ * this constant replaced, so the match set is unchanged.
+ */
+export const FEED_POST_MENU_BUTTON =
+  '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]';
+
 // ── Comment input fields ──────────────────────────────────────────
 
 /**
@@ -361,6 +381,7 @@ export const COMMENT_SUBMIT_BUTTON =
  */
 export const SELECTORS = {
   FEED_POST_CONTAINER,
+  FEED_POST_MENU_BUTTON,
   COMMENT_INPUT,
   COMMENT_REPLY_BUTTON,
   COMMENT_REACTION_TRIGGER,
