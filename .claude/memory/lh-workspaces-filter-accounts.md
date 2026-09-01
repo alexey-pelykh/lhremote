@@ -3,6 +3,9 @@ name: LinkedHelper workspaces filter the account cache
 description: On LinkedHelper 2.113.x+, runningLiAccountsService.extendedLinkedInAccountsBS only contains accounts in the selected workspace
 type: project
 originSessionId: 3aa5775a-fed4-4932-905a-c52788286d54
+volatility: high
+last-verified: 2026-05-06
+verification: empirical-walk
 ---
 `runningLiAccountsService.extendedLinkedInAccountsBS.value` on LinkedHelper 2.113.x+ contains **only accounts in the currently selected workspace** — not all accounts the LH user can access. Partitions for accounts in other workspaces still exist on disk, but the cache is filtered.
 
@@ -11,3 +14,10 @@ originSessionId: 3aa5775a-fed4-4932-905a-c52788286d54
 **How to apply:** `LauncherService.listAccounts()` defaults to the selected-workspace view for back-compat. Pass `{ includeAllWorkspaces: true }` to enumerate across every workspace the user belongs to (iterates `workspaceService.api.getWorkspaces()` + `getWorkspaceUserOwnedLiAccounts(wsUserId, { minLevel: "view_only" })`). Use `listWorkspaces()` to discover the user's workspaces. When gating operations, check `account.workspaceAccess?.level` and `canStartInstance(level)` from `@lhremote/core`.
 
 Full background: `research/linkedhelper/architecture/WORKSPACES.md`, `research/linkedhelper/data/WORKSPACE-DATA-MODEL.md`.
+
+**Verification scope**: walked against LinkedHelper **2.113.28** (anchor: `research` commit `14b626b`,
+2026-05-06). LinkedHelper auto-updates and the installed build is now **2.130.30** — 17 minor
+releases later. The claim is *unverified across that gap*, and `lh-webpack-module-volatility` is
+precisely the reason to doubt a 2.113-era observation of service internals at 2.130. Re-walk before
+relying on it.
+

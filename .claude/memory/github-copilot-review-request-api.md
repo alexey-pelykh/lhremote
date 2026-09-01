@@ -3,6 +3,9 @@ name: Request GitHub Copilot PR review via REST API
 description: The reviewer slug for requesting a Copilot code review on a PR is `copilot-pull-request-reviewer[bot]` (full bot login WITH the `[bot]` suffix); `@Copilot` comments do not trigger; GraphQL `requestReviews` does not accept Bot-type nodes
 type: reference
 originSessionId: 69536507-4e39-489b-baa1-611af227cc15
+volatility: high
+last-verified: 2026-09-01
+verification: empirical-walk
 ---
 To re-request a GitHub Copilot code review on a PR via API:
 
@@ -42,3 +45,20 @@ gh pr view {pr} --json reviewRequests    # bot reviewers NOT shown here
 **Auto re-request on push:** off by default. Repository ruleset of type `copilot_code_review` with `"review_on_push": true` (Settings → Rules → Rulesets) can enable it. Without that, every push requires an explicit API re-request.
 
 **Authoritative reference:** `github-copilot` skill § "Requesting a Review".
+
+## Rulesets change the picture (walked 2026-09-01)
+
+If a repository ruleset of type `copilot_code_review` is active, **the review fires automatically on
+PR open and the manual REST request above becomes a no-op** — it returns `201` with
+`requested_reviewers: []`, which is indistinguishable from the "wrong slug" failure documented above.
+
+Walked on `alexey-pelykh/lhremote` PR #842: the explicit request returned an empty
+`requested_reviewers`, and the review from `copilot-pull-request-reviewer[bot]` arrived **~135 s
+later anyway**, driven by the ruleset. `alexey-pelykh/lhremote` has such a ruleset
+("Copilot review for default branch", `review_on_push: false`, `review_draft_pull_requests: false`).
+
+**How to apply:** before concluding the slug is wrong, check
+`gh api repos/{o}/{r}/rulesets` for a `copilot_code_review` rule. If one exists, do not diagnose from
+`requested_reviewers` at all — poll `/pulls/{pr}/reviews` instead. `review_on_push: false` means
+subsequent pushes still need an explicit re-request.
+
