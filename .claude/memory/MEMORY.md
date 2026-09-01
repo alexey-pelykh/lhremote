@@ -1,0 +1,4 @@
+- [LH webpack module IDs are volatile](lh-webpack-module-volatility.md) — resolve services by marker, not hard-coded module ID
+- [LH workspaces filter the account cache](lh-workspaces-filter-accounts.md) — `extendedLinkedInAccountsBS` shows only selected-workspace accounts on 2.113.x+
+- [LH E2E back-to-back CDP port race](lh-e2e-backtoback-race.md) — retry once before diagnosing a beforeAll CDP port discovery failure
+- [Request GitHub Copilot PR review via REST API](github-copilot-review-request-api.md) — use reviewer slug `copilot-pull-request-reviewer[bot]`; the `[bot]` suffix is load-bearing and plain `Copilot` returns 201 but silently no-ops
