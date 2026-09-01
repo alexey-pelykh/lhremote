@@ -62,7 +62,7 @@ describe("assertCardinalCorroboration", () => {
   // The legal outcome this whole check exists to preserve. Without it the
   // contract degenerates into always-throw-on-empty and every post with no
   // comments and every post with no reactions starts failing.
-  it("returns for an empty extraction a zero cardinal corroborates", () => {
+  it("returns for an empty extraction that a zero cardinal corroborates", () => {
     expect(() =>
       assertCardinalCorroboration({
         ...OBSERVATION,
