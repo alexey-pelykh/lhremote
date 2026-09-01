@@ -5,8 +5,11 @@ date: 2026-08-31
 workflow: /capture-requirements
 dor_status: passed-with-findings
 dor_findings:
-  - "3 ratification-pending items (PEND-1..PEND-3, § 12) — PEND-3 carries a real effort delta"
-  - "3 open questions (OQ-1..OQ-3, § 10) — OQ-1 blocks the engagers half of #823"
+  # Recorded at DoR time and since resolved downstream; kept rather than deleted so the
+  # verdict stays auditable against what it was actually issued over.
+  - "PEND-1..PEND-3 (§ 12) — RESOLVED: PEND-3 ratified as four fixtures; PEND-2 adopted as a design constraint; PEND-1 met by the registry design"
+  - "OQ-1/OQ-2 (§ 10) — CLEARED: filed as #830; non-blocking, the architecture is robust to either outcome"
+  - "OQ-3 (§ 10) — RESOLVED: LinkedHelper auto-updates (observed 2.130.29 -> 2.130.30 within one session), which explains the 2.130.28 discrepancy"
 artifacts:
   # The DOM probe was moved out of gitignored scratch into the private research
   # repo. Private, so a public reader cannot follow it — the measurements it
@@ -24,7 +27,7 @@ closes: [823, 824, 825]
 
 | Field | Value |
 |---|---|
-| Status | Draft — awaiting Stage 2 (`/design-solution`) |
+| Status | **Baselined** — Stage 2 design complete (`docs/design/linkedin-dom-variant-tolerance-solution-design.md`); Stage 3 filed #826–#841 |
 | Owner | alexey-pelykh |
 | Repo | `alexey-pelykh/lhremote` |
 | Closes | [#823](https://github.com/alexey-pelykh/lhremote/issues/823), [#824](https://github.com/alexey-pelykh/lhremote/issues/824), [#825](https://github.com/alexey-pelykh/lhremote/issues/825) |
