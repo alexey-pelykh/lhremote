@@ -272,12 +272,19 @@ describe("getPostEngagers", () => {
       expect(result.paging.count).toBe(0);
     });
 
-    // HELD — `reactionsFound: false` (today: returns empty, does not throw).
-    // Its disposition depends on whether the reactions modal has a container
-    // tier equivalent to the post-detail one, which was never probed: opening
-    // the modal exceeds a read against a live licensed account. Resolved by
-    // SPIKE #830; the assertion is authored by #840, NOT here. Asserting
-    // either way now would encode a guess as a contract.
+    // HELD — `reactionsFound: false`.
+    //
+    // Today's behaviour IS asserted, by the existing test earlier in this file
+    // ("returns empty engagers when no reactions button found"): it returns an
+    // empty list and does not throw. That test is deliberately left ALONE.
+    //
+    // What is held is not whether the behaviour is asserted, but whether it
+    // should INVERT. That turns on whether the reactions modal has a container
+    // tier equivalent to the post-detail one — never probed, because opening
+    // the modal exceeds a read against a live licensed account. SPIKE #830
+    // resolves it; #840 then either inverts that test or confirms it as a
+    // third control. Pre-empting either way here would encode a guess as a
+    // contract, so this oracle stays silent on it.
   });
 
   it("scrolls modal for pagination", async () => {
