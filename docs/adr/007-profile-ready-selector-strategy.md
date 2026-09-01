@@ -144,9 +144,80 @@ references the shared `lhremote-diagnostics/` parent without the
 trailing random suffix is stale and should be updated when next
 modified.
 
+### 2026-09-01 — Diagnostic capture is no longer timeout-only
+
+The pattern above describes capture as timeout-triggered: `navigateToProfile`
+on `CDPTimeoutError`, `waitForPostLoad` and `waitForReactionsModal` when their
+polling deadlines expire. That framing made the directive this ADR exists to
+serve — *inspect these artifacts before changing profile or post-detail
+selectors* — **undischargeable for the defect class it most needed to cover.**
+
+An extraction failure never reaches a deadline. The readiness gate goes green
+in milliseconds, an adapter claims the page, the post body extracts fine, and
+only then does the scrape contradict a count the same page rendered
+(`commentCount: 41` alongside `comments: []`, observed live 2026-08-31). A
+capture bound to a deadline cannot see that at all, so the one failure mode
+that most needs an artifact produced none.
+
+**Capture now fires on failure, not on timeout.** Three additions:
+
+1. **A second trigger class.** Alongside the readiness timeouts,
+   `getPost` and `getPostEngagers` capture when the extraction raises —
+   `DOMVariantUnsupportedError` and `DOMVariantAmbiguousError` from the
+   post-detail scrape, and `ExtractionFailedError` from cardinal
+   corroboration. The capture happens at the operation call site, because the
+   corroboration predicate is pure and holds no CDP client; threading one into
+   it would turn a unit-testable predicate into an IO-bearing one.
+
+2. **Trigger-derived artifact names.** The filename rule stated in the
+   2026-04-29 amendment (`navigate-to-{profile,company}-{timestamp}-{slug}`,
+   where the kind tag identifies which navigator timed out) is joined by
+   `{trigger-stem}-{timestamp}` for the two page-reading captures:
+
+   | Trigger | Stem | `console.warn` tag |
+   |---|---|---|
+   | readiness timeout, post detail | `wait-for-post-load` | `[waitForPostLoad]` |
+   | readiness timeout, reactions modal | `wait-for-reactions-modal` | `[waitForReactionsModal]` |
+   | extraction failure, post detail | `post-detail-extraction-failure` | `[postDetailExtraction]` |
+   | extraction failure, reactions modal | `reactions-modal-extraction-failure` | `[reactionsModalExtraction]` |
+
+   The timeout stems and tags are unchanged. The extraction-failure rows are
+   deliberately **not** tagged with the wait function's name: that gate went
+   green, and labelling the artifact for a timeout that never happened would
+   send the next reader hunting a slow page that was never slow. The caller
+   label stays a single identifier token, per the same amendment's convention.
+
+3. **Two bundle fields.** Every post-detail and reactions-modal bundle now
+   carries `trigger`, because artifacts get copied out of their `mkdtemp`
+   directory and a bundle that cannot say what it was capturing leaves its
+   reader guessing. The post-detail bundle additionally carries
+   `variantDetection` — `matched` plus the per-registered-adapter detect
+   counts. That field is the diagnosis for the next dialect flip, and it is
+   the one thing the fixed-selector probes structurally cannot supply: read
+   with `matched`, it separates *nothing matched* (register an adapter) from
+   *two or more matched* (hybrid page — tighten the detect anchors) from
+   *exactly one matched* (the dialect is known; repair that field's
+   selectors). `null` means the probe yielded no usable reading, which is not
+   the claim that no adapter matched. The reactions-modal bundle carries no
+   such field on purpose: that surface has no entry in the variant-adapter
+   registry (#830), so there is nothing to probe and a fabricated field would
+   be worse than none.
+
+**Unchanged, and load-bearing:** activation stays gated on
+`LHREMOTE_CAPTURE_DIAGNOSTICS=1` at every site, on every trigger. Widening
+what fires the capture must never widen who may write it — the artifacts
+contain page content, i.e. personal data, and production callers (CLI, MCP)
+remain default-off. The per-invocation `mkdtemp` directory, the `0o700`/`0o600`
+modes, the cancellation cap, and the rule that a capture-side failure never
+masks the caller's error all carry over untouched.
+
+The `navigateTo{Profile,Company}` captures are out of scope here: they remain
+timeout-only and their bundles carry no `trigger` field.
+
 ## Related
 
 - Code: `packages/core/src/operations/navigate-to-profile.ts`
 - Branch: `fix/navigate-to-profile-diagnostics` (initial selector
   decision); `fix/unfollow-profile-company-urls` (2026-04-29 amendment)
-- Issues: #757 (company-page extension)
+- Issues: #757 (company-page extension); #835 (2026-09-01 amendment —
+  capture on extraction failure, per-adapter detect counts in the bundle)
