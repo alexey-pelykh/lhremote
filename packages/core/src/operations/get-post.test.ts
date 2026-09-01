@@ -203,12 +203,16 @@ describe("getPost", () => {
   it("throws a typed DOMVariantUnsupportedError when extraction yields nothing", async () => {
     setupMocks({ postDetail: null });
 
-    await expect(
-      getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
-    ).rejects.toThrow(DOMVariantUnsupportedError);
-    await expect(
-      getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
-    ).rejects.toThrow(/No DOM adapter matched the post-detail page/);
+    // Both assertions grade ONE invocation: `getPost` is called once and the
+    // settled rejection is asserted against twice. Re-invoking would re-run
+    // the mocked call, so any side effect it accrues would differ between the
+    // class check and the message check.
+    const rejection = getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+    await expect(rejection).rejects.toThrow(DOMVariantUnsupportedError);
+    await expect(rejection).rejects.toThrow(
+      /No DOM adapter matched the post-detail page/,
+    );
   });
 
   it("handles missing optional fields in post detail", async () => {
