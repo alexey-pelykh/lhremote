@@ -234,21 +234,14 @@ describe("getPostEngagers", () => {
     expect(result.paging.count).toBe(0);
   });
 
-  it("handles null evaluate result for engagers", async () => {
-    setupMocks({ scrapeSequence: [null] });
-
-    const result = await getPostEngagers({
-      postUrl: POST_URL,
-      cdpPort: CDP_PORT,
-    });
-
-    expect(result.engagers).toEqual([]);
-  });
-
   // ───────────────────────────────────────────────────────────────────────────
   // ORACLE — extraction contract (#827). Pre-authored; executor-uneditable.
   // See the matching block in get-post.test.ts for the full rationale and the
   // one permitted transition:  it.fails(...)  ->  it(...)
+  //
+  // The inversion below REPLACES the previous test that asserted the opposite
+  // for the same fixture. The suite must encode ONE contract, not two. The
+  // plain `it(...)` case is a CONTROL and is green today; it must stay green.
   // ───────────────────────────────────────────────────────────────────────────
   describe("ORACLE: corroborated emptiness (#827)", () => {
     // Cardinal corroborator: the modal reported 2 reactions, so scraping zero

@@ -199,23 +199,6 @@ describe("getPost", () => {
     });
   });
 
-  it("handles empty comments gracefully", async () => {
-    setupMocks({ comments: [] });
-
-    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
-
-    expect(result.comments).toEqual([]);
-    expect(result.commentsPaging).toEqual({ start: 0, count: 0, total: 0 });
-  });
-
-  it("handles null evaluate result for comments", async () => {
-    setupMocks({ comments: null });
-
-    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
-
-    expect(result.comments).toEqual([]);
-  });
-
   it("throws when post detail extraction fails", async () => {
     setupMocks({ postDetail: null });
 
@@ -262,11 +245,18 @@ describe("getPost", () => {
   // The implementing items (#831, #832, #834) MUST NOT edit these beyond one
   // documented transition:  it.fails(...)  ->  it(...)
   //
-  // `it.fails` passes while its body fails. Every body here fails today, since
-  // the contract is not implemented yet — so CI is green and this oracle can
-  // land first. The moment an implementation makes a body pass, `it.fails`
-  // turns RED, forcing the implementer to acknowledge the behaviour flip in a
-  // one-token diff instead of silently absorbing it.
+  // `it.fails` passes while its body fails. Every `it.fails` body here fails
+  // today, since the contract is not implemented yet — so CI is green and this
+  // oracle can land first. The moment an implementation makes one pass,
+  // `it.fails` turns RED, forcing the implementer to acknowledge the behaviour
+  // flip in a one-token diff instead of silently absorbing it.
+  //
+  // The plain `it(...)` cases in this block are CONTROLS and are green today.
+  // They must STAY green: they are what stops the fix degenerating into
+  // always-throw-on-empty.
+  //
+  // These inversions REPLACE the previous tests that asserted the opposite for
+  // the same fixtures. The suite must encode ONE contract, not two.
   //
   // Assertions are on OBSERVABLE BEHAVIOUR — does it throw? — never on error
   // class names, so #832 stays free to name its classes without rewriting the
