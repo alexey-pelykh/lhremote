@@ -115,12 +115,13 @@ describe("waitForPostLoad", () => {
     // Tiny timeout: with `delay` mocked to resolve immediately, the loop
     // exits within microseconds because `Date.now()` advances naturally
     // between iterations.
-    await expect(waitForPostLoad(client, 1)).rejects.toThrow(
-      ExtractionTimeoutError,
-    );
-    await expect(waitForPostLoad(client, 1)).rejects.toThrow(
-      /Post-detail extraction timed out/,
-    );
+    // Both assertions grade ONE invocation: the timeout loop runs once and the
+    // settled rejection is asserted against twice. Re-invoking would re-run
+    // the loop, doubling the wall-clock cost and the flakiness surface.
+    const rejection = waitForPostLoad(client, 1);
+
+    await expect(rejection).rejects.toThrow(ExtractionTimeoutError);
+    await expect(rejection).rejects.toThrow(/Post-detail extraction timed out/);
   });
 
   it("on timeout, attempts diagnostic capture before re-throwing (gated on LHREMOTE_CAPTURE_DIAGNOSTICS)", async () => {

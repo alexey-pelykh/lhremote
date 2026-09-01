@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { chmod, lstat, mkdtemp, writeFile } from "node:fs/promises";
-import { ExtractionTimeoutError } from "../services/errors.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ExtractionTimeoutError } from "../services/errors.js";
 import { delay } from "../utils/delay.js";
 import type { CDPClient } from "./client.js";
 
