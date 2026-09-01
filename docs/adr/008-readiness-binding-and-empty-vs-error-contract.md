@@ -27,9 +27,11 @@ serving the **legacy pre-SDUI markup again on the same URLs**, so `[componentkey
 `[data-testid]` matched zero elements document-wide. Two independent always-true
 fallbacks, in two different files, combined to turn that into a silent success:
 
-1. **The readiness gate** anchored on `main a[href*="/in/"], main a[href*="/company/"]`.
-   That anchor is *variant-agnostic* — it matches under any dialect — so the gate went
-   green on a page the scrapers could not read.
+1. **The readiness gate** anchored on the union
+   `main a[href*="/in/"], main a[href*="/company/"]`. That anchor is *variant-agnostic* — it
+   matches under any dialect — so the gate went green on a page the scrapers could not read.
+   (The probe below counted the `/in/` branch alone; the `/company/` branch was not counted
+   separately, and one branch matching is enough to satisfy a CSS union.)
 2. **The extractor's scope cascade** ran SDUI-`componentkey` → `data-sdui-screen` →
    `document.querySelector('main')` → `document`. The last two always match, so
    extraction ran against a structurally valid scope whose SDUI-only *field* selectors
@@ -41,7 +43,7 @@ fully-loaded 589 KB post-detail page (LinkedHelper 2.130.29):
 | Probe | Elements matched |
 |---|---|
 | every scraper field selector | **0** |
-| gate anchor `main a[href*="/in/"]` | **85** |
+| `main a[href*="/in/"]` — the member-profile branch of the gate's union | **85** |
 | `span[dir="ltr"]` | **82** |
 | legacy `.update-components-text` | **41** |
 | legacy `[data-id^="urn:li:"]` | **40** |
