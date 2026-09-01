@@ -77,6 +77,9 @@ export interface RawDomPost {
  *   earlier profile link is not mistaken for the author's.
  * - **Author name**: visible text of that author anchor — the same element
  *   the profile URL is read from, so the two cannot describe two people.
+ *   Read from inside the anchor's `aria-hidden="true"` wrapper when it has
+ *   one, so the screen-reader-only copy of the name beside it is not mistaken
+ *   for the rendered one.
  * - **Author profile URL**: `href` of that same author anchor.
  * - **Author headline**: 3rd `<p>` in the author anchor.
  * - **Timestamp**: last `<p>` matching `\d+[smhdw]` in that anchor.
@@ -119,17 +122,47 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // against an anchor's whole concatenated text rather than one trimmed <p>.
   const RELATIVE_TIME_IN_TEXT = /\\d+[smhdw](?:\\s|[\\u2022\\u00B7]|$)/;
 
-  // The name runs an anchor renders: <p> in the SDUI shape, <span> in the
+  // Text carrying no letter and no digit is decoration — a separator bullet, an
+  // icon glyph — and is never a name.
+  const NAME_LIKE = /[\\p{L}\\p{N}]/u;
+
+  // Where inside an anchor the name a reader sees is rendered.  LinkedIn writes
+  // the name twice: the visible copy wrapped in \`aria-hidden="true"\`, and a
+  // screen-reader-only copy beside it that reads "View <name>'s profile" or
+  // repeats the name with the connection degree appended.  Either may come
+  // first in document order, so position cannot tell them apart — the wrapper
+  // can.
+  //
+  // An anchor often carries several wrappers, one per field: the name, then the
+  // connection degree, the headline, the timestamp, sometimes the avatar's
+  // initials.  They are NOT joined — that swallows the neighbouring fields into
+  // the name.  The name is the one rendered as a run, the same <p>/<span> shape
+  // every other read here keys on, where a badge or a set of initials is bare
+  // text in its wrapper.  Outermost wrappers only, so a nested one is not
+  // considered twice, and decoration-only wrappers are dropped so a separator
+  // bullet can never become the name.
+  function visibleRoot(a) {
+    const parts = [];
+    for (const node of Array.from(a.querySelectorAll('[aria-hidden="true"]'))) {
+      const txt = (node.textContent || '').trim();
+      if (!txt || !NAME_LIKE.test(txt)) continue;
+      if (parts.some(function (p) { return p.contains(node); })) continue;
+      parts.push(node);
+    }
+    return parts.find(hasNameRun) || parts[0] || a;
+  }
+
+  // The name runs an element renders: <p> in the SDUI shape, <span> in the
   // legacy one.  Asking only WHETHER a run exists — never which tag carries it
   // — is what keeps every read below dialect-agnostic.
-  function nameRuns(a) {
-    return Array.from(a.querySelectorAll('p')).concat(Array.from(a.querySelectorAll('span')));
+  function nameRuns(root) {
+    return Array.from(root.querySelectorAll('p')).concat(Array.from(root.querySelectorAll('span')));
   }
 
   // Does the anchor render its name inside a run, rather than as bare link text?
   function hasNameRun(a) {
     return nameRuns(a).some(function (node) {
-      return (node.textContent || '').trim().length > 0;
+      return NAME_LIKE.test((node.textContent || '').trim());
     });
   }
 
@@ -174,14 +207,17 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     return named.find(hasNameRun) || named[0] || links[0] || null;
   }
 
-  // The visible name an anchor renders: its first non-empty run, or the
-  // anchor's own bare text.
+  // The visible name an anchor renders: the first run carrying a name inside
+  // whichever part of the anchor holds the visible copy, or that part's own
+  // bare text when it renders no run at all.
   function anchorName(a) {
-    for (const node of nameRuns(a)) {
+    const root = visibleRoot(a);
+    for (const node of nameRuns(root)) {
       const txt = (node.textContent || '').trim();
-      if (txt) return txt;
+      if (txt && NAME_LIKE.test(txt)) return txt;
     }
-    return (a.textContent || '').trim() || null;
+    const bare = (root.textContent || '').trim();
+    return bare && NAME_LIKE.test(bare) ? bare : null;
   }
 
   // --- Step 1: Find the feed list via data-testid ---
