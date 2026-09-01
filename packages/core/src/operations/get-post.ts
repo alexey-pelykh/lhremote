@@ -91,10 +91,26 @@ export interface GetPostOutput {
   readonly post: PostDetail;
   /** Comments on this post. */
   readonly comments: PostComment[];
-  /** Comment pagination metadata. */
+  /**
+   * Pagination metadata for {@link comments}, DERIVED from the returned list
+   * alone.
+   *
+   * `total` is `comments.length`, so it carries no information `count` does
+   * not: it describes this response, never how many comments the post has.
+   * The post's own count is {@link PostDetail.commentCount}, read off the
+   * page, and the two legitimately differ — a `commentCount` input truncates
+   * the list, and `commentCount: 0` skips comment loading entirely.
+   *
+   * Documented rather than made independent (#836).  Setting `total` from
+   * the scraped count would change what a shipped field means, and would
+   * make `total < count` reachable on any page whose counts row is absent —
+   * a behaviour change that belongs with its own acceptance criteria, not
+   * alongside a fix to the count it would start reporting.
+   */
   readonly commentsPaging: {
     readonly start: number;
     readonly count: number;
+    /** Always `count`.  See the note on {@link commentsPaging}. */
     readonly total: number;
   };
 }
