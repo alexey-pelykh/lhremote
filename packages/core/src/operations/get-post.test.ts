@@ -269,7 +269,15 @@ describe("getPost", () => {
     it.fails(
       "throws when comments are empty but commentCount contradicts it",
       async () => {
-        setupMocks({ comments: [] }); // DEFAULT_POST_DETAIL.commentCount === 5
+        // The contradicting cardinal is pinned HERE, not inherited from
+        // DEFAULT_POST_DETAIL. If the default were later changed to 0 this
+        // would become a LEGAL empty, the body would still fail, `it.fails`
+        // would still pass — and the oracle would silently stop testing the
+        // contract it claims to test.
+        setupMocks({
+          postDetail: { ...DEFAULT_POST_DETAIL, commentCount: 5 },
+          comments: [],
+        });
 
         await expect(
           getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
@@ -280,13 +288,36 @@ describe("getPost", () => {
     it.fails(
       "throws when comments evaluate to null but commentCount contradicts it",
       async () => {
-        setupMocks({ comments: null }); // DEFAULT_POST_DETAIL.commentCount === 5
+        // Contradicting cardinal pinned locally — see the note above.
+        setupMocks({
+          postDetail: { ...DEFAULT_POST_DETAIL, commentCount: 5 },
+          comments: null,
+        });
 
         await expect(
           getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
         ).rejects.toThrow();
       },
     );
+
+    // GUARD on the oracle's own premise — deliberately a plain `it`, OUTSIDE
+    // every `it.fails`. A guard placed INSIDE an `it.fails` body is worthless:
+    // that block passes whenever its body fails for ANY reason, so a failing
+    // guard is indistinguishable from the intended failure.
+    //
+    // The inversions above depend on setupMocks honouring an explicit
+    // commentCount override. If that ever stops working, they would set up a
+    // fixture with no contradiction, still fail, and still pass under
+    // `it.fails` — silently testing nothing. This test goes RED instead.
+    it("guard: setupMocks honours an explicit commentCount override", async () => {
+      setupMocks({
+        postDetail: { ...DEFAULT_POST_DETAIL, commentCount: 7 },
+      });
+
+      const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+      expect(result.post.commentCount).toBe(7);
+    });
 
     // CONTROL — MUST STAY GREEN. Without this, the fix degenerates into
     // always-throw-on-empty and breaks every post that legitimately has no
