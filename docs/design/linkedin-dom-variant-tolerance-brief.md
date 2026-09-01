@@ -65,7 +65,7 @@ malfunction — it did exactly what it was built to do, and that was never what 
 |---|---|---|
 | Technical Architecture | Adapter registry keyed on `(Surface, DOMVariant)`; detection → gate → extract → corroborate | Adds an abstraction layer to buy FR-3 structurally rather than by discipline |
 | Integration | LinkedIn's DOM treated as an unversioned, non-monotonic external system | Assumes drift recurs — the alternative assumes it does not, which ADR-007 already contradicts |
-| API Design | Two typed errors; CLI `exit 1`, MCP `isError: true` | A live behavior flip on a released product, accepted deliberately |
+| API Design | Three typed errors (§ 7.1); CLI `exit 1`, MCP `isError: true` | A live behavior flip on a released product, accepted deliberately |
 | Security (narrow) | Scrub third-party PII **inside** the harvest tooling | An unscrubbed fixture never reaches the working tree; costs harvest complexity |
 | Testing Architecture | T1-heavy pyramid; a **four-fixture** T2 oracle is the only tier that can catch a flip pre-merge | E2E cannot gate merges (ADR-004), so the fixtures carry the load |
 
@@ -77,7 +77,9 @@ malfunction — it did exactly what it was built to do, and that was never what 
   undecidable. Mitigated: the architecture degrades to cardinal corroboration either way, so this
   does **not** block the main line. **→ filed as #830**, 2-hour time-box, needs your live account.
 
-- **One error class or two?** Non-load-bearing. Two recommended; collapsible later without redesign.
+- **Three error classes or fewer?** Non-load-bearing. Three recommended — each routes to a
+  different operator action. Collapsible later without redesign; collapsing loses routing
+  signal, not correctness.
 
 - **Re-point two out-of-scope ADR-007 citations?** Non-load-bearing. `wait-for-reactions-modal.ts`
   and some post-detail unit-test comments cite ADR-007 for post-detail; they sit outside the
@@ -99,7 +101,7 @@ a tracked item, **#830**, and the architecture is robust to either answer: corro
 the cardinal kind if the modal has no container tier. They therefore no longer block, which is the
 Open-Questions Lock Gate resolving rather than being waived.
 
-Still open and non-blocking: one error class vs two (#832 takes two), and two comment-only ADR-007
+Still open and non-blocking: three error classes vs fewer (#832 takes three), and two comment-only ADR-007
 citations outside the ratified file list.
 
 Not run: the dual-lens ratification. The session's operating instructions forbid dispatching agents

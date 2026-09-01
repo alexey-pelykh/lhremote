@@ -345,7 +345,7 @@ absorbed.
 
 ### ADR-009 — Error taxonomy extension (new, may be folded into ADR-008)
 
-Records the two new `ServiceError` subclasses and why the existing classes were insufficient
+Records the three new `ServiceError` subclasses and why the existing classes were insufficient
 (§ 7.1). Small enough that folding it into ADR-008 is acceptable; kept separate here so the
 decision is visible.
 
