@@ -846,9 +846,16 @@ function extractionHelpersSource(): string {
   function __lhCountsRoot(adapter, scope) {
     for (const candidate of adapter.counts) {
       const el = scope.querySelector(candidate);
-      if (el) return { el: el, narrowed: true };
+      if (el) return __lhCountsRootOf(el, true);
     }
-    return { el: scope, narrowed: false };
+    return __lhCountsRootOf(scope, false);
+  }
+
+  // \`nodes\` is flattened once here rather than inside \`__lhReadCount\`, which
+  // runs once per counter and would otherwise walk the same subtree three
+  // times per post.
+  function __lhCountsRootOf(el, narrowed) {
+    return { el: el, narrowed: narrowed, nodes: [el, ...el.querySelectorAll('*')] };
   }
 
   function __lhToCount(raw) {
@@ -872,7 +879,7 @@ function extractionHelpersSource(): string {
   // \`reactionCount: 0\` on a post with two reactions.
   function __lhReadCount(root, counter) {
     const hits = [];
-    for (const el of [root.el, ...root.el.querySelectorAll('*')]) {
+    for (const el of root.nodes) {
       const label = el.getAttribute('aria-label') || '';
       const m =
         counter.strict.exec(label) ||
