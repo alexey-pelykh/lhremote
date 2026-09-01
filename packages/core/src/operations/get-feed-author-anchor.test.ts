@@ -2,7 +2,12 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 /**
- * Oracle for issue #837 / #825 — feed author-field co-location.
+ * Oracle for feed author-field co-location.
+ *
+ * Two issue numbers appear here and they are not interchangeable: **#825** is
+ * the reported bug — `authorName` and `authorProfileUrl` disagree on ~50% of
+ * posts — and **#837** is the fix task raised against it, which this file was
+ * authored for.  The work closes #825; #837 tracks the change itself.
  *
  * It is authored ahead of the implementation and frozen while that
  * implementation is written, so a passing run is evidence about the script
