@@ -2,7 +2,15 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ExtractionTimeoutError } from "../services/errors.js";
+import {
+  adaptersFor,
+  buildReadinessPredicateSource,
+} from "../linkedin/dom-variant.js";
+import {
+  DOMVariantAmbiguousError,
+  DOMVariantUnsupportedError,
+  ExtractionTimeoutError,
+} from "../services/errors.js";
 
 import type { CDPClient } from "./client.js";
 
@@ -73,7 +81,7 @@ describe("waitForPostLoad", () => {
     expect(evaluate).toHaveBeenCalledTimes(3);
   });
 
-  it("polls with the three-stage layered readiness predicate (main-scoped author link, aria-label + componentkey markers, span[dir=ltr] fallback)", async () => {
+  it("polls the readiness predicate generated from the post-detail adapter registry", async () => {
     const evaluate = vi.fn().mockResolvedValueOnce(true);
     const client = {
       evaluate,
@@ -83,26 +91,147 @@ describe("waitForPostLoad", () => {
     await waitForPostLoad(client);
 
     const script = String(evaluate.mock.calls[0]?.[0] ?? "");
-    // Stage 1: <main>-scoped author link (document-wide would match
-    // nav/sidebar chips that hydrate before the post body).
-    expect(script).toContain('main a[href*="/in/"]');
-    expect(script).toContain('main a[href*="/company/"]');
-    // Stage 2: aria-label-based interaction markers per ADR-007.  Legacy
-    // markers retained for defensive coverage even though both currently
-    // match 0 elements post-2026-05 SDUI rewrite (lhremote#800).
-    expect(script).toContain('aria-label^="React Like to "');
-    expect(script).toContain('aria-label^="Comment on"');
-    expect(script).toContain('aria-label^="Text editor for creating"');
-    // Stage 2 (lhremote#800 hardening): new SDUI markers — aria-label
-    // for the post-level reactions menu opener, plus a structural
-    // componentkey marker that survives aria-label rotation entirely.
-    expect(script).toContain('aria-label="Open reactions menu"');
-    expect(script).toContain(
-      '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]',
+    // The predicate is the registry's, not a hand-written disjunction:
+    // every registered adapter's detect and ready anchors appear in it.
+    // Anchors are emitted as JSON string literals — selectors legitimately
+    // contain the quote characters that hand-quoting would break on.
+    for (const adapter of adaptersFor("post-detail")) {
+      expect(script).toContain(JSON.stringify(adapter.detect));
+      expect(script).toContain(JSON.stringify(adapter.ready));
+    }
+    expect(script).toBe(
+      buildReadinessPredicateSource(adaptersFor("post-detail")),
     );
-    // Stage 3: legacy span[dir="ltr"] fallback (defensive retention
-    // in case LinkedIn restores the markup).
-    expect(script).toContain('span[dir="ltr"]');
+  });
+
+  it("no longer gates on the variant-agnostic author link that went green on an unreadable page", async () => {
+    const evaluate = vi.fn().mockResolvedValueOnce(true);
+    const client = {
+      evaluate,
+      send: vi.fn(),
+    } as unknown as CDPClient;
+
+    await waitForPostLoad(client);
+
+    // The regression this closes: `main a[href*="/in/"]` was the required
+    // first stage of the old predicate and was chosen *because* it survives
+    // markup change.  Measured 2026-08-31 it matched 85 elements on a page
+    // where every scraper selector matched 0, so the gate passed a page the
+    // extractor could not read.  An anchor that survives every markup change
+    // cannot detect a markup change, so it must not gate variant-specific
+    // extraction.  It stays in the *diagnostic* probe, which this asserts
+    // nothing about.
+    // Matched quote-insensitively so the assertion survives the anchors
+    // being emitted as escaped JSON string literals.
+    const script = String(evaluate.mock.calls[0]?.[0] ?? "");
+    expect(script).not.toContain("main a[href*=");
+  });
+
+  it("requires the SELECTED adapter's own ready anchor, not any adapter's", async () => {
+    // Grades the generated predicate directly, in a DOM-less evaluator: the
+    // page is modelled as a set of selectors that match.  A page speaking
+    // dialect A whose *ready* anchor is absent must not be gated green by
+    // dialect B's ready anchor being present.
+    const [first, second] = adaptersFor("post-detail");
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    const script = buildReadinessPredicateSource(adaptersFor("post-detail"));
+
+    const run = (present: readonly string[]): unknown =>
+      new Function(
+        "document",
+        `return ${script};`,
+      )({
+        querySelector: (sel: string) => (present.includes(sel) ? {} : null),
+        querySelectorAll: (sel: string) => (present.includes(sel) ? [{}] : []),
+      });
+
+    // Only the first adapter's detect anchor is present, and its own ready
+    // anchor is not — but the *second* adapter's ready anchor is.
+    expect(
+      run([first?.detect ?? "", second?.ready ?? ""].filter(Boolean)),
+    ).toBe(false);
+    // The first adapter's own ready anchor present -> green.
+    expect(run([first?.detect ?? "", first?.ready ?? ""])).toBe(true);
+  });
+
+  it("stays red while the page is ambiguous (two dialects claim it)", async () => {
+    const adapters = adaptersFor("post-detail");
+    const script = buildReadinessPredicateSource(adapters);
+    const present = adapters.flatMap((a) => [a.detect, a.ready]);
+
+    const ready = new Function(
+      "document",
+      `return ${script};`,
+    )({
+      querySelector: (sel: string) => (present.includes(sel) ? {} : null),
+      querySelectorAll: (sel: string) => (present.includes(sel) ? [{}] : []),
+    });
+
+    // Every anchor of every adapter matches, so a naive disjunction would go
+    // green.  Selection requires exactly one claimant, so this stays red and
+    // the deadline classifies it as ambiguous rather than picking a dialect.
+    expect(ready).toBe(false);
+  });
+
+  it("raises DOMVariantUnsupportedError when no adapter claims the page at the deadline", async () => {
+    const evaluate = vi.fn(async (script: string) =>
+      script.includes("probes") ? { matched: [], probes: { sdui: 0, legacy: 0 } } : false,
+    );
+    const client = { evaluate, send: vi.fn() } as unknown as CDPClient;
+
+    const rejection = waitForPostLoad(client, 1);
+
+    await expect(rejection).rejects.toThrow(DOMVariantUnsupportedError);
+    await expect(rejection).rejects.toThrow(
+      /No DOM adapter matched the post-detail page/,
+    );
+  });
+
+  it("raises DOMVariantAmbiguousError when two adapters claim the page at the deadline", async () => {
+    const evaluate = vi.fn(async (script: string) =>
+      script.includes("probes")
+        ? { matched: ["sdui", "legacy"], probes: { sdui: 1, legacy: 1 } }
+        : false,
+    );
+    const client = { evaluate, send: vi.fn() } as unknown as CDPClient;
+
+    const rejection = waitForPostLoad(client, 1);
+
+    await expect(rejection).rejects.toThrow(DOMVariantAmbiguousError);
+    await expect(rejection).rejects.toThrow(
+      /Multiple DOM adapters matched the post-detail page/,
+    );
+  });
+
+  it("raises the plain timeout when exactly one adapter claims the page but never becomes ready", async () => {
+    // The dialect IS known — this genuinely timed out, and calling it
+    // "LinkedIn changed" would send the operator to write an adapter that
+    // already exists.
+    const evaluate = vi.fn(async (script: string) =>
+      script.includes("probes")
+        ? { matched: ["sdui"], probes: { sdui: 1, legacy: 0 } }
+        : false,
+    );
+    const client = { evaluate, send: vi.fn() } as unknown as CDPClient;
+
+    await expect(waitForPostLoad(client, 1)).rejects.toThrow(
+      ExtractionTimeoutError,
+    );
+  });
+
+  it("falls back to the plain timeout when the classification probe is malformed", async () => {
+    // A probe result that is not well-formed says the probe did not run
+    // usefully — it is not evidence that LinkedIn changed.  Reporting
+    // "no adapter matched" off a broken instrument would blame the page for
+    // a local failure.
+    const evaluate = vi.fn().mockResolvedValue(undefined);
+    const client = { evaluate, send: vi.fn() } as unknown as CDPClient;
+
+    const rejection = waitForPostLoad(client, 1);
+
+    await expect(rejection).rejects.toThrow(ExtractionTimeoutError);
+    await expect(rejection).rejects.not.toThrow(DOMVariantUnsupportedError);
   });
 
   it("throws the post-detail timeout error when readiness predicate never matches before the deadline", async () => {

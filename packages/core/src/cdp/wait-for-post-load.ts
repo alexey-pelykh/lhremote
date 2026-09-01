@@ -4,24 +4,50 @@
 import { chmod, lstat, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ExtractionTimeoutError } from "../services/errors.js";
+import {
+  adaptersFor,
+  asVariantDetection,
+  buildDetectionSource,
+  buildReadinessPredicateSource,
+  formatVariantProbes,
+  variantNamesFor,
+} from "../linkedin/dom-variant.js";
+import {
+  DOMVariantAmbiguousError,
+  DOMVariantUnsupportedError,
+  ExtractionTimeoutError,
+} from "../services/errors.js";
 import { delay } from "../utils/delay.js";
 import type { CDPClient } from "./client.js";
 
+/** The page kind this gate reads; picks the adapter list it binds to. */
+const POST_DETAIL_SURFACE = "post-detail" as const;
+
 // ----------------------------------------------------------------------------
-// Selectors used by both the readiness predicate ({@link waitForPostLoad}) and
-// the diagnostic probe ({@link capturePostLoadFailure}).  Centralizing them
-// keeps the two aligned: the predicate's joined disjunction is exactly the
-// union of the probes the diagnostic reports individually, so a future
-// timeout's "which-of-N-is-missing" signal stays accurate by definition.
+// Diagnostic-only selectors ({@link capturePostLoadFailure}).
+//
+// These no longer feed the readiness predicate.  The predicate is now
+// generated from the post-detail adapter registry so it polls the *selected*
+// adapter's own anchor; these constants stay because a timeout still wants a
+// "which-of-N-is-missing" picture across both dialects' markers, and that
+// picture is deliberately wider than any single adapter's binding.
 // ----------------------------------------------------------------------------
 
 /**
  * `<main>`-scoped author link — anchor pointing to either a member profile
- * (`/in/{slug}`) or a company page (`/company/{slug}`).  Phase 1 (PR #770)
- * confirmed this anchor still renders post-2026-05 markup refresh; the
- * `<main>` scope avoids matching nav / sidebar profile chips that hydrate
- * before the post itself.
+ * (`/in/{slug}`) or a company page (`/company/{slug}`).
+ *
+ * **Diagnostic-only since the adapter registry landed.**  This was the
+ * readiness gate's required first stage, chosen (PR #770) because it survives
+ * markup change — which is right for a liveness probe and wrong for a gate
+ * guarding variant-specific extraction.  Measured on 2026-08-31 it matched 85
+ * elements on a post-detail page where every scraper selector matched 0, so
+ * the gate went green on a page the scrapers could not read.  A gate anchor
+ * that survives every markup change cannot detect a markup change.
+ *
+ * It remains useful as a *diagnostic*: paired with
+ * {@link POST_AUTHOR_LINK_DOCUMENT_WIDE_SELECTOR} it still separates "page
+ * failed to render entirely" from "page rendered but not the post body".
  */
 const POST_READY_AUTHOR_LINK_SELECTOR =
   'main a[href*="/in/"], main a[href*="/company/"]';
@@ -37,10 +63,12 @@ const POST_AUTHOR_LINK_DOCUMENT_WIDE_SELECTOR =
 
 // Post-detail interaction markers (per ADR-007 — aria-label-based markers
 // preferred over structural CSS / role selectors).  Each renders only after
-// the post has hydrated far enough for downstream extraction; any single
-// match satisfies the readiness predicate.  The diagnostic probe reports
-// each individually so a future timeout produces a precise
-// "which-of-N-is-missing" signal.
+// the post has hydrated far enough for downstream extraction.
+//
+// Diagnostic-only: they no longer satisfy the readiness predicate, which is
+// now bound to the selected adapter's own anchor.  The probe reports each
+// individually so a timeout produces a precise "which-of-N-is-missing"
+// signal across both dialects at once.
 //
 // Hardened 2026-05-07 (lhremote#800): the original `React Like to ` and
 // `Comment on` markers verified DEAD across all 4 probed post types in the
@@ -61,43 +89,44 @@ const POST_DETAIL_CONTAINER_SELECTOR =
   '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]';
 
 /**
- * Comma-separated disjunction of all interaction markers.  The first
- * three are the legacy aria-label-based signals (POST_REACT_LIKE_SELECTOR
- * and POST_COMMENT_ON_SELECTOR are kept for defensive coverage in case
- * LinkedIn restores them; both currently match 0 elements).  The last
- * two are the lhremote#800 hardening — aria-label `Open reactions menu`
- * (verified across 4 post types post-2026-05) plus the structural
- * componentkey marker (immune to aria-label rotation).
- */
-const POST_INTERACTION_SELECTOR = [
-  POST_REACT_LIKE_SELECTOR,
-  POST_COMMENT_ON_SELECTOR,
-  POST_EDITOR_SELECTOR,
-  POST_REACTIONS_MENU_SELECTOR,
-  POST_DETAIL_CONTAINER_SELECTOR,
-].join(", ");
-
-/**
- * Legacy `span[dir="ltr"]` fallback selector.  Phase 1 confirmed gone as of
- * 2026-05-05 but kept defensively: costs nothing if missing, and provides a
- * path back to the original signal if/when LinkedIn restores the markup.
+ * Legacy `span[dir="ltr"]` selector.  Diagnostic-only.  Reported so a
+ * timeout can tell a page serving the pre-SDUI dialect from one serving
+ * nothing at all — it matched 82 elements in the 2026-08-31 probe run.
  */
 const POST_LTR_SPAN_FALLBACK_SELECTOR = 'span[dir="ltr"]';
 
 /**
- * Poll the DOM until a LinkedIn post detail page has rendered.
+ * Poll the DOM until a LinkedIn post detail page has rendered *in a dialect
+ * an adapter can read*.
  *
- * Three-stage layered predicate (per ADR-007):
- *  1. {@link POST_READY_AUTHOR_LINK_SELECTOR} must match — required.
- *  2. Any of {@link POST_INTERACTION_SELECTOR} suffices.
- *  3. Otherwise fall back to {@link POST_LTR_SPAN_FALLBACK_SELECTOR}.
+ * The predicate is generated from the post-detail adapter registry
+ * ({@link buildReadinessPredicateSource}) and is satisfied only when exactly
+ * one adapter claims the page AND that adapter's own readiness anchor is
+ * present.  This is the binding that matters: the gate polls the anchor
+ * belonging to the adapter that will perform the extraction, so it cannot go
+ * green on a page the extractor cannot read.  The predicate it replaced was
+ * deliberately variant-agnostic (chosen for surviving markup change), which
+ * is correct for a liveness probe and wrong here — see
+ * {@link POST_READY_AUTHOR_LINK_SELECTOR}.
  *
- * Issues #762 / #771: the original predicate required both an author link
- * AND at least one `span[dir="ltr"]`; LinkedIn's 2026-05 post-detail markup
- * refresh removed `[data-testid="mainFeed"]`, `span[dir="ltr"]`, and
- * `<article>`, breaking the second gate (the author link still renders).
- * Phase 1 (PR #770) shipped diagnostic capture that pinned the regression;
- * this helper closes it.
+ * **Why zero-match does not raise immediately.**  A page that has not
+ * hydrated yet also matches zero adapters, so failing fast on the first
+ * probe would be indistinguishable from "LinkedIn changed" and would fire on
+ * every slow load.  The loop therefore polls first and classifies once, at
+ * the deadline, when "not yet" has been ruled out — which is also the only
+ * point at which the distinction is decidable.  Classification then picks
+ * the error that matches what was actually observed:
+ *
+ * | Adapters matching at the deadline | Error |
+ * |---|---|
+ * | zero | {@link DOMVariantUnsupportedError} — register an adapter |
+ * | two or more | {@link DOMVariantAmbiguousError} — tighten the detect anchors |
+ * | exactly one | {@link ExtractionTimeoutError} — the dialect is known, it never finished rendering |
+ *
+ * If the classification probe itself comes back malformed, that is not
+ * evidence about the page — only that the probe did not run usefully — so
+ * the ordinary timeout is raised rather than blaming LinkedIn for a broken
+ * instrument.
  *
  * On timeout, if `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a best-effort diagnostic
  * capture is written to a per-invocation
@@ -108,28 +137,53 @@ const POST_LTR_SPAN_FALLBACK_SELECTOR = 'span[dir="ltr"]';
  * @param client    - Connected CDP client targeting a LinkedIn page.
  * @param timeoutMs - Polling deadline in milliseconds (default: 15s).
  *
- * @throws If the readiness selectors do not match before the deadline.
+ * @throws {@link DOMVariantUnsupportedError} No adapter claimed the page.
+ * @throws {@link DOMVariantAmbiguousError} Two or more adapters claimed it.
+ * @throws {@link ExtractionTimeoutError} The selected adapter never became ready.
  */
 export async function waitForPostLoad(
   client: CDPClient,
   timeoutMs = 15_000,
 ): Promise<void> {
+  const adapters = adaptersFor(POST_DETAIL_SURFACE);
+  const predicate = buildReadinessPredicateSource(adapters);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const ready = await client.evaluate<boolean>(`(() => {
-      if (!document.querySelector('${POST_READY_AUTHOR_LINK_SELECTOR}')) return false;
-      if (document.querySelector('${POST_INTERACTION_SELECTOR}')) return true;
-      return document.querySelectorAll('${POST_LTR_SPAN_FALLBACK_SELECTOR}').length > 0;
-    })()`);
+    const ready = await client.evaluate<boolean>(predicate);
     if (ready) return;
     await delay(500);
   }
+
+  // Classify what the page actually is before reporting.  One probe, on the
+  // failure path only — the happy path pays nothing for it.
+  const detection = asVariantDetection(
+    await client.evaluate<unknown>(buildDetectionSource(adapters)),
+  );
+
   // capturePostLoadFailure self-gates on LHREMOTE_CAPTURE_DIAGNOSTICS and
-  // swallows its own errors, so the original timeout always propagates
-  // unchanged regardless of capture-side outcome.
+  // swallows its own errors, so the error below always propagates unchanged
+  // regardless of capture-side outcome.
   await capturePostLoadFailure(client);
+
+  if (detection) {
+    if (detection.matched.length === 0) {
+      throw new DOMVariantUnsupportedError(
+        POST_DETAIL_SURFACE,
+        variantNamesFor(POST_DETAIL_SURFACE).map(String),
+        { cause: new Error(`detect probes — ${formatVariantProbes(detection)}`) },
+      );
+    }
+    if (detection.matched.length > 1) {
+      throw new DOMVariantAmbiguousError(
+        POST_DETAIL_SURFACE,
+        detection.matched,
+        { cause: new Error(`detect probes — ${formatVariantProbes(detection)}`) },
+      );
+    }
+  }
+
   throw new ExtractionTimeoutError(
-    `readiness selector ${POST_READY_AUTHOR_LINK_SELECTOR}`,
+    `readiness anchor of the selected ${POST_DETAIL_SURFACE} adapter`,
     timeoutMs,
     "Post-detail",
   );
@@ -218,9 +272,12 @@ interface CaptureCancellationState {
  * elsewhere on the page.
  *
  * The post-#771 probes (`hasAuthorLinkInMain`, `hasReactLikeButton`,
- * `hasCommentOnButton`, `hasTopLevelEditor`) shadow
- * {@link waitForPostLoad}'s readiness selectors so a timeout pins
- * exactly which post-anchored signal is missing.
+ * `hasCommentOnButton`, `hasTopLevelEditor`) pin exactly which
+ * post-anchored signal is missing.  They no longer shadow
+ * {@link waitForPostLoad}'s readiness predicate — that is now bound to the
+ * selected adapter — and the divergence is deliberate: the per-adapter
+ * detect counts say *which dialect*, while these say *how far the page
+ * got*, and a timeout wants both.
  *
  * The lhremote#800 hardening probes (`hasReactionsMenu`,
  * `hasPostDetailContainer`) cover the new SDUI-era markers — the

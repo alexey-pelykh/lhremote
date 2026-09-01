@@ -18,6 +18,21 @@ export {
   type WaitForElementOptions,
 } from "./dom-automation.js";
 
+export {
+  adaptersFor,
+  asVariantDetection,
+  buildDetectionSource,
+  buildPostDetailExtractionSource,
+  buildReadinessPredicateSource,
+  type DOMVariant,
+  formatVariantProbes,
+  KNOWN_DOM_VARIANTS,
+  type Surface,
+  type VariantAdapter,
+  type VariantDetection,
+  variantNamesFor,
+} from "./dom-variant.js";
+
 export { HumanizedMouse } from "./humanized-mouse.js";
 
 export {
