@@ -218,12 +218,13 @@ AFTER, if LinkedIn serves a THIRD dialect
 
 ### 7.1 Error taxonomy (FR-8)
 
-Two *distinct* new subclasses, because they demand different operator responses:
+Three *distinct* new subclasses, because they demand different operator responses:
 
 | Class | Extends | Fires when | Operator action |
 |---|---|---|---|
 | `DOMVariantUnsupportedError` | `ServiceError` | No registered adapter matched the page | **LinkedIn changed.** Register a new adapter |
 | `ExtractionFailedError` | `ServiceError` | An adapter matched, but a field's emptiness is contradicted by its corroborator | **This adapter is partially stale.** Repair that field's selectors |
+| `DOMVariantAmbiguousError` | `ServiceError` | Two or more adapters matched the same page (§ 5.2; risk **R-9**) | **Transitional or hybrid page.** Fail loud rather than pick — inspect the diagnostics and tighten the detect anchors |
 
 Collapsing these into one class would discard the most useful bit of information the system now
 has. Existing classes were considered and rejected: `ExtractionTimeoutError` is wrong (nothing
@@ -511,7 +512,7 @@ No Must-Have component is UNCERTAIN or INFEASIBLE. **Feasibility gate: PASS.**
 | ~~**DQ-1**~~ | AC-13's false binary | **RESOLVED** 2026-08-31 | AC-13 amended; ADR-008 reclaims post-detail citations, ADR-007 untouched (§ 9) |
 | ~~**DQ-2**~~ | Fixture set vs single | **RESOLVED** 2026-08-31 | **Four fixtures ratified** (§ 10.4) |
 | **DQ-4** | Re-point the 2 out-of-scope ADR-007 citations (`wait-for-reactions-modal.ts`, post-detail unit-test comments)? | Non-load-bearing | Outside the ratified ten; comment-only. Flagged, not absorbed |
-| **DQ-3** | Two error classes vs one (§ 7.1) | Non-load-bearing | Two recommended; collapsible without redesign |
+| **DQ-3** | Three error classes vs fewer (§ 7.1) | Non-load-bearing | Three recommended — each routes to a different operator action. Collapsible later without redesign; collapsing loses routing signal, not correctness |
 
 **OQ-1 and OQ-2 are the same probe, and they are cleared.** Stage 3 filed it as **#830**. Because
 § 4.3 makes the architecture robust to either answer (corroboration degrades to cardinal if the modal
@@ -573,9 +574,9 @@ per the § 16 protocol's explicit allowance.
 | Container corroborator | component | FR-9 (AC-9b), scope item 11 | traced |
 | `DOMVariantUnsupportedError` | interface | FR-4, FR-8 | traced |
 | `ExtractionFailedError` | interface | FR-7, FR-8 | traced |
-| `DOMVariantAmbiguousError` | interface | **net-new** — R-9 | **ratified net-new** (design decision, surfaced § 14 DQ-3) |
+| `DOMVariantAmbiguousError` | interface | **net-new** — R-9 | **ratified net-new** (design decision; introduced § 5.2, justified § 13 R-9, specified § 7.1) |
 | Per-adapter detection results in capture | component | FR-10, NFR-5 | traced |
-| Fixture set (4 files) | test asset | FR-11 + **PEND-3** | traced (PEND-3 pending ratification) |
+| Fixture set (4 files) | test asset | FR-11 + **PEND-3** | traced — **PEND-3 ratified** 2026-08-31 (four fixtures; § 10.4, § 14 DQ-2) |
 | Scrub pipeline | component | **net-new** — PEND-2 | **ratified net-new** (privacy constraint, § 8.1) |
 | ADR-008 | doc | FR-13 | traced |
 
