@@ -71,9 +71,15 @@ export interface RawDomPost {
  *
  * - **Post text**: `[data-testid="expandable-text-box"]` (clone, strip
  *   `expandable-text-button` child, take `textContent`).
- * - **Author name**: menu button `aria-label` prefix strip.
- * - **Author headline**: 3rd `<p>` in the text-bearing author link.
- * - **Timestamp**: last `<p>` matching `\d+[smhdw]` in that link.
+ * - **Author anchor**: the profile anchor whose own text carries the
+ *   `[name, connection degree, headline, relative time]` run — a mention, a
+ *   repost chip or a suggested-connection link renders a bare name, so an
+ *   earlier profile link is not mistaken for the author's.
+ * - **Author name**: visible text of that author anchor — the same element
+ *   the profile URL is read from, so the two cannot describe two people.
+ * - **Author profile URL**: `href` of that same author anchor.
+ * - **Author headline**: 3rd `<p>` in the author anchor.
+ * - **Timestamp**: last `<p>` matching `\d+[smhdw]` in that anchor.
  *
  * Post URNs are NOT available in the DOM.  They are extracted in a
  * separate phase by opening each post's three-dot menu, clicking
@@ -82,6 +88,101 @@ export interface RawDomPost {
 const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   const posts = [];
   if (window.__lhrNextIdx == null) window.__lhrNextIdx = 0;
+
+  // --- Author anchor helpers ---
+  // The author name and the author profile URL are read from ONE anchor, so
+  // they can never describe two different people.  These helpers use nothing
+  // but an anchor's href and its own text content, which every DOM dialect
+  // shares, so the read does not depend on any dialect-specific marker.
+
+  // Profile anchors inside a post, in document order.
+  function profileLinksIn(item) {
+    return Array.from(item.querySelectorAll('a[href*="/in/"], a[href*="/company/"]'));
+  }
+
+  // Path part of an anchor's href, or null when it cannot be parsed.
+  function linkPath(a) {
+    try {
+      return new URL(a.href).pathname;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function hasVisibleText(a) {
+    return (a.textContent || '').trim().length > 0;
+  }
+
+  // A relative-time token — "18h", "3d", "45m" — followed by the separator
+  // LinkedIn renders after it, or by the end of the run.  Same token vocabulary
+  // the timestamp read below uses; this form is unanchored because it is tested
+  // against an anchor's whole concatenated text rather than one trimmed <p>.
+  const RELATIVE_TIME_IN_TEXT = /\\d+[smhdw](?:\\s|[\\u2022\\u00B7]|$)/;
+
+  // The name runs an anchor renders: <p> in the SDUI shape, <span> in the
+  // legacy one.  Asking only WHETHER a run exists — never which tag carries it
+  // — is what keeps every read below dialect-agnostic.
+  function nameRuns(a) {
+    return Array.from(a.querySelectorAll('p')).concat(Array.from(a.querySelectorAll('span')));
+  }
+
+  // Does the anchor render its name inside a run, rather than as bare link text?
+  function hasNameRun(a) {
+    return nameRuns(a).some(function (node) {
+      return (node.textContent || '').trim().length > 0;
+    });
+  }
+
+  // The post's AUTHOR anchor — not merely a profile anchor.  Reading both
+  // fields off one element makes them agree; picking the right element is what
+  // makes them agree about the right person, and any profile link rendered
+  // before the author's (a mention, a repost chip, a suggested connection) is a
+  // candidate for being mistaken for it.
+  //
+  // Tried in order, strongest signal first, each keyed on nothing but an
+  // anchor's href and the text it renders:
+  //
+  //   1. The author block is the only profile anchor whose own text carries the
+  //      [name, connection degree, headline, relative time] run this file's DOM
+  //      notes describe; a chip or a mention renders a bare name.  The run is
+  //      recognised by its time token, read off the anchor's text rather than
+  //      off whichever element holds it, so both name shapes satisfy it.
+  //   2. Failing that, LinkedIn usually links the author twice — once for the
+  //      avatar, once for the name block — while chips and mentions are linked
+  //      once, so a profile carrying more than one anchor is the author's.
+  //   3. Failing that, the author block still wraps its name in a run where a
+  //      chip is bare text.
+  //   4. Then the first anchor carrying any text, and finally the first anchor
+  //      at all, so a post with only a text-less or empty author link still
+  //      yields a URL rather than nothing.
+  function findAuthorAnchor(item) {
+    const links = profileLinksIn(item);
+    const named = links.filter(hasVisibleText);
+
+    const dated = named.find(function (a) {
+      return RELATIVE_TIME_IN_TEXT.test(a.textContent || '');
+    });
+    if (dated) return dated;
+
+    const paired = named.find(function (a) {
+      const path = linkPath(a);
+      if (path === null) return false;
+      return links.filter(function (other) { return linkPath(other) === path; }).length > 1;
+    });
+    if (paired) return paired;
+
+    return named.find(hasNameRun) || named[0] || links[0] || null;
+  }
+
+  // The visible name an anchor renders: its first non-empty run, or the
+  // anchor's own bare text.
+  function anchorName(a) {
+    for (const node of nameRuns(a)) {
+      const txt = (node.textContent || '').trim();
+      if (txt) return txt;
+    }
+    return (a.textContent || '').trim() || null;
+  }
 
   // --- Step 1: Find the feed list via data-testid ---
   const feedList = document.querySelector('[data-testid="mainFeed"]');
@@ -119,47 +220,35 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     let authorProfileUrl = null;
     let timestamp = null;
 
-    const authorLink = item.querySelector('a[href*="/in/"], a[href*="/company/"]');
-    if (authorLink) {
-      authorProfileUrl = authorLink.href.split('?')[0] || null;
-    }
+    // Name and profile URL both come from the author anchor.  Reading them
+    // from one element is what makes disagreement impossible: the control
+    // menu's aria-label is deliberately NOT a name source, because nothing
+    // ties it structurally to the anchor the URL comes from.
+    const authorAnchor = findAuthorAnchor(item);
+    if (authorAnchor) {
+      authorProfileUrl = authorAnchor.href.split('?')[0] || null;
+      authorName = anchorName(authorAnchor);
 
-    // Author name: extract only when the menu button aria-label matches
-    // the expected "Open control menu for post by <name>" format.
-    // The menu button is already validated above (line that sets menuBtn).
-    const menuLabel = menuBtn.getAttribute('aria-label') || '';
-    const authorNameMatch = menuLabel.match(/^Open control menu for post by\\s+(.+)$/);
-    authorName = authorNameMatch ? authorNameMatch[1].trim() || null : null;
+      // Headline + timestamp come from that same anchor: it carries the
+      // <p> run [name, connection degree, headline, timestamp].
+      const pEls = Array.from(authorAnchor.querySelectorAll('p'));
 
-    // Author headline + timestamp: find the text-bearing second author
-    // link.  Each post has two links to the author profile — the first
-    // contains only an avatar (<figure>), the second contains <p>
-    // elements with name, degree, headline, and timestamp.
-    if (authorLink) {
-      const authorPath = new URL(authorLink.href).pathname;
-      const allLinks = Array.from(item.querySelectorAll('a[href*="' + authorPath + '"]'));
-      const textLink = allLinks.find(function(a) { return (a.textContent || '').trim().length > 0; });
-
-      if (textLink) {
-        const pEls = Array.from(textLink.querySelectorAll('p'));
-
-        // Timestamp: last <p> containing a relative-time token (e.g. "18h •")
-        for (let i = pEls.length - 1; i >= 0; i--) {
-          const txt = (pEls[i].textContent || '').trim();
-          const timestampMatch = txt.match(/^(\\d+[smhdw])(?:\\s|[\\u2022\\u00B7]|$)/);
-          if (timestampMatch) {
-            timestamp = timestampMatch[1];
-            pEls.splice(i, 1);
-            break;
-          }
+      // Timestamp: last <p> containing a relative-time token (e.g. "18h •")
+      for (let i = pEls.length - 1; i >= 0; i--) {
+        const txt = (pEls[i].textContent || '').trim();
+        const timestampMatch = txt.match(/^(\\d+[smhdw])(?:\\s|[\\u2022\\u00B7]|$)/);
+        if (timestampMatch) {
+          timestamp = timestampMatch[1];
+          pEls.splice(i, 1);
+          break;
         }
+      }
 
-        // Headline: 3rd <p> (index 2) — after name and connection degree.
-        // Company posts may have only 2 <p> elements (name + timestamp),
-        // in which case authorHeadline stays null.
-        if (pEls.length >= 3) {
-          authorHeadline = (pEls[2].textContent || '').trim() || null;
-        }
+      // Headline: 3rd <p> (index 2) — after name and connection degree.
+      // Company posts may have only 2 <p> elements (name + timestamp),
+      // in which case authorHeadline stays null.
+      if (pEls.length >= 3) {
+        authorHeadline = (pEls[2].textContent || '').trim() || null;
       }
     }
 
