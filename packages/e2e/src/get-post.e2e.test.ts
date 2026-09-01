@@ -202,11 +202,12 @@ describeE2E("get-post operation", () => {
 
       // (4) Verify commentUrn extraction (was previously hardcoded to
       // null; SDUI format includes the `(urn:li:activity:` qualifier).
-      if (parsed.comments.length > 0) {
-        const firstComment = parsed.comments[0];
-        expect(firstComment.commentUrn).not.toBeNull();
-        expect(firstComment.commentUrn).toMatch(/^urn:li:comment:\(/);
-      }
+      // Unconditional: (3) already asserted `comments.length > 0`, so a
+      // guard here could never be false — it only made these assertions
+      // look optional (lhremote#829).
+      const firstComment = parsed.comments[0];
+      expect(firstComment.commentUrn).not.toBeNull();
+      expect(firstComment.commentUrn).toMatch(/^urn:li:comment:\(/);
     }, 60_000);
 
     it("get-post prints human-friendly output", async () => {
