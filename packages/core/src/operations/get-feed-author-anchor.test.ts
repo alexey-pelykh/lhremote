@@ -646,6 +646,32 @@ describe("get-feed author fields are co-located on one anchor (#837, closes #825
     expect(name).not.toContain("Head of Widgets");
   });
 
+  it("AC-3: the name is the run rendered first, whichever tag carries it", () => {
+    // An anchor mixing both run shapes: the name in a legacy `<span>`, a later
+    // field in an SDUI `<p>`.  Collecting `<p>` and `<span>` as two queries
+    // orders every `<p>` ahead of every `<span>`, so the headline would outrank
+    // a name rendered before it; document order is what decides.
+    const root = feedOf(
+      el("div", { role: "listitem" }, [
+        el("a", { href: "/in/mixed-order/" }, [
+          text("span", "Real Name", { dir: "ltr" }),
+          text("p", "Head of Widgets at Acme"),
+        ]),
+        el("div", { "data-testid": "expandable-text-box" }, [
+          text("span", "Post body text that is long enough to be real."),
+        ]),
+        text("button", "", { "aria-label": `${MENU_LABEL_PREFIX}Real Name` }),
+      ], "", 400),
+    );
+
+    const post = runScrape(root)[0];
+
+    expect(post?.authorName).toBe("Real Name");
+    expect(post?.authorProfileUrl).toBe(
+      "https://www.linkedin.com/in/mixed-order/",
+    );
+  });
+
   it("AC-2 (a11y): a decoration-only wrapper never becomes the name", () => {
     const root = feedOf(
       el("div", { role: "listitem" }, [

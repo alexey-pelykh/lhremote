@@ -154,9 +154,12 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
 
   // The name runs an element renders: <p> in the SDUI shape, <span> in the
   // legacy one.  Asking only WHETHER a run exists — never which tag carries it
-  // — is what keeps every read below dialect-agnostic.
+  // — is what keeps every read below dialect-agnostic.  One selector list, not
+  // two queries concatenated: the callers below take the FIRST run, and two
+  // queries would order every <p> ahead of every <span> rather than in document
+  // order, so a headline could outrank a name an anchor renders before it.
   function nameRuns(root) {
-    return Array.from(root.querySelectorAll('p')).concat(Array.from(root.querySelectorAll('span')));
+    return Array.from(root.querySelectorAll('p, span'));
   }
 
   // Does the anchor render its name inside a run, rather than as bare link text?
