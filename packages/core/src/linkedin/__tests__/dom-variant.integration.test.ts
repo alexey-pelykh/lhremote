@@ -102,6 +102,10 @@ describe("DOM variant adapters (integration)", () => {
     attr: "data-id",
     value: "urn:li:activity:7436698865522851840",
   };
+  const SDUI_SCREEN = {
+    attr: "data-sdui-screen",
+    value: "com.linkedin.sdui.flagshipnav.feed.UpdateDetail",
+  };
 
   describe("readiness predicate", () => {
     const predicate = buildReadinessPredicateSource(adapters);
@@ -151,6 +155,16 @@ describe("DOM variant adapters (integration)", () => {
       await buildPage([SDUI_CONTAINER, LEGACY_CONTAINER]);
 
       expect(await client.evaluate<boolean>(predicate)).toBe(false);
+    });
+
+    it("goes green on the sdui screen fallback when the container prefix is gone", async () => {
+      // The tolerance the pre-registry cascade had for the `expanded` prefix
+      // being renamed. Graded in a real browser because both `detect` and
+      // `ready` are CSS selector LISTS here, and list semantics are exactly
+      // what a hand-rolled document double cannot certify.
+      await buildPage([SDUI_SCREEN]);
+
+      expect(await client.evaluate<boolean>(predicate)).toBe(true);
     });
   });
 

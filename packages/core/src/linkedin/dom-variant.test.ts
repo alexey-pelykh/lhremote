@@ -38,8 +38,24 @@ function fakeElement(sel: string): unknown {
   };
 }
 
+/**
+ * Match a selector against the set of selectors the page is pretending to
+ * have.  Selector LISTS are split, because `querySelector('a, b')` matches
+ * when EITHER side matches and several adapter anchors are lists — a double
+ * that compared the whole string would report "absent" for a page that a
+ * real browser matches, which is a false pass in the safe-looking direction.
+ *
+ * Splitting on a bare comma is sound for the anchors in play (none contains a
+ * comma inside brackets or quotes); the real-browser tier is what grades CSS
+ * semantics properly.
+ */
+function selectorMatches(present: readonly string[], sel: string): boolean {
+  const wanted = new Set(present.flatMap((p) => p.split(",").map((s) => s.trim())));
+  return sel.split(",").some((part) => wanted.has(part.trim()));
+}
+
 function fakeDocument(present: readonly string[], body = ""): unknown {
-  const matches = (sel: string): boolean => present.includes(sel);
+  const matches = (sel: string): boolean => selectorMatches(present, sel);
   return {
     querySelector: (sel: string) => (matches(sel) ? fakeElement(sel) : null),
     querySelectorAll: (sel: string) =>
@@ -95,6 +111,21 @@ describe("adapter registry", () => {
     }
   });
 
+  it("keeps every declared scope reachable", () => {
+    // A scope is only reachable if some page can select the adapter without
+    // an earlier scope resolving.  With `detect` narrower than `scopes[0]`,
+    // selection would guarantee `scopes[0]` resolves and every later entry
+    // would be dead code — worse, dead code that the extractor's comments
+    // cite as the reason live exclusions exist.  Requiring `detect` to cover
+    // the whole scope list is what keeps a documented fallback real.
+    for (const adapter of adaptersFor("post-detail")) {
+      if (adapter.scopes.length <= 1) continue;
+      for (const scope of adapter.scopes) {
+        expect(adapter.detect).toContain(scope);
+      }
+    }
+  });
+
   it("binds each adapter's ready anchor to that adapter, not to a shared one", () => {
     // ADR-008's invariant: a readiness gate must anchor on a selector
     // belonging to the same adapter that performs the extraction.  Two
@@ -133,10 +164,63 @@ describe("selector escaping", () => {
   });
 });
 
+describe("blast radius of a defective adapter", () => {
+  // A broken extractor is the most likely defect in a new adapter, and it is
+  // the one an author is least able to catch before shipping. It must not be
+  // able to take down readiness for the OTHER dialects: the readiness and
+  // detection scripts never carry extractor source, so an extractor that
+  // cannot even parse is inert until extraction actually runs.
+  const broken: VariantAdapter = {
+    ...THIRD_ADAPTER,
+    extract: `(function (scope) { this is not valid javascript ]]] })`,
+  };
+  const withBroken = [...adaptersFor("post-detail"), broken];
+
+  it("does not break the readiness predicate for other dialects", () => {
+    const script = buildReadinessPredicateSource(withBroken);
+    const [sdui] = adaptersFor("post-detail");
+
+    expect(() => runScript(script, fakeDocument([]))).not.toThrow();
+    expect(
+      runScript(script, fakeDocument([sdui?.detect ?? "", sdui?.ready ?? ""])),
+    ).toBe(true);
+  });
+
+  it("does not break the detection probe", () => {
+    const script = buildDetectionSource(withBroken);
+
+    expect(() => runScript(script, fakeDocument([]))).not.toThrow();
+    expect(asVariantDetection(runScript(script, fakeDocument([])))).not.toBeNull();
+  });
+
+  it("keeps extractor source out of the readiness and detection scripts", () => {
+    const marker = "not valid javascript";
+    expect(buildReadinessPredicateSource(withBroken)).not.toContain(marker);
+    expect(buildDetectionSource(withBroken)).not.toContain(marker);
+    // ...and the extraction script is where it legitimately appears.
+    expect(buildPostDetailExtractionSource(withBroken)).toContain(marker);
+  });
+});
+
 describe("readiness predicate", () => {
   const adapters = adaptersFor("post-detail");
   const script = buildReadinessPredicateSource(adapters);
   const [sdui, legacy] = adapters;
+
+  it("accepts the sdui screen fallback when the container prefix is gone", () => {
+    // The tolerance the pre-registry cascade had for the `expanded` prefix
+    // being renamed: the screen wrapper is still an SDUI root, so the adapter
+    // still claims the page rather than reporting it unsupported.
+    const screen =
+      '[data-sdui-screen="com.linkedin.sdui.flagshipnav.feed.UpdateDetail"]';
+    expect(sdui?.scopes).toContain(screen);
+    expect(
+      runScript(
+        script,
+        fakeDocument([screen, `${screen} a[href*="/in/"]`]),
+      ),
+    ).toBe(true);
+  });
 
   it("is false when no adapter claims the page", () => {
     expect(runScript(script, fakeDocument([]))).toBe(false);

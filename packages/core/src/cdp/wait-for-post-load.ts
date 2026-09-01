@@ -195,6 +195,14 @@ export async function waitForPostLoad(
     }
   }
 
+  // Exactly one adapter matched (or classification was unavailable): the
+  // dialect is known and it genuinely timed out.
+  //
+  // The probe counts are deliberately NOT folded into this error. This is the
+  // branch where a partially-stale adapter is most likely, so the diagnosis
+  // matters most here — but its designed home is the diagnostic capture above
+  // (per-registered-adapter detect results), which #835 adds, not a `cause`
+  // bolted onto an error class this item does not own.
   throw new ExtractionTimeoutError(
     `readiness anchor of the selected ${POST_DETAIL_SURFACE} adapter`,
     timeoutMs,
