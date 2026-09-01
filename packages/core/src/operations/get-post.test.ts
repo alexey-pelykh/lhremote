@@ -252,6 +252,94 @@ describe("getPost", () => {
     expect(result.post.shareCount).toBe(0);
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // ORACLE — extraction contract (#827). Pre-authored; executor-uneditable.
+  //
+  // Encodes the empty-vs-error contract this migration must satisfy. Authored
+  // BEFORE the implementation, deliberately, because an executor that writes
+  // both the fix and the assertions grading it has no independent gate.
+  //
+  // The implementing items (#831, #832, #834) MUST NOT edit these beyond one
+  // documented transition:  it.fails(...)  ->  it(...)
+  //
+  // `it.fails` passes while its body fails. Every body here fails today, since
+  // the contract is not implemented yet — so CI is green and this oracle can
+  // land first. The moment an implementation makes a body pass, `it.fails`
+  // turns RED, forcing the implementer to acknowledge the behaviour flip in a
+  // one-token diff instead of silently absorbing it.
+  //
+  // Assertions are on OBSERVABLE BEHAVIOUR — does it throw? — never on error
+  // class names, so #832 stays free to name its classes without rewriting the
+  // oracle that grades it.
+  // ───────────────────────────────────────────────────────────────────────────
+  describe("ORACLE: corroborated emptiness (#827)", () => {
+    // Cardinal corroborator: a count in the SAME response contradicts the empty
+    // field. commentCount 5 with zero comments is self-contradictory — the
+    // extraction failed, it did not observe an empty comment section.
+    it.fails(
+      "throws when comments are empty but commentCount contradicts it",
+      async () => {
+        setupMocks({ comments: [] }); // DEFAULT_POST_DETAIL.commentCount === 5
+
+        await expect(
+          getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+        ).rejects.toThrow();
+      },
+    );
+
+    it.fails(
+      "throws when comments evaluate to null but commentCount contradicts it",
+      async () => {
+        setupMocks({ comments: null }); // DEFAULT_POST_DETAIL.commentCount === 5
+
+        await expect(
+          getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+        ).rejects.toThrow();
+      },
+    );
+
+    // CONTROL — MUST STAY GREEN. Without this, the fix degenerates into
+    // always-throw-on-empty and breaks every post that legitimately has no
+    // comments. A zero cardinal corroborates the empty list: this is legal.
+    it("does NOT throw when comments are empty and commentCount agrees", async () => {
+      setupMocks({
+        postDetail: { ...DEFAULT_POST_DETAIL, commentCount: 0 },
+        comments: [],
+      });
+
+      const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+      expect(result.comments).toEqual([]);
+      expect(result.post.commentCount).toBe(0);
+    });
+
+    // CONTROL — MUST STAY GREEN. Container corroborator: the region's anchor
+    // matched, so absent text is a legal image-only / link-only post, not a
+    // stale selector. Empty text must normalise to "" and must not throw.
+    it('does NOT throw when text is absent but the container matched, and yields ""', async () => {
+      setupMocks({
+        postDetail: { ...DEFAULT_POST_DETAIL, text: null, commentCount: 0 },
+        comments: [],
+      });
+
+      const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+      expect(result.post.text).toBe("");
+    });
+
+    // Container corroborator, negative case: the container itself did not
+    // match, so there is no same-observation evidence that the page is empty.
+    // Already true on main; pinned here so a later refactor cannot silently
+    // downgrade it to a success.
+    it("throws when the post-detail container did not match at all", async () => {
+      setupMocks({ postDetail: null });
+
+      await expect(
+        getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+      ).rejects.toThrow();
+    });
+  });
+
   it("waits for post to load with polling", async () => {
     const { evaluateMock } = setupMocks({
       readySequence: [false, false, true],

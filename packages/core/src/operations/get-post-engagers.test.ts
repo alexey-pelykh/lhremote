@@ -245,6 +245,48 @@ describe("getPostEngagers", () => {
     expect(result.engagers).toEqual([]);
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // ORACLE — extraction contract (#827). Pre-authored; executor-uneditable.
+  // See the matching block in get-post.test.ts for the full rationale and the
+  // one permitted transition:  it.fails(...)  ->  it(...)
+  // ───────────────────────────────────────────────────────────────────────────
+  describe("ORACLE: corroborated emptiness (#827)", () => {
+    // Cardinal corroborator: the modal reported 2 reactions, so scraping zero
+    // of them is self-contradictory — extraction failed.
+    it.fails(
+      "throws when engagers evaluate to null but totalReactions contradicts it",
+      async () => {
+        setupMocks({ scrapeSequence: [null], totalReactions: 2 });
+
+        await expect(
+          getPostEngagers({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+        ).rejects.toThrow();
+      },
+    );
+
+    // CONTROL — MUST STAY GREEN. A post with genuinely zero reactions is legal
+    // and must return normally. This is the safeguard against the fix
+    // degenerating into always-throw-on-empty.
+    it("does NOT throw when engagers are empty and totalReactions agrees", async () => {
+      setupMocks({ scrapeSequence: [[]], totalReactions: 0 });
+
+      const result = await getPostEngagers({
+        postUrl: POST_URL,
+        cdpPort: CDP_PORT,
+      });
+
+      expect(result.engagers).toEqual([]);
+      expect(result.paging.count).toBe(0);
+    });
+
+    // HELD — `reactionsFound: false` (today: returns empty, does not throw).
+    // Its disposition depends on whether the reactions modal has a container
+    // tier equivalent to the post-detail one, which was never probed: opening
+    // the modal exceeds a read against a live licensed account. Resolved by
+    // SPIKE #830; the assertion is authored by #840, NOT here. Asserting
+    // either way now would encode a guess as a contract.
+  });
+
   it("scrolls modal for pagination", async () => {
     const first = DEFAULT_ENGAGERS[0] as (typeof DEFAULT_ENGAGERS)[0];
     const partial = [first];
