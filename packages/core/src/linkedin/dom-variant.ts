@@ -253,35 +253,64 @@ const SDUI_POST_DETAIL_EXTRACT = `(function (scope) {
   return { authorName, authorHeadline, authorProfileUrl, text, timestamp };
 })`;
 
+/** Post-detail container componentkey — the tightest SDUI scope. */
+const SDUI_CONTAINER =
+  '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]';
+
+/**
+ * SDUI screen wrapper — the wider SDUI scope, used when the container prefix
+ * changes.  It includes the comment list as a descendant, which is why the
+ * extractor's `replaceableComment_` exclusions are load-bearing.
+ */
+const SDUI_SCREEN =
+  '[data-sdui-screen="com.linkedin.sdui.flagshipnav.feed.UpdateDetail"]';
+
+/** `<scope> a[href*="/in/"], <scope> a[href*="/company/"]` for each scope. */
+function authorLinkWithin(scopes: readonly string[]): string {
+  return scopes
+    .flatMap((scope) => [
+      `${scope} a[href*="/in/"]`,
+      `${scope} a[href*="/company/"]`,
+    ])
+    .join(", ");
+}
+
 /**
  * SDUI post-detail adapter.
  *
- * `detect` is the post-detail container componentkey — the same anchor the
- * pre-registry scraper used as its primary scope, and the one the #800 spike
- * verified contains exactly the post body and excludes the LinkedIn chrome.
- * It is decisive for this dialect: `componentkey` is an SDUI-only attribute.
+ * `detect` spans BOTH SDUI roots, and that matters: if it were only the
+ * container, the screen entry in `scopes` would be unreachable — selection
+ * requires the container to be present, so the scope loop would always
+ * resolve on its first candidate and the documented fallback would be dead
+ * code justified by a comment. Covering both keeps the fallback live, which
+ * is the tolerance the pre-registry cascade had for the `expanded` prefix
+ * being renamed. Both anchors are SDUI-only (`componentkey` and
+ * `data-sdui-screen`), so widening within the dialect cannot collide with
+ * the legacy adapter.
  *
- * `ready` is the author link **inside that container**.  Two things are going
- * on and both matter.  It is the old gate's author-link stage re-scoped from
- * `<main>` to this adapter's own root, which is the whole ADR-008 binding:
- * the same anchor was variant-agnostic under `<main>` and is variant-specific
- * under a `componentkey` root, because `componentkey` is SDUI-only.  And it
- * is deliberately *stricter* than the container alone — the container can be
- * present in a skeleton state before the post body hydrates, so gating on it
- * would let extraction run against an empty container and hand back an empty
- * record, which is the failure mode being removed rather than a new one.
+ * `ready` is the author link inside whichever of those roots is present.
+ * Two things are going on and both matter. It is the old gate's author-link
+ * stage re-scoped from `<main>` to this adapter's own roots, which is the
+ * whole ADR-008 binding: the same anchor was variant-agnostic under `<main>`
+ * and is variant-specific under an SDUI root. And it is deliberately
+ * *stricter* than the root alone — a container can be present in a skeleton
+ * state before the post body hydrates, so gating on it would let extraction
+ * run against an empty container and hand back an empty record, which is the
+ * failure mode being removed rather than a new one.
+ *
+ * The screen-scoped half of `ready` is weaker than the container-scoped half:
+ * the screen contains the comment list, so a commenter's link can satisfy it
+ * before the post body hydrates. That is accepted deliberately — it only
+ * applies on the fallback path, where the alternative is no adapter at all,
+ * and the extractor excludes `replaceableComment_` subtrees so a commenter
+ * still cannot be picked as the author.
  */
 const SDUI_POST_DETAIL_ADAPTER: VariantAdapter = {
   surface: "post-detail",
   variant: "sdui",
-  detect: '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]',
-  ready:
-    '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"] a[href*="/in/"], ' +
-    '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"] a[href*="/company/"]',
-  scopes: [
-    '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]',
-    '[data-sdui-screen="com.linkedin.sdui.flagshipnav.feed.UpdateDetail"]',
-  ],
+  detect: `${SDUI_CONTAINER}, ${SDUI_SCREEN}`,
+  ready: authorLinkWithin([SDUI_CONTAINER, SDUI_SCREEN]),
+  scopes: [SDUI_CONTAINER, SDUI_SCREEN],
   extract: SDUI_POST_DETAIL_EXTRACT,
 };
 
@@ -292,22 +321,34 @@ const SDUI_POST_DETAIL_ADAPTER: VariantAdapter = {
 /**
  * Post-detail extraction for the pre-SDUI (Ember / artdeco) dialect.
  *
- * **Provenance, stated precisely because the two halves have different
- * evidence behind them.**
+ * **Provenance, stated precisely because the three parts have different
+ * evidence behind them.  None of this adapter is fixture-verified: no
+ * committed DOM fixture exists yet (#828 harvests them, #838 asserts
+ * extraction against them).**
  *
- * *Anchors* — measured live on 2026-08-31 against a fully-loaded 589 KB
- * post-detail page (LinkedHelper 2.130.29), the same probe run that recorded
- * every SDUI scraper selector matching 0: `[data-id^="urn:li:"]` matched 40,
+ * *Measured* — live on 2026-08-31 against a fully-loaded 589 KB post-detail
+ * page (LinkedHelper 2.130.29), the same probe run that recorded every SDUI
+ * scraper selector matching 0: `[data-id^="urn:li:"]` matched 40,
  * `.update-components-text` matched 41, `span[dir="ltr"]` matched 82.
+ *
+ * *The shipped detect anchor is NOT one of those three.* It is
+ * `[data-id^="urn:li:activity:"]` — a **narrowing** of the measured
+ * `[data-id^="urn:li:"]`, because that measured selector also matches
+ * `urn:li:comment:` entities and a comment is not the extraction root. The
+ * narrowing is a hypothesis with two unmeasured halves, and it is worth
+ * being blunt about both: that the 40 hits include at least one
+ * `activity:` container (if they are all comment entities, this adapter
+ * claims nothing and a legacy page is reported unsupported), and that
+ * `data-id` never appears on an SDUI page (if it does, both adapters claim
+ * healthy pages and extraction reports ambiguity). The second is the better
+ * grounded of the two — the SDUI rewrite replaced `data-id` with
+ * `componentkey` — but neither has a recorded count.
  *
  * *Field logic* — carried forward from the scraper this repository shipped
  * against this dialect before `15f5902` rewrote it for SDUI.  That code
  * demonstrably worked against this stack; the measured `span[dir="ltr"]`
- * count is consistent with it still applying.  It is **not** re-verified
- * against a captured page: no committed DOM fixture exists yet (#828
- * harvests them, #838 asserts extraction against them).  Treat the field
- * logic as the current best hypothesis with the evidence above, not as a
- * verified claim.
+ * count is consistent with it still applying.  Treat it as the current best
+ * hypothesis with the evidence above, not as a verified claim.
  *
  * What is *not* carried forward is that scraper's `<main>`/`document` scope
  * fallback.  Scope resolution is confined to this dialect's own anchors; if
@@ -418,12 +459,8 @@ const LEGACY_POST_DETAIL_EXTRACT = `(function (scope) {
  * detection yields nothing and the page is reported unsupported rather than
  * scraped into an empty record.
  *
- * `data-id` is narrowed to the `activity` URN family rather than the measured
- * `[data-id^="urn:li:"]`, which also matches comment entities; the update
- * container is the post itself, not a comment.
- *
- * The anchor is exclusive against SDUI: `data-id` is an Ember-stack
- * attribute, and the SDUI rewrite replaced it with `componentkey`.
+ * The narrowing to the `activity` URN family, and its unmeasured status, are
+ * documented on {@link LEGACY_POST_DETAIL_EXTRACT} above.
  *
  * `ready` is the author link inside that container — the same shape as the
  * SDUI adapter's, and for the same two reasons: it is the old gate's
@@ -431,14 +468,14 @@ const LEGACY_POST_DETAIL_EXTRACT = `(function (scope) {
  * it proves the update actually hydrated rather than merely that its
  * container exists.
  */
+const LEGACY_UPDATE_CONTAINER = '[data-id^="urn:li:activity:"]';
+
 const LEGACY_POST_DETAIL_ADAPTER: VariantAdapter = {
   surface: "post-detail",
   variant: "legacy",
-  detect: '[data-id^="urn:li:activity:"]',
-  ready:
-    '[data-id^="urn:li:activity:"] a[href*="/in/"], ' +
-    '[data-id^="urn:li:activity:"] a[href*="/company/"]',
-  scopes: ['[data-id^="urn:li:activity:"]'],
+  detect: LEGACY_UPDATE_CONTAINER,
+  ready: authorLinkWithin([LEGACY_UPDATE_CONTAINER]),
+  scopes: [LEGACY_UPDATE_CONTAINER],
   extract: LEGACY_POST_DETAIL_EXTRACT,
 };
 
@@ -490,16 +527,32 @@ function jsString(value: string): string {
  * The adapter table as an in-page array literal.  Every generated script
  * folds over this one array, which is what keeps "register a third adapter"
  * a registry-only edit.
+ *
+ * `withExtractors` is a blast-radius control, not an optimisation.  The
+ * extractor sources are the largest and most defect-prone part of an adapter,
+ * and only the extraction script runs them — so including them in the
+ * readiness and detection scripts would mean a syntax error in ONE adapter's
+ * extractor makes every readiness poll reject with an evaluate error, for
+ * every dialect and every operation, for a reason that has nothing to do with
+ * readiness.  Each script is handed only the fields it consumes.  (The
+ * bandwidth saving on a 500 ms poll loop is real but incidental.)
  */
-function adapterTableSource(adapters: readonly VariantAdapter[]): string {
-  const rows = adapters.map(
-    (adapter) =>
-      `{ variant: ${jsString(String(adapter.variant))}, ` +
-      `detect: ${jsString(adapter.detect)}, ` +
-      `ready: ${jsString(adapter.ready)}, ` +
-      `scopes: [${adapter.scopes.map(jsString).join(", ")}], ` +
-      `extract: ${adapter.extract} }`,
-  );
+function adapterTableSource(
+  adapters: readonly VariantAdapter[],
+  withExtractors: boolean,
+): string {
+  const rows = adapters.map((adapter) => {
+    const fields = [
+      `variant: ${jsString(String(adapter.variant))}`,
+      `detect: ${jsString(adapter.detect)}`,
+      `ready: ${jsString(adapter.ready)}`,
+    ];
+    if (withExtractors) {
+      fields.push(`scopes: [${adapter.scopes.map(jsString).join(", ")}]`);
+      fields.push(`extract: ${adapter.extract}`);
+    }
+    return `{ ${fields.join(", ")} }`;
+  });
   return `[\n${rows.join(",\n")}\n]`;
 }
 
@@ -511,8 +564,11 @@ function adapterTableSource(adapters: readonly VariantAdapter[]): string {
  * zero and multiple cases are reported through `matched` so the caller can
  * raise the right error, and neither has a default.
  */
-function selectionSource(adapters: readonly VariantAdapter[]): string {
-  return `const __lhAdapters = ${adapterTableSource(adapters)};
+function selectionSource(
+  adapters: readonly VariantAdapter[],
+  withExtractors = false,
+): string {
+  return `const __lhAdapters = ${adapterTableSource(adapters, withExtractors)};
   function __lhSelect() {
     const matched = [];
     for (const a of __lhAdapters) {
@@ -591,7 +647,7 @@ export function buildPostDetailExtractionSource(
   adapters: readonly VariantAdapter[],
 ): string {
   return `(() => {
-  ${selectionSource(adapters)}
+  ${selectionSource(adapters, true)}
   const selection = __lhSelect();
   if (selection.matched.length > 1) {
     return { ambiguousVariants: selection.matched };
