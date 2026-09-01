@@ -54,7 +54,7 @@ fourth — the goal is that it lands as a caught regression, not silent data los
 | **Reject** per-field selector fallback | "Empty ⇒ try the next selector" makes empty indistinguishable from failure — it would re-implement the bug while looking like the fix |
 | **Reject** extending the comma-separated selector unions | A union cannot report *which* dialect it matched, so it can build a record from two dialects with no way to notice |
 | Corroborated emptiness — cardinal + container | Makes "image-only post has no text" legal while "text missing because selectors are stale" is loud |
-| Two error classes, not one | *"LinkedIn changed, register an adapter"* and *"this adapter is partially stale"* need different responses |
+| Three error classes, not one | *"LinkedIn changed, register an adapter"*, *"this adapter is partially stale"* and *"two adapters matched — transitional page, fail loud rather than pick"* need different responses |
 | ADR-008 reclaims post-detail; ADR-007 untouched | ADR-007 is `Accepted`, decides profile readiness only, has 14 live citers. The defect was `wait-for-post-load.ts` **borrowing** it for a surface it never claimed |
 | Four fixtures, not one | The two middle ones are the only Tier-2 evidence that a legal empty stays legal |
 
