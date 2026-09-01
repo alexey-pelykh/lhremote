@@ -2,11 +2,19 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { resolveInstancePort } from "../cdp/index.js";
-import { DOMVariantUnsupportedError } from "../services/errors.js";
+import {
+  DOMVariantAmbiguousError,
+  DOMVariantUnsupportedError,
+} from "../services/errors.js";
 import type { PostComment, PostDetail } from "../types/post.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { waitForPostLoad } from "../cdp/wait-for-post-load.js";
+import {
+  adaptersFor,
+  buildPostDetailExtractionSource,
+  variantNamesFor,
+} from "../linkedin/dom-variant.js";
 import { denormalizeCommentUrnToLegacy } from "../linkedin/selectors.js";
 import { gaussianDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
@@ -57,6 +65,27 @@ interface RawPostDetail {
   commentCount: number;
   shareCount: number;
   timestamp: string | null;
+  /**
+   * Which adapter produced this record.  Absent only when the scrape
+   * predates the registry (no live path does).
+   */
+  variant?: string;
+}
+
+/**
+ * Returned instead of a field bag when two or more adapters claimed the
+ * page.  A transitional or hybrid page: picking one would build a record
+ * out of two dialects with no way to notice, so it is reported rather than
+ * resolved.
+ */
+interface AmbiguousPostDetail {
+  ambiguousVariants: string[];
+}
+
+function isAmbiguous(
+  raw: RawPostDetail | AmbiguousPostDetail,
+): raw is AmbiguousPostDetail {
+  return Array.isArray((raw as AmbiguousPostDetail).ambiguousVariants);
 }
 
 interface RawComment {
@@ -73,170 +102,32 @@ interface RawComment {
 // In-page DOM scraping scripts
 // ---------------------------------------------------------------------------
 
+/** The page kind this operation reads; picks the adapter list it binds to. */
+const POST_DETAIL_SURFACE = "post-detail" as const;
+
 /**
  * JavaScript source evaluated inside the LinkedIn post detail page to
  * extract post metadata from the rendered DOM.
  *
- * Post-2026-05 LinkedIn migrated `/posts/...` to a React + CSS Modules
- * + SDUI stack (see lhremote#800 + research file
- * `post-detail-body-dom-react-sdui-20260507.md`).  The legacy anchors
- * `[data-testid="mainFeed"]`, `<article>`, and `span[dir="ltr"]` are
- * all gone.  The script now scopes to the post-detail container by
- * `[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]`,
- * which contains EXACTLY the post body (author links, headline, text,
- * post-level reactions trigger) and excludes the LinkedIn chrome
- * (Premium banner, sidebar, comment list, comment authors) — all of
- * which the legacy fallback-to-`<main>` cascade was incorrectly
- * picking up.
+ * Generated from the post-detail adapter registry, not hand-written: the
+ * script selects the one adapter whose detect anchor claims the page, scopes
+ * to that adapter's own container, and runs that adapter's field extractors.
+ *
+ * **There is no terminal fallback.**  The cascade this replaced ended in
+ * `document.querySelector('main') || document`, both of which always match —
+ * so a page whose field selectors matched nothing still produced a valid
+ * scope and returned an empty record with an HTTP success.  That is the
+ * mechanism that turned a selector miss into a silent success.  Selection now
+ * has three outcomes and none of them is a default: exactly one adapter
+ * (extract), zero (`null`, raised as {@link DOMVariantUnsupportedError}), or
+ * two-or-more (reported as `ambiguousVariants`).
+ *
+ * Registering a third dialect is an edit to the registry alone — nothing
+ * here branches on the variant.
  */
-const SCRAPE_POST_DETAIL_SCRIPT = `(() => {
-  let authorName = null;
-  let authorHeadline = null;
-  let authorProfileUrl = null;
-  let text = null;
-  let reactionCount = 0;
-  let commentCount = 0;
-  let shareCount = 0;
-  let timestamp = null;
-
-  // Scope to the post-detail container (lhremote#800).  Cascades down
-  // to the SDUI screen and finally <main> if the componentkey prefix
-  // changes.
-  const scope =
-    document.querySelector('[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]') ||
-    document.querySelector('[data-sdui-screen="com.linkedin.sdui.flagshipnav.feed.UpdateDetail"]') ||
-    document.querySelector('main') ||
-    document;
-
-  // --- Author info ---
-  // The post-author has 3 anchors inside scope: avatar (text empty),
-  // name link ("<Name>  • <degree>"), and a height-zero "extended click
-  // area".  All point to the same /in/{publicId}/.  Use the first
-  // anchor for the URL; find the first anchor with non-empty text for
-  // the display name.
-  //
-  // Defense-in-depth (lhremote#800): when the primary post-detail
-  // selector misses and we fall back to the SDUI screen or <main>, the
-  // scope includes the comment list as descendants.  Skip anchors that
-  // sit inside any [componentkey^="replaceableComment_"] subtree so a
-  // commenter never gets picked as the post author — which is exactly
-  // the failure mode this fallback chain is meant to recover from.
-  let authorLink = null;
-  for (const a of scope.querySelectorAll('a[href*="/in/"], a[href*="/company/"]')) {
-    if (a.closest('[componentkey^="replaceableComment_"]')) continue;
-    authorLink = a;
-    break;
-  }
-  if (authorLink) {
-    authorProfileUrl = (authorLink.href || '').split('?')[0] || null;
-
-    // Find a sibling anchor with the same href but non-empty text.  Iterate
-    // and compare attribute values directly rather than building a CSS
-    // attribute selector via concatenation — the latter throws on hrefs
-    // containing CSS-special characters (quotes, backslashes), and the raw
-    // attribute can include LinkedIn-injected query strings.
-    const targetHref = authorLink.getAttribute('href');
-    let nameText = '';
-    for (const a of scope.querySelectorAll('a')) {
-      if (a.getAttribute('href') !== targetHref) continue;
-      const t = (a.textContent || '').trim();
-      if (t.length > 0) { nameText = t; break; }
-    }
-
-    // Strip the SDUI " • <degree>" suffix from the name link text.
-    // Format: "<Name>  • 1st" / "<Name> • 2nd" / "<Name>  • You" /
-    // "<Name>  • 3rd".  Connection-degree separator is bullet (•).
-    const m = nameText.match(/^(.+?)\\s+•\\s+(?:1st|2nd|3rd|Out of network|You)\\s*$/);
-    authorName = (m ? m[1] : nameText).trim() || null;
-  }
-
-  // --- Author headline ---
-  // After the author block, there's a headline element in <p> or <span>
-  // form. Scan post container for a non-empty text leaf with length
-  // 5..200 that is NOT the author name, NOT a relative-time marker,
-  // NOT a UI label, and NOT a composite "<Name> • <degree>" span.
-  //
-  // Defense-in-depth (lhremote#800): same filter as the author-link
-  // lookup above — when the SDUI-screen / <main> fallback fires, the
-  // comment list is a descendant of scope, and a commenter's headline
-  // would otherwise win.
-  const headlineCandidates = scope.querySelectorAll('p, span');
-  for (const el of headlineCandidates) {
-    if (el.closest('[componentkey^="replaceableComment_"]')) continue;
-    const txt = (el.textContent || '').trim();
-    if (
-      txt &&
-      txt.length > 5 &&
-      txt.length < 200 &&
-      txt !== authorName &&
-      !txt.match(/^\\d+[smhdw]$/) &&
-      !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
-      !txt.match(/^Follow$|^Promoted$|^Boost$|^Author$|^You$/i) &&
-      !txt.match(/^Skip to|^Keyboard shortcuts$|^Close jump menu$/i) &&
-      !txt.match(/^Feed\\s+(?:post|detail\\s+update)$/i) &&
-      !txt.match(/^Promote\\s+this\\s+post/i) &&
-      !txt.match(/Reaction button state:/) &&
-      !txt.includes('•') &&
-      !txt.match(/^https?:\\/\\//)
-    ) {
-      authorHeadline = txt;
-      break;
-    }
-  }
-
-  // --- Post text ---
-  // Cascade per research: data-testid leaf -> componentkey wrapper.
-  // Both selectors are stable and verified across all 4 post types
-  // (regular / share / ugcPost / self).  Very short posts may have
-  // neither — accept null in that case rather than synthesizing.
-  let textEl = scope.querySelector('[data-testid="expandable-text-box"]');
-  if (!textEl) {
-    textEl = scope.querySelector('[componentkey^="feed-commentary_"]');
-  }
-  if (textEl) {
-    const t = (textEl.textContent || '').trim();
-    if (t.length > 0) text = t;
-  }
-
-  // --- Engagement counts (UNCHANGED — text-content regex survives
-  // the DOM rewrite; verified by lhremote#800 reporting correct counts
-  // even when other fields are placeholder data) ---
-  const countText = document.body.textContent || '';
-
-  function parseCount(pattern) {
-    const m = countText.match(pattern);
-    if (!m) return 0;
-    const raw = m[1].replace(/,/g, '');
-    const num = parseInt(raw, 10);
-    return isNaN(num) ? 0 : num;
-  }
-
-  reactionCount = parseCount(/(\\d[\\d,]*)\\s+reactions?/i);
-  commentCount = parseCount(/(\\d[\\d,]*)\\s+comments?/i);
-  shareCount = parseCount(/(\\d[\\d,]*)\\s+reposts?/i);
-
-  // --- Timestamp ---
-  // The SDUI post-detail page has NO <time> element inside the post
-  // container (verified across all 4 post types).  Extract the
-  // relative-time prefix from container textContent: "<degree>2w •",
-  // "<degree>1mo •", etc.  "Edited" is a status flag, not a timestamp,
-  // so it is intentionally excluded from the alternation.
-  const scopeText = scope.textContent || '';
-  const timeMatch = scopeText.match(/(?:1st|2nd|3rd|You)(\\d+[smhdw]|[1-9]\\d*mo)\\s+•/) ||
-                     scopeText.match(/(?:^|\\s)(\\d+[smhdw]|[1-9]\\d*mo)\\s+•/);
-  if (timeMatch) timestamp = timeMatch[1];
-
-  return {
-    authorName,
-    authorHeadline,
-    authorProfileUrl,
-    text,
-    reactionCount,
-    commentCount,
-    shareCount,
-    timestamp,
-  };
-})()`;
+const SCRAPE_POST_DETAIL_SCRIPT = buildPostDetailExtractionSource(
+  adaptersFor(POST_DETAIL_SURFACE),
+);
 
 /**
  * JavaScript source evaluated inside the LinkedIn post detail page to
@@ -498,13 +389,28 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
     // Wait for the post content to render
     await waitForPostLoad(client);
 
-    // Extract post metadata from the DOM
-    const rawPost = await client.evaluate<RawPostDetail>(SCRAPE_POST_DETAIL_SCRIPT);
+    // Extract post metadata from the DOM.  The script has already selected
+    // the adapter; what arrives here is one of the three selection outcomes.
+    const rawPost = await client.evaluate<RawPostDetail | AmbiguousPostDetail>(
+      SCRAPE_POST_DETAIL_SCRIPT,
+    );
     if (!rawPost) {
-      // No adapter registry exists yet (#831), so nothing has been offered
-      // the page — the empty `triedVariants` list is literally accurate and
-      // becomes the real list when the registry lands.
-      throw new DOMVariantUnsupportedError("post-detail", []);
+      // Zero adapters claimed the page, or the claiming adapter could not
+      // resolve its own scope.  Either way nothing read the page, and there
+      // is no `<main>` left to pretend otherwise with.
+      throw new DOMVariantUnsupportedError(
+        POST_DETAIL_SURFACE,
+        variantNamesFor(POST_DETAIL_SURFACE).map(String),
+      );
+    }
+    if (isAmbiguous(rawPost)) {
+      // Two or more adapters claimed it.  Refuse rather than pick: a record
+      // assembled from two dialects is wrong in a way nothing downstream can
+      // detect.
+      throw new DOMVariantAmbiguousError(
+        POST_DETAIL_SURFACE,
+        rawPost.ambiguousVariants,
+      );
     }
 
     const post: PostDetail = {
