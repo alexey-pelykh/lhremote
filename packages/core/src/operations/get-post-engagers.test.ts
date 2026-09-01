@@ -246,7 +246,7 @@ describe("getPostEngagers", () => {
   describe("ORACLE: corroborated emptiness (#827)", () => {
     // Cardinal corroborator: the modal reported 2 reactions, so scraping zero
     // of them is self-contradictory — extraction failed.
-    it.fails(
+    it(
       "throws when engagers evaluate to null but totalReactions contradicts it",
       async () => {
         setupMocks({ scrapeSequence: [null], totalReactions: 2 });
@@ -367,6 +367,24 @@ describe("getPostEngagers", () => {
     const engager = result.engagers[0] as (typeof result.engagers)[0];
     expect(engager.firstName).toBe("John");
     expect(result.paging.start).toBe(1);
+  });
+
+  // Corroboration is measured on the whole scrape, never on the pagination
+  // window. A `start` past the end of a SUCCESSFUL scrape legitimately yields
+  // no rows — that is the caller's offset, not a failed extraction — so this
+  // must not throw even though the modal reports a positive total.
+  it("returns an empty window for a start past the end without throwing", async () => {
+    setupMocks({ totalReactions: 2 });
+
+    const result = await getPostEngagers({
+      postUrl: POST_URL,
+      cdpPort: CDP_PORT,
+      start: 5,
+      count: 10,
+    });
+
+    expect(result.engagers).toEqual([]);
+    expect(result.paging).toEqual({ start: 5, count: 0, total: 2 });
   });
 
   it("waits for post to load with polling", async () => {
