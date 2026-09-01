@@ -8,8 +8,15 @@ dor_findings:
   - "3 ratification-pending items (PEND-1..PEND-3, § 12) — PEND-3 carries a real effort delta"
   - "3 open questions (OQ-1..OQ-3, § 10) — OQ-1 blocks the engagers half of #823"
 artifacts:
-  investigation: .tmp/investigations/alexey-pelykh-lhremote-issue-823.md
-  probe: .tmp/investigations/823-q6-live-probe-findings.md
+  # The DOM probe was moved out of gitignored scratch into the private research
+  # repo. Private, so a public reader cannot follow it — the measurements it
+  # records are therefore restated in-band in this PRD (§ 1.1) and in every
+  # work item body, which is what makes those self-contained.
+  probe: "alexey-pelykh/lhremote-research :: linkedin/post-detail-dom-legacy-reversion-20260831.md"
+  probe_public_substance: "https://github.com/alexey-pelykh/lhremote/issues/823"
+  # The investigation report was session scratch and is superseded by this PRD
+  # and the solution design, which distilled it. Not committed anywhere.
+  investigation: superseded-by-this-prd
 closes: [823, 824, 825]
 ---
 
@@ -22,7 +29,7 @@ closes: [823, 824, 825]
 | Repo | `alexey-pelykh/lhremote` |
 | Closes | [#823](https://github.com/alexey-pelykh/lhremote/issues/823), [#824](https://github.com/alexey-pelykh/lhremote/issues/824), [#825](https://github.com/alexey-pelykh/lhremote/issues/825) |
 | Baseline HEAD | `fad665ded659286cd5fc15763e5625f79e0be862` |
-| Evidence | `.tmp/investigations/alexey-pelykh-lhremote-issue-823.md`, `.tmp/investigations/823-q6-live-probe-findings.md` |
+| Evidence | Live DOM probe, restated in-band in § 1.1. Full record: `linkedin/post-detail-dom-legacy-reversion-20260831.md` in the **private** research repo |
 | Appetite | 1 week of focused work (see § Appetite) |
 
 ---
