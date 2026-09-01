@@ -10,6 +10,7 @@ import type { PostComment, PostDetail } from "../types/post.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { waitForPostLoad } from "../cdp/wait-for-post-load.js";
+import { assertCardinalCorroboration } from "../linkedin/corroboration.js";
 import {
   adaptersFor,
   buildPostDetailExtractionSource,
@@ -453,6 +454,27 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
     // Extract all visible comments from the DOM
     const rawComments = await client.evaluate<RawComment[]>(SCRAPE_COMMENTS_SCRIPT);
     const allRaw = rawComments ?? [];
+
+    // Corroborate the scrape before trusting an empty one.  `commentCount` was
+    // read off the very page this scrape ran against, so the two disagreeing
+    // is a self-contradiction within one observation — the shape the defect
+    // took live: `commentCount: 41` returned next to `comments: []` (#834).
+    //
+    // Only when comments were actually asked for.  `commentCount: 0` on the
+    // input means "skip comment loading entirely", so the empty list is the
+    // caller's own instruction rather than an observation, and there is
+    // nothing for the cardinal to contradict.
+    if (maxComments > 0) {
+      assertCardinalCorroboration({
+        surface: POST_DETAIL_SURFACE,
+        variant: rawPost.variant ?? "unknown",
+        field: "comments",
+        cardinalName: "commentCount",
+        cardinal: post.commentCount,
+        extractedCount: allRaw.length,
+      });
+    }
+
     const limited = maxComments > 0 ? allRaw.slice(0, maxComments) : [];
 
     const comments: PostComment[] = limited.map((c) => ({

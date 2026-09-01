@@ -10,6 +10,7 @@ import {
   RESOLVE_REACTIONS_MODAL_SCRIPT,
   waitForReactionsModal,
 } from "../cdp/wait-for-reactions-modal.js";
+import { assertCardinalCorroboration } from "../linkedin/corroboration.js";
 import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
 import { gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak, simulateReadingTime } from "../utils/delay.js";
@@ -356,6 +357,34 @@ export async function getPostEngagers(
       type: "keyUp",
       key: "Escape",
       code: "Escape",
+    });
+
+    // Corroborate the scrape before trusting an empty one.  `total` was read
+    // from the header of the very modal this scrape ran against, so the modal
+    // reporting N reactions while the list yields none is a self-contradiction
+    // within one observation (#834).
+    //
+    // Deliberately measured on the whole scrape, not on the pagination window
+    // below: a `start` past the end of a successful scrape legitimately yields
+    // no rows, and that is a caller's offset, not a failed extraction.
+    //
+    // No skip-analogue guard is needed here, unlike get-post: the scrape runs
+    // whatever `count` is, so an empty result is always an observation.
+    //
+    // The surface is a bare string and `variant` names a constant in this file
+    // rather than a dialect, because the reactions modal has no entry in the
+    // adapter registry — whether it even has a container tier is unprobed
+    // (#830), and the design degrades to this cardinal tier either way.
+    // Naming the scraper is deliberate over inventing a dialect name: the
+    // error renders as `adapter "<variant>" … repair the selectors`, so the
+    // value has to be something an operator can actually grep to and repair.
+    assertCardinalCorroboration({
+      surface: "reactions-modal",
+      variant: "SCRAPE_ENGAGERS_SCRIPT",
+      field: "engagers",
+      cardinalName: "totalReactions",
+      cardinal: total,
+      extractedCount: allEngagers.length,
     });
 
     // Apply pagination window

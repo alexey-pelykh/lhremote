@@ -274,7 +274,7 @@ describe("getPost", () => {
     // Cardinal corroborator: a count in the SAME response contradicts the empty
     // field. commentCount 5 with zero comments is self-contradictory — the
     // extraction failed, it did not observe an empty comment section.
-    it.fails(
+    it(
       "throws when comments are empty but commentCount contradicts it",
       async () => {
         // The contradicting cardinal is pinned HERE, not inherited from
@@ -293,7 +293,7 @@ describe("getPost", () => {
       },
     );
 
-    it.fails(
+    it(
       "throws when comments evaluate to null but commentCount contradicts it",
       async () => {
         // Contradicting cardinal pinned locally — see the note above.
@@ -385,6 +385,11 @@ describe("getPost", () => {
       postDetail: {
         ...DEFAULT_POST_DETAIL,
         authorProfileUrl: "https://www.linkedin.com/in/jane-doe-123",
+        // Comments are incidental here — this test is about the author URL.
+        // The cardinal is pinned to 0 to match the empty list: the default 5
+        // would describe a page claiming five comments and rendering none,
+        // which is the contradiction the extraction contract now rejects.
+        commentCount: 0,
       },
       comments: [],
     });
@@ -398,6 +403,8 @@ describe("getPost", () => {
       postDetail: {
         ...DEFAULT_POST_DETAIL,
         authorProfileUrl: "https://www.linkedin.com/company/acme-corp",
+        // Cardinal pinned to 0 to match the empty list — see the note above.
+        commentCount: 0,
       },
       comments: [],
     });

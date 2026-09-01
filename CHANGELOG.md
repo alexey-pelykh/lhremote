@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (runtime behavior)** — `get-post` and `get-post-engagers` now fail loudly on a corroborated-empty extraction instead of returning an empty success (#834). When the page reports a positive `commentCount` (or the reactions modal a positive total) and the scrape yields no rows, the operation raises `ExtractionFailedError`: the CLI exits `1` and MCP returns `isError: true`, where both previously returned `comments: []` / `engagers: []` alongside a success status. Calls that were silently losing data to stale selectors will now surface as errors — this is the point of the change, but it is a live behavior flip for existing callers and scripts that treat an empty list as a valid answer.
+- Legitimately empty results are deliberately unaffected by the above: a post with zero comments, a post with zero reactions, and an image-only or link-only post with no body text all continue to return normally. Emptiness is only rejected when a count read from the same page contradicts it.
+
 ## [0.9.0] — 2026-04-01
 
 ### Added
