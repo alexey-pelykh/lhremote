@@ -28,8 +28,13 @@ const BEFORE_EACH_TIMEOUT = 15_000;
  *
  * It deliberately does NOT assert extracted field values against harvested
  * LinkedIn markup — that needs real captured pages and is the fixture
- * oracle's job.  What it asserts is *selection*: which adapter claims a page,
- * and what happens when none or several do.
+ * oracle's job.  What it asserts is *selection* — which adapter claims a
+ * page, and what happens when none or several do — plus the reads whose
+ * answer only a real browser can settle, against DOM built here: how sibling
+ * elements' text concatenates, whether `aria-label` carries a count the text
+ * omits, and CSS selector-list semantics.  Those cases are graded in the unit
+ * tier too, against a hand-rolled stand-in; the duplication is the point,
+ * because it is the stand-in's fidelity that is in question.
  */
 describe("DOM variant adapters (integration)", () => {
   let chromium: ChromiumInstance;
@@ -252,24 +257,150 @@ describe("DOM variant adapters (integration)", () => {
       expect(result.ambiguousVariants).toEqual(["sdui", "legacy"]);
     });
 
-    it("parses engagement counts from body text independently of the dialect", async () => {
-      await buildPage([SDUI_CONTAINER]);
+    it("reads each counter from the element that renders it (#836)", async () => {
+      // The counts row exactly as it rendered live on 2026-08-31: "2"
+      // reactions — a bare number whose words live only in the control's
+      // aria-label — beside "41 comments".  A reader sees "2 41 comments";
+      // the concatenation the previous whole-page read consumed sees
+      // "241 comments".  Only a real browser can settle which of the two a
+      // given markup shape actually produces, which is why this assertion is
+      // here and not in the unit tier.
+      await buildPage([LEGACY_CONTAINER]);
       await client.evaluate(`(() => {
-        const counts = document.createElement('span');
-        counts.textContent = '1,234 reactions 41 comments 7 reposts';
-        document.body.appendChild(counts);
+        const container = document.querySelector('[data-id^="urn:li:activity:"]');
+        const row = document.createElement('div');
+        row.className = 'social-details-social-counts';
+        const reactions = document.createElement('button');
+        reactions.setAttribute('aria-label', '2 reactions');
+        const reactionsValue = document.createElement('span');
+        reactionsValue.textContent = '2';
+        reactions.appendChild(reactionsValue);
+        const comments = document.createElement('button');
+        comments.setAttribute('aria-label', '41 comments');
+        comments.textContent = '41 comments';
+        row.appendChild(reactions);
+        row.appendChild(comments);
+        container.appendChild(row);
+        return true;
+      })()`);
+
+      // Guard on the premise: the two counters really do concatenate with no
+      // separator in a real DOM.  Without this the assertions below could be
+      // grading a page shape that never produced the defect.
+      expect(
+        await client.evaluate<string>(
+          `document.querySelector('.social-details-social-counts').textContent`,
+        ),
+      ).toBe("241 comments");
+
+      const result = await client.evaluate<{
+        reactionCount: number;
+        commentCount: number;
+      }>(script);
+
+      expect(result.commentCount).toBe(41);
+      expect(result.reactionCount).toBe(2);
+    });
+
+    it("reads a counts row that renders both counters as one node (#836)", async () => {
+      // The same criterion string against a row built the other way: one
+      // element whose whole text is "2 41 comments".  Nothing inside it
+      // renders a counter on its own, so the anchored read finds none — and
+      // reporting zero comments for a row that visibly says "41 comments"
+      // would be the same class of wrong the whole-page read was.  Inside a
+      // row the adapter itself declared, the looser read recovers 41.
+      await buildPage([LEGACY_CONTAINER]);
+      await client.evaluate(`(() => {
+        const container = document.querySelector('[data-id^="urn:li:activity:"]');
+        const row = document.createElement('div');
+        row.className = 'social-details-social-counts';
+        row.textContent = '2 41 comments';
+        container.appendChild(row);
         return true;
       })()`);
 
       const result = await client.evaluate<{
         reactionCount: number;
         commentCount: number;
-        shareCount: number;
       }>(script);
 
-      expect(result.reactionCount).toBe(1234);
+      // 0 reactions is the honest answer, not a miss: this rendering carries
+      // no "reactions" token anywhere for a read to find.
       expect(result.commentCount).toBe(41);
-      expect(result.shareCount).toBe(7);
+      expect(result.reactionCount).toBe(0);
+    });
+
+    it("ignores a counter rendered outside the selected adapter's scope", async () => {
+      // The whole-page read took the first "<N> comments"-shaped run anywhere
+      // in the document, chrome and sibling modules included.  A count from
+      // outside the post is not the post's count.
+      await buildPage([LEGACY_CONTAINER]);
+      await client.evaluate(`(() => {
+        const stray = document.createElement('span');
+        stray.textContent = '999 comments';
+        document.body.appendChild(stray);
+        return true;
+      })()`);
+
+      const result = await client.evaluate<{ commentCount: number }>(script);
+
+      expect(result.commentCount).toBe(0);
+    });
+
+    it("reads the author's name once and the headline as the headline (#836)", async () => {
+      // The legacy actor block writes each field twice inside the anchor —
+      // the copy a reader sees, wrapped in aria-hidden="true", and an
+      // assistive-technology twin beside it — with span[dir="ltr"] wrapping
+      // the PAIR.  Reading that wrapper returned the name doubled and pushed
+      // the plain name into the headline.
+      await client.evaluate(`(() => {
+        while (document.body.firstChild) {
+          document.body.removeChild(document.body.firstChild);
+        }
+        function pair(text) {
+          const outer = document.createElement('span');
+          const visible = document.createElement('span');
+          visible.setAttribute('aria-hidden', 'true');
+          visible.textContent = text;
+          const twin = document.createElement('span');
+          twin.textContent = text;
+          outer.appendChild(visible);
+          outer.appendChild(twin);
+          return outer;
+        }
+        const main = document.createElement('main');
+        const container = document.createElement('div');
+        container.setAttribute('data-id', 'urn:li:activity:7436698865522851840');
+        const anchor = document.createElement('a');
+        anchor.setAttribute('href', 'https://www.linkedin.com/in/alexey-pelykh/');
+        const title = pair('Alexey Pelykh');
+        title.setAttribute('dir', 'ltr');
+        anchor.appendChild(title);
+        anchor.appendChild(pair('Software Architect | Agentic AI'));
+        container.appendChild(anchor);
+        main.appendChild(container);
+        document.body.appendChild(main);
+        return true;
+      })()`);
+
+      // Guard on the premise: the anchor's own text really is the two fields
+      // with both copies of each run together, which is the shape measured
+      // live.
+      expect(
+        await client.evaluate<string>(
+          `document.querySelector('[data-id^="urn:li:activity:"] a').textContent`,
+        ),
+      ).toBe(
+        "Alexey PelykhAlexey PelykhSoftware Architect | Agentic AISoftware Architect | Agentic AI",
+      );
+
+      const result = await client.evaluate<{
+        authorName: string | null;
+        authorHeadline: string | null;
+      }>(script);
+
+      expect(result.authorName).toBe("Alexey Pelykh");
+      expect(result.authorHeadline).toBe("Software Architect | Agentic AI");
     });
 
     it("extracts post text through the selected adapter's own field selectors", async () => {
@@ -301,6 +432,7 @@ describe("DOM variant adapters (integration)", () => {
       detect: '[data-hypothetical-post="1"]',
       ready: '[data-hypothetical-post="1"] a[href*="/in/"]',
       scopes: ['[data-hypothetical-post="1"]'],
+      counts: [],
       extract: `(function (scope) {
         const a = scope.querySelector('a[href*="/in/"]');
         return {

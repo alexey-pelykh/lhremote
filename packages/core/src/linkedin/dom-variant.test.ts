@@ -54,13 +54,117 @@ function selectorMatches(present: readonly string[], sel: string): boolean {
   return sel.split(",").some((part) => wanted.has(part.trim()));
 }
 
-function fakeDocument(present: readonly string[], body = ""): unknown {
-  const matches = (sel: string): boolean => selectorMatches(present, sel);
-  return {
-    querySelector: (sel: string) => (matches(sel) ? fakeElement(sel) : null),
+/**
+ * An element spec — the shape of one node in a hand-built stand-in tree.
+ *
+ * `fakeElement` above is enough to grade *selection*, which is all the scripts
+ * decided before the engagement counts and the author fields were bound to the
+ * DOM.  Both of those reads turn on the relationship between an element and
+ * its descendants — which copy of a doubled string a wrapper holds, which
+ * element of a counts row renders which counter — so grading them needs a tree
+ * whose `textContent` concatenates its children exactly as a browser's does.
+ * That concatenation IS the defect under test.
+ */
+interface ElementSpec {
+  /** Selector list this element answers to, as a real one would. */
+  readonly sel?: string;
+  /** `aria-label`, where the element carries one. */
+  readonly label?: string;
+  /** `href`, where the element is an anchor. */
+  readonly href?: string;
+  /** This element's own text.  Leaves only, as in real markup. */
+  readonly text?: string;
+  readonly children?: readonly ElementSpec[];
+}
+
+interface FakeEl {
+  readonly textContent: string;
+  readonly href: string;
+  /** Every descendant in document order.  Node identity is stable, which is
+   *  what makes `contains` an ancestry test rather than a value comparison. */
+  readonly descendants: FakeEl[];
+  getAttribute(name: string): string | null;
+  querySelector(sel: string): FakeEl | null;
+  querySelectorAll(sel: string): FakeEl[];
+  closest(sel: string): FakeEl | null;
+  contains(other: FakeEl): boolean;
+  /** Whether this element answers to `sel`; `*` answers to everything. */
+  matchesSelector(sel: string): boolean;
+}
+
+/** Every element of the tree in document order, the root first. */
+function flatten(spec: ElementSpec): ElementSpec[] {
+  return [spec, ...(spec.children ?? []).flatMap(flatten)];
+}
+
+/**
+ * `textContent` semantics, verbatim: own text plus every descendant's, with no
+ * separator of any kind.  A stand-in that inserted one would make the two
+ * counters this suite is about readable, and the bug unreproducible.
+ */
+function specText(spec: ElementSpec): string {
+  return (spec.text ?? "") + (spec.children ?? []).map(specText).join("");
+}
+
+/**
+ * What a READER sees: the leaf texts separated, because the elements holding
+ * them are laid out apart.  This is the only place the rendered form and the
+ * concatenated one differ, and telling them apart is the whole point.
+ */
+function renderedText(spec: ElementSpec): string {
+  return flatten(spec)
+    .map((node) => node.text ?? "")
+    .filter((text) => text.length > 0)
+    .join(" ");
+}
+
+function buildElement(spec: ElementSpec): FakeEl {
+  const children = (spec.children ?? []).map(buildElement);
+  const descendants = children.flatMap((child) => [child, ...child.descendants]);
+  const matchesSelf = (sel: string): boolean =>
+    sel.trim() === "*" || selectorMatches([spec.sel ?? ""], sel);
+  const self: FakeEl = {
+    textContent: specText(spec),
+    href: spec.href ?? "",
+    descendants,
+    getAttribute: (name: string) => {
+      if (name === "aria-label") return spec.label ?? null;
+      if (name === "href") return spec.href ?? null;
+      return null;
+    },
     querySelectorAll: (sel: string) =>
-      matches(sel) ? [fakeElement(sel)] : [],
-    body: { textContent: body },
+      descendants.filter((node) => node.matchesSelector(sel)),
+    querySelector: (sel: string) =>
+      descendants.find((node) => node.matchesSelector(sel)) ?? null,
+    closest: () => null,
+    contains: (other: FakeEl) => other === self || descendants.includes(other),
+    matchesSelector: matchesSelf,
+  };
+  return self;
+}
+
+/**
+ * A page.  `trees` supplies a real subtree for a selector the page should
+ * answer with; every other present selector still resolves to the contentless
+ * stand-in, which is all the selection assertions need.
+ */
+function fakeDocument(
+  present: readonly string[],
+  trees: Readonly<Record<string, ElementSpec>> = {},
+): unknown {
+  const matches = (sel: string): boolean => selectorMatches(present, sel);
+  const resolve = (sel: string): unknown => {
+    for (const [key, spec] of Object.entries(trees)) {
+      if (selectorMatches([key], sel)) return buildElement(spec);
+    }
+    return matches(sel) ? fakeElement(sel) : null;
+  };
+  return {
+    querySelector: (sel: string) => resolve(sel),
+    querySelectorAll: (sel: string) => {
+      const el = resolve(sel);
+      return el === null ? [] : [el];
+    },
   };
 }
 
@@ -79,6 +183,7 @@ const THIRD_ADAPTER: VariantAdapter = {
   detect: '[data-hypothetical-post="1"]',
   ready: '[data-hypothetical-ready="1"]',
   scopes: ['[data-hypothetical-post="1"]'],
+  counts: [],
   extract: `(function (scope) {
     return {
       authorName: 'Third Dialect',
@@ -356,20 +461,13 @@ describe("post-detail extraction", () => {
     expect(result.authorName).toBe("Third Dialect");
   });
 
-  it("parses engagement counts outside the adapter, from document body text", () => {
-    // Dialect-independent by construction: the text-content regex was the
-    // one part of the scrape that kept working across the 2026-05 rewrite,
-    // so it must not be duplicated into each adapter.
-    const result = runScript(
-      buildPostDetailExtractionSource([THIRD_ADAPTER]),
-      fakeDocument(
-        [THIRD_ADAPTER.detect, ...THIRD_ADAPTER.scopes],
-        "1,234 reactions 41 comments 7 reposts",
-      ),
-    ) as { reactionCount: number; commentCount: number; shareCount: number };
-    expect(result.reactionCount).toBe(1234);
-    expect(result.commentCount).toBe(41);
-    expect(result.shareCount).toBe(7);
+  it("reads no page-wide text at all", () => {
+    // The counts used to come from `document.body.textContent`, which made the
+    // first "<N> comments"-shaped run ANYWHERE on the page the post's comment
+    // count.  Nothing about the number that came back could reveal that, so
+    // the absence of the read is asserted directly rather than inferred from
+    // a value.
+    expect(script).not.toContain("document.body");
   });
 
   it("keeps an sdui-only page selecting sdui", () => {
@@ -443,5 +541,402 @@ describe("registering a third adapter", () => {
       fakeDocument([sdui?.detect ?? "", ...(sdui?.scopes ?? [])]),
     );
     expect(after).toEqual(before);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Engagement counts and author identity (#836)
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * The engagement-counts row exactly as it rendered live on 2026-08-31, on the
+ * probe run that found LinkedIn serving the legacy dialect (#836).
+ *
+ * Two counters side by side.  The comment count renders its own words; the
+ * reaction count renders as a BARE NUMBER, with the words only in the
+ * control's `aria-label` — which is why a text-only read returned
+ * `reactionCount: 0` for a post carrying two reactions.
+ */
+const LIVE_COUNTS_ROW: ElementSpec = {
+  sel: ".social-details-social-counts",
+  children: [
+    {
+      sel: "ul",
+      children: [
+        {
+          sel: "li",
+          children: [
+            {
+              sel: "button",
+              label: "2 reactions",
+              children: [{ sel: "span", text: "2" }],
+            },
+          ],
+        },
+        {
+          sel: "li",
+          children: [{ sel: "button", label: "41 comments", text: "41 comments" }],
+        },
+      ],
+    },
+  ],
+};
+
+/** The actor block, so a counts fixture still produces a complete record. */
+const LEGACY_AUTHOR_ANCHOR: ElementSpec = {
+  sel: 'a[href*="/in/"]',
+  href: "https://www.linkedin.com/in/alexey-pelykh/",
+  children: [{ sel: 'span, [aria-hidden="true"]', text: "Alexey Pelykh" }],
+};
+
+/**
+ * A legacy page whose update container holds exactly `children`, in order.
+ *
+ * Order is load-bearing for the counts reads below: it decides which
+ * containment chain an un-narrowed read would start from.
+ */
+function legacyPage(children: readonly ElementSpec[]): unknown {
+  const legacy = adaptersFor("post-detail").find((a) => a.variant === "legacy");
+  const container = legacy?.scopes[0] ?? "";
+  return fakeDocument([legacy?.detect ?? "", container], {
+    [container]: { sel: container, children },
+  });
+}
+
+/** The ordinary counts shape: the actor block, then the counts row. */
+function legacyPageWith(row: ElementSpec): unknown {
+  return legacyPage([LEGACY_AUTHOR_ANCHOR, row]);
+}
+
+interface Counts {
+  reactionCount: number;
+  commentCount: number;
+  shareCount: number;
+}
+
+describe("engagement counts (#836)", () => {
+  const script = buildPostDetailExtractionSource(adaptersFor("post-detail"));
+
+  it("reproduces the live row: what a reader saw, and what textContent gives", () => {
+    // Guard on this suite's own premise, and the reason the fixture is a TREE
+    // rather than a string.  "2 41 comments" is the verbatim live rendering;
+    // the space in it is an element boundary, not a character, so the
+    // concatenation a page-wide read sees is "241 comments".  If either half
+    // ever stops holding, the assertions below would be grading a page shape
+    // LinkedIn never served.
+    expect(renderedText(LIVE_COUNTS_ROW)).toBe("2 41 comments");
+    expect(specText(LIVE_COUNTS_ROW)).toBe("241 comments");
+  });
+
+  it("reads each counter from the element that renders it", () => {
+    // The headline acceptance criterion: "2 41 comments" yields 2 and 41 —
+    // not 241, which is what the flattened form parses to, and not 0
+    // reactions, which is what a text-only read returns for a bare number.
+    const result = runScript(script, legacyPageWith(LIVE_COUNTS_ROW)) as Counts;
+
+    expect(result.commentCount).toBe(41);
+    expect(result.reactionCount).toBe(2);
+  });
+
+  it("reads a narrowed counts row that renders both counters as one node", () => {
+    // The same criterion against a row built the OTHER way: one element whose
+    // whole text is the criterion's string.  Anchored matching finds no
+    // counter here, and the strict read alone would report the post as having
+    // none — visibly false for a row that renders "41 comments".  Inside a
+    // row the adapter itself declared, a looser read of the row's own text is
+    // warranted, and it recovers 41.
+    //
+    // `reactionCount` stays 0 by construction, not by omission: this string
+    // carries no "reactions" token for any read to find.  Only the two-element
+    // rendering above — where the count lives in a control's `aria-label` —
+    // makes 2 recoverable at all.
+    const result = runScript(
+      script,
+      legacyPageWith({ sel: ".social-details-social-counts", text: "2 41 comments" }),
+    ) as Counts;
+
+    expect(result.commentCount).toBe(41);
+    expect(result.reactionCount).toBe(0);
+  });
+
+  it("does not read loosely when no counts anchor narrowed the root", () => {
+    // The bound on the fallback above.  An un-narrowed root is the whole post
+    // container, and the post's own prose is exactly where "a number followed
+    // by the word comments" is a sentence rather than a counter — reading it
+    // loosely there would reintroduce the defect this change removes, one
+    // scope smaller.
+    const result = runScript(
+      buildPostDetailExtractionSource([THIRD_ADAPTER]),
+      fakeDocument([THIRD_ADAPTER.detect, ...THIRD_ADAPTER.scopes], {
+        [THIRD_ADAPTER.scopes[0] ?? ""]: {
+          sel: THIRD_ADAPTER.scopes[0] ?? "",
+          children: [{ sel: "span", text: "This post got 3 comments last week." }],
+        },
+      }),
+    ) as Counts;
+
+    expect(result.commentCount).toBe(0);
+  });
+
+  it("keeps thousands separators out of the parsed value", () => {
+    const result = runScript(
+      script,
+      legacyPageWith({
+        sel: ".social-details-social-counts",
+        children: [
+          { sel: "button", label: "1,234 reactions", text: "1,234" },
+          { sel: "button", text: "5,678 comments" },
+          { sel: "button", text: "90 reposts" },
+        ],
+      }),
+    ) as Counts;
+
+    expect(result.reactionCount).toBe(1234);
+    expect(result.commentCount).toBe(5678);
+    expect(result.shareCount).toBe(90);
+  });
+
+  it("reports zero for a post that renders no counts row", () => {
+    // Load-bearing, not a nicety: `commentCount` is the cardinal that decides
+    // whether an empty comment list is legitimate or a stale-selector failure
+    // (#834).  A count invented for a post that has none would turn every such
+    // post into a raised error.
+    const result = runScript(
+      script,
+      legacyPageWith({ sel: "div", children: [{ sel: "span", text: "no counts here" }] }),
+    ) as Counts;
+
+    expect(result.reactionCount).toBe(0);
+    expect(result.commentCount).toBe(0);
+    expect(result.shareCount).toBe(0);
+  });
+
+  it("prefers the counts row over a counter rendered earlier in scope", () => {
+    // What the `counts` anchor actually buys, isolated.  The stray counter is
+    // placed BEFORE the row deliberately: an un-narrowed read starts its
+    // containment chain at the first hit in document order, so without the
+    // narrowing this page reports 999 — the post's own count decided by
+    // whatever happens to render a counter above it.  Ordered the other way
+    // round the row wins regardless, and the narrowing goes unexercised.
+    const result = runScript(
+      script,
+      legacyPage([
+        LEGACY_AUTHOR_ANCHOR,
+        { sel: "div", children: [{ sel: "span", text: "999 comments" }] },
+        LIVE_COUNTS_ROW,
+      ]),
+    ) as Counts;
+
+    expect(result.commentCount).toBe(41);
+  });
+
+  it("falls back to the adapter's own scope when it declares no counts anchor", () => {
+    // What every dialect with no measured counts row does, the registered
+    // `sdui` adapter included.  Anchored per-element matching is what makes
+    // the wider root safe.
+    const result = runScript(
+      buildPostDetailExtractionSource([THIRD_ADAPTER]),
+      fakeDocument([THIRD_ADAPTER.detect, ...THIRD_ADAPTER.scopes], {
+        [THIRD_ADAPTER.scopes[0] ?? ""]: {
+          sel: THIRD_ADAPTER.scopes[0] ?? "",
+          children: [LIVE_COUNTS_ROW],
+        },
+      }),
+    ) as Counts;
+
+    expect(result.reactionCount).toBe(2);
+    expect(result.commentCount).toBe(41);
+  });
+
+  it("has no adapter narrowing its counts read with an always-true selector", () => {
+    // The same guard the detect anchors carry, one field over: a `counts`
+    // candidate matching every page would put the whole document back inside
+    // the read this change took it out of.
+    const alwaysTrue = ["main", "body", "html", ":root", "*", "document"];
+    for (const adapter of adaptersFor("post-detail")) {
+      for (const candidate of adapter.counts) {
+        expect(alwaysTrue).not.toContain(candidate.trim());
+      }
+    }
+  });
+});
+
+describe("author identity (#836)", () => {
+  const script = buildPostDetailExtractionSource(adaptersFor("post-detail"));
+
+  interface Author {
+    authorName: string | null;
+    authorHeadline: string | null;
+    authorProfileUrl: string | null;
+  }
+
+  /** A legacy update container wrapping one author anchor and nothing else. */
+  function legacyPageWithAnchor(anchor: ElementSpec): unknown {
+    return legacyPage([anchor]);
+  }
+
+  /**
+   * The legacy actor block: LinkedIn writes each field twice inside the
+   * anchor — the copy a reader sees, wrapped in `aria-hidden="true"`, and an
+   * assistive-technology twin beside it — with `span[dir="ltr"]` wrapping the
+   * PAIR.  Reading that wrapper is what returned the name doubled.
+   */
+  const ACTOR_BLOCK: ElementSpec = {
+    sel: 'a[href*="/in/"]',
+    href: "https://www.linkedin.com/in/alexey-pelykh/",
+    children: [
+      {
+        sel: 'span[dir="ltr"], span',
+        children: [
+          { sel: 'span, [aria-hidden="true"]', text: "Alexey Pelykh" },
+          { sel: "span", text: "Alexey Pelykh" },
+        ],
+      },
+      {
+        sel: "span",
+        children: [
+          {
+            sel: 'span, [aria-hidden="true"]',
+            text: "Software Architect | Agentic AI",
+          },
+          { sel: "span", text: "Software Architect | Agentic AI" },
+        ],
+      },
+    ],
+  };
+
+  it("returns the name once, from the copy a reader sees", () => {
+    const result = runScript(script, legacyPageWithAnchor(ACTOR_BLOCK)) as Author;
+
+    expect(result.authorName).toBe("Alexey Pelykh");
+    expect(result.authorProfileUrl).toBe(
+      "https://www.linkedin.com/in/alexey-pelykh/",
+    );
+  });
+
+  it("returns the headline, not the name", () => {
+    const result = runScript(script, legacyPageWithAnchor(ACTOR_BLOCK)) as Author;
+
+    expect(result.authorHeadline).toBe("Software Architect | Agentic AI");
+  });
+
+  it("collapses a name a dialect renders twice inside one element", () => {
+    // No wrapper separates the two copies here, so nothing structural tells
+    // them apart — this is the residue the live record carried as
+    // "Alexey PelykhAlexey Pelykh".
+    const result = runScript(
+      script,
+      legacyPageWithAnchor({
+        sel: 'a[href*="/in/"]',
+        href: "https://www.linkedin.com/in/alexey-pelykh/",
+        children: [{ sel: "span", text: "Alexey PelykhAlexey Pelykh" }],
+      }),
+    ) as Author;
+
+    expect(result.authorName).toBe("Alexey Pelykh");
+  });
+
+  it("drops the connection degree and the Premium badge from the name", () => {
+    // The decorations as the live record carried them: mid-string, not
+    // suffixed, which is why each is truncated from its first occurrence.
+    const result = runScript(
+      script,
+      legacyPageWithAnchor({
+        sel: 'a[href*="/in/"]',
+        href: "https://www.linkedin.com/in/alexey-pelykh/",
+        children: [
+          {
+            sel: "span",
+            text: "Alexey Pelykh • YouPremium • You Software Architect",
+          },
+        ],
+      }),
+    ) as Author;
+
+    expect(result.authorName).toBe("Alexey Pelykh");
+  });
+
+  it("keeps a company name that merely begins with a badge word", () => {
+    // The badge rule is narrow on purpose: "Premium" is only a decoration
+    // when it trails the name or introduces "Premium Profile".
+    const result = runScript(
+      script,
+      legacyPageWithAnchor({
+        sel: 'a[href*="/company/"]',
+        href: "https://www.linkedin.com/company/premium-motors/",
+        children: [{ sel: "span", text: "Premium Motors" }],
+      }),
+    ) as Author;
+
+    expect(result.authorName).toBe("Premium Motors");
+  });
+
+  it("does not take a candidate that is the author's name in disguise", () => {
+    // An equality test passed the plain name through as the headline whenever
+    // the name itself came back mangled.
+    const result = runScript(
+      script,
+      legacyPageWithAnchor({
+        sel: 'a[href*="/in/"]',
+        href: "https://www.linkedin.com/in/alexey-pelykh/",
+        children: [
+          {
+            sel: 'span[dir="ltr"], span',
+            children: [
+              { sel: 'span, [aria-hidden="true"]', text: "Alexey Pelykh" },
+              { sel: "span", text: "Alexey Pelykh" },
+            ],
+          },
+          // The discriminating candidate: an unwrapped element rendering the
+          // a11y pair.  It is NOT equal to the name, so an equality test lets
+          // it through and it becomes the headline; reducing it first — the
+          // same reduction the name read applies — rejects it.
+          { sel: "span", text: "Alexey PelykhAlexey Pelykh" },
+          { sel: "span", text: "Software Architect | Agentic AI" },
+        ],
+      }),
+    ) as Author;
+
+    expect(result.authorName).toBe("Alexey Pelykh");
+    expect(result.authorHeadline).toBe("Software Architect | Agentic AI");
+  });
+
+  it("keeps a headline that names its own owner", () => {
+    // The bound on the rule above, and the reason it reduces rather than
+    // merely testing containment: "<Name> | <role>" is one of the commonest
+    // headline shapes LinkedIn renders, and dropping it would replace a
+    // visibly wrong headline with a silently absent one.
+    const result = runScript(
+      script,
+      legacyPageWithAnchor({
+        sel: 'a[href*="/in/"]',
+        href: "https://www.linkedin.com/in/jane-doe/",
+        children: [
+          { sel: 'span, [aria-hidden="true"]', text: "Jane Doe" },
+          { sel: "span", text: "Jane Doe | Head of Data" },
+        ],
+      }),
+    ) as Author;
+
+    expect(result.authorName).toBe("Jane Doe");
+    expect(result.authorHeadline).toBe("Jane Doe | Head of Data");
+  });
+
+  it("keeps a headline that uses a bullet as its own separator", () => {
+    // The composite this rejects is "<Name> • <degree>", so the rule keys on
+    // the degree.  Rejecting every bullet would drop a real headline.
+    const result = runScript(
+      script,
+      legacyPageWithAnchor({
+        sel: 'a[href*="/in/"]',
+        href: "https://www.linkedin.com/in/alexey-pelykh/",
+        children: [
+          { sel: 'span, [aria-hidden="true"]', text: "Alexey Pelykh" },
+          { sel: "span", text: "Software Architect • Agentic AI" },
+        ],
+      }),
+    ) as Author;
+
+    expect(result.authorHeadline).toBe("Software Architect • Agentic AI");
   });
 });
