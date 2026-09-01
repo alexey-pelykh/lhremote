@@ -9,7 +9,12 @@ import {
 import type { PostComment, PostDetail } from "../types/post.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { waitForPostLoad } from "../cdp/wait-for-post-load.js";
+import {
+  capturePostLoadFailure,
+  diagnosticCaptureEnabled,
+  probeVariantDetection,
+  waitForPostLoad,
+} from "../cdp/wait-for-post-load.js";
 import { assertCardinalCorroboration } from "../linkedin/corroboration.js";
 import {
   adaptersFor,
@@ -22,6 +27,47 @@ import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
 import { delay, parseTimestamp } from "./get-feed.js";
 import { navigateAwayIf } from "./navigate-away.js";
+
+/**
+ * Write an extraction-failure diagnostic bundle for the post-detail page the
+ * client is sitting on, then return so the caller can re-throw (#835).
+ *
+ * Both call sites raise a deadline-free failure: the readiness gate went
+ * green, and only then did the page turn out to be unreadable.  A capture
+ * bound to a deadline could never see either.
+ *
+ * The detect probe is skipped when capture is off.  It is a diagnostic-only
+ * read whose sole consumer is the bundle, so running it on a default-off CLI
+ * or MCP run would spend a `Runtime.evaluate` in the page for nobody — and
+ * `capturePostLoadFailure`'s own gate fires too late to prevent that, because
+ * the probe would already have been evaluated as its argument.  Asking
+ * {@link diagnosticCaptureEnabled} rather than re-spelling the comparison
+ * keeps one definition of the gate; the capture still re-checks it, so this
+ * is a cost optimisation and never the boundary itself.
+ *
+ * Never throws: `probeVariantDetection` degrades to `null` and
+ * `capturePostLoadFailure` swallows its own failures, so the caller's error
+ * always propagates unchanged.
+ */
+async function capturePostDetailExtractionFailure(
+  client: CDPClient,
+): Promise<void> {
+  if (!diagnosticCaptureEnabled()) return;
+  // Per-registered-adapter detect counts, read alongside `matched`: together
+  // they separate "LinkedIn served a dialect nobody registered" (nothing
+  // matched) from "a hybrid page needing tighter detect anchors" (two or more
+  // matched) from "our adapter matched, so this field's selectors went stale"
+  // (exactly one).  Nothing else in the bundle can make those distinctions —
+  // every other probe is a fixed selector.
+  const detection = await probeVariantDetection(
+    client,
+    adaptersFor(POST_DETAIL_SURFACE),
+  );
+  await capturePostLoadFailure(client, {
+    trigger: "extraction-failure",
+    detection,
+  });
+}
 
 /**
  * Input for the get-post operation.
@@ -395,16 +441,21 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
     const rawPost = await client.evaluate<RawPostDetail | AmbiguousPostDetail>(
       SCRAPE_POST_DETAIL_SCRIPT,
     );
-    if (!rawPost) {
-      // Zero adapters claimed the page, or the claiming adapter could not
-      // resolve its own scope.  Either way nothing read the page, and there
-      // is no `<main>` left to pretend otherwise with.
-      throw new DOMVariantUnsupportedError(
-        POST_DETAIL_SURFACE,
-        variantNamesFor(POST_DETAIL_SURFACE).map(String),
-      );
-    }
-    if (isAmbiguous(rawPost)) {
+    if (!rawPost || isAmbiguous(rawPost)) {
+      // Both branches are deadline-free extraction failures on a page whose
+      // readiness gate went green milliseconds ago, so #835's widening covers
+      // them for the same reason it covers the cardinal contradiction below —
+      // and the issue names all three error classes, not just the third.
+      await capturePostDetailExtractionFailure(client);
+      if (!rawPost) {
+        // Zero adapters claimed the page, or the claiming adapter could not
+        // resolve its own scope.  Either way nothing read the page, and there
+        // is no `<main>` left to pretend otherwise with.
+        throw new DOMVariantUnsupportedError(
+          POST_DETAIL_SURFACE,
+          variantNamesFor(POST_DETAIL_SURFACE).map(String),
+        );
+      }
       // Two or more adapters claimed it.  Refuse rather than pick: a record
       // assembled from two dialects is wrong in a way nothing downstream can
       // detect.
@@ -467,14 +518,35 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
     // caller's own instruction rather than an observation, and there is
     // nothing for the cardinal to contradict.
     if (maxComments > 0) {
-      assertCardinalCorroboration({
-        surface: POST_DETAIL_SURFACE,
-        variant: rawPost.variant ?? "unknown",
-        field: "comments",
-        cardinalName: "commentCount",
-        cardinal: post.commentCount,
-        extractedCount: allRaw.length,
-      });
+      try {
+        assertCardinalCorroboration({
+          surface: POST_DETAIL_SURFACE,
+          variant: rawPost.variant ?? "unknown",
+          field: "comments",
+          cardinalName: "commentCount",
+          cardinal: post.commentCount,
+          extractedCount: allRaw.length,
+        });
+      } catch (error) {
+        // Capture on the way out (#835).  `assertCardinalCorroboration` is a
+        // pure predicate and holds no CDP client, so the capture cannot live
+        // inside it — this is the nearest frame that still has the page open,
+        // and it is the last one: past this `throw` the `finally` disconnects
+        // the client and the DOM that would have explained the failure is
+        // gone.
+        //
+        // Why capture here at all, when the readiness gate already captures:
+        // this failure never reaches a deadline.  The gate went green in
+        // milliseconds, an adapter matched, the post body extracted fine —
+        // and then `commentCount: 41` came back next to `comments: []`.  A
+        // timeout-gated capture cannot see that, which left the ADR-007
+        // directive "inspect these artifacts before changing post-detail
+        // selectors" undischargeable for exactly this defect class.
+        //
+        // Swallows its own errors, so `error` propagates unchanged either way.
+        await capturePostDetailExtractionFailure(client);
+        throw error;
+      }
     }
 
     const limited = maxComments > 0 ? allRaw.slice(0, maxComments) : [];

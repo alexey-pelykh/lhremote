@@ -7,6 +7,7 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { waitForPostLoad } from "../cdp/wait-for-post-load.js";
 import {
+  captureReactionsModalFailure,
   RESOLVE_REACTIONS_MODAL_SCRIPT,
   waitForReactionsModal,
 } from "../cdp/wait-for-reactions-modal.js";
@@ -347,22 +348,21 @@ export async function getPostEngagers(
       }
     }
 
-    // Close the modal
-    await client.send("Input.dispatchKeyEvent", {
-      type: "keyDown",
-      key: "Escape",
-      code: "Escape",
-    });
-    await client.send("Input.dispatchKeyEvent", {
-      type: "keyUp",
-      key: "Escape",
-      code: "Escape",
-    });
-
     // Corroborate the scrape before trusting an empty one.  `total` was read
     // from the header of the very modal this scrape ran against, so the modal
     // reporting N reactions while the list yields none is a self-contradiction
     // within one observation (#834).
+    //
+    // Deliberately BEFORE the modal is dismissed below, and that ordering is
+    // load-bearing rather than cosmetic (#835): the diagnostic capture on the
+    // failure path probes modal-scoped selectors (`dialogCount`,
+    // `resolvedModalAncestorTag`, the reactions-tab ancestor walk) and takes a
+    // screenshot.  Run after the Escape dispatch, it would record
+    // `dialogCount: 0` on a page whose modal we had just closed ourselves —
+    // which is the fingerprint of a DIFFERENT, already-known regression
+    // (#773, modal never opened), for a failure whose actual cause is the row
+    // scrape inside a modal that opened fine.  `total` and `allEngagers` are
+    // both settled by this point, so nothing else moves by checking here.
     //
     // Deliberately measured on the whole scrape, not on the pagination window
     // below: a `start` past the end of a successful scrape legitimately yields
@@ -378,13 +378,51 @@ export async function getPostEngagers(
     // Naming the scraper is deliberate over inventing a dialect name: the
     // error renders as `adapter "<variant>" … repair the selectors`, so the
     // value has to be something an operator can actually grep to and repair.
-    assertCardinalCorroboration({
-      surface: "reactions-modal",
-      variant: "SCRAPE_ENGAGERS_SCRIPT",
-      field: "engagers",
-      cardinalName: "totalReactions",
-      cardinal: total,
-      extractedCount: allEngagers.length,
+    try {
+      assertCardinalCorroboration({
+        surface: "reactions-modal",
+        variant: "SCRAPE_ENGAGERS_SCRIPT",
+        field: "engagers",
+        cardinalName: "totalReactions",
+        cardinal: total,
+        extractedCount: allEngagers.length,
+      });
+    } catch (error) {
+      // Capture on the way out (#835) — the same widening applied to
+      // `get-post`'s comment scrape, for the same reason: this failure never
+      // reaches a deadline.  `waitForReactionsModal` already returned green
+      // (the modal opened and rendered engager links), so a timeout-gated
+      // capture cannot see the contradiction that follows it.
+      //
+      // `assertCardinalCorroboration` is a pure predicate holding no CDP
+      // client, so the capture belongs here rather than inside it — and this
+      // is the last frame that still has the page open, since the `finally`
+      // below disconnects.
+      //
+      // Deliberately NOT capturing per-adapter detect counts: the reactions
+      // modal has no entry in the variant-adapter registry (#830), so there
+      // is nothing to probe and a fabricated field would be worse than none.
+      //
+      // Self-gated on LHREMOTE_CAPTURE_DIAGNOSTICS and swallows its own
+      // errors, so `error` propagates unchanged either way.
+      await captureReactionsModalFailure(client, {
+        trigger: "extraction-failure",
+      });
+      throw error;
+    }
+
+    // Close the modal.  Only reached on the success path now — a raise above
+    // leaves it open, which costs nothing (the `finally` disconnects) and
+    // keeps the captured screenshot showing the modal that failed.
+    await client.send("Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "Escape",
+      code: "Escape",
+    });
+    await client.send("Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "Escape",
+      code: "Escape",
     });
 
     // Apply pagination window

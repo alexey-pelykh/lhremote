@@ -10,6 +10,7 @@ import {
   buildDetectionSource,
   buildReadinessPredicateSource,
   formatVariantProbes,
+  type VariantAdapter,
   type VariantDetection,
   variantNamesFor,
 } from "../linkedin/dom-variant.js";
@@ -90,6 +91,23 @@ const POST_DETAIL_CONTAINER_SELECTOR =
   '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]';
 
 /**
+ * Comment-layer anchor.  Diagnostic-only.
+ *
+ * Mirrors the selector `SCRAPE_COMMENTS_SCRIPT` and `get-post`'s load-more
+ * loop depend on.  Reported as a raw element count rather than a logical
+ * comment count — the SDUI markup nests three elements per comment, and
+ * de-duplicating them here would hide the shape a stale-selector diagnosis
+ * needs.  Zero versus non-zero is the signal.
+ *
+ * Added for the extraction-failure trigger (#835): when the capture fires
+ * because `commentCount` contradicted an empty scrape, `ExtractionFailedError`
+ * tells the operator to "repair the selectors for `comments`" — and every
+ * other probe in the set answers a readiness question instead.  Without this
+ * one the bundle carries no evidence about the layer its own error names.
+ */
+const POST_COMMENT_ELEMENT_SELECTOR = '[componentkey^="replaceableComment_"]';
+
+/**
  * Legacy `span[dir="ltr"]` selector.  Diagnostic-only.  Reported so a
  * timeout can tell a page serving the pre-SDUI dialect from one serving
  * nothing at all — it matched 82 elements in the 2026-08-31 probe run.
@@ -156,27 +174,18 @@ export async function waitForPostLoad(
   }
 
   // Classify what the page actually is before reporting.  One probe, on the
-  // failure path only — the happy path pays nothing for it.
-  //
-  // A probe that THROWS is the same kind of non-evidence as one that returns
-  // a malformed result, and is treated identically: the classification is
-  // abandoned, diagnostics still run, and the ordinary timeout propagates.
-  // Letting it escape would replace the caller's timeout with an unrelated
-  // evaluate error AND skip the diagnostic capture below — the one artifact
-  // that would explain the failure.
-  let detection: VariantDetection | null = null;
-  try {
-    detection = asVariantDetection(
-      await client.evaluate<unknown>(buildDetectionSource(adapters)),
-    );
-  } catch {
-    // Classification is best-effort; the timeout is the real signal.
-  }
+  // failure path only — the happy path pays nothing for it.  The same read
+  // feeds both the error's `cause` and the diagnostic bundle below, so the
+  // two can never disagree about what was on the page.
+  const detection = await probeVariantDetection(client, adapters);
 
   // capturePostLoadFailure self-gates on LHREMOTE_CAPTURE_DIAGNOSTICS and
   // swallows its own errors, so the error below always propagates unchanged
   // regardless of capture-side outcome.
-  await capturePostLoadFailure(client);
+  await capturePostLoadFailure(client, {
+    trigger: "readiness-timeout",
+    detection,
+  });
 
   if (detection) {
     if (detection.matched.length === 0) {
@@ -201,13 +210,48 @@ export async function waitForPostLoad(
   // The probe counts are deliberately NOT folded into this error. This is the
   // branch where a partially-stale adapter is most likely, so the diagnosis
   // matters most here — but its designed home is the diagnostic capture above
-  // (per-registered-adapter detect results), which #835 adds, not a `cause`
-  // bolted onto an error class this item does not own.
+  // (per-registered-adapter detect results, #835), not a `cause` bolted onto
+  // an error class this item does not own.
   throw new ExtractionTimeoutError(
     `readiness anchor of the selected ${POST_DETAIL_SURFACE} adapter`,
     timeoutMs,
     "Post-detail",
   );
+}
+
+/**
+ * Read the per-registered-adapter detect counts for a surface.
+ *
+ * Centralizes the one discipline every caller of {@link buildDetectionSource}
+ * owes: a probe that THROWS is the same kind of non-evidence as one that
+ * returns a malformed result, and both must degrade to `null` rather than
+ * escaping.  Letting an evaluate error propagate would replace the caller's
+ * real failure with an unrelated one AND skip the diagnostic capture — the
+ * one artifact that would have explained it.
+ *
+ * `null` therefore means *the probe did not run usefully*, which is NOT the
+ * same claim as "no adapter matched"; callers must fall back to their
+ * ordinary failure rather than blaming LinkedIn for a broken instrument.
+ *
+ * @param client   - Connected CDP client targeting the page in question.
+ * @param adapters - The surface's registered adapters.
+ * @returns The detection, or `null` when the probe yielded no evidence.
+ *
+ * @internal Exported for unit testing and for the extraction-failure capture
+ *   sites in `operations/`; not part of the public API.
+ */
+export async function probeVariantDetection(
+  client: CDPClient,
+  adapters: readonly VariantAdapter[],
+): Promise<VariantDetection | null> {
+  try {
+    return asVariantDetection(
+      await client.evaluate<unknown>(buildDetectionSource(adapters)),
+    );
+  } catch {
+    // Best-effort; the caller's own failure is the real signal.
+    return null;
+  }
 }
 
 /**
@@ -230,16 +274,117 @@ interface CaptureCancellationState {
 }
 
 /**
- * Best-effort diagnostic capture when {@link waitForPostLoad} times out
- * waiting for the post-detail DOM anchors.  Each invocation creates a
- * fresh `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/` directory via
+ * Is diagnostic capture switched on?
+ *
+ * Single definition of the gate, so a caller that wants to skip *preparing*
+ * capture inputs asks the same question the capture itself asks rather than
+ * re-spelling the comparison.  The capture wrappers keep their own check as
+ * well: this is a cost optimisation for callers, never the security boundary.
+ *
+ * Exact `"1"`, deliberately — `"true"`, `"yes"` and `"0"` are all off.  The
+ * artifacts contain LinkedIn page content, i.e. personal data, so the gate
+ * opens on one spelling and nothing else.
+ *
+ * @internal Exported for unit testing and for the operation-layer capture
+ *   sites; not part of the public API.
+ */
+export function diagnosticCaptureEnabled(): boolean {
+  return process.env.LHREMOTE_CAPTURE_DIAGNOSTICS === "1";
+}
+
+/**
+ * What made a post-detail capture fire.
+ *
+ * The capture used to have exactly one trigger, so "timeout" could be baked
+ * into the filename and the warn line.  Since #835 it also fires when an
+ * extraction contradicts itself — a failure that never reaches a deadline —
+ * so the trigger travels with the call and names the artifact honestly.  A
+ * bundle labelled `timeout` for a sub-second corroboration failure would send
+ * the next reader hunting a slow page that was never slow.
+ *
+ * The vocabulary is deliberately closed rather than a free-form string: these
+ * values become filenames operators grep for.
+ */
+/** @internal Not part of the public API. */
+export type PostDetailFailureTrigger =
+  | "readiness-timeout"
+  | "extraction-failure";
+
+/**
+ * Per-trigger artifact stem, warn-line tag, and warn-line wording.
+ *
+ * The `readiness-timeout` row reproduces the pre-#835 strings exactly — that
+ * capture's behaviour is unchanged and its artifact names are already in
+ * ADR-007 and in operators' heads.  Only the new trigger gets new words.
+ */
+const POST_DETAIL_TRIGGER_LABELS: Record<
+  PostDetailFailureTrigger,
+  { readonly stem: string; readonly tag: string; readonly summary: string }
+> = {
+  "readiness-timeout": {
+    stem: "wait-for-post-load",
+    tag: "waitForPostLoad",
+    summary: "timeout diagnostics",
+  },
+  "extraction-failure": {
+    stem: "post-detail-extraction-failure",
+    // Not `waitForPostLoad`: that gate went green and is not what failed.
+    // Tagging this line with it would point the reader at a slow page that
+    // was never slow.  Identifier-shaped like the family's other tags
+    // (`navigateToProfile`, `waitForReactionsModal`) so a log splitter can
+    // still treat the tag as one token.
+    tag: "postDetailExtraction",
+    summary: "extraction-failure diagnostics",
+  },
+};
+
+/**
+ * What the caller knows about the failure it is capturing.
+ *
+ * @internal Not part of the public API.
+ */
+export interface PostDetailCaptureContext {
+  /** Which failure fired the capture; names the artifact and the warn line. */
+  readonly trigger: PostDetailFailureTrigger;
+  /**
+   * Per-registered-adapter detect counts, already read by the caller via
+   * {@link probeVariantDetection}, recorded verbatim in the bundle.
+   *
+   * Required rather than optional, and `null`-able rather than omittable: the
+   * caller is the only party that knows whether a probe was even attempted,
+   * and a bundle silently missing the field would be indistinguishable from
+   * one where the probe returned nothing.  `null` records the honest answer —
+   * *no usable reading* — which is NOT the claim "no adapter matched".
+   */
+  readonly detection: VariantDetection | null;
+}
+
+/**
+ * Best-effort diagnostic capture when reading a post-detail page fails.
+ *
+ * **Two triggers, not one** ({@link PostDetailFailureTrigger}, #835).  It
+ * fires when {@link waitForPostLoad} times out waiting for the DOM anchors,
+ * AND when an extraction that got past that gate contradicts itself — a
+ * cardinal on the page saying N while the scrape yielded none
+ * (`assertCardinalCorroboration`).  The second trigger is why the capture
+ * could not stay bound to a deadline: that failure is decided in
+ * milliseconds and never reaches one, so a timeout-gated capture left the
+ * ADR-007 directive *"inspect these artifacts before changing post-detail
+ * selectors"* undischargeable for exactly the defect class it exists to
+ * serve.  The trigger travels with the call and names both the artifact and
+ * the warn line, so a bundle is never labelled for a timeout that did not
+ * happen.
+ *
+ * Each invocation creates a fresh
+ * `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/` directory via
  * `mkdtemp` (atomic; refuses to follow any pre-existing symlink at the
- * prefix) and writes `wait-for-post-load-{timestamp}.json` (URL, title,
- * DOM probes, visible text snippet) and a sibling `.png` (full-page
+ * prefix) and writes `{trigger-stem}-{timestamp}.json` (trigger, URL,
+ * title, DOM probes, per-adapter detect counts, visible text snippet) and
+ * a sibling `.png` (full-page
  * `Page.captureScreenshot` with `captureBeyondViewport: true`, when the
  * screenshot succeeds) inside it, so callers can classify the failure —
  * auth wall, DOM change, or silent navigation error.  Per-invocation
- * directories prevent concurrent timeouts from `get-post` /
+ * directories prevent concurrent failures in `get-post` /
  * `get-post-engagers` / `get-post-stats` from clobbering each other's
  * artifacts AND close the TOCTOU window a shared parent directory
  * would otherwise leave open.  The trailing `console.warn` reports
@@ -265,16 +410,17 @@ interface CaptureCancellationState {
  * complete in the background; the process is not held alive by this
  * function beyond the cap plus any such single in-flight step.
  *
- * Any capture-side failure is swallowed so the original timeout always
- * propagates unchanged.
+ * Any capture-side failure is swallowed so the caller's original error
+ * always propagates unchanged.
  *
- * Probe set: `{ href, title, hasMain, hasMainFeed,
+ * Probe set: `{ trigger, href, title, hasMain, hasMainFeed,
  * mainFeedListItemCount, mainFeedListItemsWithMenuButton,
  * mainFeedListItemsViableForPostScrape, hasAuthorLink,
  * hasAuthorLinkInMain, hasLtrSpans, hasArticles, hasReactLikeButton,
  * hasCommentOnButton, hasTopLevelEditor, hasReactionsMenu,
- * hasPostDetailContainer, bodyTextSnippet }` —
- * mirrors the container-selection logic in
+ * hasPostDetailContainer, commentElementCount, bodyTextSnippet,
+ * variantDetection }` —
+ * the fixed-selector probes mirror the container-selection logic in
  * `SCRAPE_POST_DETAIL_SCRIPT`: it scopes from `<main>` (fallback) →
  * `[data-testid="mainFeed"]` → `div[role="listitem"]` inside that
  * feed → per-item `button[aria-label^="Open control menu for post"]`
@@ -309,16 +455,34 @@ interface CaptureCancellationState {
  * `hasReactionsMenu` / `hasPostDetailContainer` arrive will pin the
  * regression to the SDUI marker layer specifically.
  *
+ * `variantDetection` is the field the fixed probes above structurally
+ * cannot supply, and the reason #835 exists: every probe in that set is a
+ * hard-coded selector, so a page serving a dialect nobody registered looks
+ * exactly like one whose registered adapter matched but whose field
+ * selectors went stale.  Read it together with `matched`, which is what
+ * decides between the three cases `buildDetectionSource` distinguishes:
+ * nothing matched (all probes 0 — register an adapter), two or more matched
+ * (a hybrid page — tighten the detect anchors), exactly one matched (the
+ * dialect is known, so repair that field's selectors).  `null` records that
+ * the probe yielded no usable reading, which is NOT the claim "no adapter
+ * matched".
+ *
  * Mirrors the diagnostic-capture pattern documented in ADR-007 for
  * `navigateToProfile` — same env var, same artifact structure, same
  * cancellation discipline.
  *
- * @internal Exported for unit testing only; not part of the public API.
+ * @param client  - Connected CDP client targeting the failed page.
+ * @param context - Which failure fired the capture, plus the caller's
+ *   already-read {@link probeVariantDetection} result.
+ *
+ * @internal Exported for unit testing and for the operation-layer
+ *   extraction-failure sites; not part of the public API.
  */
 export async function capturePostLoadFailure(
   client: CDPClient,
+  context: PostDetailCaptureContext,
 ): Promise<void> {
-  if (process.env.LHREMOTE_CAPTURE_DIAGNOSTICS !== "1") return;
+  if (!diagnosticCaptureEnabled()) return;
   const state: CaptureCancellationState = { timedOut: false };
   let bound: NodeJS.Timeout | undefined;
   try {
@@ -326,8 +490,10 @@ export async function capturePostLoadFailure(
       // Attach a no-op catch to the inner promise so a late rejection
       // (after the timer wins the race) does not escape as an
       // UnhandledPromiseRejection — capture-side errors must always be
-      // swallowed to keep the caller's timeout propagating unchanged.
-      capturePostLoadFailureInner(client, state).catch(() => undefined),
+      // swallowed to keep the caller's failure propagating unchanged.
+      capturePostLoadFailureInner(client, context, state).catch(
+        () => undefined,
+      ),
       new Promise<void>((resolve) => {
         bound = setTimeout(() => {
           state.timedOut = true;
@@ -336,7 +502,7 @@ export async function capturePostLoadFailure(
       }),
     ]);
   } catch {
-    // Capture itself failed; do not mask the caller's timeout.
+    // Capture itself failed; do not mask the caller's error.
   } finally {
     if (bound !== undefined) clearTimeout(bound);
   }
@@ -344,8 +510,10 @@ export async function capturePostLoadFailure(
 
 async function capturePostLoadFailureInner(
   client: CDPClient,
+  context: PostDetailCaptureContext,
   state: CaptureCancellationState,
 ): Promise<void> {
+  const labels = POST_DETAIL_TRIGGER_LABELS[context.trigger];
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   // mkdtemp is the atomic fresh-directory primitive: it generates a
   // random suffix and creates the directory in one syscall, refusing
@@ -366,7 +534,7 @@ async function capturePostLoadFailureInner(
   // refuses if anything looks off.
   if (!(await ensureSecureDiagnosticDir(baseDir))) return;
   if (state.timedOut) return;
-  const prefix = join(baseDir, `wait-for-post-load-${timestamp}`);
+  const prefix = join(baseDir, `${labels.stem}-${timestamp}`);
 
   const info = await client.evaluate<{
     href: string;
@@ -385,6 +553,7 @@ async function capturePostLoadFailureInner(
     hasTopLevelEditor: boolean;
     hasReactionsMenu: boolean;
     hasPostDetailContainer: boolean;
+    commentElementCount: number;
     bodyTextSnippet: string;
   }>(`(() => {
     const mainFeed = document.querySelector('[data-testid="mainFeed"]');
@@ -420,13 +589,41 @@ async function capturePostLoadFailureInner(
       hasTopLevelEditor: document.querySelector('${POST_EDITOR_SELECTOR}') !== null,
       hasReactionsMenu: document.querySelector('${POST_REACTIONS_MENU_SELECTOR}') !== null,
       hasPostDetailContainer: document.querySelector('${POST_DETAIL_CONTAINER_SELECTOR}') !== null,
+      commentElementCount: document.querySelectorAll('${POST_COMMENT_ELEMENT_SELECTOR}').length,
       bodyTextSnippet: (document.body ? document.body.innerText : "").slice(0, 800),
     };
   })()`);
   if (state.timedOut) return;
 
+  // The bundle carries the trigger and the per-registered-adapter detect
+  // counts alongside the DOM probes (#835).  `variantDetection` is the whole
+  // diagnosis for the next dialect flip, and it is the one thing the probe
+  // set above structurally cannot say: every probe there is a fixed selector,
+  // so a page serving a dialect nobody has registered looks identical to one
+  // whose registered adapter matched but whose field selectors went stale.
+  //
+  // Both halves are recorded because the diagnosis needs both: `matched`
+  // picks between the three cases (none / two-or-more / exactly one) and
+  // `probes` says by how much.  A bundle reading `{ sdui: 1, legacy: 1 }` is
+  // a hybrid page wanting tighter detect anchors, NOT a stale field selector
+  // — collapsing this to "zero versus non-zero" loses that case.
+  //
+  // `null` records that the detect probe yielded no usable reading — which is
+  // NOT the claim "no adapter matched".  A reader must not treat it as
+  // evidence about the page.
+  const bundle = {
+    trigger: context.trigger,
+    ...info,
+    variantDetection: context.detection
+      ? {
+          matched: context.detection.matched,
+          probes: context.detection.probes,
+        }
+      : null,
+  };
+
   // 0o600: owner-only rw.  POSIX-only; no-op on Windows.
-  await writeFile(`${prefix}.json`, JSON.stringify(info, null, 2), {
+  await writeFile(`${prefix}.json`, JSON.stringify(bundle, null, 2), {
     encoding: "utf8",
     mode: 0o600,
   });
@@ -436,7 +633,7 @@ async function capturePostLoadFailureInner(
     // place these artifacts live, so an early return without a warn
     // would leave operators unable to find them.
     console.warn(
-      `[waitForPostLoad] timeout diagnostics partial: ${prefix}.json (screenshot skipped — capture cap reached)`,
+      `[${labels.tag}] ${labels.summary} partial: ${prefix}.json (screenshot skipped — capture cap reached)`,
     );
     return;
   }
@@ -463,7 +660,7 @@ async function capturePostLoadFailureInner(
   // Mention `.png` only when actually written.
   const artifacts = wroteScreenshot ? "{json,png}" : "json";
   console.warn(
-    `[waitForPostLoad] timeout diagnostics written: ${prefix}.${artifacts}`,
+    `[${labels.tag}] ${labels.summary} written: ${prefix}.${artifacts}`,
   );
 }
 

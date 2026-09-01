@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   adaptersFor,
+  buildDetectionSource,
   buildReadinessPredicateSource,
 } from "../linkedin/dom-variant.js";
 import {
@@ -45,8 +46,13 @@ vi.mock("../utils/delay.js", () => ({
   delay: vi.fn().mockResolvedValue(undefined),
 }));
 
-const { capturePostLoadFailure, ensureSecureDiagnosticDir, waitForPostLoad } =
-  await import("./wait-for-post-load.js");
+const {
+  capturePostLoadFailure,
+  diagnosticCaptureEnabled,
+  ensureSecureDiagnosticDir,
+  probeVariantDetection,
+  waitForPostLoad,
+} = await import("./wait-for-post-load.js");
 
 describe("waitForPostLoad", () => {
   beforeEach(() => {
@@ -340,9 +346,77 @@ describe("waitForPostLoad", () => {
       }
     }
   });
+
+  it("on timeout, the bundle carries the same detection the error was classified from (#835)", async () => {
+    const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const { writeFile } = await import("node:fs/promises");
+    const writeFileMock = vi.mocked(writeFile);
+    writeFileMock.mockClear();
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    // Zero adapters claim the page: the classification probe decides
+    // DOMVariantUnsupportedError, and the SAME reading must reach the bundle.
+    const evaluate = vi.fn(async (script: string) => {
+      if (script.includes("probes")) {
+        return { matched: [], probes: { sdui: 0, legacy: 0 } };
+      }
+      if (script.includes("hasMainFeed")) return { href: "", title: "" };
+      return false;
+    });
+    const client = {
+      evaluate,
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+
+    try {
+      await expect(waitForPostLoad(client, 1)).rejects.toThrow(
+        DOMVariantUnsupportedError,
+      );
+
+      const jsonCall = writeFileMock.mock.calls.find((call) =>
+        String(call[0]).endsWith(".json"),
+      );
+      expect(jsonCall).toBeDefined();
+      // One probe feeds both the error's `cause` and the artifact, so an
+      // operator reading the two side by side can never be shown two
+      // different accounts of the same page.
+      expect(
+        JSON.parse(String(jsonCall?.[1])) as Record<string, unknown>,
+      ).toMatchObject({
+        trigger: "readiness-timeout",
+        variantDetection: { matched: [], probes: { sdui: 0, legacy: 0 } },
+      });
+      // Exactly one detect probe: the capture reuses the classification's
+      // reading rather than taking a second, later one.
+      const detectCalls = evaluate.mock.calls.filter((call) =>
+        String(call[0]).includes("probes"),
+      );
+      expect(detectCalls).toHaveLength(1);
+    } finally {
+      warnSpy.mockRestore();
+      if (originalEnv === undefined) {
+        delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+      } else {
+        process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalEnv;
+      }
+    }
+  });
 });
 
 describe("capturePostLoadFailure", () => {
+  // The readiness-timeout context every case below implicitly used before
+  // #835 widened the capture to carry its trigger.  Pinned as a constant so
+  // these cases keep asserting the timeout capture's behaviour UNCHANGED —
+  // filename stem, warn wording and all — and the new extraction-failure
+  // trigger is exercised only where a test names it.
+  const TIMEOUT_CAPTURE = {
+    trigger: "readiness-timeout",
+    detection: null,
+  } as const;
+
   const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
 
   beforeEach(() => {
@@ -376,6 +450,7 @@ describe("capturePostLoadFailure", () => {
         hasTopLevelEditor: false,
         hasReactionsMenu: false,
         hasPostDetailContainer: false,
+        commentElementCount: 0,
         bodyTextSnippet: "Post body text\n",
       }),
       send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
@@ -386,7 +461,7 @@ describe("capturePostLoadFailure", () => {
     delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
     const client = makeClient();
 
-    await capturePostLoadFailure(client);
+    await capturePostLoadFailure(client, TIMEOUT_CAPTURE);
 
     expect(client.evaluate).not.toHaveBeenCalled();
     expect(client.send).not.toHaveBeenCalled();
@@ -396,7 +471,7 @@ describe("capturePostLoadFailure", () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "true";
     const client = makeClient();
 
-    await capturePostLoadFailure(client);
+    await capturePostLoadFailure(client, TIMEOUT_CAPTURE);
 
     expect(client.evaluate).not.toHaveBeenCalled();
     expect(client.send).not.toHaveBeenCalled();
@@ -406,7 +481,7 @@ describe("capturePostLoadFailure", () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
     const client = makeClient();
 
-    await capturePostLoadFailure(client);
+    await capturePostLoadFailure(client, TIMEOUT_CAPTURE);
 
     expect(client.evaluate).toHaveBeenCalledTimes(1);
     expect(client.send).toHaveBeenCalledWith("Page.captureScreenshot", {
@@ -419,7 +494,7 @@ describe("capturePostLoadFailure", () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
     const client = makeClient();
 
-    await capturePostLoadFailure(client);
+    await capturePostLoadFailure(client, TIMEOUT_CAPTURE);
 
     const script = String(vi.mocked(client.evaluate).mock.calls[0]?.[0] ?? "");
     expect(script).toContain("href");
@@ -454,6 +529,10 @@ describe("capturePostLoadFailure", () => {
     expect(script).toContain(
       '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]',
     );
+    // #835: the comment layer the extraction-failure error names.  Every
+    // other probe here answers a readiness question instead.
+    expect(script).toContain("commentElementCount");
+    expect(script).toContain('[componentkey^="replaceableComment_"]');
     expect(script).toContain("bodyTextSnippet");
   });
 
@@ -464,7 +543,7 @@ describe("capturePostLoadFailure", () => {
       send: vi.fn(),
     } as unknown as CDPClient;
 
-    await expect(capturePostLoadFailure(client)).resolves.toBeUndefined();
+    await expect(capturePostLoadFailure(client, TIMEOUT_CAPTURE)).resolves.toBeUndefined();
   });
 
   it("writes diagnostics with the wait-for-post-load prefix and .json/.png extensions", async () => {
@@ -474,7 +553,7 @@ describe("capturePostLoadFailure", () => {
     const writeFileMock = vi.mocked(writeFile);
     writeFileMock.mockClear();
 
-    await capturePostLoadFailure(client);
+    await capturePostLoadFailure(client, TIMEOUT_CAPTURE);
 
     expect(writeFileMock.mock.calls.length).toBeGreaterThanOrEqual(1);
     for (const call of writeFileMock.mock.calls) {
@@ -527,8 +606,8 @@ describe("capturePostLoadFailure", () => {
     );
 
     try {
-      await capturePostLoadFailure(makeClient());
-      await capturePostLoadFailure(makeClient());
+      await capturePostLoadFailure(makeClient(), TIMEOUT_CAPTURE);
+      await capturePostLoadFailure(makeClient(), TIMEOUT_CAPTURE);
 
       const jsonCalls = writeFileMock.mock.calls.filter((c) =>
         String(c[0]).endsWith(".json"),
@@ -574,7 +653,7 @@ describe("capturePostLoadFailure", () => {
 
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
-      await capturePostLoadFailure(client);
+      await capturePostLoadFailure(client, TIMEOUT_CAPTURE);
 
       expect(warnSpy).toHaveBeenCalledTimes(1);
       const message = String(warnSpy.mock.calls[0]?.[0] ?? "");
@@ -603,7 +682,7 @@ describe("capturePostLoadFailure", () => {
       send: vi.fn(),
     } as unknown as CDPClient;
 
-    await capturePostLoadFailure(client);
+    await capturePostLoadFailure(client, TIMEOUT_CAPTURE);
 
     // Capture must have refused: no probe evaluation, no screenshot,
     // no writes — symlinks at the diagnostics path are a redirection
@@ -631,7 +710,7 @@ describe("capturePostLoadFailure", () => {
       send: vi.fn(),
     } as unknown as CDPClient;
 
-    await capturePostLoadFailure(client);
+    await capturePostLoadFailure(client, TIMEOUT_CAPTURE);
 
     expect(client.evaluate).not.toHaveBeenCalled();
     expect(writeFileMock).not.toHaveBeenCalled();
@@ -650,7 +729,7 @@ describe("capturePostLoadFailure", () => {
       mode: 0o755, // group-readable & world-readable bits set
     } as Awaited<ReturnType<typeof lstat>>);
 
-    await capturePostLoadFailure(makeClient());
+    await capturePostLoadFailure(makeClient(), TIMEOUT_CAPTURE);
 
     // chmod called to tighten — without this, a process with a loose
     // umask would write into a 0o755 dir other users could enumerate.
@@ -681,7 +760,7 @@ describe("capturePostLoadFailure", () => {
       send: vi.fn(),
     } as unknown as CDPClient;
 
-    await capturePostLoadFailure(client);
+    await capturePostLoadFailure(client, TIMEOUT_CAPTURE);
 
     expect(writeFileMock).not.toHaveBeenCalled();
     expect(client.evaluate).not.toHaveBeenCalled();
@@ -772,7 +851,7 @@ describe("capturePostLoadFailure", () => {
         send: vi.fn(),
       } as unknown as CDPClient;
 
-      await capturePostLoadFailure(client);
+      await capturePostLoadFailure(client, TIMEOUT_CAPTURE);
 
       // Allow the late rejection to settle.
       await new Promise<void>((r) => setImmediate(r));
@@ -794,7 +873,7 @@ describe("capturePostLoadFailure", () => {
     writeFileMock.mockClear();
     mkdtempMock.mockClear();
 
-    await capturePostLoadFailure(client);
+    await capturePostLoadFailure(client, TIMEOUT_CAPTURE);
 
     // mkdtemp called with the lhremote-diagnostics- prefix; the random
     // suffix is generated by the kernel.  No longer mkdir(recursive),
@@ -809,5 +888,246 @@ describe("capturePostLoadFailure", () => {
     );
     expect(jsonCall).toBeDefined();
     expect(jsonCall?.[2]).toMatchObject({ mode: 0o600 });
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// #835 — the capture is no longer bound to a deadline, and the bundle now
+// carries the one field that distinguishes "LinkedIn served a dialect we
+// don't know" from "our adapter matched but a field's selectors are stale".
+// ───────────────────────────────────────────────────────────────────────────
+
+describe("probeVariantDetection", () => {
+  const ADAPTERS = adaptersFor("post-detail");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function clientReturning(value: unknown): CDPClient {
+    return {
+      evaluate: vi.fn().mockResolvedValue(value),
+      send: vi.fn(),
+    } as unknown as CDPClient;
+  }
+
+  it("narrows a well-formed probe result", async () => {
+    const client = clientReturning({
+      matched: ["sdui"],
+      probes: { sdui: 3, legacy: 0 },
+    });
+
+    await expect(probeVariantDetection(client, ADAPTERS)).resolves.toEqual({
+      matched: ["sdui"],
+      probes: { sdui: 3, legacy: 0 },
+    });
+  });
+
+  it("yields null when the probe throws", async () => {
+    const client = {
+      evaluate: vi.fn().mockRejectedValue(new Error("evaluate failed")),
+      send: vi.fn(),
+    } as unknown as CDPClient;
+
+    // A probe that throws must not replace the caller's real failure with an
+    // unrelated evaluate error, and must not skip the capture that follows.
+    await expect(probeVariantDetection(client, ADAPTERS)).resolves.toBeNull();
+  });
+
+  it("yields null when the probe result is malformed", async () => {
+    // Same non-evidence as a throw: the instrument did not run usefully, so
+    // reporting "no adapter matched" would blame LinkedIn for our own break.
+    await expect(
+      probeVariantDetection(clientReturning({ nonsense: true }), ADAPTERS),
+    ).resolves.toBeNull();
+  });
+
+  it("evaluates the detection source built for the given adapters", async () => {
+    const client = clientReturning({ matched: [], probes: {} });
+
+    await probeVariantDetection(client, ADAPTERS);
+
+    expect(client.evaluate).toHaveBeenCalledWith(
+      buildDetectionSource(ADAPTERS),
+    );
+  });
+});
+
+describe("capturePostLoadFailure — trigger and detection (#835)", () => {
+  const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+
+  const PROBE = {
+    href: "https://www.linkedin.com/feed/update/urn:li:activity:1/",
+    title: "Post | LinkedIn",
+    hasMain: true,
+    hasMainFeed: true,
+    mainFeedListItemCount: 1,
+    mainFeedListItemsWithMenuButton: 1,
+    mainFeedListItemsViableForPostScrape: 1,
+    hasAuthorLink: true,
+    hasAuthorLinkInMain: true,
+    hasLtrSpans: true,
+    hasArticles: true,
+    hasReactLikeButton: false,
+    hasCommentOnButton: false,
+    hasTopLevelEditor: false,
+    hasReactionsMenu: true,
+    hasPostDetailContainer: true,
+    commentElementCount: 41,
+    bodyTextSnippet: "Post body text\n",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    } else {
+      process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalEnv;
+    }
+  });
+
+  function makeClient(): CDPClient {
+    return {
+      evaluate: vi.fn().mockResolvedValue(PROBE),
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+  }
+
+  async function bundleFor(
+    context: Parameters<typeof capturePostLoadFailure>[1],
+  ): Promise<{ bundle: Record<string, unknown>; path: string }> {
+    const { writeFile } = await import("node:fs/promises");
+    const writeFileMock = vi.mocked(writeFile);
+    writeFileMock.mockClear();
+
+    await capturePostLoadFailure(makeClient(), context);
+
+    const jsonCall = writeFileMock.mock.calls.find((call) =>
+      String(call[0]).endsWith(".json"),
+    );
+    expect(jsonCall).toBeDefined();
+    return {
+      bundle: JSON.parse(String(jsonCall?.[1])) as Record<string, unknown>,
+      path: String(jsonCall?.[0]),
+    };
+  }
+
+  it("records the per-adapter detect counts alongside the DOM probes", async () => {
+    const { bundle } = await bundleFor({
+      trigger: "readiness-timeout",
+      detection: { matched: [], probes: { sdui: 0, legacy: 0 } },
+    });
+
+    // All-zero probes: nobody claimed the page, so the next step is
+    // registering an adapter — NOT hunting a stale field selector.  No other
+    // field in the bundle can say this; every other probe is a fixed
+    // selector that answers a different question.
+    expect(bundle).toMatchObject({
+      trigger: "readiness-timeout",
+      hasPostDetailContainer: true,
+      variantDetection: { matched: [], probes: { sdui: 0, legacy: 0 } },
+    });
+  });
+
+  it("records a null detection rather than fabricating an all-zero one", async () => {
+    const { bundle } = await bundleFor({
+      trigger: "readiness-timeout",
+      detection: null,
+    });
+
+    // `{ sdui: 0, legacy: 0 }` would be the positive claim "no adapter
+    // matched".  A probe that did not run usefully has made no claim at all,
+    // and the bundle must not invent one on its behalf.
+    expect(bundle.variantDetection).toBeNull();
+    expect(bundle).toHaveProperty("variantDetection");
+  });
+
+  it("keeps the readiness-timeout artifact name and warn wording unchanged", async () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    const { path } = await bundleFor({
+      trigger: "readiness-timeout",
+      detection: null,
+    });
+
+    // Regression pin: widening the trigger must not rename the artifact
+    // operators (and ADR-007) already know.
+    expect(path).toContain("wait-for-post-load-");
+    expect(String(warnSpy.mock.calls[0]?.[0] ?? "")).toContain(
+      "[waitForPostLoad] timeout diagnostics written:",
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("names the extraction-failure artifact and warn line for what failed", async () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    const { path } = await bundleFor({
+      trigger: "extraction-failure",
+      detection: { matched: ["sdui"], probes: { sdui: 2, legacy: 0 } },
+    });
+
+    // Not "timeout": this failure is decided in milliseconds and the
+    // readiness gate went green.  A bundle labelled for a timeout that never
+    // happened points the reader at a slow page that was never slow.
+    expect(path).toContain("post-detail-extraction-failure-");
+    expect(path).not.toContain("wait-for-post-load-");
+    const message = String(warnSpy.mock.calls[0]?.[0] ?? "");
+    expect(message).toContain("[postDetailExtraction]");
+    expect(message).toContain("extraction-failure diagnostics written:");
+    // Acceptance: the warn still carries the real artifact directory.
+    expect(message).toContain(path.replace(/\.json$/, ""));
+    warnSpy.mockRestore();
+  });
+
+  it("stays default-off on the extraction-failure trigger too", async () => {
+    delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    const client = makeClient();
+
+    await capturePostLoadFailure(client, {
+      trigger: "extraction-failure",
+      detection: { matched: ["sdui"], probes: { sdui: 2 } },
+    });
+
+    // Widening the trigger must not widen the gate: the artifacts carry page
+    // content, i.e. personal data, on every trigger alike.
+    expect(client.evaluate).not.toHaveBeenCalled();
+    expect(client.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("diagnosticCaptureEnabled", () => {
+  const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    } else {
+      process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalEnv;
+    }
+  });
+
+  it('opens on exactly "1" and on nothing else', () => {
+    // One spelling, deliberately: the artifacts carry personal data, so a
+    // caller who typed `true` has not opted in.  Callers ask this rather than
+    // re-spelling the comparison, so the gate has one definition.
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    expect(diagnosticCaptureEnabled()).toBe(true);
+
+    for (const value of ["true", "yes", "0", "", "01", " 1"]) {
+      process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = value;
+      expect(diagnosticCaptureEnabled()).toBe(false);
+    }
+
+    delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    expect(diagnosticCaptureEnabled()).toBe(false);
   });
 });

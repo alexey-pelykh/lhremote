@@ -6,7 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { delay } from "../utils/delay.js";
 import type { CDPClient } from "./client.js";
-import { ensureSecureDiagnosticDir } from "./wait-for-post-load.js";
+import {
+  diagnosticCaptureEnabled,
+  ensureSecureDiagnosticDir,
+} from "./wait-for-post-load.js";
 
 // ----------------------------------------------------------------------------
 // Selectors used by the readiness predicate, the diagnostic probe, and the
@@ -181,7 +184,9 @@ export async function waitForReactionsModal(
   // captureReactionsModalFailure self-gates on LHREMOTE_CAPTURE_DIAGNOSTICS
   // and swallows its own errors, so the original timeout always propagates
   // unchanged regardless of capture-side outcome.
-  await captureReactionsModalFailure(client);
+  await captureReactionsModalFailure(client, {
+    trigger: "readiness-timeout",
+  });
   throw new Error(
     "Timed out waiting for reactions modal to appear",
   );
@@ -207,12 +212,76 @@ interface CaptureCancellationState {
 }
 
 /**
- * Best-effort diagnostic capture when {@link waitForReactionsModal}
- * times out waiting for the reactions modal DOM.  Each invocation
+ * What made a reactions-modal capture fire.
+ *
+ * The capture used to have exactly one trigger, so "timeout" could be baked
+ * into the filename and the warn line.  Since #835 it also fires when the
+ * engager scrape contradicts itself — the modal header reporting N reactions
+ * while the list yields none — a failure decided in milliseconds that never
+ * reaches a deadline.  The trigger travels with the call so a bundle is never
+ * labelled for a timeout that did not happen.
+ *
+ * The vocabulary is deliberately closed rather than a free-form string: these
+ * values become filenames operators grep for.
+ */
+/** @internal Not part of the public API. */
+export type ReactionsModalFailureTrigger =
+  | "readiness-timeout"
+  | "extraction-failure";
+
+/**
+ * Per-trigger artifact stem, warn-line tag, and warn-line wording.
+ *
+ * The `readiness-timeout` row reproduces the pre-#835 strings exactly — that
+ * capture's behaviour is unchanged.  Only the new trigger gets new words.
+ */
+const REACTIONS_MODAL_TRIGGER_LABELS: Record<
+  ReactionsModalFailureTrigger,
+  { readonly stem: string; readonly tag: string; readonly summary: string }
+> = {
+  "readiness-timeout": {
+    stem: "wait-for-reactions-modal",
+    tag: "waitForReactionsModal",
+    summary: "timeout diagnostics",
+  },
+  "extraction-failure": {
+    stem: "reactions-modal-extraction-failure",
+    // Not `waitForReactionsModal`: that gate went green — the modal opened
+    // and rendered engager links.  What failed is the row scrape inside it.
+    // Identifier-shaped like the family's other tags so a log splitter can
+    // still treat the tag as one token.
+    tag: "reactionsModalExtraction",
+    summary: "extraction-failure diagnostics",
+  },
+};
+
+/**
+ * What the caller knows about the failure it is capturing.
+ *
+ * @internal Not part of the public API.
+ */
+export interface ReactionsModalCaptureContext {
+  /** Which failure fired the capture; names the artifact and the warn line. */
+  readonly trigger: ReactionsModalFailureTrigger;
+}
+
+/**
+ * Best-effort diagnostic capture when reading the reactions modal fails.
+ *
+ * **Two triggers, not one** ({@link ReactionsModalFailureTrigger}, #835):
+ * {@link waitForReactionsModal} timing out waiting for the modal DOM, and an
+ * engager scrape that got past that gate contradicting itself
+ * (`assertCardinalCorroboration`).  The second never reaches a deadline, so a
+ * timeout-gated capture could not see it at all.
+ *
+ * Unlike the post-detail bundle, this one records no per-adapter detect
+ * counts: the reactions modal has no entry in the variant-adapter registry
+ * (whether it even has a container tier is unprobed — #830), so there is
+ * nothing to report and inventing a field would fabricate a diagnosis.  Each invocation
  * creates a fresh `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/`
  * directory via `mkdtemp` (atomic; refuses to follow any pre-existing
  * symlink at the prefix) and writes
- * `wait-for-reactions-modal-{timestamp}.json` (URL, dialog probes,
+ * `{trigger-stem}-{timestamp}.json` (trigger, URL, dialog probes,
  * reactions-button candidates, body-text snippet) and a sibling `.png`
  * (full-page `Page.captureScreenshot` with `captureBeyondViewport: true`,
  * when the screenshot succeeds) inside it, so callers can classify the
@@ -245,10 +314,10 @@ interface CaptureCancellationState {
  * held alive by this function beyond the cap plus any such single
  * in-flight step.
  *
- * Any capture-side failure is swallowed so the original timeout
+ * Any capture-side failure is swallowed so the caller's original error
  * always propagates unchanged.
  *
- * Probe set: `{ href, dialogCount, dialogHasInLinks,
+ * Probe set: `{ trigger, href, dialogCount, dialogHasInLinks,
  * dialogChildElementCount, bodyTextSnippet, reactionsButtonAriaLabels,
  * reactionsCountText, htmlDialogCount, ariaModalCount, hasReactionsTab,
  * reactionsTabAncestorChain, resolvedModalAncestorTag }` —
@@ -277,12 +346,14 @@ interface CaptureCancellationState {
  * artifact structure, same cancellation discipline,
  * {@link ensureSecureDiagnosticDir} reused from `wait-for-post-load.ts`.
  *
- * @internal Exported for unit testing only; not part of the public API.
+ * @internal Exported for unit testing and for the operation-layer
+ *   extraction-failure site; not part of the public API.
  */
 export async function captureReactionsModalFailure(
   client: CDPClient,
+  context: ReactionsModalCaptureContext,
 ): Promise<void> {
-  if (process.env.LHREMOTE_CAPTURE_DIAGNOSTICS !== "1") return;
+  if (!diagnosticCaptureEnabled()) return;
   const state: CaptureCancellationState = { timedOut: false };
   let bound: NodeJS.Timeout | undefined;
   try {
@@ -290,8 +361,10 @@ export async function captureReactionsModalFailure(
       // Attach a no-op catch to the inner promise so a late rejection
       // (after the timer wins the race) does not escape as an
       // UnhandledPromiseRejection — capture-side errors must always be
-      // swallowed to keep the caller's timeout propagating unchanged.
-      captureReactionsModalFailureInner(client, state).catch(() => undefined),
+      // swallowed to keep the caller's failure propagating unchanged.
+      captureReactionsModalFailureInner(client, context, state).catch(
+        () => undefined,
+      ),
       new Promise<void>((resolve) => {
         bound = setTimeout(() => {
           state.timedOut = true;
@@ -300,7 +373,7 @@ export async function captureReactionsModalFailure(
       }),
     ]);
   } catch {
-    // Capture itself failed; do not mask the caller's timeout.
+    // Capture itself failed; do not mask the caller's error.
   } finally {
     if (bound !== undefined) clearTimeout(bound);
   }
@@ -308,8 +381,10 @@ export async function captureReactionsModalFailure(
 
 async function captureReactionsModalFailureInner(
   client: CDPClient,
+  context: ReactionsModalCaptureContext,
   state: CaptureCancellationState,
 ): Promise<void> {
+  const labels = REACTIONS_MODAL_TRIGGER_LABELS[context.trigger];
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   // mkdtemp is the atomic fresh-directory primitive: it generates a
   // random suffix and creates the directory in one syscall, refusing
@@ -321,7 +396,7 @@ async function captureReactionsModalFailureInner(
   if (state.timedOut) return;
   if (!(await ensureSecureDiagnosticDir(baseDir))) return;
   if (state.timedOut) return;
-  const prefix = join(baseDir, `wait-for-reactions-modal-${timestamp}`);
+  const prefix = join(baseDir, `${labels.stem}-${timestamp}`);
 
   const info = await client.evaluate<{
     href: string;
@@ -444,7 +519,12 @@ async function captureReactionsModalFailureInner(
   if (state.timedOut) return;
 
   // 0o600: owner-only rw.  POSIX-only; no-op on Windows.
-  await writeFile(`${prefix}.json`, JSON.stringify(info, null, 2), {
+  // The trigger rides in the bundle as well as in the filename: artifacts get
+  // copied out of their mkdtemp directory, and a bundle that cannot say what
+  // it was capturing is a bundle whose reader has to guess (#835).
+  const bundle = { trigger: context.trigger, ...info };
+
+  await writeFile(`${prefix}.json`, JSON.stringify(bundle, null, 2), {
     encoding: "utf8",
     mode: 0o600,
   });
@@ -454,7 +534,7 @@ async function captureReactionsModalFailureInner(
     // place these artifacts live, so an early return without a warn
     // would leave operators unable to find them.
     console.warn(
-      `[waitForReactionsModal] timeout diagnostics partial: ${prefix}.json (screenshot skipped — capture cap reached)`,
+      `[${labels.tag}] ${labels.summary} partial: ${prefix}.json (screenshot skipped — capture cap reached)`,
     );
     return;
   }
@@ -481,6 +561,6 @@ async function captureReactionsModalFailureInner(
   // Mention `.png` only when actually written.
   const artifacts = wroteScreenshot ? "{json,png}" : "json";
   console.warn(
-    `[waitForReactionsModal] timeout diagnostics written: ${prefix}.${artifacts}`,
+    `[${labels.tag}] ${labels.summary} written: ${prefix}.${artifacts}`,
   );
 }

@@ -187,6 +187,13 @@ describe("waitForReactionsModal", () => {
 });
 
 describe("captureReactionsModalFailure", () => {
+  // The readiness-timeout context every case below implicitly used before
+  // #835 widened the capture to carry its trigger.  Pinned as a constant so
+  // these cases keep asserting the timeout capture's behaviour UNCHANGED, and
+  // the new extraction-failure trigger is exercised only where a test names
+  // it.
+  const TIMEOUT_CAPTURE = { trigger: "readiness-timeout" } as const;
+
   const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
 
   beforeEach(() => {
@@ -228,7 +235,7 @@ describe("captureReactionsModalFailure", () => {
     delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
     const client = makeClient();
 
-    await captureReactionsModalFailure(client);
+    await captureReactionsModalFailure(client, TIMEOUT_CAPTURE);
 
     expect(client.evaluate).not.toHaveBeenCalled();
     expect(client.send).not.toHaveBeenCalled();
@@ -238,7 +245,7 @@ describe("captureReactionsModalFailure", () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "true";
     const client = makeClient();
 
-    await captureReactionsModalFailure(client);
+    await captureReactionsModalFailure(client, TIMEOUT_CAPTURE);
 
     expect(client.evaluate).not.toHaveBeenCalled();
     expect(client.send).not.toHaveBeenCalled();
@@ -248,7 +255,7 @@ describe("captureReactionsModalFailure", () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
     const client = makeClient();
 
-    await captureReactionsModalFailure(client);
+    await captureReactionsModalFailure(client, TIMEOUT_CAPTURE);
 
     expect(client.evaluate).toHaveBeenCalledTimes(1);
     expect(client.send).toHaveBeenCalledWith("Page.captureScreenshot", {
@@ -261,7 +268,7 @@ describe("captureReactionsModalFailure", () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
     const client = makeClient();
 
-    await captureReactionsModalFailure(client);
+    await captureReactionsModalFailure(client, TIMEOUT_CAPTURE);
 
     const script = String(vi.mocked(client.evaluate).mock.calls[0]?.[0] ?? "");
     // Original probe-shape fields (#773 Phase 1 issue body baseline).
@@ -298,7 +305,7 @@ describe("captureReactionsModalFailure", () => {
       send: vi.fn(),
     } as unknown as CDPClient;
 
-    await expect(captureReactionsModalFailure(client)).resolves.toBeUndefined();
+    await expect(captureReactionsModalFailure(client, TIMEOUT_CAPTURE)).resolves.toBeUndefined();
   });
 
   it("writes diagnostics with the wait-for-reactions-modal prefix and .json/.png extensions", async () => {
@@ -308,7 +315,7 @@ describe("captureReactionsModalFailure", () => {
     const writeFileMock = vi.mocked(writeFile);
     writeFileMock.mockClear();
 
-    await captureReactionsModalFailure(client);
+    await captureReactionsModalFailure(client, TIMEOUT_CAPTURE);
 
     expect(writeFileMock.mock.calls.length).toBeGreaterThanOrEqual(1);
     for (const call of writeFileMock.mock.calls) {
@@ -353,8 +360,8 @@ describe("captureReactionsModalFailure", () => {
     );
 
     try {
-      await captureReactionsModalFailure(makeClient());
-      await captureReactionsModalFailure(makeClient());
+      await captureReactionsModalFailure(makeClient(), TIMEOUT_CAPTURE);
+      await captureReactionsModalFailure(makeClient(), TIMEOUT_CAPTURE);
 
       const jsonCalls = writeFileMock.mock.calls.filter((c) =>
         String(c[0]).endsWith(".json"),
@@ -392,7 +399,7 @@ describe("captureReactionsModalFailure", () => {
 
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
-      await captureReactionsModalFailure(client);
+      await captureReactionsModalFailure(client, TIMEOUT_CAPTURE);
 
       expect(warnSpy).toHaveBeenCalledTimes(1);
       const message = String(warnSpy.mock.calls[0]?.[0] ?? "");
@@ -421,7 +428,7 @@ describe("captureReactionsModalFailure", () => {
       send: vi.fn(),
     } as unknown as CDPClient;
 
-    await captureReactionsModalFailure(client);
+    await captureReactionsModalFailure(client, TIMEOUT_CAPTURE);
 
     expect(client.evaluate).not.toHaveBeenCalled();
     expect(client.send).not.toHaveBeenCalled();
@@ -437,7 +444,7 @@ describe("captureReactionsModalFailure", () => {
     writeFileMock.mockClear();
     mkdtempMock.mockClear();
 
-    await captureReactionsModalFailure(client);
+    await captureReactionsModalFailure(client, TIMEOUT_CAPTURE);
 
     expect(mkdtempMock).toHaveBeenCalledWith(
       expect.stringMatching(/lhremote-diagnostics-$/),
@@ -482,7 +489,7 @@ describe("captureReactionsModalFailure", () => {
         send: vi.fn(),
       } as unknown as CDPClient;
 
-      await captureReactionsModalFailure(client);
+      await captureReactionsModalFailure(client, TIMEOUT_CAPTURE);
 
       // Allow the late rejection to settle.
       await new Promise<void>((r) => setImmediate(r));
@@ -493,5 +500,122 @@ describe("captureReactionsModalFailure", () => {
       timeoutSpy.mockRestore();
       process.off("unhandledRejection", handler);
     }
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// #835 — the capture is no longer bound to a deadline.  The reactions modal
+// has no entry in the variant-adapter registry (#830), so this bundle gains
+// the trigger but deliberately no per-adapter detect counts.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe("captureReactionsModalFailure — trigger (#835)", () => {
+  const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+
+  const PROBE = {
+    href: "https://www.linkedin.com/feed/update/urn:li:activity:1/",
+    dialogCount: 1,
+    dialogHasInLinks: true,
+    dialogChildElementCount: 4,
+    bodyTextSnippet: "2 reactions\n",
+    reactionsButtonAriaLabels: ["Open reactions menu"],
+    reactionsCountText: "2 reactions",
+    htmlDialogCount: 1,
+    ariaModalCount: 1,
+    hasReactionsTab: true,
+    reactionsTabAncestorChain: ["div role=dialog inLinks=0"],
+    resolvedModalAncestorTag: "div",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    } else {
+      process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalEnv;
+    }
+  });
+
+  function makeClient(): CDPClient {
+    return {
+      evaluate: vi.fn().mockResolvedValue(PROBE),
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+  }
+
+  async function captureWith(
+    trigger: "readiness-timeout" | "extraction-failure",
+  ): Promise<{ bundle: Record<string, unknown>; path: string }> {
+    const { writeFile } = await import("node:fs/promises");
+    const writeFileMock = vi.mocked(writeFile);
+    writeFileMock.mockClear();
+
+    await captureReactionsModalFailure(makeClient(), { trigger });
+
+    const jsonCall = writeFileMock.mock.calls.find((call) =>
+      String(call[0]).endsWith(".json"),
+    );
+    expect(jsonCall).toBeDefined();
+    return {
+      bundle: JSON.parse(String(jsonCall?.[1])) as Record<string, unknown>,
+      path: String(jsonCall?.[0]),
+    };
+  }
+
+  it("keeps the readiness-timeout artifact name and warn wording unchanged", async () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    const { bundle, path } = await captureWith("readiness-timeout");
+
+    // Regression pin: widening the trigger must not rename the artifact
+    // operators already know.
+    expect(path).toContain("wait-for-reactions-modal-");
+    expect(bundle).toMatchObject({
+      trigger: "readiness-timeout",
+      dialogCount: 1,
+    });
+    expect(String(warnSpy.mock.calls[0]?.[0] ?? "")).toContain(
+      "[waitForReactionsModal] timeout diagnostics written:",
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("names the extraction-failure artifact and warn line for what failed", async () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    const { bundle, path } = await captureWith("extraction-failure");
+
+    // The modal opened and rendered engager links — the readiness gate went
+    // green.  Labelling this a timeout would misdirect the next reader.
+    expect(path).toContain("reactions-modal-extraction-failure-");
+    expect(bundle.trigger).toBe("extraction-failure");
+    const message = String(warnSpy.mock.calls[0]?.[0] ?? "");
+    expect(message).toContain("[reactionsModalExtraction]");
+    expect(message).toContain("extraction-failure diagnostics written:");
+    // Acceptance: the warn still carries the real artifact directory.
+    expect(message).toContain(path.replace(/\.json$/, ""));
+    warnSpy.mockRestore();
+  });
+
+  it("stays default-off on the extraction-failure trigger too", async () => {
+    delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    const client = makeClient();
+
+    await captureReactionsModalFailure(client, {
+      trigger: "extraction-failure",
+    });
+
+    // Widening the trigger must not widen the gate: the artifacts carry
+    // engager names and profile slugs on every trigger alike.
+    expect(client.evaluate).not.toHaveBeenCalled();
+    expect(client.send).not.toHaveBeenCalled();
   });
 });
