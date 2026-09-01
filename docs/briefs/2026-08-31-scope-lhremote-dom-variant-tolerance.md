@@ -94,8 +94,10 @@ spike — needs your live account).
 | PRD | `docs/requirements/linkedin-dom-variant-tolerance-prd.md` |
 | Solution design | `docs/design/linkedin-dom-variant-tolerance-solution-design.md` |
 | Design brief | `docs/design/linkedin-dom-variant-tolerance-brief.md` (`status: final`) |
-| Investigation | `.tmp/investigations/alexey-pelykh-lhremote-issue-823.md` |
-| Live probe | `.tmp/investigations/823-q6-live-probe-findings.md` |
+| Live probe | `linkedin/post-detail-dom-legacy-reversion-20260831.md` in the **private** research repo — measurements restated in-band here and in every work item |
+| Investigation | session scratch, superseded by the PRD and solution design above; not committed |
 
-**All three `docs/` artifacts are untracked** — #826 commits them. Every issue body therefore carries
-its context in-band and cites these paths as provenance only.
+Every issue body carries its context **in-band** and cites these paths as provenance only. That was
+written while the `docs/` artifacts were still untracked (#826 committed them), and it stays true for
+a stronger reason: the DOM probe lives in a **private** repo, so no public reader can follow that
+link. In-band context is what makes #827–#841 executable by someone who can reach neither.

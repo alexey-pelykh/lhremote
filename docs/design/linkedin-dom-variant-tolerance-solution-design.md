@@ -4,7 +4,7 @@ slug: linkedin-dom-variant-tolerance
 date: 2026-08-31
 workflow: /design-solution
 source: docs/requirements/linkedin-dom-variant-tolerance-prd.md
-status: draft
+status: final
 ---
 
 # Solution Design: LinkedIn DOM Variant Tolerance and Fail-Loud Extraction
@@ -513,11 +513,11 @@ No Must-Have component is UNCERTAIN or INFEASIBLE. **Feasibility gate: PASS.**
 | **DQ-4** | Re-point the 2 out-of-scope ADR-007 citations (`wait-for-reactions-modal.ts`, post-detail unit-test comments)? | Non-load-bearing | Outside the ratified ten; comment-only. Flagged, not absorbed |
 | **DQ-3** | Two error classes vs one (§ 7.1) | Non-load-bearing | Two recommended; collapsible without redesign |
 
-**Two load-bearing questions remain — OQ-1 and OQ-2 — and they are the same probe.** Both convert
-to **SPIKE-2**, a tracked work item, at Stage 3. Because § 4.3 makes the architecture robust to
-either answer (corroboration degrades to cardinal if the modal has no container tier), they cease to
-block once that item is filed. The brief therefore stays `status: draft` **until Stage 3 files
-SPIKE-2**, then flips to `final` — the gate working, not a false lock.
+**OQ-1 and OQ-2 are the same probe, and they are cleared.** Stage 3 filed it as **#830**. Because
+§ 4.3 makes the architecture robust to either answer (corroboration degrades to cardinal if the modal
+has no container tier), they ceased to block the moment that item existed — so the brief is
+`status: final`. That is the Open-Questions Lock Gate resolving, not being waived: the questions are
+still open, but they are *tracked and non-blocking* rather than *open and load-bearing*.
 
 ---
 
@@ -605,11 +605,11 @@ per the § 16 protocol's explicit allowance.
 | Backward coverage (§ 16b) | ✅ zero PHANTOM, two ratified net-new |
 | Feasibility (§ 12) | ✅ PASS — 2 spikes, 0 blocking |
 | Risk (§ 13) | ✅ PASS — 1 HIGH, doubly mitigated |
-| Open questions (§ 14) | ⚠️ **2 load-bearing open** (OQ-1, OQ-2 — one probe, converting to SPIKE-2 at Stage 3) |
+| Open questions (§ 14) | ✅ **cleared** — OQ-1/OQ-2 (one probe) were filed as #830; the architecture is robust to either answer (§ 4.3), so they no longer block |
 
-**DESIGN IS NOT YET LOCKED.** Brief is `status: draft`. DQ-1 and DQ-2 are resolved (AC-13 amended;
-four fixtures ratified). The remaining lock condition is that Stage 3 files **SPIKE-2**, after which
-OQ-1/OQ-2 no longer block and the brief flips to `final`.
+**DESIGN IS LOCKED.** Brief is `status: final`. All lock conditions are met: DQ-1 and DQ-2 were
+resolved (AC-13 amended; four fixtures ratified), and Stage 3 filed the spike as **#830**, which is
+what cleared OQ-1/OQ-2 — the Open-Questions Lock Gate resolving, not being waived.
 
 The dual-lens ratification (product lens + UX lens) is **not run**: the session's operating
 instructions forbid dispatching agents unless the user requests it, and the UX lens has no subject
