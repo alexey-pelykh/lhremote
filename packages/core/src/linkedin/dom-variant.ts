@@ -118,9 +118,38 @@ export interface VariantAdapter {
    */
   readonly scopes: readonly string[];
   /**
+   * Narrowing candidates for the engagement-counts row, tried in order
+   * *within* the resolved scope.  When none matches — including the
+   * deliberately empty list of a dialect whose counts row has never been
+   * measured — the scope itself is the counts root.
+   *
+   * That fallback is not the terminal fallback this module forbids.  The one
+   * it forbids widens to something that matches on EVERY page (`<main>`,
+   * `document`) and so makes an unreadable page look readable.  This one
+   * lands on an anchor that is already dialect-bound and already resolved:
+   * it can cost precision, never a false claim to have read the page.
+   *
+   * What bounds that cost is how a counter is read.  Every candidate is
+   * matched against ONE element's own text, anchored end to end, so a run
+   * found inside a longer one is not a counter.  An ancestor can still
+   * satisfy the anchored pattern by concatenation — "2" beside "41 comments"
+   * flattens to exactly "241 comments" — so anchoring alone is not the
+   * guard; the deepest hit of the first containment chain wins, which picks
+   * the element that RENDERS a counter over the ancestor that merely runs it
+   * together with its neighbour.  See `__lhReadCount`.
+   */
+  readonly counts: readonly string[];
+  /**
    * In-page JavaScript **function source** of the form
    * `(function (scope) { ...; return {...}; })`, evaluated with the resolved
    * scope element.  It returns the raw post-detail field bag.
+   *
+   * Evaluated inside the extraction script, so the shared text helpers
+   * {@link extractionHelpersSource} emits — `__lhVisibleText`,
+   * `__lhCleanName`, `__lhFirstHeadline` — are in scope and may be called.
+   * They are shared rather than copied into each dialect because what differs
+   * between dialects there is *where* a string is rendered, not how a rendered
+   * string is read.
    *
    * Source rather than a structured selector bag because the dialects differ
    * in extraction *algorithm*, not merely in selector strings — SDUI reads a
@@ -182,48 +211,31 @@ const SDUI_POST_DETAIL_EXTRACT = `(function (scope) {
     // containing CSS-special characters (quotes, backslashes), and the raw
     // attribute can include LinkedIn-injected query strings.
     const targetHref = authorLink.getAttribute('href');
-    let nameText = '';
+    let nameAnchor = null;
     for (const a of scope.querySelectorAll('a')) {
       if (a.getAttribute('href') !== targetHref) continue;
-      const t = (a.textContent || '').trim();
-      if (t.length > 0) { nameText = t; break; }
+      if ((a.textContent || '').trim().length > 0) { nameAnchor = a; break; }
     }
 
-    // Strip the SDUI " • <degree>" suffix from the name link text.
-    // Format: "<Name>  • 1st" / "<Name> • 2nd" / "<Name>  • You" /
-    // "<Name>  • 3rd".  Connection-degree separator is bullet (•).
-    const m = nameText.match(/^(.+?)\\s+•\\s+(?:1st|2nd|3rd|Out of network|You)\\s*$/);
-    authorName = (m ? m[1] : nameText).trim() || null;
+    // Read the copy a reader sees, then drop the decorations LinkedIn renders
+    // beside it — the " • <degree>" suffix ("<Name>  • 1st" / " • You") and a
+    // Premium / Verified profile badge.  Both are handled by the shared
+    // helpers so the two dialects cannot drift apart on them.
+    authorName = __lhCleanName(__lhVisibleText(nameAnchor));
   }
 
   // --- Author headline ---
   // After the author block, there's a headline element in <p> or <span>
-  // form. Scan post container for a non-empty text leaf with length
-  // 5..200 that is NOT the author name, NOT a relative-time marker,
-  // NOT a UI label, and NOT a composite "<Name> • <degree>" span.
-  const headlineCandidates = scope.querySelectorAll('p, span');
-  for (const el of headlineCandidates) {
+  // form.  Scan the post container for the first candidate the shared
+  // headline rule accepts, skipping the comment list: the SDUI *screen*
+  // scope contains it as a descendant, so a commenter's headline is
+  // otherwise reachable from here.
+  const headlineCandidates = [];
+  for (const el of scope.querySelectorAll('p, span')) {
     if (el.closest('[componentkey^="replaceableComment_"]')) continue;
-    const txt = (el.textContent || '').trim();
-    if (
-      txt &&
-      txt.length > 5 &&
-      txt.length < 200 &&
-      txt !== authorName &&
-      !txt.match(/^\\d+[smhdw]$/) &&
-      !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
-      !txt.match(/^Follow$|^Promoted$|^Boost$|^Author$|^You$/i) &&
-      !txt.match(/^Skip to|^Keyboard shortcuts$|^Close jump menu$/i) &&
-      !txt.match(/^Feed\\s+(?:post|detail\\s+update)$/i) &&
-      !txt.match(/^Promote\\s+this\\s+post/i) &&
-      !txt.match(/Reaction button state:/) &&
-      !txt.includes('•') &&
-      !txt.match(/^https?:\\/\\//)
-    ) {
-      authorHeadline = txt;
-      break;
-    }
+    headlineCandidates.push(el);
   }
+  authorHeadline = __lhFirstHeadline(headlineCandidates, authorName);
 
   // --- Post text ---
   // Cascade per research: data-testid leaf -> componentkey wrapper.
@@ -298,6 +310,17 @@ function authorLinkWithin(scopes: readonly string[]): string {
  * run against an empty container and hand back an empty record, which is the
  * failure mode being removed rather than a new one.
  *
+ * `counts` is deliberately EMPTY: no engagement-counts row has been measured
+ * for this dialect, and guessing one would either match nothing (silently
+ * zeroing every count) or match something that is not the counts row.  The
+ * read therefore falls back to this adapter's own resolved scope, which the
+ * anchored per-element matching makes safe — see {@link VariantAdapter.counts}.
+ * The one thing the dialect does tell us is that the counters render INSIDE
+ * that scope: this extractor's headline scan has had to exclude
+ * `"<N> reactions"`-shaped runs found there since #800.  Narrow it the moment
+ * a container is measured; an empty list is a recorded absence of evidence,
+ * not a decision that none exists.
+ *
  * The screen-scoped half of `ready` is weaker than the container-scoped half:
  * the screen contains the comment list, so a commenter's link can satisfy it
  * before the post body hydrates. That is accepted deliberately — it only
@@ -311,6 +334,7 @@ const SDUI_POST_DETAIL_ADAPTER: VariantAdapter = {
   detect: `${SDUI_CONTAINER}, ${SDUI_SCREEN}`,
   ready: authorLinkWithin([SDUI_CONTAINER, SDUI_SCREEN]),
   scopes: [SDUI_CONTAINER, SDUI_SCREEN],
+  counts: [],
   extract: SDUI_POST_DETAIL_EXTRACT,
 };
 
@@ -367,48 +391,31 @@ const LEGACY_POST_DETAIL_EXTRACT = `(function (scope) {
   if (authorLink) {
     authorProfileUrl = (authorLink.href || '').split('?')[0] || null;
 
-    // Name from a span inside the link first; the legacy actor block wraps
-    // the visible name in span[dir="ltr"] with an aria-hidden twin.
-    const nameSpan = authorLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]');
-    let rawName = nameSpan ? (nameSpan.textContent || '').trim() : '';
-
-    // Fallback: the link's own textContent, first line only.
-    if (!rawName) {
-      rawName = (authorLink.textContent || '').trim().split('\\n')[0].trim();
-    }
+    // Read the copy a reader sees.  The previous read took the first
+    // \`span[dir="ltr"]\` inside the link, which in this dialect WRAPS both
+    // copies of the name — the visible one and its assistive-technology twin
+    // — so it returned them concatenated: "Alexey PelykhAlexey Pelykh",
+    // measured live on 2026-08-31 (#836).  Selecting the twin's wrapper
+    // rather than its parent is what separates them.
+    let rawName = __lhVisibleText(authorLink);
 
     // Fallback: LinkedIn sometimes renders the name outside the <a>.
     if (!rawName) {
-      const parent = authorLink.closest('div');
-      if (parent) {
-        const nearby = parent.querySelector('span[dir="ltr"], span[aria-hidden="true"]');
-        if (nearby) rawName = (nearby.textContent || '').trim();
-      }
+      rawName = __lhVisibleText(authorLink.closest('div'));
     }
 
-    authorName = rawName || null;
+    authorName = __lhCleanName(rawName);
   }
 
   // --- Author headline ---
-  // Scan spans inside scope, skipping navigation text and the author name.
-  const allSpans = scope.querySelectorAll('span');
-  for (const span of allSpans) {
-    const txt = (span.textContent || '').trim();
-    if (
-      txt &&
-      txt.length > 5 &&
-      txt.length < 200 &&
-      txt !== authorName &&
-      !txt.match(/^\\d+[smhdw]$/) &&
-      !txt.match(/^\\d[\\d,]*\\s+(reactions?|comments?|reposts?|likes?)$/i) &&
-      !txt.match(/^Follow$|^Promoted$/i) &&
-      !txt.match(/^Skip to|^Keyboard shortcuts$|^Close jump menu$/i) &&
-      !txt.match(/^Feed detail update$|^Feed post$/i)
-    ) {
-      authorHeadline = txt;
-      break;
-    }
-  }
+  // Scan runs inside scope for the first candidate the shared headline rule
+  // accepts.  Both run shapes, not just this dialect's \`<span>\`: asking only
+  // whether a run carries the headline — never which tag renders it — is what
+  // keeps the rule one rule rather than two that can drift.
+  authorHeadline = __lhFirstHeadline(
+    Array.from(scope.querySelectorAll('p, span')),
+    authorName,
+  );
 
   // --- Post text ---
   // Prefer the dedicated commentary element; fall back to the longest
@@ -423,6 +430,14 @@ const LEGACY_POST_DETAIL_EXTRACT = `(function (scope) {
     const ltrSpans = scope.querySelectorAll('span[dir="ltr"]');
     let longestText = '';
     for (const span of ltrSpans) {
+      // Never the actor block.  Excluding it structurally rather than by
+      // comparing against the extracted name is what keeps this contest
+      // independent of how well that extraction went: this dialect wraps the
+      // name and its assistive-technology twin in a \`span[dir="ltr"]\` of
+      // exactly the shape the contest is looking for, and it is longer than
+      // either field, so any text-equality guard lets it through the moment
+      // the name is read as one copy rather than two.
+      if (authorLink && authorLink.contains(span)) continue;
       const txt = (span.textContent || '').trim();
       if (txt.length > longestText.length && txt !== authorName && txt !== authorHeadline) {
         longestText = txt;
@@ -448,6 +463,12 @@ const LEGACY_POST_DETAIL_EXTRACT = `(function (scope) {
   return { authorName, authorHeadline, authorProfileUrl, text, timestamp };
 })`;
 
+/** The legacy update container, carrying the activity URN in `data-id`. */
+const LEGACY_UPDATE_CONTAINER = '[data-id^="urn:li:activity:"]';
+
+/** The legacy engagement-counts row.  Measured: 1 match on 2026-08-31. */
+const LEGACY_SOCIAL_COUNTS = ".social-details-social-counts";
+
 /**
  * Legacy (pre-SDUI) post-detail adapter.
  *
@@ -467,15 +488,19 @@ const LEGACY_POST_DETAIL_EXTRACT = `(function (scope) {
  * author-link stage re-scoped from `<main>` to this dialect's own root, and
  * it proves the update actually hydrated rather than merely that its
  * container exists.
+ *
+ * `counts` is *measured*, unlike this adapter's detect anchor: the same
+ * 2026-08-31 probe run recorded `.social-details-social-counts` matching
+ * exactly 1, rendering `"2 41 comments"` — two reactions and forty-one
+ * comments, side by side.
  */
-const LEGACY_UPDATE_CONTAINER = '[data-id^="urn:li:activity:"]';
-
 const LEGACY_POST_DETAIL_ADAPTER: VariantAdapter = {
   surface: "post-detail",
   variant: "legacy",
   detect: LEGACY_UPDATE_CONTAINER,
   ready: authorLinkWithin([LEGACY_UPDATE_CONTAINER]),
   scopes: [LEGACY_UPDATE_CONTAINER],
+  counts: [LEGACY_SOCIAL_COUNTS],
   extract: LEGACY_POST_DETAIL_EXTRACT,
 };
 
@@ -549,6 +574,7 @@ function adapterTableSource(
     ];
     if (withExtractors) {
       fields.push(`scopes: [${adapter.scopes.map(jsString).join(", ")}]`);
+      fields.push(`counts: [${adapter.counts.map(jsString).join(", ")}]`);
       fields.push(`extract: ${adapter.extract}`);
     }
     return `{ ${fields.join(", ")} }`;
@@ -628,6 +654,251 @@ export function buildDetectionSource(
 }
 
 /**
+ * Shared in-page text helpers, emitted once at the top of the extraction
+ * script and in scope for every adapter's `extract` source.
+ *
+ * Shared rather than copied per dialect because what differs between dialects
+ * here is *where* a string is rendered, not how a rendered string is read —
+ * and the two hand-maintained copies of the headline rule had already drifted
+ * apart, with neither a superset of the other.  The dialect-specific part
+ * stays in the extractors: which element to hand these helpers.
+ *
+ * Deliberately absent from the readiness and detection scripts, for the same
+ * blast-radius reason {@link adapterTableSource} withholds the extractors from
+ * them — neither script reads text, so a defect here cannot reach a poll loop.
+ *
+ * **Editing across the language seam.**  The literal below is TypeScript
+ * emitting JavaScript, and the two languages share an escape character.  Every
+ * backslash must be doubled to survive the crossing — `\\s` here is `\s`
+ * there — and getting it wrong fails SILENTLY rather than loudly: an
+ * unrecognised escape collapses to the bare character, so a lone `\s` emits
+ * `/s+/`, a valid regex that matches the letter s.  Literal backticks must be
+ * escaped for the same reason.  Both test tiers evaluate the emitted source,
+ * so a *parse* error surfaces at once; a mis-escaped regex parses fine and
+ * surfaces only where an assertion happens to depend on it.  The same holds
+ * for the two `*_EXTRACT` constants above.
+ */
+function extractionHelpersSource(): string {
+  return `
+  // Text carrying no letter and no digit is decoration — a separator bullet,
+  // an icon glyph — and is never a name, a headline or a count.
+  const __LH_MEANINGFUL = /[\\p{L}\\p{N}]/u;
+
+  // Collapse the whitespace \`textContent\` preserves, newlines included.
+  function __lhSqueeze(text) {
+    return (text || '').replace(/\\s+/g, ' ').trim();
+  }
+
+  // The text a reader actually sees inside \`el\`.
+  //
+  // LinkedIn writes many strings TWICE: the copy a reader sees, wrapped in
+  // \`aria-hidden="true"\`, and an assistive-technology copy beside it.
+  // \`textContent\` returns the pair concatenated with no separator, which is
+  // how the post author's name came back as "Alexey PelykhAlexey Pelykh" —
+  // measured live on 2026-08-31 (#836).
+  //
+  // The FIRST such wrapper wins, and the wrappers are deliberately NOT
+  // joined: an actor block carries one per field — the name, the connection
+  // degree, the headline, the timestamp — so joining them would swallow the
+  // neighbouring fields into the first.  Taking the first in document order
+  // also takes the OUTERMOST, because an ancestor precedes its descendants
+  // and inherits their text.  Decoration-only wrappers are skipped, so a
+  // separator bullet can never be mistaken for the string.
+  function __lhVisibleText(el) {
+    if (!el) return '';
+    for (const node of el.querySelectorAll('[aria-hidden="true"]')) {
+      const txt = __lhSqueeze(node.textContent);
+      if (txt && __LH_MEANINGFUL.test(txt)) return txt;
+    }
+    return __lhSqueeze(el.textContent);
+  }
+
+  // "Alexey PelykhAlexey Pelykh" -> "Alexey Pelykh".  The assistive-technology
+  // copy normally sits in its own wrapper and is excluded by reading the
+  // visible one; this collapses the residue where a dialect renders both
+  // copies inside ONE element, so no wrapper tells them apart.
+  //
+  // The repeated unit must be at least three characters, which keeps a real
+  // two-character-per-half name ("LiLi") intact, and the whole string is
+  // length-bounded because the backreference is quadratic in the worst case.
+  function __lhDropRepeat(text) {
+    if (text.length > 120) return text;
+    const doubled = text.match(/^(.{3,}?)\\s*\\1$/);
+    return doubled ? doubled[1].trim() : text;
+  }
+
+  // A display name with the decorations LinkedIn renders beside it removed.
+  //
+  // Each decoration truncates from its FIRST occurrence rather than anchoring
+  // at the end of the string, because both were observed mid-string in the
+  // live legacy record, whose name ran on into
+  // "… • YouPremium • You … Software Architect | Agentic AI…" (#836).
+  //
+  // The badge rule is deliberately narrow — "Premium Profile", or a trailing
+  // bare "Premium" — so that a company legitimately named "Premium Motors"
+  // survives it.
+  function __lhCleanName(raw) {
+    let name = __lhSqueeze(raw);
+    if (!name) return null;
+    // No word boundary after the degree: the concatenated a11y twin runs
+    // straight into it ("… • YouPremium • You …"), so requiring one skips the
+    // first occurrence and truncates too late.  The bullet in front is what
+    // keeps the rule from firing on an ordinary name.
+    name = name.replace(
+      /\\s*[\\u2022\\u00B7]\\s*(?:1st|2nd|3rd|Out of network|You)[\\s\\S]*$/i,
+      '',
+    );
+    name = name.replace(/\\s*\\b(?:Verified|Premium)\\s+Profile\\b[\\s\\S]*$/i, '');
+    name = name.replace(/\\s*\\b(?:Verified|Premium)\\s*$/i, '');
+    name = __lhDropRepeat(__lhSqueeze(name));
+    return name && __LH_MEANINGFUL.test(name) ? name : null;
+  }
+
+  // Whether \`txt\` is the author's NAME IN DISGUISE rather than a headline.
+  // Two shapes qualify: \`txt\` reduces to the name under the same cleaning the
+  // name read itself applies, or \`txt\` is nothing but that name repeated —
+  // the a11y pair concatenated, and the same shape one copy further.  A plain
+  // equality test let both through as the headline whenever the name itself
+  // came back mangled, which is how \`authorHeadline\` came back holding the
+  // NAME (#836).
+  //
+  // Deliberately NOT containment, which would also close that path: an
+  // ordinary LinkedIn headline names its owner — "Jane Doe | Head of Data" —
+  // so rejecting every candidate mentioning the author trades one silently
+  // wrong field for a silently empty one.
+  function __lhIsNameEcho(txt, authorName) {
+    if (!authorName) return false;
+    if (__lhCleanName(txt) === authorName) return true;
+    let rest = __lhSqueeze(txt);
+    while (rest.indexOf(authorName) === 0) {
+      rest = __lhSqueeze(rest.slice(authorName.length));
+    }
+    return rest.length === 0 || !__LH_MEANINGFUL.test(rest);
+  }
+
+  // Does \`txt\` read as the author's headline?  The rejections below are the
+  // strings rendered beside a headline in the actor block that would
+  // otherwise win the scan.
+  function __lhIsHeadline(txt, authorName) {
+    if (!txt || txt.length <= 5 || txt.length >= 200) return false;
+    if (__lhIsNameEcho(txt, authorName)) return false;
+    if (/^\\d+[smhdw]$/.test(txt)) return false;
+    if (/^\\d[\\d,]*\\s+(?:reactions?|comments?|reposts?|likes?)$/i.test(txt)) return false;
+    if (/^(?:Follow|Following|Promoted|Boost|Author|You)$/i.test(txt)) return false;
+    if (/^(?:Verified|Premium)(?:\\s+Profile)?$/i.test(txt)) return false;
+    if (/^Skip to|^Keyboard shortcuts$|^Close jump menu$/i.test(txt)) return false;
+    if (/^Feed\\s+(?:post|detail\\s+update)$/i.test(txt)) return false;
+    if (/^Promote\\s+this\\s+post/i.test(txt)) return false;
+    if (/Reaction button state:/.test(txt)) return false;
+    if (/^https?:\\/\\//.test(txt)) return false;
+    // A "<Name> • <degree>" composite.  Keyed on the degree rather than on
+    // the bullet alone, so a headline that merely uses a bullet as its own
+    // separator — "Software Architect • Agentic AI" — still qualifies.
+    if (/[\\u2022\\u00B7]\\s*(?:1st|2nd|3rd|Out of network|You)\\b/i.test(txt)) return false;
+    return __LH_MEANINGFUL.test(txt);
+  }
+
+  function __lhFirstHeadline(candidates, authorName) {
+    for (const el of candidates) {
+      const txt = __lhVisibleText(el);
+      if (__lhIsHeadline(txt, authorName)) return txt;
+    }
+    return null;
+  }
+
+  // Two patterns per engagement counter.
+  //
+  // \`strict\` is anchored end to end, so it describes ONE element's whole
+  // rendered text rather than a run found somewhere inside a larger one.  It
+  // is what every read below tries first.
+  //
+  // \`loose\` is the same pattern unanchored, and it is admissible in exactly
+  // one place: the whole text of a NARROWED counts row in which no single
+  // element — the row itself included — reads as a counter on its own (see
+  // \`__lhReadCount\`).  It exists because the row is
+  // only *usually* built out of one control per counter — the shape the live
+  // 2026-08-31 row had, and the shape everything below is designed around —
+  // and a row that ever renders "2 41 comments" as one node should still
+  // yield 41 rather than nothing.
+  const __LH_COUNTERS = {
+    reactionCount: {
+      strict: /^(\\d[\\d,]*)\\s+reactions?$/i,
+      loose: /(\\d[\\d,]*)\\s+reactions?/i,
+    },
+    commentCount: {
+      strict: /^(\\d[\\d,]*)\\s+comments?$/i,
+      loose: /(\\d[\\d,]*)\\s+comments?/i,
+    },
+    shareCount: {
+      strict: /^(\\d[\\d,]*)\\s+reposts?$/i,
+      loose: /(\\d[\\d,]*)\\s+reposts?/i,
+    },
+  };
+
+  // The row the counters render in: the first of this adapter's own \`counts\`
+  // candidates present inside the resolved scope, else the scope itself.
+  //
+  // \`narrowed\` records which of the two happened, because it decides whether
+  // the loose pattern above may be used.  Inside a row whose only job is to
+  // render counts, a looser read is warranted; inside a whole post container
+  // it is not — that container holds the post's own prose, where a number
+  // followed by the word "comments" is a sentence, not a counter.
+  function __lhCountsRoot(adapter, scope) {
+    for (const candidate of adapter.counts) {
+      const el = scope.querySelector(candidate);
+      if (el) return { el: el, narrowed: true };
+    }
+    return { el: scope, narrowed: false };
+  }
+
+  function __lhToCount(raw) {
+    const num = parseInt(raw.replace(/,/g, ''), 10);
+    return isNaN(num) ? 0 : num;
+  }
+
+  // One counter, read from the element that renders IT.
+  //
+  // Anchoring alone is not enough: an ancestor whose text concatenates two
+  // counters — "2" and "41 comments" side by side flatten to "241 comments"
+  // wherever no whitespace text node separates them — satisfies the pattern
+  // too, just more coarsely than its own child.  So the DEEPEST hit of the
+  // FIRST chain wins: document order picks the row, and containment picks the
+  // leaf inside it.  A later chain is a different part of the page — a
+  // comment's own counter, a reply affordance — and never overrides the row.
+  //
+  // \`aria-label\` is read alongside the text because LinkedIn renders the
+  // reaction count as a bare number and puts the words on the control: "2",
+  // labelled "2 reactions".  That is why the whole-page text read returned
+  // \`reactionCount: 0\` on a post with two reactions.
+  function __lhReadCount(root, counter) {
+    const hits = [];
+    for (const el of [root.el, ...root.el.querySelectorAll('*')]) {
+      const label = el.getAttribute('aria-label') || '';
+      const m =
+        counter.strict.exec(label) ||
+        counter.strict.exec(__lhSqueeze(el.textContent));
+      if (m) hits.push({ el: el, raw: m[1] });
+    }
+    if (hits.length === 0) {
+      // No element renders this counter on its own.  Inside a narrowed counts
+      // row that means the row is not built the way the live one was, so read
+      // the row's own text loosely rather than reporting a count it visibly
+      // renders as absent.  Outside one it means the counter is not there,
+      // and zero is the honest answer.
+      if (!root.narrowed) return 0;
+      const loose = counter.loose.exec(__lhSqueeze(root.el.textContent));
+      return loose ? __lhToCount(loose[1]) : 0;
+    }
+    let best = hits[0];
+    for (const hit of hits) {
+      if (hit.el !== best.el && best.el.contains(hit.el)) best = hit;
+    }
+    return __lhToCount(best.raw);
+  }
+`;
+}
+
+/**
  * Post-detail extraction source.
  *
  * Selects the adapter, resolves its scope from its own ordered candidates,
@@ -639,14 +910,25 @@ export function buildDetectionSource(
  *   caller raises as unsupported
  * - `{ ambiguousVariants: [...] }` when two or more adapters claimed it
  *
- * Engagement counts are parsed from `document.body.textContent` outside the
- * adapter, unchanged: the text-content regex is dialect-independent and was
- * the one part of the scrape that kept working across the 2026-05 rewrite.
+ * Engagement counts are read from the selected adapter's own counts root,
+ * one counter per element.  They used to be parsed out of
+ * `document.body.textContent`, carried across the 2026-05 rewrite under the
+ * claim that the text-content regex was dialect-independent and "the one part
+ * of the scrape that kept working".  **That claim was false, and repeating it
+ * is why the defect survived a second migration.**  Flattening a page into one
+ * string does two things no number coming back can reveal: the first
+ * `"<N> comments"`-shaped run *anywhere* on the page wins, wherever it is; and
+ * two counters rendered side by side concatenate wherever no whitespace text
+ * node separates them, so "2" and "41 comments" read as "241 comments".  The
+ * live evidence for the first is `reactionCount: 0` returned for a post
+ * carrying two reactions, whose count LinkedIn renders as a bare "2" with the
+ * words only in the control's `aria-label`.
  */
 export function buildPostDetailExtractionSource(
   adapters: readonly VariantAdapter[],
 ): string {
   return `(() => {
+  ${extractionHelpersSource()}
   ${selectionSource(adapters, true)}
   const selection = __lhSelect();
   if (selection.matched.length > 1) {
@@ -665,16 +947,7 @@ export function buildPostDetailExtractionSource(
   if (!scope) return null;
 
   const fields = adapter.extract(scope);
-
-  // --- Engagement counts (dialect-independent) ---
-  const countText = document.body.textContent || '';
-  function parseCount(pattern) {
-    const m = countText.match(pattern);
-    if (!m) return 0;
-    const raw = m[1].replace(/,/g, '');
-    const num = parseInt(raw, 10);
-    return isNaN(num) ? 0 : num;
-  }
+  const countsRoot = __lhCountsRoot(adapter, scope);
 
   return {
     variant: adapter.variant,
@@ -683,9 +956,9 @@ export function buildPostDetailExtractionSource(
     authorProfileUrl: fields.authorProfileUrl,
     text: fields.text,
     timestamp: fields.timestamp,
-    reactionCount: parseCount(/(\\d[\\d,]*)\\s+reactions?/i),
-    commentCount: parseCount(/(\\d[\\d,]*)\\s+comments?/i),
-    shareCount: parseCount(/(\\d[\\d,]*)\\s+reposts?/i),
+    reactionCount: __lhReadCount(countsRoot, __LH_COUNTERS.reactionCount),
+    commentCount: __lhReadCount(countsRoot, __LH_COUNTERS.commentCount),
+    shareCount: __lhReadCount(countsRoot, __LH_COUNTERS.shareCount),
   };
 })()`;
 }
