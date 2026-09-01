@@ -2,8 +2,14 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 /**
- * Executor-uneditable oracle for issue #837 / #825 — feed author-field
- * co-location.
+ * Oracle for issue #837 / #825 — feed author-field co-location.
+ *
+ * It is authored ahead of the implementation and frozen while that
+ * implementation is written, so a passing run is evidence about the script
+ * rather than about a test edited to agree with it.  Widening the document
+ * double, or adding a fixture for a shape it does not yet cover, is a separate
+ * and legitimate change — the rule is that it must not be edited to make a
+ * failing implementation pass.
  *
  * ## Why this file exists
  *
@@ -171,6 +177,19 @@ class FakeElement {
     return this.querySelectorAll(selector)[0] ?? null;
   }
 
+  /**
+   * `Node.contains` — true for descendants AND for the node itself, which is
+   * what the real DOM returns.  The scrape script uses it to drop an
+   * `aria-hidden` wrapper nested inside another one, so a double without it
+   * throws on any anchor carrying two of them.
+   */
+  contains(other: FakeElement | null): boolean {
+    for (let node = other; node !== null; node = node.parent) {
+      if (node === this) return true;
+    }
+    return false;
+  }
+
   closest(selector: string): FakeElement | null {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     let node: FakeElement | null = this;
@@ -211,6 +230,38 @@ function el(
 
 function text(tag: string, value: string, attrs: Record<string, string> = {}): FakeElement {
   return new FakeElement(tag, attrs, [], value);
+}
+
+/**
+ * One post whose author anchor renders LinkedIn's accessible actor-link shape:
+ * every field is a pair of a screen-reader-only copy and a visible copy wrapped
+ * in `aria-hidden="true"`, so assistive technology reads each field exactly
+ * once.  The name's two copies say DIFFERENT things — "View <name>'s profile"
+ * against the bare name — and the screen-reader copy is rendered FIRST, so a
+ * read that takes the anchor's first run returns the wrong string.
+ *
+ * The shape also puts four `aria-hidden` wrappers inside one anchor, which is
+ * what exercises the nested-wrapper check.
+ */
+function a11yPostItem(slug: string, name: string): FakeElement {
+  const field = (srCopy: string, visible: FakeElement): FakeElement =>
+    el("span", {}, [
+      text("span", srCopy, { class: "visually-hidden" }),
+      el("span", { "aria-hidden": "true" }, [visible]),
+    ]);
+
+  return el("div", { role: "listitem" }, [
+    el("a", { href: `/in/${slug}/` }, [
+      field(`View ${name}'s profile`, text("span", name, { dir: "ltr" })),
+      field("2nd degree connection", text("span", "• 2nd")),
+      field("Head of Widgets at Acme", text("span", "Head of Widgets at Acme")),
+      field("18 hours ago", text("span", "18h •")),
+    ]),
+    el("div", { "data-testid": "expandable-text-box" }, [
+      text("span", "Post body text that is long enough to be real."),
+    ]),
+    text("button", "", { "aria-label": `${MENU_LABEL_PREFIX}${name}` }),
+  ], "", 400);
 }
 
 /** The `document` the script is handed: a root element plus `querySelector`. */
@@ -326,8 +377,13 @@ function postItem(shape: PostShape): FakeElement {
 }
 
 function feed(...shapes: PostShape[]): FakeElement {
+  return feedOf(...shapes.map(postItem));
+}
+
+/** The same feed root, for fixtures built as list items rather than shapes. */
+function feedOf(...items: FakeElement[]): FakeElement {
   return el("div", {}, [
-    el("div", { "data-testid": "mainFeed", role: "list" }, shapes.map(postItem)),
+    el("div", { "data-testid": "mainFeed", role: "list" }, items),
   ]);
 }
 
@@ -544,6 +600,66 @@ describe("get-feed author fields are co-located on one anchor (#837, closes #825
     expect(post?.authorName).toBe("Legacy Author");
     expect(post?.authorProfileUrl).toBe(
       "https://www.linkedin.com/in/legacy-author/",
+    );
+  });
+
+  it("AC-1 (a11y): the name is the visible copy, not the screen-reader copy rendered before it", () => {
+    const root = feedOf(a11yPostItem("ada-lovelace", "Ada Lovelace"));
+
+    const item = root.querySelector('div[role="listitem"]') as FakeElement;
+    const post = runScrape(root)[0];
+
+    // The anchor's first run is "View Ada Lovelace's profile"; the name is the
+    // aria-hidden copy that follows it.
+    expect(post?.authorName).toBe("Ada Lovelace");
+    expect(post?.authorProfileUrl).toBe(
+      "https://www.linkedin.com/in/ada-lovelace/",
+    );
+
+    // Co-location, stated for a shape `anchorPairs` cannot model: it reads an
+    // anchor's first text leaf, which is the screen-reader copy here, so it
+    // would have to be taught the visible-copy rule to be used — and a helper
+    // that mirrors the implementation stops being independent evidence.  The
+    // item renders exactly ONE anchor, so both fields necessarily came from it.
+    const anchors = item.querySelectorAll("a");
+    expect(anchors).toHaveLength(1);
+    expect(anchors[0]?.href).toBe(post?.authorProfileUrl);
+    expect(anchors[0]?.textContent).toContain(post?.authorName ?? "");
+  });
+
+  it("AC-1 (a11y): a neighbouring field is not swallowed into the name, nor returned as it", () => {
+    const root = feedOf(a11yPostItem("ada-lovelace", "Ada Lovelace"));
+
+    const name = runScrape(root)[0]?.authorName ?? "";
+
+    // The same anchor carries the connection degree, the headline and the
+    // timestamp, each in its own aria-hidden wrapper.  None of them belongs in
+    // the name, whether appended to it or returned in its place.
+    expect(name).toBe("Ada Lovelace");
+    expect(name).not.toContain("2nd");
+    expect(name).not.toContain("18h");
+    expect(name).not.toContain("Head of Widgets");
+  });
+
+  it("AC-2 (a11y): a decoration-only wrapper never becomes the name", () => {
+    const root = feedOf(
+      el("div", { role: "listitem" }, [
+        el("a", { href: "/in/gus-glyph/" }, [
+          el("span", { "aria-hidden": "true" }, [text("span", "•")]),
+          text("span", "Gus Glyph", { dir: "ltr" }),
+        ]),
+        el("div", { "data-testid": "expandable-text-box" }, [
+          text("span", "Post body text that is long enough to be real."),
+        ]),
+        text("button", "", { "aria-label": `${MENU_LABEL_PREFIX}Gus Glyph` }),
+      ], "", 400),
+    );
+
+    const post = runScrape(root)[0];
+
+    expect(post?.authorName).toBe("Gus Glyph");
+    expect(post?.authorProfileUrl).toBe(
+      "https://www.linkedin.com/in/gus-glyph/",
     );
   });
 });
