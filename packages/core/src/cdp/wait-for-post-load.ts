@@ -63,12 +63,20 @@ const POST_READY_AUTHOR_LINK_SELECTOR =
 const POST_AUTHOR_LINK_DOCUMENT_WIDE_SELECTOR =
   'a[href*="/in/"], a[href*="/company/"]';
 
-// Post-detail interaction markers (per ADR-007 — aria-label-based markers
-// preferred over structural CSS / role selectors).  Each renders only after
-// the post has hydrated far enough for downstream extraction.
+// Post-detail interaction markers — aria-label-based markers preferred over
+// structural CSS / role selectors.  Each renders only after the post has
+// hydrated far enough for downstream extraction.
+//
+// This rule reached post-detail by citing ADR-007, which is scoped to profile
+// and /company/ pages and never claimed this surface; ADR-008 reclaims the
+// post-detail citation.  ADR-007 is untouched by that reclamation and still
+// governs profile/company readiness — and, per its 2026-09-01 amendment, the
+// diagnostic-capture pattern this file also cites it for below.
 //
 // Diagnostic-only: they no longer satisfy the readiness predicate, which is
-// now bound to the selected adapter's own anchor.  The probe reports each
+// now bound to the selected adapter's own anchor — see ADR-008 § Decision 1
+// (a gate anchor that survives every markup change cannot detect a markup
+// change).  The probe reports each
 // individually so a timeout produces a precise "which-of-N-is-missing"
 // signal across both dialects at once.
 //
@@ -121,9 +129,10 @@ const POST_LTR_SPAN_FALLBACK_SELECTOR = 'span[dir="ltr"]';
  * The predicate is generated from the post-detail adapter registry
  * ({@link buildReadinessPredicateSource}) and is satisfied only when exactly
  * one adapter claims the page AND that adapter's own readiness anchor is
- * present.  This is the binding that matters: the gate polls the anchor
- * belonging to the adapter that will perform the extraction, so it cannot go
- * green on a page the extractor cannot read.  The predicate it replaced was
+ * present.  This is the binding that matters, and it is normative — ADR-008
+ * § Decision 1: a readiness gate must anchor on a selector belonging to the
+ * same adapter that will perform the extraction, so it cannot go green on a
+ * page the extractor cannot read.  The predicate it replaced was
  * deliberately variant-agnostic (chosen for surviving markup change), which
  * is correct for a liveness probe and wrong here — see
  * {@link POST_READY_AUTHOR_LINK_SELECTOR}.
@@ -469,7 +478,9 @@ export interface PostDetailCaptureContext {
  *
  * Mirrors the diagnostic-capture pattern documented in ADR-007 for
  * `navigateToProfile` — same env var, same artifact structure, same
- * cancellation discipline.
+ * cancellation discipline.  This citation is deliberately NOT reclaimed by
+ * ADR-008: ADR-007 § 2026-05-05 Amendment names this function by name, so it
+ * is the pattern's own home rather than a post-detail borrowing.
  *
  * @param client  - Connected CDP client targeting the failed page.
  * @param context - Which failure fired the capture, plus the caller's
