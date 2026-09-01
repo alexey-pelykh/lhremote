@@ -22,8 +22,10 @@ a version the issue never names.
 
 LinkedIn is serving **legacy pre-SDUI markup again**. Commit `15f5902` (*Closes #800*) rewrote the
 post-detail scrapers for SDUI and left no legacy path, so `[componentkey]` and `[data-testid]` now
-match **zero** elements document-wide, while the readiness cascade falls through to
-`document.querySelector('main')` — which always exists.
+match **zero** elements document-wide. Two separate always-true fallbacks then combine: the
+**readiness gate** (`wait-for-post-load.ts`) anchors on `main a[href*="/in/"]`, which survives the
+variant flip, and the **extractor's scope cascade** (`get-post.ts:105-107`) falls through to
+`document.querySelector('main')` then `document` — both of which always exist.
 
 Measured live on a fully-loaded 589 KB page: every scraper selector **0**, gate anchors **85** and
 **82**, and `get-post` returning `text: ""` and `comments: []` alongside `commentCount: 41`.

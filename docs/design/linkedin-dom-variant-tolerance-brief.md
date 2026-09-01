@@ -13,9 +13,12 @@ status: final
 `get-post`, `get-post-engagers` and `get-feed` return HTTP-success payloads with empty content on
 posts that visibly have content. The filed cause (a LinkedHelper version) is falsified: LinkedIn
 flipped its post-detail markup **back** to the pre-SDUI dialect, our scrapers speak only SDUI, and
-the readiness gate falls through to `document.querySelector('main')` — which always exists. Gate
-green, scrape empty, success returned. The deeper problem is that the gate is not bound to the
-scraper it gates, and the system cannot tell "legitimately empty" from "extraction failed."
+two separate always-true fallbacks combine: the **readiness gate** (`wait-for-post-load.ts`)
+anchors on `main a[href*="/in/"]`, which survives the variant flip, and the **extractor's scope
+cascade** (`get-post.ts:105-107`) falls through to `document.querySelector('main')` then
+`document` — both always exist. Gate green, scrape empty, success returned. The deeper problem is
+that the gate is not bound to the scraper it gates, and the system cannot tell "legitimately empty"
+from "extraction failed."
 
 ## Key Decisions
 

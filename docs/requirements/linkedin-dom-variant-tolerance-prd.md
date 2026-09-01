@@ -54,9 +54,13 @@ never names. The discriminating variable is not the LinkedHelper build.
 **Grounded cause**: commit `15f5902` (2026-05-07, *Closes #800*) rewrote the post-detail scrapers
 for LinkedIn's SDUI markup and left **no legacy path**. LinkedIn is now serving **legacy pre-SDUI
 markup again** — `[componentkey]` and `[data-testid]` are absent document-wide, not merely renamed.
-The readiness cascade in `packages/core/src/operations/get-post.ts:105-107` therefore falls through
-to `document.querySelector('main')`, **which always exists**. Gate green → scrape empty → success
-returned.
+Two *separate* always-true fallbacks, in two different files, then combine. The **readiness gate**
+(`packages/core/src/cdp/wait-for-post-load.ts`, called at `get-post.ts:498`) anchors on
+`main a[href*="/in/"]` — variant-agnostic, so it reports ready on a page the scrapers cannot read.
+The **extractor's scope cascade** (`get-post.ts:105-107`, inside `SCRAPE_POST_DETAIL_SCRIPT`,
+evaluated at `:501`) then falls through to `document.querySelector('main')` and finally `document`,
+**both of which always exist** — so extraction runs against a valid scope whose SDUI-only *field*
+selectors match nothing. Gate green → scrape empty → success returned.
 
 ### 1.2 The problem is not the selectors
 
@@ -173,7 +177,7 @@ LinkedIn page.
 
 > **AC-4**
 > **Given** `packages/core/src/operations/get-post.ts`
-> **When** the readiness cascade is inspected
+> **When** the extractor's scope cascade (`SCRAPE_POST_DETAIL_SCRIPT`, lines 105-107) is inspected
 > **Then** `document.querySelector('main')` is absent from it, and no equivalent
 > always-true terminal fallback replaces it.
 
@@ -448,7 +452,8 @@ outside the ratified set.
 Recorded, not decided. Each names what would settle it.
 
 **OQ-1 — Is `get-post-engagers`' reactions-modal path affected by the same cause?**
-Its post-detail selectors already measured **0** and it shares the readiness cascade, but the modal
+Its post-detail selectors already measured **0** and it shares the readiness **gate** (it calls
+`waitForPostLoad` at `get-post-engagers.ts:291`), but the modal
 itself was never opened: doing so drives UI interaction beyond a read, and the probe was
 deliberately kept read-only against a live licensed account.
 *Settled by*: opening the reactions modal on a live legacy-variant post and measuring its selectors.
