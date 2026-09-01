@@ -38,9 +38,19 @@ gh pr view {pr} --json reviewRequests    # bot reviewers NOT shown here
 
 **Filtering Copilot review records:**
 
+The same bot reports **two different `login` values depending on the endpoint** — both are
+genuinely the `user.login` field, not a display name, and there is no `.name` to fall back on:
+
 - `/pulls/{pr}/reviews` → `.[].user.login` is `copilot-pull-request-reviewer[bot]`
-- `/pulls/{pr}/comments` → `.[].user.login` is `Copilot` (display-name, not login)
-- Use a regex like `test("^Copilot$|copilot-pull-request-reviewer")` to match both.
+- `/pulls/{pr}/comments` → `.[].user.login` is `Copilot`
+
+Both records carry `user.type == "Bot"` and the **same** `user.id` (`175728472`), so `id` is the
+only stable join key across the two endpoints. Filtering `/comments` on the `[bot]` form silently
+returns zero rows — which reads as "no findings" rather than as a broken filter. Use a regex like
+`test("^Copilot$|copilot-pull-request-reviewer")` to match both, or key on `user.id`.
+
+*Measured 2026-09-01 against PR #842: `/comments` → `["Copilot","alexey-pelykh"]`,
+`/reviews` → `["alexey-pelykh","copilot-pull-request-reviewer[bot]"]`.*
 
 **Auto re-request on push:** off by default. Repository ruleset of type `copilot_code_review` with `"review_on_push": true` (Settings → Rules → Rulesets) can enable it. Without that, every push requires an explicit API re-request.
 

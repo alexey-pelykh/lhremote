@@ -32,9 +32,11 @@ scraper it gates, and the system cannot tell "legitimately empty" from "extracti
    agrees. Two corroborator kinds: *cardinal* (a count in the same response) and *container* (did
    the region's anchor match?). The container kind is what makes "image-only post has no text" legal
    while "text missing because selectors are stale" is loud.
-5. **Two new error classes, not one** — `DOMVariantUnsupportedError` ("LinkedIn changed, register an
-   adapter") and `ExtractionFailedError` ("this adapter is partially stale, fix that field"). They
-   demand different operator responses; collapsing them discards the most useful new signal.
+5. **Three new error classes, not one** — `DOMVariantUnsupportedError` ("LinkedIn changed, register
+   an adapter"), `ExtractionFailedError` ("this adapter is partially stale, fix that field") and
+   `DOMVariantAmbiguousError` ("two adapters matched the same page — a transitional or hybrid page;
+   fail loud rather than pick"). Each demands a different operator response; collapsing them
+   discards the most useful new signal. The full taxonomy is § 7.1 of the solution design.
 6. **ADR-008 reclaims the post-detail citations; ADR-007 stays untouched** *(ratified)* — the PRD's
    AC-13 offered a false binary and has been amended. Grounding the artifact showed ADR-007 is
    `Accepted`, decides profile/company readiness only, and has **14 live citation sites**. It is
