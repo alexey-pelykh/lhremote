@@ -10,6 +10,7 @@ import {
   buildDetectionSource,
   buildReadinessPredicateSource,
   formatVariantProbes,
+  type VariantDetection,
   variantNamesFor,
 } from "../linkedin/dom-variant.js";
 import {
@@ -156,9 +157,21 @@ export async function waitForPostLoad(
 
   // Classify what the page actually is before reporting.  One probe, on the
   // failure path only — the happy path pays nothing for it.
-  const detection = asVariantDetection(
-    await client.evaluate<unknown>(buildDetectionSource(adapters)),
-  );
+  //
+  // A probe that THROWS is the same kind of non-evidence as one that returns
+  // a malformed result, and is treated identically: the classification is
+  // abandoned, diagnostics still run, and the ordinary timeout propagates.
+  // Letting it escape would replace the caller's timeout with an unrelated
+  // evaluate error AND skip the diagnostic capture below — the one artifact
+  // that would explain the failure.
+  let detection: VariantDetection | null = null;
+  try {
+    detection = asVariantDetection(
+      await client.evaluate<unknown>(buildDetectionSource(adapters)),
+    );
+  } catch {
+    // Classification is best-effort; the timeout is the real signal.
+  }
 
   // capturePostLoadFailure self-gates on LHREMOTE_CAPTURE_DIAGNOSTICS and
   // swallows its own errors, so the error below always propagates unchanged

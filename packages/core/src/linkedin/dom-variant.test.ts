@@ -209,6 +209,22 @@ describe("detection probe", () => {
       probes: {},
     });
   });
+
+  it("drops non-numeric probe counts instead of trusting the cast", () => {
+    // The container being an object says nothing about its values.  An
+    // unchecked cast would print `sdui: [object Object]` on the one line
+    // that is supposed to BE the diagnosis.  `matched` is what decides the
+    // error class and is validated separately, so a bad count degrades the
+    // diagnostic rather than discarding the classification.
+    const detection = asVariantDetection({
+      matched: ["sdui"],
+      probes: { sdui: 3, legacy: "many", broken: {}, nan: Number.NaN },
+    });
+
+    expect(detection).toEqual({ matched: ["sdui"], probes: { sdui: 3 } });
+    if (detection === null) throw new Error("probe result was not well-formed");
+    expect(formatVariantProbes(detection)).toBe("sdui: 3");
+  });
 });
 
 describe("post-detail extraction", () => {
