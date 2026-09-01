@@ -456,9 +456,11 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
     const allRaw = rawComments ?? [];
 
     // Corroborate the scrape before trusting an empty one.  `commentCount` was
-    // read off the very page this scrape ran against, so the two disagreeing
-    // is a self-contradiction within one observation — the shape the defect
-    // took live: `commentCount: 41` returned next to `comments: []` (#834).
+    // read off the very page this scrape ran against, so the count and the
+    // scrape are two halves of one observation, and their disagreeing is a
+    // self-contradiction rather than two readings of different things — the
+    // shape the defect took live: `commentCount: 41` returned next to
+    // `comments: []` (#834).
     //
     // Only when comments were actually asked for.  `commentCount: 0` on the
     // input means "skip comment loading entirely", so the empty list is the
