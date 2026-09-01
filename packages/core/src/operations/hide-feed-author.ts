@@ -6,15 +6,12 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { humanizedScrollToByIndex, retryInteraction } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
+import { FEED_POST_MENU_BUTTON } from "../linkedin/selectors.js";
 import { gaussianDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
 import { waitForFeedLoad } from "./get-feed.js";
 import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
-
-/** CSS selector for feed post menu buttons. */
-const FEED_MENU_BUTTON_SELECTOR =
-  '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]';
 
 /** Prefix of the "Hide posts by {Name}" menu item text. */
 const HIDE_POSTS_PREFIX = "Hide posts by ";
@@ -96,7 +93,7 @@ export async function hideFeedAuthor(
       // Scroll menu button into view
       await humanizedScrollToByIndex(
         client,
-        FEED_MENU_BUTTON_SELECTOR,
+        FEED_POST_MENU_BUTTON,
         feedIndex,
         mouse,
       );
@@ -104,7 +101,7 @@ export async function hideFeedAuthor(
       // Click the specific menu button by index (not the first match)
       const clicked = await client.evaluate<boolean>(`(() => {
         const btns = document.querySelectorAll(
-          ${JSON.stringify(FEED_MENU_BUTTON_SELECTOR)}
+          ${JSON.stringify(FEED_POST_MENU_BUTTON)}
         );
         const btn = btns[${feedIndex}];
         if (!btn) return false;
