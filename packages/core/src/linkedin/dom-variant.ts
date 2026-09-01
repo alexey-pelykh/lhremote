@@ -657,10 +657,21 @@ export function asVariantDetection(value: unknown): VariantDetection | null {
   if (!candidate.matched.every((entry) => typeof entry === "string")) {
     return null;
   }
-  const probes =
-    typeof candidate.probes === "object" && candidate.probes !== null
-      ? (candidate.probes as Record<string, number>)
-      : {};
+  // Validate the probe VALUES, not just the container.  Casting an unchecked
+  // object to `Record<string, number>` would make the narrowing unsound and
+  // let a non-numeric count reach the diagnostic line as
+  // `sdui: [object Object]` — a diagnosis is only worth printing if its
+  // shape has been checked.  Non-numeric entries are dropped rather than
+  // failing the whole result: `matched` is what decides the error class, and
+  // it has already been validated.
+  const probes: Record<string, number> = {};
+  if (typeof candidate.probes === "object" && candidate.probes !== null) {
+    for (const [variant, count] of Object.entries(candidate.probes)) {
+      if (typeof count === "number" && Number.isFinite(count)) {
+        probes[variant] = count;
+      }
+    }
+  }
   return { matched: candidate.matched as readonly string[], probes };
 }
 

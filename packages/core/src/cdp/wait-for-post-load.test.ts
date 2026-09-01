@@ -220,6 +220,40 @@ describe("waitForPostLoad", () => {
     );
   });
 
+  it("falls back to the plain timeout when the classification probe throws", async () => {
+    // A throwing probe is the same non-evidence as a malformed one. Letting
+    // it escape would swap the caller's timeout for an unrelated evaluate
+    // error and skip the diagnostic capture — the one artifact that would
+    // explain the failure.
+    const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const evaluate = vi.fn(async (script: string) => {
+      if (script.includes("probes")) throw new Error("probe blew up");
+      if (script.includes("hasMainFeed")) return { href: "", title: "" };
+      return false;
+    });
+    const send = vi.fn().mockResolvedValue({ data: "aGVsbG8=" });
+    const client = { evaluate, send } as unknown as CDPClient;
+
+    try {
+      const rejection = waitForPostLoad(client, 1);
+
+      await expect(rejection).rejects.toThrow(ExtractionTimeoutError);
+      await expect(rejection).rejects.not.toThrow(/probe blew up/);
+      // Diagnostics still ran despite the probe failing.
+      expect(send).toHaveBeenCalledWith("Page.captureScreenshot", {
+        format: "png",
+        captureBeyondViewport: true,
+      });
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+      } else {
+        process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalEnv;
+      }
+    }
+  });
+
   it("falls back to the plain timeout when the classification probe is malformed", async () => {
     // A probe result that is not well-formed says the probe did not run
     // usefully — it is not evidence that LinkedIn changed.  Reporting
