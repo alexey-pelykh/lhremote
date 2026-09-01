@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { chmod, lstat, mkdtemp, writeFile } from "node:fs/promises";
+import { ExtractionTimeoutError } from "../services/errors.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { delay } from "../utils/delay.js";
@@ -127,8 +128,10 @@ export async function waitForPostLoad(
   // swallows its own errors, so the original timeout always propagates
   // unchanged regardless of capture-side outcome.
   await capturePostLoadFailure(client);
-  throw new Error(
-    "Timed out waiting for post detail to appear in the DOM",
+  throw new ExtractionTimeoutError(
+    `readiness selector ${POST_READY_AUTHOR_LINK_SELECTOR}`,
+    timeoutMs,
+    "Post-detail",
   );
 }
 

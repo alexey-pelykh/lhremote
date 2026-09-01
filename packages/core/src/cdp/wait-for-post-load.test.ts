@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ExtractionTimeoutError } from "../services/errors.js";
 
 import type { CDPClient } from "./client.js";
 
@@ -115,7 +116,10 @@ describe("waitForPostLoad", () => {
     // exits within microseconds because `Date.now()` advances naturally
     // between iterations.
     await expect(waitForPostLoad(client, 1)).rejects.toThrow(
-      "Timed out waiting for post detail to appear in the DOM",
+      ExtractionTimeoutError,
+    );
+    await expect(waitForPostLoad(client, 1)).rejects.toThrow(
+      /Post-detail extraction timed out/,
     );
   });
 
@@ -156,7 +160,7 @@ describe("waitForPostLoad", () => {
 
     try {
       await expect(waitForPostLoad(client, 1)).rejects.toThrow(
-        "Timed out waiting for post detail to appear in the DOM",
+        ExtractionTimeoutError,
       );
       // The diagnostic probe runs at least once before the timeout
       // re-throws (env=1), and `Page.captureScreenshot` is requested.

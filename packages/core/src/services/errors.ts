@@ -161,15 +161,130 @@ export class InvalidProfileUrlError extends ServiceError {
 }
 
 /**
- * Thrown when profile extraction times out waiting for data
- * to appear in the database.
+ * Thrown when extraction times out waiting for data to appear.
+ *
+ * `subject` defaults to `"Profile"` for backward compatibility with the
+ * original database-extraction call shape; the post-detail readiness gate
+ * passes `"Post-detail"` and names the selector that never matched.
  */
 export class ExtractionTimeoutError extends ServiceError {
-  constructor(profileUrl: string, timeoutMs: number) {
+  /** What was being waited for — a URL, or a description of the anchor. */
+  readonly target: string;
+  readonly timeoutMs: number;
+  /** Which extraction subject timed out (e.g. 'Profile', 'Post-detail'). */
+  readonly subject: string;
+
+  constructor(target: string, timeoutMs: number, subject = "Profile") {
     super(
-      `Profile extraction timed out after ${String(timeoutMs)}ms for ${profileUrl}`,
+      `${subject} extraction timed out after ${String(timeoutMs)}ms for ${target}`,
     );
     this.name = "ExtractionTimeoutError";
+    this.target = target;
+    this.timeoutMs = timeoutMs;
+    this.subject = subject;
+  }
+}
+
+/**
+ * Thrown when no registered `VariantAdapter` recognises the page.
+ *
+ * This is the "LinkedIn changed" signal. It is deliberately distinct from
+ * {@link ExtractionFailedError}: nothing is stale here, the page simply
+ * speaks a dialect no adapter knows, and the operator action is to register
+ * a new adapter rather than repair an existing one.
+ *
+ * It is also deliberately NOT {@link ExtractionTimeoutError} — nothing timed
+ * out. The whole defect class this models is a gate going green promptly on
+ * a page the scrapers cannot read.
+ */
+export class DOMVariantUnsupportedError extends ServiceError {
+  /** The surface being read (e.g. 'post-detail', 'feed'). */
+  readonly surface: string;
+  /** Variants that were offered the page and declined it. */
+  readonly triedVariants: readonly string[];
+
+  constructor(
+    surface: string,
+    triedVariants: readonly string[],
+    options?: ErrorOptions,
+  ) {
+    super(
+      `No DOM adapter matched the ${surface} page ` +
+        `(tried: ${triedVariants.length > 0 ? triedVariants.join(", ") : "none registered"}). ` +
+        "LinkedIn has changed its markup — register an adapter for the new variant.",
+      options,
+    );
+    this.name = "DOMVariantUnsupportedError";
+    this.surface = surface;
+    this.triedVariants = triedVariants;
+  }
+}
+
+/**
+ * Thrown when an adapter matched the page but a field came back empty and
+ * its same-observation corroborator contradicts that emptiness.
+ *
+ * This is the "partially stale adapter" signal: the dialect is recognised,
+ * so the fix is to repair the named field's selectors rather than register
+ * a new adapter. Naming both the variant and the field is load-bearing —
+ * an agent consuming the MCP tool is the least able party to diagnose this.
+ */
+export class ExtractionFailedError extends ServiceError {
+  readonly surface: string;
+  readonly variant: string;
+  /** The field whose emptiness was contradicted. */
+  readonly field: string;
+  /** The corroborating observation that contradicted it. */
+  readonly corroborator: string;
+
+  constructor(
+    args: {
+      surface: string;
+      variant: string;
+      field: string;
+      corroborator: string;
+    },
+    options?: ErrorOptions,
+  ) {
+    super(
+      `Extraction failed on the ${args.surface} page: adapter "${args.variant}" matched, ` +
+        `but field "${args.field}" came back empty while ${args.corroborator} contradicts it. ` +
+        `Adapter "${args.variant}" is partially stale — repair the selectors for "${args.field}".`,
+      options,
+    );
+    this.name = "ExtractionFailedError";
+    this.surface = args.surface;
+    this.variant = args.variant;
+    this.field = args.field;
+    this.corroborator = args.corroborator;
+  }
+}
+
+/**
+ * Thrown when two or more adapters claim the same page.
+ *
+ * A transitional or hybrid page. Failing loudly is deliberate: picking one
+ * adapter would build a record from two dialects with no way to notice,
+ * which is the failure mode the whole variant model exists to prevent.
+ */
+export class DOMVariantAmbiguousError extends ServiceError {
+  readonly surface: string;
+  readonly matchedVariants: readonly string[];
+
+  constructor(
+    surface: string,
+    matchedVariants: readonly string[],
+    options?: ErrorOptions,
+  ) {
+    super(
+      `Multiple DOM adapters matched the ${surface} page ` +
+        `(${matchedVariants.join(", ")}). This is a transitional or hybrid page; ` +
+        "refusing to guess which adapter owns it — tighten the detect anchors.",
+      options,
+    );
+    this.name = "DOMVariantAmbiguousError";
+    this.surface = surface;
+    this.matchedVariants = matchedVariants;
   }
 }
 
