@@ -165,9 +165,14 @@ class HarvestExit extends Error {
   }
 }
 
+// `connect` sits INSIDE the try so the cleanup guarantee holds on every failure
+// path, including a target that disappears between discovery and attach.  Safe
+// because `disconnect()` is idempotent on a client that never connected -- it
+// null-guards the socket and `rejectAllPending` no-ops on an empty set -- so the
+// finally cannot mask the original error with a secondary one.
 const client = new CDPClient(PORT);
-await client.connect(page.id);
 try {
+  await client.connect(page.id);
   await client.navigate(POST_URL);
   await sleep(SETTLE_MS);
   // Load the comment thread the way a reader would.
