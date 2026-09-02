@@ -19,7 +19,8 @@
     "images": 50,
     "urns": 40,
     "textNodes": 348,
-    "auditedAttrValues": 696,
+    "auditedTextNodes": 388,
+    "auditedAttrValues": 308,
     "suspectedResidualIds": [],
     "residualFetchUrls": [],
     "suspectedResidualNames": []

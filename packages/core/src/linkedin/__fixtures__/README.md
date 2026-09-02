@@ -77,8 +77,8 @@ fetchable URL fails the harvest rather than silently costing the suite its offli
 Source pages carry real third-party names, profile URLs, headlines and comment text, and this
 repository is public. Scrubbing is part of the capture, not cleanup afterwards.
 
-The harvester is **fail-closed**, with two independent gates, and it **refuses to write** if
-either trips — naming each survivor and where it lives:
+The harvester is **fail-closed**. It **refuses to write** if any of these gates trips, naming each
+survivor and where it lives:
 
 - a **name** gate over text nodes *and* name-bearing attribute values, flagging capitalised runs
   that are neither LinkedIn UI vocabulary nor the scrubber's own synthetic output;
@@ -88,7 +88,7 @@ either trips — naming each survivor and where it lives:
   actually fetches (`src`, `srcset`, `poster`, `data-*-url`). `href` is deliberately exempt — an
   `<a href>` is navigation, not a fetch, and those hrefs carry structure the adapters read.
 
-The two gates read different surfaces on purpose. Every leak found so far got through because a
+The gates read different surfaces on purpose. Every leak found so far got through because a
 check read a *narrower* surface than the artifact it certified: the name gate once tag-stripped the
 markup and so never saw an attribute, and a real `urn:li:fsd_profile:` account id shipped inside an
 `href` query string — a surface the name gate does not read and would not recognise if it did.
