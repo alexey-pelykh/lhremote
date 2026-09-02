@@ -59,10 +59,16 @@ if (labelIdx !== -1) {
 }
 const LABEL = labelIdx !== -1 ? rest[labelIdx + 1] : "fixture";
 
-// The label is operator-supplied and lands in the fixture's <title> and in an
-// HTML comment, so it is escaped at both sites: `<`/`&`/quotes would otherwise
-// emit invalid markup, and a `--` sequence would terminate the comment early
-// and spill the rest of the header into the document.
+// The label is operator-supplied and lands in two places that need DIFFERENT
+// treatment, so each gets its own escape rather than one shared pass:
+//   <title>       -- full entity escaping.  `&` and `<` would otherwise emit
+//                    invalid markup, and quotes are escaped for the same reason
+//                    the helper is reusable in an attribute.
+//   HTML comment  -- `--` collapsed and `<`/`>` stripped.  A `--` sequence
+//                    terminates the comment early and spills the rest of the
+//                    header into the document.  `&` and quotes are inert inside
+//                    a comment and are deliberately NOT escaped: entity-escaping
+//                    there would put a literal `&amp;` in front of the reader.
 const escapeHtml = (v) => String(v)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");

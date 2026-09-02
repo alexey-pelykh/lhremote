@@ -235,13 +235,19 @@
   // (`main a[href*="/in/"]`).  The second is additionally re-checked here rather
   // than trusted -- a `/in/` slug that the slug map missed is a REAL identity,
   // so the path shape is kept while the slug itself is forced synthetic.
+  //
+  // The slug quantifier is `*`, not `+`, so that a SLUG-LESS `linkedin.com/in/`
+  // (bare, or carrying only a query or fragment) still rewrites.  With `+` the
+  // replace simply did not match, the URL passed through untouched, and the gate
+  // below then flagged it -- refusing the whole harvest over a URL that carries
+  // no identity at all.
   const SAFE_NAMESPACE_URL = /^https?:\/\/(www\.)?w3\.org\//i;
   const LINKEDIN_PROFILE_URL = /^https?:\/\/([a-z0-9-]+\.)*linkedin\.com\/in\//i;
   const REDACTED_URL = 'https://example.invalid/redacted';
   const scrubOtherUrls = (v) => v.replace(/https?:\/\/[^\s"'<>)]+/gi, (u) => {
     if (SAFE_NAMESPACE_URL.test(u)) return u;
     if (LINKEDIN_PROFILE_URL.test(u)) {
-      return u.replace(/\/in\/([^/?#]+)/, (seg, slug) =>
+      return u.replace(/\/in\/([^/?#]*)/, (seg, slug) =>
         /^test-person-/.test(slug) ? seg : '/in/test-person-x');
     }
     return REDACTED_URL;
