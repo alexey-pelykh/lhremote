@@ -25,5 +25,12 @@
     "residualUrls": [],
     "residualFetchUrls": [],
     "suspectedResidualNames": []
+  },
+  "remediation": {
+    "applied": "body-prose numeric scrub",
+    "why": "the harvest that produced this file synthesised prose word-by-word, and a letterless token has no letter to synthesise -- so a real statistics breakdown survived intact inside .update-components-text while every word around it became lorem",
+    "scope": "digits inside .update-components-text only; counts and every other text node untouched",
+    "invariant": "digit -> digit, so the file length is unchanged and the pre-scrub measurements above still hold",
+    "tool": "scripts/lib/harvest-scrub.js now applies this during the harvest; a numeric gate fails the harvest closed if it does not"
   }
 }

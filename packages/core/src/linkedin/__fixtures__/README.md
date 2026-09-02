@@ -17,7 +17,7 @@ and never removes or renames an element, a class, or an attribute.
 |---|---|
 | Element tree, tag names, `class`, `data-*` attribute **names** | Profile slugs → `test-person-N` |
 | Engagement counts and the text carrying them (`"2 41 comments"`, `aria-label="2 reactions"`) | Personal names → `Test Person` |
-| Entity cardinality (comment count, `[data-id^="urn:li:"]` count) | Post and comment prose → deterministic lorem of the same length and word count |
+| Entity cardinality (comment count, `[data-id^="urn:li:"]` count) | Post and comment prose → deterministic lorem of the same length and word count, and **every digit inside it → `1`** (a statistics breakdown once survived the word-level sweep intact, because a letterless token has no letter to synthesise) |
 | `urn:li:{type}:` prefixes and shape, including the type name (`fsd_profile`) | URN ids → a synthetic token of the **same length and shape**: digits stay digits, opaque alphanumerics stay opaque. Covers percent-encoded forms (`urn%3Ali%3A…`) in href query strings. |
 | Presence/absence of the variant anchors (`[componentkey]`, `[data-testid]`) | Every asset URL → an inline 1×1 transparent GIF `data:` URI |
 | `w3.org` XML namespaces (inline SVG will not parse without them) and the `/in/` profile-link shape the adapters select on | Every **other** absolute URL → `https://example.invalid/redacted` — shortlinks, opaque `/services/page/{id}` links, anything outbound |
@@ -28,6 +28,13 @@ that changed because an element was deleted would be a fixture bug, not a varian
 Counts are deliberately **not** scrubbed. A fixture whose counts were anonymised could not exercise
 the corroborator it exists to test: the whole point of `post-with-comments` is a cardinal that
 contradicts an empty list.
+
+That is why digit scrubbing is scoped to `.update-components-text` — the body container — rather
+than applied to every synthesised text node. A bare `2` in its own text node **is** the reaction
+count; the word "reactions" lives in a sibling `aria-label`, so no node-local test can tell it from
+a number in prose. Scrubbing digits everywhere rewrote that count to `1` while the `aria-label`
+still said `2`, leaving the fixture contradicting its own sidecar. No engagement count lives inside
+the body container, so the narrower scope is both sufficient and safe.
 
 ## The fixtures
 
@@ -73,6 +80,13 @@ quietly becomes "the network fails fast enough". The `data:` URI removes the req
 This is **enforced by the network gate**, not just documented — a future edit that reintroduces a
 fetchable URL fails the harvest rather than silently costing the suite its offline guarantee.
 
+`href` is not on the fetch-triggering attribute list, and that exemption is scoped to `<a>`, where
+an href is navigation rather than a fetch and carries structure the adapters select on. It does
+**not** generalise: `<link href>` fetches a stylesheet and SVG `<image>`/`<use> href` fetches a
+resource. A non-anchor `href` is therefore neutralised to the inline asset and checked by the same
+gate — redacting it to a placeholder URL would not be enough, for the same reason a placeholder was
+not enough for `<img src>`.
+
 ## Privacy
 
 Source pages carry real third-party names, profile URLs, headlines and comment text, and this
@@ -88,7 +102,10 @@ survivor and where it lives:
 - a **network** gate, flagging any dereferenceable `http(s):` URL left in an attribute the browser
   actually fetches (`src`, `srcset`, `poster`, `data-*-url`);
 - a **URL** gate, flagging any absolute URL anywhere in the artifact that is not one of the two
-  structurally required forms or the redaction placeholder.
+  structurally required forms or the redaction placeholder;
+- a **numeric** gate, flagging any digit other than `1` left inside a body-text container — real
+  statistics, a year, an id or a phone number would all land there, and the marker digit is what
+  makes the scrubber's own output distinguishable from a survivor.
 
 URL handling is an **allowlist**, which is the point: a denylist of known-bad hosts was fail-open
 and left real trackable URLs in `href` attributes — an opaque `/services/page/{id}` link and

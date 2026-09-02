@@ -158,6 +158,22 @@ try {
       console.error("     no-network contract of the Tier-2 suite.  Neutralise them to the");
       console.error("     inline BLANK_ASSET in scripts/lib/harvest-scrub.js.");
     }
+    const urls = result.scrub.residualUrls ?? [];
+    if (urls.length > 0) {
+      console.error("\nAbsolute URLs that are not on the allowlist:");
+      for (const u of urls) console.error("   " + u);
+      console.error("\n  -> URL handling is an ALLOWLIST, so anything printed here is by");
+      console.error("     definition unscrubbed.  Only w3.org namespaces, /in/test-person-");
+      console.error("     profile links and the redaction placeholder are permitted.");
+    }
+    const nums = result.scrub.residualNumerics ?? [];
+    if (nums.length > 0) {
+      console.error("\nReal numbers surviving in synthesised prose:");
+      for (const n of nums) console.error("   " + n);
+      console.error("\n  -> Synthesised text may contain no digit but the marker `1`.  Anything");
+      console.error("     else came off the live page -- a statistic, an id, a phone number --");
+      console.error("     and contradicts the fixture's own claim that its prose is synthetic.");
+    }
     console.error("\nNothing was written.  Fix the scrub and re-run -- do not hand-edit a fixture.");
     process.exit(5);
   }

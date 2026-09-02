@@ -71,6 +71,13 @@
   // are synthetic: length-matching mangles the vocabulary, so a fixed allowlist
   // would flag the scrubber's own output as suspected identities.
   const emitted = new Set();
+  // A letterless token is returned UNCHANGED here, deliberately.  Digits are
+  // NOT synthesised at this level: engagement counts are letterless tokens too,
+  // and a bare `2` in its own text node is the reaction count -- the word
+  // "reactions" sits in a SIBLING attribute, so no node-local test can see it.
+  // Scrubbing digits here rewrote that count to `1` while `aria-label="2
+  // reactions"` still said 2, contradicting the fixture's own sidecar.  Numeric
+  // scrubbing is scoped to body prose in step 4 instead.
   const synthWord = (w) => {
     if (!/[A-Za-zÀ-ɏ]/.test(w)) return w;
     const pick = VOCAB[wordCursor++ % VOCAB.length];
@@ -159,6 +166,7 @@
   };
 
   // 4. Text nodes.
+  const BODY_TEXT_SEL = '.update-components-text';
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const textNodes = [];
   while (walker.nextNode()) textNodes.push(walker.currentNode);
@@ -172,7 +180,19 @@
       if (swept !== raw) { tn.nodeValue = swept; report.names++; }
       continue;
     }
-    tn.nodeValue = synthText(raw);
+    let out = synthText(raw);
+    // Digits inside POST/COMMENT BODY prose are real content and must go: this
+    // is where `68,214`, `10,148 Pro | 66.7%` and the rest of a statistics
+    // breakdown survived, every word around them lorem, under a README claiming
+    // the prose was synthetic.  Scoped to the body container the adapters read
+    // (`.update-components-text`, which covers the post AND all 40 comments)
+    // because that is exactly the text the contract calls synthetic -- and
+    // because no engagement count lives inside it.
+    if (BODY_TEXT_SEL && tn.parentElement && tn.parentElement.closest
+        && tn.parentElement.closest(BODY_TEXT_SEL)) {
+      out = out.replace(/[0-9]/g, '1');
+    }
+    tn.nodeValue = out;
     report.textNodes++;
   }
 
@@ -198,9 +218,14 @@
   const NAME_ATTRS = ['aria-label', 'alt', 'title', 'aria-description',
     'aria-roledescription', 'data-test-name', 'placeholder'];
 
-  // Attributes a browser DEREFERENCES on load.  `href` is deliberately absent:
-  // an <a href> is navigation, not a fetch, and the hrefs carry structure the
-  // adapters read.  Everything here is neutralised to an inline asset.
+  // Attributes a browser DEREFERENCES on load.  `href` is deliberately absent
+  // from this list, but ONLY because of the element it usually sits on: an
+  // <a href> is navigation, not a fetch, and those hrefs carry structure the
+  // adapters read.  That rationale is scoped to <a> and does NOT generalise --
+  // <link href> fetches a stylesheet and SVG <image>/<use> href fetches a
+  // resource, so a non-anchor href is handled separately below rather than by
+  // widening this list, which would neutralise the anchors too.
+  // Everything here is neutralised to an inline asset.
   const FETCHING_ATTRS = ['src', 'srcset', 'poster', 'data-delayed-url',
     'data-ghost-url', 'data-src', 'data-srcset'];
   // URN scrubbing has to cover three axes at once, and the first revision of this
@@ -275,6 +300,16 @@
         }
       }
       if (FETCHING_ATTRS.indexOf(name) !== -1) {
+        v = BLANK_ASSET;
+        report.images++;
+      }
+      // A non-anchor href IS a fetch.  Redacting it to a placeholder URL is not
+      // enough -- that is the round-4 lesson (an unresolvable host still costs a
+      // DNS lookup), and it applies to <link href> and SVG <image>/<use> href
+      // exactly as it did to <img src>.
+      if ((name === 'href' || name === 'xlink:href')
+          && el.tagName && el.tagName.toLowerCase() !== 'a'
+          && /^\s*https?:/i.test(v)) {
         v = BLANK_ASSET;
         report.images++;
       }
@@ -396,8 +431,36 @@
         (residualFetches.get(fm[1] + '=' + fm[2].slice(0, 60)) || 0) + 1);
     }
   }
+  {
+    // The network gate above reads a fixed attribute list.  A non-anchor
+    // `href`/`xlink:href` is dereferenced too and is NOT on that list, so it
+    // gets its own scan -- keyed on the owning tag, which is the whole point:
+    // the same attribute is inert on <a> and a fetch on <link>.
+    const re = /<\s*([a-zA-Z][-a-zA-Z0-9:]*)\b[^>]*?\b((?:xlink:)?href)\s*=\s*["'](https?:[^"']*)["']/gi;
+    let hm;
+    while ((hm = re.exec(serialised)) !== null) {
+      if (hm[1].toLowerCase() === 'a') continue;
+      const k = '<' + hm[1].toLowerCase() + ' ' + hm[2].toLowerCase() + '=' + hm[3].slice(0, 50);
+      residualFetches.set(k, (residualFetches.get(k) || 0) + 1);
+    }
+  }
   report.residualFetchUrls = Array.from(residualFetches.entries())
     .sort((a, b) => b[1] - a[1]).slice(0, 10).map((e) => e[0] + ' x' + e[1]);
+
+  // NUMERIC gate.  Deliberately re-reads the SCRUBBED TREE rather than trusting
+  // the pass that just ran -- the recurring defect in this file is a check whose
+  // corpus is narrower than the artifact, and "the loop that did it says it did
+  // it" is the narrowest corpus there is.  Marker discipline makes it decidable:
+  // after scrubbing, every digit inside a body-text container must be `1`.
+  const residualNumeric = [];
+  for (const bodyEl of Array.prototype.slice.call(root.querySelectorAll(BODY_TEXT_SEL))) {
+    const t = bodyEl.textContent || '';
+    if (/[02-9]/.test(t)) {
+      const m = t.match(/[^\s]*[02-9][^\s]*/);
+      residualNumeric.push((m ? m[0] : '?') + '  <- ' + t.trim().slice(0, 70));
+    }
+  }
+  report.residualNumerics = residualNumeric.slice(0, 15);
 
   const suspects = new Map();
   // Record WHERE each suspect lives, not just what it is.  A gate that names a
@@ -423,5 +486,6 @@
     blocked: report.suspectedResidualNames.length > 0
       || report.suspectedResidualIds.length > 0
       || report.residualFetchUrls.length > 0
-      || report.residualUrls.length > 0 };
+      || report.residualUrls.length > 0
+      || report.residualNumerics.length > 0 };
 })()
