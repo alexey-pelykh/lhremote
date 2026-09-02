@@ -129,6 +129,28 @@ if (!page) {
   process.exit(3);
 }
 
+// Failure exits inside the try below are thrown, not `process.exit()`ed.
+//
+// Observed: `process.exit()` skips the `finally`, so `client.disconnect()` never
+// runs on either failure path.  Measured against this exact control flow -- the
+// throwing form emits the finally's line, the exiting form does not.  On its own
+// that is minor, since the process is about to die and take the socket with it.
+//
+// The reason it is worth fixing anyway is the documented `process.exit()` hazard
+// it sits next to: exit does not wait for pending stdout/stderr writes to flush,
+// and those streams are pipes whenever the run is piped through `tail`/`less` or
+// captured by CI.  The refusal path prints a long five-gate diagnostic
+// immediately before exiting, and that report is the whole point of the gate.
+// This did NOT reproduce at 400 lines on this host -- it is a latent risk, not a
+// measured failure -- but throwing removes it for free, because the process then
+// ends naturally and Node flushes on its own.
+class HarvestExit extends Error {
+  constructor(code) {
+    super(`harvest exit ${code}`);
+    this.code = code;
+  }
+}
+
 const client = new CDPClient(PORT);
 await client.connect(page.id);
 try {
@@ -146,7 +168,7 @@ try {
 
   if (result.error) {
     console.error("HARVEST FAILED:", JSON.stringify(result, null, 2));
-    process.exit(4);
+    throw new HarvestExit(4);
   }
   console.error("measured (pre-scrub):", JSON.stringify(result.measured, null, 2));
   console.error("scrub report:", JSON.stringify(result.scrub, null, 2));
@@ -193,7 +215,7 @@ try {
       console.error("     and contradicts the fixture's own claim that its prose is synthetic.");
     }
     console.error("\nNothing was written.  Fix the scrub and re-run -- do not hand-edit a fixture.");
-    process.exit(5);
+    throw new HarvestExit(5);
   }
 
   // The live URL identifies the account; provenance keeps the SHAPE, not the URL.
@@ -233,6 +255,11 @@ ${result.html}
     "utf8",
   );
   console.error(`WROTE ${OUT} (${doc.length} bytes)`);
+} catch (err) {
+  // A real failure must still surface with its stack; only the deliberate
+  // early-exit sentinel is converted into an exit code.
+  if (!(err instanceof HarvestExit)) throw err;
+  process.exitCode = err.code;
 } finally {
   client.disconnect();
 }
