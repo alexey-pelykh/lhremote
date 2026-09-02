@@ -306,7 +306,13 @@
       if (av) auditParts.push({ where: '@' + NAME_ATTRS[j], text: av });
     }
   }
-  report.auditedAttrValues = auditParts.length;
+  // Split, because one number over two different surfaces is not readable: the
+  // gate's corpus is text nodes AND attribute values, and a reader checking a
+  // sidecar needs to know which surface was thin.  A single `auditedAttrValues`
+  // counting both was actively misleading about the attribute coverage that the
+  // earlier leaks turned on.
+  report.auditedTextNodes = auditParts.filter((x) => x.where.charAt(0) === 't').length;
+  report.auditedAttrValues = auditParts.filter((x) => x.where.charAt(0) === '@').length;
 
   // Each audited value is scanned INDEPENDENTLY.  Joining them into one corpus
   // let a run be manufactured across the seam between two unrelated values.
