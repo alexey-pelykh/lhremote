@@ -133,7 +133,8 @@ const SCRAPE_SEARCH_RESULTS_SCRIPT = buildSearchResultsExtractionSource(
  * tell apart from a dialect flip, which is exactly what ADR-008 § Decision 4
  * forbids; and softening the class would lose the one operator action that is
  * right under the first reading.  What was wrong was the diagnosis, not the
- * refusal.  See ADR-008 § 2026-09-02 Amendment.
+ * refusal.  See ADR-008 § 2026-09-02 Amendment (#841) — that date carries two
+ * amendments, and this is the search-results one.
  *
  * @param detection - The deadline classification probe's own reading.
  */

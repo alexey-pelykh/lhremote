@@ -9,7 +9,9 @@ This ADR governs the **post-detail** surface: the readiness gate in
 `packages/core/src/operations/get-post.ts`. It also states the empty-vs-error
 contract for every extraction surface, including
 `packages/core/src/operations/get-post-engagers.ts`. It was subsequently bound to the
-**search-results** surface (`packages/core/src/operations/search-posts.ts`) — see § Amendments.
+**search-results** surface (`packages/core/src/operations/search-posts.ts`), and then to the
+**reactions-modal** surface (`packages/core/src/cdp/wait-for-reactions-modal.ts` and the extraction
+it gates in `get-post-engagers.ts`) — see § Amendments.
 
 **Relationship to ADR-007** — ADR-008 **reclaims** the post-detail citations that had
 borrowed ADR-007. ADR-007 remains `Accepted`, is **not modified by this reclamation**, and stays
@@ -218,6 +220,17 @@ If the classification probe itself throws or returns a malformed result, that is
 evidence about the page** — only that the instrument did not run usefully — so the
 ordinary timeout is raised rather than blaming LinkedIn for a broken probe.
 
+> **One registered surface departs from the zero-match row of the first table, and it is a
+> RULE-level exception rather than an example-level one.** On `reactions-modal`, zero matches
+> RETURNS EMPTY and does not raise. Ground: `detect` on that surface is the reactions TRIGGER, not
+> the modal, and a post with no reactions renders no trigger — so a zero-match page has a third,
+> ordinary reading the other two surfaces do not have, and raising would throw on every such post.
+> Everything else in this section is unchanged there, ambiguity above all: two or more adapters is
+> still a hybrid page and still raises. Do NOT generalize the exception when registering a fourth
+> surface — it is earned by the affordance being OPTIONAL on a page that otherwise reads fine, and
+> it rests on a premise recorded as reasoned rather than measured. See § 2026-09-02 Amendment
+> (#840), and § Consequences for the residual it leaves open.
+
 ### 4. The empty-vs-error contract
 
 > **An empty extraction is trustworthy only when a signal from the SAME observation
@@ -266,6 +279,12 @@ Normatively:
   `"post-detail"`, so `"reactions-modal"` reaches the corroborator as a bare string naming the
   scraper rather than a dialect. Whether it has a container tier at all is unprobed (#830), and
   the contract holds either way.
+
+  > **Superseded in its example, not in its rule.** The reactions modal was bound to the registry
+  > on 2026-09-02: it has two adapters, it carries BOTH tiers, and #830 is answered — it does have
+  > a container tier. The rule above still holds for any surface that has no entry; there is no
+  > longer a registered surface serving as its example. See § Amendments → *The reactions modal has
+  > a container tier; the surface set is three* (#840).
 
 On post-detail the container tier is enforced **structurally, upstream of any per-field
 check** — an adapter that cannot resolve its own scope yields no record and raises
@@ -404,6 +423,8 @@ not a measurement, and chasing it is out of this decision's scope.
   array, no call-site or control-flow change.
 - The empty-vs-error contract is surface-agnostic, so a surface with no entry in the adapter
   registry (the reactions modal today) still gets the cardinal tier on its scrape path.
+  *(The rule holds; its example does not — the reactions modal was registered on 2026-09-02 and
+  now carries both tiers. See § Amendments (#840).)*
 
 **Negative**
 
@@ -429,6 +450,23 @@ not a measurement, and chasing it is out of this decision's scope.
   zero-reaction post there is no count element to serve as a cardinal at all, so the tier is
   *structurally unavailable* on that path rather than merely skipped. Closing it needs the
   container tier the #830 spike is scoped to answer.
+  **Narrowed and re-justified on 2026-09-02, NOT closed** (#840, § Amendments). What changed is the
+  reason to accept the path, not the path: it still returns `engagers: []` with a success status
+  when the trigger is not found, still *before* the modal opens, and therefore still before any
+  cardinal exists. The container tier the spike delivered runs on the OPEN modal and never executes
+  on this branch at all. What the registration bought is a better argument for the same outcome —
+  the trigger is now matched on its accessible name per dialect rather than by document-wide text,
+  so a not-found trigger is much likelier to mean *no affordance is rendered*.
+  Two bounds keep this open rather than closed. That premise — a zero-reaction post renders no
+  `[data-reaction-details]` at all — is **reasoned, not measured**; the 2026-09-02 probe covered a
+  post WITH reactions. And "no affordance on the page" is not the only way to reach the branch: the
+  trigger source also returns `false` when an adapter DID claim the page but no candidate satisfied
+  the accessible-name rule, which is a stale-rule reading wearing the same return value.
+  **Falsifier**, stated here rather than only in the amendment body: a live DOM probe of a
+  zero-reaction legacy post. If it renders a trigger reading `"0 reactions"`, the branch is
+  unreachable there and the modal opens on an empty list instead — which the container tier then
+  handles correctly. One probe also settles the document-wide-`detect` residual recorded in that
+  amendment.
 
 **Neutral**
 
@@ -452,9 +490,10 @@ not a measurement, and chasing it is out of this decision's scope.
   *diagnostic-capture* citation, which ADR-007 owns; by the rule in § Citation-reclamation scope
   it must **not** be re-pointed. It is named here so a future maintainer working from a
   "remaining ADR-007 citations" list does not make exactly the wrong edit.
-- **Register the reactions-modal surface**: the modal has no adapter entry, so it has no
-  container tier and relies on cardinal corroboration alone. Whether it has a container tier at
-  all is unprobed — see #830.
+- ~~**Register the reactions-modal surface**~~ — **done** (#840, § Amendments). #830 is answered:
+  the modal has a container tier, it is registered with a `legacy` and an `sdui` adapter, and it
+  now carries both tiers. What that amendment leaves open is narrower and stated there: a live
+  probe of a zero-reaction post, and a measured SDUI modal wrapper.
 - **ADR-005's inline hierarchy tree** does not list the three subclasses added here. Reconcile
   it when ADR-005 is next amended; § 5 above is the authoritative record until then.
 - **Probe the profile surface for the same flip**: currently an inference, not a measurement
@@ -477,6 +516,14 @@ does: the reactions modal remains a surface with **no** registry entry, so it st
 container tier and still degrades to the cardinal tier alone, and `"reactions-modal"` still
 reaches the corroborator as a bare string naming the scraper rather than a dialect (#830 remains
 open). Only the reason the sentence gave has moved on.
+
+> **Superseded the same day, by the amendment below.** Every clause of the previous paragraph about
+> the *reactions modal* was true when written and is now false: the modal was registered later on
+> 2026-09-02, it has two adapters, it carries both tiers, and #830 is answered. What the paragraph
+> was actually establishing — that widening `Surface` did not by itself change the corroboration
+> contract — still stands. See § Amendments → *The reactions modal has a container tier; the surface
+> set is three* (#840). Left in place rather than rewritten: amendments are append-only, and the
+> sequence in which the two surfaces were bound is itself the record.
 
 § Decision 1's *"a readiness anchor MUST NOT be shared across dialects"* is **not** amended, but
 it needs reading with its own rationale, because the search-results adapters deliberately share
@@ -603,15 +650,331 @@ deliberately NOT restored — its span-based name read, which was already broken
 anchor on a card is avatar-only) and whose brokenness is *why* that commit moved the name onto the
 control menu's `aria-label`. The name comes from the shared card skeleton, for both dialects.
 
+### 2026-09-02 — The reactions modal has a container tier; the surface set is three (#840)
+
+Spike #830 is answered, and the answer is **yes**: the reactions modal has a container tier. The
+modal was accordingly bound to the registry as a third surface, which closes the engagers half of
+#823 and the residual this ADR's own § Consequences recorded as bounded-but-open.
+
+The measurement is one live legacy post-detail page (2 reactions, 41 comments, CDP 62104,
+2026-09-02). Under that markup the modal renders as
+
+```html
+<div data-test-modal role="dialog" tabindex="-1"
+     class="artdeco-modal artdeco-modal--layer-default social-details-reactors-modal"
+     size="medium" aria-labelledby="social-details-reactors-modal__header">
+```
+
+and `.social-details-reactors-modal`, `#social-details-reactors-modal__header`,
+`[data-test-modal]`, the heading text *Reactions* and four `[role="tab"]` / `[role="tablist"]`
+matches were **all** present independent of what the list held. (The probe recorded the COUNT, not
+the NESTING, and the adapter binds `[role="tablist"]` with a DESCENDANT combinator — so containment
+is *implied* by the measured `aria-labelledby="social-details-reactors-modal__header"`, which names
+a header the wrapper labels, and is not itself measured. See the residual list below.)
+That independence is the whole finding: an anchor that only appears once rows exist cannot
+distinguish *the modal opened and there is nobody in it* from *the modal opened and we can no longer
+read it*, which is precisely the distinction § Decision 4 asks the container tier to make.
+
+**What changed, stated as the narrowing of the body above.**
+
+§ Decision 4's last bullet is **corrected, not merely dated**. It said a surface with no registry
+entry degrades to the cardinal tier alone, that the reactions modal is such a surface, and that
+whether it has a container tier at all is unprobed. The general rule still holds. Its running
+example does not: `Surface` now admits `"post-detail"`, `"search-results"` and `"reactions-modal"`;
+the modal has two registered adapters; `"reactions-modal"` reaches the corroborator as a surface
+name backed by a selected dialect rather than as a bare string naming the scraper; and it now
+carries **both** tiers, enforced the same way post-detail enforces them — the container tier
+structurally and upstream, the cardinal tier as a per-field check. § Follow-ups' *"Register
+the reactions-modal surface"* is closed by this amendment. § Consequences' *"One uncorroborated
+empty-success path survives on the reactions modal"* is **narrowed and re-justified, not closed**:
+that path returns before the modal opens, so the container tier delivered here never executes on
+it — what improved is the argument for accepting the same outcome. It is restated at that bullet,
+with its falsifier. § Follow-ups'
+*"`wait-for-reactions-modal.ts` needs no action"* remains correct **on its own subject** — that
+file's ADR-007 citation is a diagnostic-capture citation and was not re-pointed — even though the
+file was otherwise rewritten here.
+
+**The reactions-modal binding.**
+
+| | `sdui` | `legacy` |
+|---|---|---|
+| `detect` | `button`, `[role="button"]`, `span`, `a` within the two SDUI post roots (one measured, one inferred — see below) | `button[data-reaction-details]` |
+| `ready` | `button[aria-label$=" All reactions"]` | `[role="tablist"]` within either modal scope |
+| `scopes` | `dialog`, then `[aria-modal="true"]` | `.social-details-reactors-modal`, then `[aria-labelledby="social-details-reactors-modal__header"]` |
+| `rootSignal` | `button[aria-label$=" All reactions"]` | `[role="tablist"]` |
+| `extract` | the #773 tab-anchor ancestor walk | an explicit `null` — nothing left to resolve |
+
+**`rootSignal` is a field this surface adds, and it is the reason a scope candidate is not simply
+the first match.** Every other surface's scopes name the thing they wrap — `[data-id^="urn:li:activity:"]`,
+a chameleon result container. A modal-root candidate does not: `dialog` and `[aria-modal="true"]`
+match any modal on the page, a CLOSED `<dialog>` included, and the legacy wrapper may be rendered
+alongside unrelated overlays. So the resolver iterates EVERY match of every candidate and accepts
+only one that CONTAINS this anchor. Both failures it closes are silent-to-loud in the wrong
+direction: an overlay with no engager rows scrapes to `[]` and the cardinal tier raises on a modal
+that opened perfectly, and an overlay that does hold `/in/` links returns people who never reacted
+with `extractedCount > 0`, so nothing raises at all. The requirement is not new — the pre-registry
+resolver states and implements it (`RESOLVE_REACTIONS_MODAL_SCRIPT`, #773); the registry port kept
+the candidate list and dropped the gate. It is per-ADAPTER rather than that resolver's cross-dialect
+union because a union cannot report which dialect it matched, which is why this surface was
+registered at all — and each dialect's signal is the same anchor its own `ready` polls, so a
+candidate cannot pass one check and fail the other.
+
+**`detect` is the TRIGGER, not the modal.** Every other surface detects the thing it extracts from.
+This one cannot: the modal does not exist until something is clicked, and the click needs a dialect
+decision before there is a modal to decide from. The affordance that opens it is present on the post
+page **both before and after** the click, so one anchor serves pre-click selection and still keeps
+the readiness conjunction of § Decision 1 honest post-click — *exactly one adapter's `detect`
+matched* AND *that adapter's own `ready` is present*. No new selection machinery, and the same
+invariant.
+
+Exclusivity is measured in one direction and reasoned in the other, which is weaker than the
+search-results binding and is recorded as such: `[componentkey]` matched **0** document-wide on the
+**2026-08-31** legacy-reversion probe — a different probe from the 2026-09-02 one everything else
+here rests on, and cited by its own date because it is the only measurement of that attribute — so
+the SDUI candidate set cannot claim a legacy page. The converse — `data-reaction-details` matching 0
+under SDUI — is an inference from the attribute scheme, not a measurement, because LinkedIn is not
+serving SDUI to this account.
+
+Two narrower points inside that, because "measured" has to mean the thing that was measured. The
+count above is of `[componentkey]` ALONE; the second SDUI root, `[data-sdui-screen="…"]`, has no
+recorded count anywhere, so its non-match under legacy is an inference from the same attribute
+scheme rather than an observation. And what either direction being wrong costs is a total outage
+rather than a degraded read: both reactions-modal adapters would claim the page and every post of
+the affected dialect would raise `DOMVariantAmbiguousError`. Both are stated on the adapters
+themselves so a maintainer diagnosing that outage is not working against a comment claiming the
+collision was measured impossible.
+
+Precision does not live in the `detect` selector on this surface. It lives in a **shared
+accessible-name rule** applied to whatever `detect` yields: `/^(\d[\d,]*)\s+reactions?$/i` matched
+against `aria-label` **first**, then the element's own text, with a visibility floor. Both halves of
+that rule are measured, one per dialect — legacy puts the words in `aria-label`, SDUI (per the #773
+capture) put them in the element's text — so the rule is the union of two observations rather than a
+guess covering both.
+
+**`extract` is reinterpreted on this surface as the dialect's own modal-root resolver** — an
+undictated decision, taken because the alternative was worse in a specific way. SDUI's modal carries
+no selectable wrapper anyone has measured; the only recorded way to reach it is #773's walk upward
+from the *All reactions* tab. Deleting that walk would leave the SDUI adapter unable to resolve a
+scope, which under § Decision 3 means the surface raises on every SDUI page — a regression dressed
+as a simplification. Keeping it as a *global* fallback would put a guessed anchor back in the
+selection path, which is the always-true-`<main>` failure this ADR removed. Making it the SDUI
+adapter's **own** algorithm, consulted only when that adapter's `scopes` all miss, keeps it exactly
+as wide as the evidence for it: `extract`'s own contract already says that is where per-dialect
+*algorithm* differences belong. Legacy's resolver is a literal `null` rather than a copy of the
+walk, because the walk is **measured dead** there — its anchor matched 0 with the modal open.
+
+**Zero `detect` returns empty; it does not raise** (contra § Decision 3, deliberately). On
+post-detail and search-results a zero-match page has two readings and this ADR resolves both toward
+*LinkedIn changed*. Here there is a third, and it is the ordinary case: **a post with no reactions
+renders no reactions affordance**, so a working page matches nothing. Raising would throw on every
+such post. Two or more adapters matching is still a hybrid page and still raises
+`DOMVariantAmbiguousError` — that reading has no benign third alternative.
+
+The premise is **reasoned, not measured**: the zero-reaction case was not observed, and the probe
+covered one post that had two reactions. Its falsifier is cheap and specific — a live DOM probe of a
+zero-reaction post. If such a post *does* render a `[data-reaction-details]` trigger, this branch is
+unreachable there and the argument for it weakens to the SDUI candidate set alone.
+
+**The held test's disposition is CONFIRM-AS-CONTROL, not invert.** #827's oracle left
+`get-post-engagers.test.ts:199` — trigger absent ⇒ `engagers: []`, `total: 0`, no throw — deliberately
+alone, pending this spike. The spike's answer is that today's asserted behaviour is the *correct*
+behaviour, for the reason in the paragraph above, so applying the disposition required **no edit to
+that file**: the test is promoted from held to a third control alongside the two the oracle already
+carries. This is recorded here and in a comment on the branch itself so that a later reader can tell
+a decision was taken from a step that was skipped — the two look identical in a diff.
+
+**The three legacy defects this closes, in the order they fired.**
+
+1. **The modal was never opened.** The finder scanned `button, [role="button"], span, a` for
+   `textContent` matching `/^\d[\d,]*\s+reactions?$/` and matched **nothing**: the trigger's text is
+   the bare `"2"`, and the word *reactions* exists only in `aria-label`, with `<img>` reaction icons
+   in between. So the operation took its trigger-absent early return and reported `engagers: []`,
+   `total: 0` on a post with two reactions. That is #823 on this path, and it was the dominant
+   defect — the two below could not even be reached.
+2. **The tab-anchor fallback was dead.** Against the shipped resolver, `dialog` matched 0,
+   `[aria-modal="true"]` matched 0, `[role="dialog"]` matched 1, and the
+   `button[aria-label$=" All reactions"]` fallback matched 0. One generic wrapper was load-bearing
+   alone, and the fallback that exists for when wrappers rot would not have fired. Both are now
+   per-adapter: legacy binds to its semantically-named wrapper, and the tab anchor is SDUI's, where
+   it was measured.
+3. **The modal total returned 0 with two engagers on screen.** It required `"All (2)"` **with**
+   parentheses; legacy renders `"All 2"`. Parentheses are now optional, and the read prefers a
+   cardinal captured earlier — see below.
+
+**The cardinal is captured off the trigger PRE-click and read back POST-click.** The find call
+already marks the trigger element; it now also stamps the cardinal parsed from the trigger's
+accessible name, and the modal-total call reads that stamp back, falling through to the modal's own
+`N reactions` / `All (N)` / `All N` runs when the stamp is absent or unparseable. This is not a
+preference about tidiness: the success-path `Runtime.evaluate` sequence is pinned by the uneditable
+oracle at *N readiness polls, one find, N modal-readiness polls, one total, one scrape*, so a
+separate pre-click read of the cardinal was not available at any price. Riding it on two calls that
+already exist costs nothing.
+
+**The container tier is enforced structurally, upstream, exactly as on post-detail.** The scrape now
+returns `RawEngager[] | null`: `null` means no adapter claimed the modal or no scope resolved ⇒ the
+page was not read ⇒ raise. A non-null **empty** array means the container resolved and there were no
+rows ⇒ the cardinal tier decides. The replaced code coalesced with `scraped ?? []`, which erased
+exactly that distinction and is why the container tier could not be enforced before the surface was
+registered.
+
+**A consequence for the pre-authored oracle, recorded because it cannot be fixed in place.** #827's
+`scrapeSequence: [null]` fixture is titled *"…but totalReactions contradicts it"* and asserts a bare
+`.rejects.toThrow()`. Adding the container tier moved that fixture's refusal one tier earlier: `null`
+is now refused before `total` is consulted, so the fixture passes identically with
+`totalReactions: 0` and no longer discriminates on the cardinal its title names. It is still a
+correct MUST-THROW pin, so it keeps its place among the controls — but that file is uneditable, so
+the discrimination was re-established next door in
+`get-post-engagers-extraction-diagnostics.test.ts`, by CLASS: `null` ⇒ `DOMVariantUnsupportedError`
+with a corroborating `totalReactions: 0`, empty-array ⇒ `ExtractionFailedError`. Only the class says
+which tier refused, which is exactly what the bare `toThrow` cannot.
+
+**Readiness deliberately moved DOWN a tier, from rows to container.** The old predicate polled for an
+engager link. That anchor cannot go green on a modal with no engagers in it, so a genuinely-zero
+modal would have timed out and been reported as a failure — the same empty-vs-error confusion this
+ADR exists to remove, inverted. The predicate now stops at the container tier and lets the cardinal
+tier decide, which is the weaker gate and the correct one: readiness answers *can we read this
+page*, never *does it have content*.
+
+**And the wait that move deleted is re-paid at the cardinal tier, not skipped.** A container-tier
+gate goes green while the reactor payload may still be arriving, which is exactly why the
+post-detail adapters gate on a STRICTER-than-container anchor — *"a container can be present in a
+skeleton state before the post body hydrates"*. This surface cannot copy that: a stricter anchor
+here is the row-tier predicate just removed. The collect loop cannot absorb it either, because a
+modal with zero rows has no scrollable region, so the scroll declines on the first attempt and the
+loop breaks after ONE scrape. So `get-post-engagers` re-reads the modal a bounded number of times
+*before* the cardinal tier is allowed to raise, gated on `contradictsEmptyExtraction` — false the
+moment a single row was scraped, so a healthy run and a legitimately empty one spend no additional
+`Runtime.evaluate` and the pinned success-path call budget is untouched. Without it, a modal
+mid-hydration raises `ExtractionFailedError` non-deterministically against a diagnostic bundle
+showing a perfectly healthy open modal, naming a selector repair that is not needed.
+
+**The re-read sits INSIDE the collect loop, immediately after the scrape, and its budget is global
+to the collect.** Both halves are load-bearing. Placed after the loop, a re-read that SUCCEEDS never
+returns to it, so pagination is skipped entirely: a 50-reaction post whose modal hydrates slowly
+answers with however many rows happened to be in the DOM on the re-read, reporting `paging.total:
+50`, no scroll attempted and no error — the cardinal check passes the moment `extractedCount > 0`,
+so the under-collection is silent and reads as a successful call. Placed inside with a
+per-iteration counter, the budget refills on every scroll attempt and the settle becomes a retry
+loop. The counter is therefore hoisted out of the loop, and Tier-1 fixtures pin both: that a
+successful re-read falls through to the scroll path, and that the total re-read count across a
+21-iteration collect is still `EMPTY_SCRAPE_SETTLE_ATTEMPTS`.
+
+**One rule, two entry points.** `assertCardinalCorroboration` was split into a
+`contradictsEmptyExtraction` predicate plus the assertion that raises it. `get-post-engagers` has to
+know the verdict *before* the raise, because naming the dialect in the error costs a
+`Runtime.evaluate` that the pinned call budget forbids on the success path and permits on the
+failure path. Re-deriving the rule at that call site would have put two copies of one contract in two
+files — the failure `corroboration.ts` exists to prevent one level down — so the rule stayed in one
+place and grew a second door. A Tier-1 test pins that a healthy run spends no probe there.
+
+**Provenance, because the two dialects again do not have equal evidence.** Everything legacy above
+is measured on the 2026-09-02 probe. Everything SDUI is **reconstructed**: its `ready` anchor and its
+modal walk come from #773's capture, which recorded the modal visibly open — which the click could
+not have achieved had the trigger not been findable by text, and that is the whole basis for the
+SDUI half of the accessible-name rule. Its `scopes` are generic ARIA wrappers, not a measured
+LinkedIn anchor. No live SDUI page has been probed for this surface, and none can be while the
+account is served legacy markup.
+
+Two consequences follow directly from that walk's termination condition — it stops on an ancestor
+**containing engager links** — rather than being discovered later.
+
+The first is a limitation: an SDUI modal with genuinely zero engagers resolves no root and raises
+instead of returning empty. Under legacy that case returns empty correctly, because the legacy scope
+is the wrapper itself and does not depend on its contents. Fixing it needs a measured SDUI wrapper
+anchor, which needs a live SDUI page.
+
+The second is that **the termination condition is not a validation, and was briefly recorded as
+one.** "Holds engager links" is satisfied by every ancestor up to and including `<body>` on any page
+that lists people anywhere — the feed behind the modal is enough — so the walk could climb past the
+modal and answer with the document body, after which the engager scrape reads the whole page and
+returns strangers as reactors with `extractedCount > 0`, which no tier can contradict. The walk
+therefore carries its own refusal: it rejects `body`, `html`, `head` and `main` as a result and
+keeps climbing, which on a document-level ancestor means resolving nothing at all. Refusing is the
+correct answer there — the caller raises, which is loud, where the alternative ships wrong data
+quietly. A Tier-1 fixture pins it, and the residual is stated rather than claimed closed: an
+INTERMEDIATE page wrapper that is neither a landmark nor the body (`<div id="app">`) still satisfies
+the condition, so the refusal bounds the failure at the document level and does not eliminate it.
+Eliminating it needs the same thing the limitation above needs — a measured SDUI container anchor —
+at which point the walk stops being load-bearing at all.
+
+**Residuals an independent review surfaced, recorded rather than closed, because closing any of them
+needs a measurement nobody has.** Deliberately uncounted: the list is the record, and a count written
+here goes stale the next time one is added or closed.
+
+- **The legacy `detect` is document-wide where its SDUI sibling is root-scoped — and this residual is
+  CONFIRMED REACHABLE BY PROBE, not merely reasoned.** On a post that has reactions it cannot
+  mis-fire: the post's own counts row precedes every comment in document order and the first visible
+  hit wins. The exposure is a ZERO-reaction post where some other `[data-reaction-details]` reads
+  `"<N> reactions"`. An independent verifier probed exactly that shape on 2026-09-02 — a
+  zero-reaction post whose COMMENT carries `aria-label="7 reactions"` — and the trigger source
+  returns `true` and stamps a cardinal of 7. So the wrong control is clicked, its reactors are
+  returned as this post's, and it *self-corroborates*, because the cardinal came off that same wrong
+  control. Nothing downstream can detect it: both tiers see a consistent observation.
+  It is nonetheless recorded rather than closed, and the decision NOT to narrow stands. Scoping to
+  `.social-details-social-counts` would close it, and the element's own
+  `social-details-social-counts__count-value` class says it is a BEM child of exactly that block —
+  but the containment was never measured, and narrowing a working measured anchor on an inference is
+  the move this ADR refuses everywhere else; get the inference wrong and extraction breaks outright,
+  which is worse than the failure it prevents. The falsifier is unchanged and is deliberately the
+  SAME probe as the zero-reaction premise above: one probe of a zero-reaction legacy post records
+  whether any `[data-reaction-details]` renders at all AND whether the post's own trigger is a
+  descendant of `.social-details-social-counts`, and answers both.
+- **The legacy `ready` anchor's containment is implied, not measured.** The 2026-09-02 probe counted
+  four `[role="tab"]` / `[role="tablist"]` matches but did not record their NESTING, while the
+  adapter binds `[role="tablist"]` to a modal scope with a DESCENDANT combinator. The measured
+  `aria-labelledby="social-details-reactors-modal__header"` implies the header — and with it the tab
+  strip — is inside the wrapper, which is why this is low-probability rather than speculative. The
+  verifier probed the failure it permits: with the tablist as a SIBLING of the wrapper rather than a
+  descendant, readiness returns `false` — and since `rootSignal` was introduced, the extraction path
+  is bound to that same anchor and rejects the same wrapper, so the scrape resolves no root and
+  raises rather than quietly succeeding. Both halves now fail together, which is the intended
+  coupling — readiness asks *has the modal's container rendered* and `rootSignal` asks *is this
+  candidate that container*, and answering them with two different anchors is what would let a page
+  pass one and fail the other. The consequence is unchanged in severity and sharper in shape: if
+  LinkedIn ever portals the tab strip outside the wrapper, EVERY legacy `getPostEngagers` call fails
+  on a modal that opened perfectly — at the readiness deadline, and at the container tier for
+  anything that gets past it. Falsifier: the same live probe, recording the tab strip's ancestor
+  chain rather than only its count.
+- **The modal-total fall-through is structural under legacy, not the live fix.** Because the trigger
+  stamp always parses, step 1 always returns and the `"All 2"` read is unreachable on legacy in
+  production — it stays for SDUI, whose broad `detect` can survive losing the marked element. So the
+  parenthesis fix is correct and Tier-1-pinned, but on legacy DEFECT 3 is already headed off one step
+  earlier. Its reads are also UNANCHORED — they flatten the modal, the read post detail abandoned —
+  which on the SDUI path is a live over-match risk (an engager headline reading *"overall 20 years"*
+  satisfies the `"All"` pattern). Anchoring it needs a measured SDUI count element.
+- **A reactions modal caught mid-hydration under-collects silently, and the contract is why.**
+  `contradictsEmptyExtraction` short-circuits on ANY non-zero extraction, and that one predicate
+  gates BOTH the settle re-read and the cardinal raise. So a first scrape that lands with 3 of 50
+  rows rendered spends no settle re-read, and cannot be contradicted afterwards either: three rows
+  do not overflow their container, the scroll declines, the collect loop breaks, and the call
+  returns 3 engagers with `paging.total: 50`, an HTTP success and no error. Sharper than the
+  all-empty case the settle closes, because nothing anywhere reports it. It is recorded rather than
+  closed because the contract this surface implements is empty-vs-error, not complete-vs-error, and
+  the uneditable oracle SPECIFIES that: `get-post-engagers.test.ts`, "stops scrolling when modal is
+  at bottom", asserts one engager returned against `totalReactions: 5`. Both candidate repairs —
+  widening the settle gate to `extractedCount < cardinal`, or re-reading once after a declined
+  scroll — turn that test red, so closing this needs the oracle amended first, deliberately, rather
+  than as a side effect. Falsifier: a live measurement of whether the reactor list sits in a
+  container that overflows at a SMALL row count. If it does, a partial first scrape still scrolls,
+  the loop recovers on the next iteration, and the residual narrows to the case where hydration is
+  slower than a full scroll cycle.
+
+**Deliberately not done here, so a reader does not infer it.** The trigger-absent branch does not
+attempt to distinguish *no reactions* from *trigger selector rotted*; the evidence to do so does not
+exist yet (see the falsifier above). Engagement-count parsing elsewhere is untouched. And this
+surface, like search-results, has **no Tier-2 coverage** — every claim above rests on the live probe
+plus Tier-1 against a hand-built stand-in, and a stand-in cannot falsify a belief about the DOM.
+
 ## Related
 
 - Code: `packages/core/src/linkedin/dom-variant.ts`,
   `packages/core/src/linkedin/corroboration.ts`,
   `packages/core/src/cdp/wait-for-post-load.ts`,
+  `packages/core/src/cdp/wait-for-reactions-modal.ts` (§ 2026-09-02 Amendment, #840),
   `packages/core/src/services/errors.ts`,
   `packages/core/src/operations/get-post.ts`,
   `packages/core/src/operations/get-post-engagers.ts`,
-  `packages/core/src/operations/search-posts.ts` (§ 2026-09-02 Amendment)
+  `packages/core/src/operations/search-posts.ts` (§ 2026-09-02 Amendment, #841)
 - ADRs: [ADR-005](005-error-hierarchy-design.md) (error hierarchy this extends),
   [ADR-007](007-profile-ready-selector-strategy.md) (precedent instance on the profile surface;
   unmodified and still in force there)
@@ -619,4 +982,5 @@ control menu's `aria-label`. The name comes from the shared card skeleton, for b
 - Design: `docs/design/linkedin-dom-variant-tolerance-solution-design.md` (§ 4.3, § 7.1, § 9)
 - Issues: #823 (the silent-empty report), #831 (adapter registry), #832 (typed extraction
   errors), #834 (fail-loud), #839 (this ADR), #841 (search-results binding, § 2026-09-02
-  Amendment), #830 (reactions-modal container tier, open)
+  Amendment), #830 (reactions-modal container tier — answered: it has one), #840 (reactions-modal
+  binding, § 2026-09-02 Amendment)

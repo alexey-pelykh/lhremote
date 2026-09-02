@@ -4,19 +4,43 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  adaptersFor,
+  buildReadinessPredicateSource,
+  formatVariantProbes,
+  type VariantDetection,
+  variantNamesFor,
+} from "../linkedin/dom-variant.js";
+import {
+  DOMVariantAmbiguousError,
+  DOMVariantUnsupportedError,
+  ExtractionTimeoutError,
+} from "../services/errors.js";
 import { delay } from "../utils/delay.js";
 import type { CDPClient } from "./client.js";
 import {
   diagnosticCaptureEnabled,
   ensureSecureDiagnosticDir,
+  probeVariantDetection,
 } from "./wait-for-post-load.js";
 
+/** The page kind this gate reads; picks the adapter list it binds to. */
+const REACTIONS_MODAL_SURFACE = "reactions-modal" as const;
+
 // ----------------------------------------------------------------------------
-// Selectors used by the readiness predicate, the diagnostic probe, and the
-// modal resolver shared with `get-post-engagers.ts` (scrape / scroll / total).
-// Centralizing them keeps the call sites aligned: a future regression in
-// "which selector matches the engager modal" lands as a precise diagnostic
-// signal rather than a generic timeout.
+// Diagnostic-only selectors ({@link captureReactionsModalFailure}).
+//
+// These no longer feed the readiness predicate or any script in
+// `get-post-engagers.ts`.  Since #840 the reactions modal is a registered
+// surface, so the predicate is generated from its adapter list and polls the
+// SELECTED adapter's own anchor, and the scrape / scroll / total scripts
+// resolve the modal through that same registry.
+//
+// They stay because a failure still wants a "which-of-N-is-missing" picture
+// across every wrapper shape LinkedIn has served, and that picture is
+// deliberately WIDER than any single adapter's binding — it is the artifact a
+// reader consults precisely when no adapter could read the page, which is the
+// one moment an adapter-bound probe has nothing to say.
 // ----------------------------------------------------------------------------
 
 /**
@@ -35,10 +59,22 @@ import {
  * listed.  That breaks the precedence claim above when multiple
  * candidate wrappers coexist on the page (e.g. engager modal +
  * unrelated dialog).  An array iterated by the resolver enforces real
- * precedence.  Used by the readiness predicate
- * ({@link waitForReactionsModal}) and shared via
- * {@link RESOLVE_REACTIONS_MODAL_SCRIPT} with the diagnostic probe and
- * the scrape / scroll / total scripts in `get-post-engagers.ts`.
+ * precedence.
+ *
+ * **Diagnostic-only since #840, and WIDER than either adapter — deliberately.**
+ * The first two entries are the `sdui` reactions-modal adapter's own `scopes`.
+ * The third, `[role="dialog"]`, belongs to NEITHER adapter: `legacy`'s scopes
+ * are its two `social-details-reactors-modal` anchors.  The 2026-09-02 probe
+ * did record `[role="dialog"]` matching 1 on the legacy modal — it sits on the
+ * same measured wrapper element — but it was rejected as an ADAPTER anchor for
+ * being generic: it describes *a* modal rather than *this* one and matched 1
+ * only because that was the one dialog open, so binding to it would resolve an
+ * unrelated overlay on a page where the reactors modal is absent (see
+ * `dom-variant.ts`, {@link LEGACY_REACTORS_MODAL}).  It survives HERE precisely
+ * because a diagnostic wants to report every wrapper shape LinkedIn has ever
+ * served, including ones no adapter is willing to bind to.  Do not "restore"
+ * it to the legacy adapter's `scopes` on the strength of this list — that is
+ * the #773 over-match.
  */
 const REACTIONS_MODAL_WRAPPER_SELECTORS: readonly string[] = [
   "dialog",
@@ -60,12 +96,24 @@ const REACTIONS_TAB_FALLBACK_SELECTOR =
 
 /**
  * Engager profile link inside the modal — each engager entry contains an
- * `<a href="/in/{slug}">` linking to that person's profile.  Used both
- * by the readiness predicate (presence ⇒ engager rows hydrated), the
- * modal resolver (anchor-walk termination signal), and the diagnostic
- * probe (`dialogHasInLinks`).
+ * `<a href="/in/{slug}">` linking to that person's profile.  Diagnostic-only
+ * since #840, where it feeds `dialogHasInLinks` and the ancestor chain.
+ *
+ * It is deliberately no longer what readiness polls.  "At least one engager
+ * link is present" cannot go green on a modal that legitimately holds nobody,
+ * so it made a genuinely-zero post indistinguishable from a timeout — the very
+ * distinction the container tier now draws (ADR-008 § Decision 4).
  */
 const REACTIONS_MODAL_ENGAGER_LINK_SELECTOR = 'a[href*="/in/"]';
+
+// Both selectors above are interpolated into emitted JavaScript through
+// `JSON.stringify`, never by hand-quoting them as `'${CONST}'`.  Both contain
+// double quotes today, so hand-quoting happened to work; the moment either
+// grows a single quote or a backslash it would emit a syntax error or, worse,
+// a valid-but-different selector.  The failure would be invisible: the
+// capture's own `.catch` swallows an evaluate that throws, so the operator
+// gets no json, no png and no warn line at the one moment diagnostics matter.
+// Same discipline as `dom-variant.ts`'s `jsString`.
 
 /**
  * Maximum ancestor depth the tab-anchor fallback walks up from the
@@ -80,17 +128,18 @@ const REACTIONS_MODAL_ANCESTOR_WALK_DEPTH = 12;
  * In-page JavaScript that resolves the engager modal element via the
  * fallback chain (canonical wrappers → tab-anchor walk).  Defines a
  * function `__getReactionsModal()` that returns either the resolved
- * `Element` or `null`.  Prepended to every consumer that needs the
- * resolved modal — the readiness predicate ({@link waitForReactionsModal}),
- * the diagnostic probe ({@link captureReactionsModalFailure}), and the
- * scrape / scroll / total scripts in `get-post-engagers.ts` — so all
- * call sites share a single resolution rule.  String form (not a
- * function) because each call site composes a separate
- * `Runtime.evaluate` script.
+ * `Element` or `null`.
  *
- * Exported for reuse from `get-post-engagers.ts`.
+ * **Diagnostic-only since #840, and no longer exported.**  Its two stages did
+ * not disappear — they were split along the axis they always had.  Stage 1's
+ * wrapper list and stage 2's ancestor walk are now the reactions-modal
+ * adapters' `scopes` and `extract` respectively, per dialect, so the operation
+ * resolves the modal through the registry and knows WHICH dialect answered.
+ * What is left here is the union of both stages, which is what a diagnostic
+ * wants: it reports whether ANY known wrapper shape is on the page, including
+ * on a page no registered adapter claims.
  */
-export const RESOLVE_REACTIONS_MODAL_SCRIPT = `
+const RESOLVE_REACTIONS_MODAL_SCRIPT = `
 function __getReactionsModal() {
   // Stage 1: try the canonical wrapper selectors in precedence order.
   // For each selector, iterate ALL matches and validate each one —
@@ -110,8 +159,8 @@ function __getReactionsModal() {
     for (let j = 0; j < candidates.length; j++) {
       const c = candidates[j];
       if (
-        c.querySelector('${REACTIONS_TAB_FALLBACK_SELECTOR}') ||
-        c.querySelector('${REACTIONS_MODAL_ENGAGER_LINK_SELECTOR}')
+        c.querySelector(${JSON.stringify(REACTIONS_TAB_FALLBACK_SELECTOR)}) ||
+        c.querySelector(${JSON.stringify(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)})
       ) {
         return c;
       }
@@ -125,12 +174,12 @@ function __getReactionsModal() {
   // stable across the refresh; its closest ancestor that holds
   // engager links IS the modal.  Bounded depth so a
   // missing-engager-links page doesn't infinite-loop.
-  const tab = document.querySelector('${REACTIONS_TAB_FALLBACK_SELECTOR}');
+  const tab = document.querySelector(${JSON.stringify(REACTIONS_TAB_FALLBACK_SELECTOR)});
   if (!tab || tab.offsetHeight === 0) return null;
   let ancestor = tab.parentElement;
   let depth = 0;
   while (ancestor && depth < ${REACTIONS_MODAL_ANCESTOR_WALK_DEPTH}) {
-    if (ancestor.querySelectorAll('${REACTIONS_MODAL_ENGAGER_LINK_SELECTOR}').length > 0) {
+    if (ancestor.querySelectorAll(${JSON.stringify(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)}).length > 0) {
       return ancestor;
     }
     ancestor = ancestor.parentElement;
@@ -141,54 +190,115 @@ function __getReactionsModal() {
 `;
 
 /**
- * Poll the DOM until the reactions modal has loaded with at least one
- * profile link visible.
+ * Poll the DOM until the reactions modal has rendered *in a dialect an adapter
+ * can read*.
  *
- * Issue #773: the engager modal's `[role="dialog"]` wrapper disappeared
- * with LinkedIn's 2026-05 markup refresh (Phase 1 diagnostic capture
- * confirmed `dialogCount: 0` while the modal IS visually open — see
- * `reactionsButtonAriaLabels` and `bodyTextSnippet`).  This predicate
- * resolves the modal via {@link RESOLVE_REACTIONS_MODAL_SCRIPT}'s
- * fallback chain: canonical wrappers (`<dialog>` / `[aria-modal="true"]`
- * / `[role="dialog"]`) first, then a tab-anchor walk from the "All
- * reactions" filter button — whose aria-label stayed stable.  Engager
- * links inside the resolved element gate the predicate.
+ * The predicate is generated from the reactions-modal adapter registry
+ * ({@link buildReadinessPredicateSource}) and is satisfied only when exactly
+ * one adapter claims the page AND that adapter's own readiness anchor is
+ * present — ADR-008 § Decision 1, applied to a third surface.  The `detect`
+ * half is the post page's reactions TRIGGER, which is still there after the
+ * click, so the conjunction stays meaningful once the modal is open; the
+ * `ready` half is a container-tier anchor of the modal itself.
  *
- * On timeout, if `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a best-effort
- * diagnostic capture is written to a per-invocation
- * `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/` directory before the
- * error propagates; see {@link captureReactionsModalFailure}.  Opt-in
- * because the LinkedIn engager modal can include personal data
- * (engager names, profile slugs, headlines).
+ * **What changed, and why it is not a weakening (#840).**  The predicate this
+ * replaces asked whether at least one engager profile link had appeared inside
+ * a resolved modal.  That is a *row*-tier question, and it cannot go green on
+ * a modal that legitimately holds nobody — so a post with zero reactions timed
+ * out here, on a modal that had opened perfectly.  Readiness now stops at the
+ * container tier and the cardinal tier decides what an empty list means, which
+ * is the split ADR-008 § Decision 4 draws and the reason this surface was
+ * registered at all.  Nothing about the #773 wrapper problem is lost: both
+ * stages of that resolver are now per-dialect adapter fields.
+ *
+ * **Why zero-match does not raise inside the loop.**  A modal that has not
+ * rendered yet also matches zero adapters, so failing fast would be
+ * indistinguishable from "LinkedIn changed" and would fire on every slow open.
+ * The loop polls first and classifies once, at the deadline:
+ *
+ * | Adapters matching at the deadline | Error |
+ * |---|---|
+ * | zero | {@link DOMVariantUnsupportedError} — register an adapter |
+ * | two or more | {@link DOMVariantAmbiguousError} — tighten the detect anchors |
+ * | exactly one | {@link ExtractionTimeoutError} — the dialect is known, the modal never rendered |
+ *
+ * A classification probe that did not run usefully degrades to `null`, which
+ * is NOT the claim "no adapter matched": the ordinary timeout is raised rather
+ * than blaming LinkedIn for a broken instrument.
+ *
+ * Unlike the search-results gate, a zero match here needs no "or the page is
+ * legitimately empty" qualifier.  A post with no reactions never reaches this
+ * function: its trigger is what the caller failed to find, and that path
+ * returns an empty list without opening anything.
+ *
+ * On failure, if `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a best-effort diagnostic
+ * capture is written to a per-invocation
+ * `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/` directory before the error
+ * propagates; see {@link captureReactionsModalFailure}.  Opt-in because the
+ * LinkedIn engager modal can include personal data (engager names, profile
+ * slugs, headlines).
  *
  * @param client    - Connected CDP client targeting a LinkedIn page.
  * @param timeoutMs - Polling deadline in milliseconds (default: 10s).
  *
- * @throws If the modal predicate does not match before the deadline.
+ * @throws {@link DOMVariantUnsupportedError} No adapter claimed the page.
+ * @throws {@link DOMVariantAmbiguousError} Two or more adapters claimed it.
+ * @throws {@link ExtractionTimeoutError} The selected adapter never became ready.
  */
 export async function waitForReactionsModal(
   client: CDPClient,
   timeoutMs = 10_000,
 ): Promise<void> {
+  const adapters = adaptersFor(REACTIONS_MODAL_SURFACE);
+  const predicate = buildReadinessPredicateSource(adapters);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const ready = await client.evaluate<boolean>(`(() => {
-      ${RESOLVE_REACTIONS_MODAL_SCRIPT}
-      const modal = __getReactionsModal();
-      if (!modal) return false;
-      return modal.querySelectorAll('${REACTIONS_MODAL_ENGAGER_LINK_SELECTOR}').length > 0;
-    })()`);
+    const ready = await client.evaluate<boolean>(predicate);
     if (ready) return;
     await delay(500);
   }
+
+  // Classify what the page actually is before reporting.  One probe, on the
+  // failure path only — the happy path pays nothing for it.  The same read
+  // feeds both the error's `cause` and the diagnostic bundle below, so the two
+  // can never disagree about what was on the page.
+  const detection = await probeVariantDetection(client, adapters);
+
   // captureReactionsModalFailure self-gates on LHREMOTE_CAPTURE_DIAGNOSTICS
-  // and swallows its own errors, so the original timeout always propagates
+  // and swallows its own errors, so the error below always propagates
   // unchanged regardless of capture-side outcome.
   await captureReactionsModalFailure(client, {
     trigger: "readiness-timeout",
+    detection,
   });
-  throw new Error(
-    "Timed out waiting for reactions modal to appear",
+
+  if (detection) {
+    if (detection.matched.length === 0) {
+      throw new DOMVariantUnsupportedError(
+        REACTIONS_MODAL_SURFACE,
+        variantNamesFor(REACTIONS_MODAL_SURFACE).map(String),
+        {
+          cause: new Error(`detect probes — ${formatVariantProbes(detection)}`),
+        },
+      );
+    }
+    if (detection.matched.length > 1) {
+      throw new DOMVariantAmbiguousError(
+        REACTIONS_MODAL_SURFACE,
+        detection.matched,
+        {
+          cause: new Error(`detect probes — ${formatVariantProbes(detection)}`),
+        },
+      );
+    }
+  }
+
+  // Exactly one adapter matched (or classification was unavailable): the
+  // dialect is known and the modal genuinely never rendered.
+  throw new ExtractionTimeoutError(
+    `readiness anchor of the selected ${REACTIONS_MODAL_SURFACE} adapter`,
+    timeoutMs,
+    "Reactions-modal",
   );
 }
 
@@ -263,6 +373,17 @@ const REACTIONS_MODAL_TRIGGER_LABELS: Record<
 export interface ReactionsModalCaptureContext {
   /** Which failure fired the capture; names the artifact and the warn line. */
   readonly trigger: ReactionsModalFailureTrigger;
+  /**
+   * Per-registered-adapter detect counts, already read by the caller via
+   * `probeVariantDetection`, recorded verbatim in the bundle.
+   *
+   * Required rather than optional, and `null`-able rather than omittable: the
+   * caller is the only party that knows whether a probe was even attempted,
+   * and a bundle silently missing the field would be indistinguishable from
+   * one where the probe returned nothing.  `null` records the honest answer —
+   * *no usable reading* — which is NOT the claim "no adapter matched".
+   */
+  readonly detection: VariantDetection | null;
 }
 
 /**
@@ -274,10 +395,21 @@ export interface ReactionsModalCaptureContext {
  * (`assertCardinalCorroboration`).  The second never reaches a deadline, so a
  * timeout-gated capture could not see it at all.
  *
- * Unlike the post-detail bundle, this one records no per-adapter detect
- * counts: the reactions modal has no entry in the variant-adapter registry
- * (whether it even has a container tier is unprobed — #830), so there is
- * nothing to report and inventing a field would fabricate a diagnosis.  Each invocation
+ * **This bundle now carries per-adapter detect counts (#840), and the sentence
+ * that used to stand here saying it could not is corrected rather than
+ * deleted.**  It said the reactions modal has no entry in the variant-adapter
+ * registry and that whether it even has a container tier was unprobed (#830).
+ * Both halves have since been answered: the spike measured a container tier on
+ * the legacy modal, and the surface is registered, so `variantDetection` is a
+ * real reading rather than the fabricated field that reasoning correctly
+ * refused to invent.  Read it together with `matched`, which decides between
+ * the three cases the detection source distinguishes: nothing matched (a
+ * dialect nobody registered), two or more (a hybrid page — tighten the detect
+ * anchors), exactly one (the dialect is known, so repair that adapter's
+ * selectors).  `null` records that the probe yielded no usable reading, which
+ * is NOT the claim "no adapter matched".
+ *
+ * Each invocation
  * creates a fresh `${os.tmpdir()}/lhremote-diagnostics-XXXXXX/`
  * directory via `mkdtemp` (atomic; refuses to follow any pre-existing
  * symlink at the prefix) and writes
@@ -320,7 +452,7 @@ export interface ReactionsModalCaptureContext {
  * Probe set: `{ trigger, href, dialogCount, dialogHasInLinks,
  * dialogChildElementCount, bodyTextSnippet, reactionsButtonAriaLabels,
  * reactionsCountText, htmlDialogCount, ariaModalCount, hasReactionsTab,
- * reactionsTabAncestorChain, resolvedModalAncestorTag }` —
+ * reactionsTabAncestorChain, resolvedModalAncestorTag, variantDetection }` —
  * distinguishes:
  *  1. "click never opened a dialog" (`dialogCount === 0` AND
  *     `htmlDialogCount === 0` AND `ariaModalCount === 0` AND
@@ -419,7 +551,7 @@ async function captureReactionsModalFailureInner(
     const legacyDialogs = document.querySelectorAll('[role="dialog"]');
     const firstLegacyDialog = legacyDialogs[0] || null;
     const dialogHasInLinks = firstLegacyDialog
-      ? firstLegacyDialog.querySelectorAll('${REACTIONS_MODAL_ENGAGER_LINK_SELECTOR}').length > 0
+      ? firstLegacyDialog.querySelectorAll(${JSON.stringify(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)}).length > 0
       : false;
     const dialogChildElementCount = firstLegacyDialog ? firstLegacyDialog.childElementCount : 0;
 
@@ -429,7 +561,7 @@ async function captureReactionsModalFailureInner(
     // resolver fallback in RESOLVE_REACTIONS_MODAL_SCRIPT must adapt.
     const htmlDialogCount = document.querySelectorAll('dialog').length;
     const ariaModalCount = document.querySelectorAll('[aria-modal="true"]').length;
-    const reactionsTab = document.querySelector('${REACTIONS_TAB_FALLBACK_SELECTOR}');
+    const reactionsTab = document.querySelector(${JSON.stringify(REACTIONS_TAB_FALLBACK_SELECTOR)});
     const hasReactionsTab = reactionsTab !== null && reactionsTab.offsetHeight > 0;
 
     // Walk up from the "All reactions" tab and capture each ancestor's
@@ -451,7 +583,7 @@ async function captureReactionsModalFailureInner(
         const classToken = ((ancestor.className && typeof ancestor.className === 'string')
           ? ancestor.className.trim().split(/\\s+/)[0]
           : '') || '';
-        const inLinks = ancestor.querySelectorAll('${REACTIONS_MODAL_ENGAGER_LINK_SELECTOR}').length;
+        const inLinks = ancestor.querySelectorAll(${JSON.stringify(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)}).length;
         reactionsTabAncestorChain.push(
           tag + (role ? ' role=' + role : '') +
           (ariaModal ? ' aria-modal=' + ariaModal : '') +
@@ -488,9 +620,13 @@ async function captureReactionsModalFailureInner(
       })
       .slice(0, 30);
 
-    // Capture the text the FIND_REACTIONS_SCRIPT regex would currently
-    // match — pins what the click target looks like at timeout time so
-    // Phase 2 can decide whether the regex itself needs updating.
+    // The text the SUPERSEDED text-only finder would have matched, kept
+    // deliberately (#840).  Read beside reactionsButtonAriaLabels, a null
+    // here next to a label reading "<N> reactions" IS the fingerprint of the
+    // defect that finder had: legacy renders the count as a bare number and
+    // puts the words only on the control, so a text-only match saw nothing on
+    // a post that had reactions.  The live rule reads the label first; this
+    // probe is what shows a reader which of the two the page supports.
     const reactionsCountElements = Array.prototype.slice
       .call(document.querySelectorAll('button, [role="button"], span, a'))
       .filter(function (el) {
@@ -522,7 +658,16 @@ async function captureReactionsModalFailureInner(
   // The trigger rides in the bundle as well as in the filename: artifacts get
   // copied out of their mkdtemp directory, and a bundle that cannot say what
   // it was capturing is a bundle whose reader has to guess (#835).
-  const bundle = { trigger: context.trigger, ...info };
+  //
+  // `variantDetection` is the field the fixed probes above structurally cannot
+  // supply: every one of them is a hard-coded selector, so a modal served in a
+  // dialect nobody registered looks exactly like one whose registered adapter
+  // matched but whose anchors went stale (#840).
+  const bundle = {
+    trigger: context.trigger,
+    ...info,
+    variantDetection: context.detection,
+  };
 
   await writeFile(`${prefix}.json`, JSON.stringify(bundle, null, 2), {
     encoding: "utf8",
