@@ -515,7 +515,7 @@ export async function getPostEngagers(
       // `totalReactions: 5`.  Both candidate repairs (widening the gate to
       // `extractedCount < cardinal`, or re-reading once after a declined
       // scroll) turn that test red.  Recorded rather than closed, with its
-      // falsifier, in ADR-008 § Residuals.
+      // falsifier, in ADR-008 § Residuals, and tracked as #874.
       while (
         settleAttempts < EMPTY_SCRAPE_SETTLE_ATTEMPTS &&
         contradictsEmptyExtraction({
