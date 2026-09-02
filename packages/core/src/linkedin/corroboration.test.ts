@@ -98,8 +98,9 @@ describe("assertCardinalCorroboration", () => {
   // A negative or unparseable cardinal is a broken count, not a contradiction
   // to report. Raising would point an operator at this field's selectors for a
   // parsing regression that lives somewhere else entirely. `NaN` is the case
-  // that discriminates `!(cardinal > 0)` from the `cardinal <= 0` spelling —
-  // the latter falls through and reports `commentCount=NaN`.
+  // that discriminates the predicate's `cardinal > 0` from the `!(cardinal
+  // <= 0)` spelling that reads as its equivalent — `NaN <= 0` is `false`, so
+  // that form reports a contradiction and prints `commentCount=NaN`.
   it.each([
     ["negative", -1],
     ["NaN", Number.NaN],

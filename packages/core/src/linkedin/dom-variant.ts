@@ -42,15 +42,16 @@
  * - two or more match -> `DOMVariantAmbiguousError`; a transitional or
  *   hybrid page, where picking one would silently blend two dialects
  *
- * ## Two surfaces
+ * ## Three surfaces
  *
- * Post detail and search results are both registered.  They share detection,
- * readiness and the no-terminal-fallback rule verbatim, and differ only in
- * what an extraction produces — one record against one root, versus a list of
- * records against a list of cards.  Each surface therefore narrows
- * {@link VariantAdapter} into its own adapter type
- * ({@link PostDetailVariantAdapter}, {@link SearchResultsVariantAdapter}) and
- * has its own `build*ExtractionSource`.
+ * Post detail, search results and the reactions modal are all registered.
+ * They share detection, readiness and the no-terminal-fallback rule verbatim,
+ * and differ only in what an extraction roots on and produces — one record
+ * against one root, a list of records against a list of cards, or a list of
+ * records against one root that only exists after a click.  Each surface
+ * therefore narrows {@link VariantAdapter} into its own adapter type
+ * ({@link PostDetailVariantAdapter}, {@link SearchResultsVariantAdapter},
+ * {@link ReactionsModalVariantAdapter}) and has its own `build*Source`.
  *
  * ## Extending
  *
@@ -92,6 +93,7 @@ export const KNOWN_DOM_VARIANTS = ["sdui", "legacy"] as const;
 interface SurfaceAdapterMap {
   "post-detail": PostDetailVariantAdapter;
   "search-results": SearchResultsVariantAdapter;
+  "reactions-modal": ReactionsModalVariantAdapter;
 }
 
 /**
@@ -155,9 +157,20 @@ export interface VariantAdapter {
   readonly scopes: readonly string[];
   /**
    * In-page JavaScript **function source** of the form
-   * `(function (...) { ...; return {...}; })`, evaluated by the surface's
-   * extraction script.  The parameters it is called with, and the field bag
-   * it returns, are fixed per surface by that script — see the sub-interfaces.
+   * `(function (...) { ...; return <result>; })`, evaluated by the surface's
+   * extraction script.  BOTH ends are fixed per surface by that script and
+   * neither is fixed here — see the sub-interfaces.
+   *
+   * The parameters vary (a resolved scope on post detail, a card and an author
+   * name on search results, nothing at all on the reactions modal), and so
+   * does what counts as a result: post detail and search results return a
+   * FIELD BAG the caller reads named properties off, while the reactions modal
+   * REINTERPRETS the whole contract and returns an `Element | null` — that
+   * dialect's own modal-root resolver.  The reinterpretation is legitimate
+   * because what differs between dialects there is the extraction *algorithm*,
+   * which is exactly what this field carries; it is written out because
+   * `extract` is typed `string`, so nothing mechanical catches a mismatch, and
+   * this interface is the entry point a reader uses to register a new dialect.
    *
    * Evaluated inside the extraction script, so the shared text helpers
    * {@link extractionHelpersSource} emits — `__lhVisibleText`,
@@ -242,6 +255,117 @@ export interface PostDetailVariantAdapter extends VariantAdapter {
  */
 export interface SearchResultsVariantAdapter extends VariantAdapter {
   readonly surface: "search-results";
+}
+
+/**
+ * A reactions-modal adapter: one post page, one trigger, one modal that only
+ * exists after that trigger is clicked.
+ *
+ * This surface is read in FOUR generated scripts rather than one, because the
+ * region it reads has to be *opened* first, and every field below is
+ * reinterpreted against that sequence.  Nothing here is a new selection
+ * mechanism — detection, readiness and scope resolution are the same three
+ * rules the other two surfaces use.
+ *
+ * - {@link VariantAdapter.detect} is the **reactions TRIGGER on the post
+ *   page**, not the modal wrapper.  The trigger is present both before and
+ *   after the click, so one anchor serves pre-click dialect selection *and*
+ *   keeps the readiness conjunction honest post-click ("exactly one adapter's
+ *   `detect` matched AND that adapter's own `ready` is present").  Anchoring
+ *   `detect` on the modal instead would make the dialect undecidable at the
+ *   only moment it has to be decided — before the click, when there is no
+ *   modal yet.  It is a candidate SET, not the trigger itself: which of those
+ *   candidates *is* the trigger is decided by the shared accessible-name rule
+ *   in {@link buildReactionsTriggerSource}, because that rule is what the two
+ *   dialects genuinely share (one labels the control, the other renders the
+ *   words as its text).
+ * - {@link VariantAdapter.ready} is a **container-tier anchor of the OPEN
+ *   modal** — an element the modal renders whether or not the engager list
+ *   holds a single row.  Deliberately not "an engager link is present", which
+ *   is what the pre-registry gate polled: that predicate cannot go green on a
+ *   modal with zero engagers, so it made the legal genuinely-zero case
+ *   indistinguishable from a timeout.  The container tier is what separates
+ *   them now (ADR-008 § Decision 4), so readiness must stop just short of it.
+ * - {@link VariantAdapter.scopes} are the **modal-root candidates**, tried in
+ *   order, resolving to the SINGLE element the engager rows are read from.
+ *   Resolving one IS the container tier: none resolving means this adapter did
+ *   not read the modal, which raises rather than returning an empty list.  The
+ *   no-terminal-fallback rule is unchanged — there is no widening to
+ *   `document`.  First match wins only among candidates that pass
+ *   {@link ReactionsModalVariantAdapter.rootSignal}; see that field for why a
+ *   bare first match is not enough on this surface.
+ * - {@link VariantAdapter.extract} is `(function () { ...; return
+ *   <Element|null>; })` — this dialect's **own resolver for its modal root**,
+ *   consulted only when none of its `scopes` candidates matched.  That is the
+ *   reinterpretation, and it is where the two dialects actually differ: one
+ *   modal carries a semantically-named wrapper class and needs no resolver at
+ *   all, the other carries no selectable wrapper of any kind and can only be
+ *   found by walking up from a control inside it (#773).  What a *found* row
+ *   then reads as is NOT dialect-specific in anything measured, so the row
+ *   read stays in {@link buildReactionsModalExtractionSource} rather than
+ *   being copied into each extractor — two copies of one unmeasured read is
+ *   exactly the drift the shared text helpers exist to prevent.
+ *
+ * It adds ONE field of its own, {@link rootSignal}.  There is deliberately no
+ * `counts` here: that field narrows the engagement-counts row of a post, and
+ * this surface reads a modal.  Its own cardinal — the reaction total — is
+ * captured off the trigger before the click and read back after it, by
+ * {@link buildReactionsModalTotalSource}.
+ */
+export interface ReactionsModalVariantAdapter extends VariantAdapter {
+  readonly surface: "reactions-modal";
+  /**
+   * The anchor a resolved modal root must CONTAIN for this dialect — the
+   * per-candidate validation gate on {@link VariantAdapter.scopes}.
+   *
+   * Every other surface can take a scope's first match: a post-detail scope is
+   * `[data-id^="urn:li:activity:"]` or a chameleon result container, anchors
+   * that name the thing they wrap.  A modal-root candidate does not have that
+   * property.  This dialect's are the generic `dialog` / `[aria-modal="true"]`
+   * (sdui) and, for legacy, a wrapper LinkedIn may render alongside unrelated
+   * overlays.  A cookie banner, a messaging overlay or a CLOSED `<dialog>`
+   * — which still matches `querySelector('dialog')` — would otherwise be
+   * returned as "the modal" purely by sitting earlier in document order.  Two
+   * failures follow, one loud and one silent: an overlay with no engager rows
+   * scrapes to `[]` and the cardinal tier raises on a modal that opened
+   * perfectly, and an overlay that DOES carry `/in/` links returns people who
+   * never reacted, with `extractedCount > 0` so nothing raises at all.
+   *
+   * The resolver therefore iterates EVERY match of every scope candidate and
+   * accepts the first that contains this anchor.  That requirement is not new
+   * — the pre-registry resolver `RESOLVE_REACTIONS_MODAL_SCRIPT` states and
+   * implements it (`wait-for-reactions-modal.ts`, #773); the registry port
+   * kept the candidate list and dropped the gate.
+   *
+   * **What it actually rules out, stated as a bound rather than as a
+   * result.**  This gate rejects a candidate that matches the scope selector
+   * but does NOT contain the dialect's container anchor.  That is all it
+   * settles, and it is strictly weaker than identifying the modal: a decoy
+   * that matches the scope AND happens to contain the anchor is accepted.
+   * For legacy the anchor is `[role="tablist"]`, which is generic — any
+   * overlay carrying a tab strip inside a `.social-details-reactors-modal`-
+   * shaped wrapper would pass — so "narrow, not impossible" is the honest
+   * reading, not "decoys are excluded".  It is worth having anyway, because
+   * the shapes it filters are the ones this surface actually has to worry
+   * about — a cookie banner, a messaging overlay, a CLOSED `<dialog>` — and
+   * none of those holds a tab strip.  (That those shapes are what LinkedIn
+   * renders alongside the modal is REASONED from the scope selectors being
+   * generic, not measured: the 2026-09-02 probe recorded one dialog open, its
+   * own.)  What would make it a proof of
+   * identity is a *decisive* per-dialect anchor — one that names the reactors
+   * modal rather than describing a modal — and for sdui that is the
+   * measurement nobody has taken.
+   *
+   * It is deliberately per-ADAPTER rather than the union that resolver used.
+   * A union cannot report which dialect it matched, which is the whole reason
+   * this surface was registered — so each dialect validates with its own
+   * container-tier anchor: legacy's tab strip, sdui's filter tab.  Both are
+   * the same anchor that dialect's {@link VariantAdapter.ready} polls, which
+   * is the point: readiness asks *has the modal's container rendered* and this
+   * asks *is this candidate that container*, and answering them with two
+   * different anchors would let a candidate pass one and fail the other.
+   */
+  readonly rootSignal: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -874,6 +998,403 @@ const LEGACY_SEARCH_RESULTS_ADAPTER: SearchResultsVariantAdapter = {
 };
 
 // ---------------------------------------------------------------------------
+// reactions-modal :: what the two dialects share
+// ---------------------------------------------------------------------------
+
+/**
+ * How deep the SDUI resolver walks up from a control inside the modal before
+ * giving up.
+ *
+ * 12 crosses the modal wrapper plus typical layout chrome (toolbar,
+ * root-of-modal, portal host).  It does NOT on its own stop the walk running
+ * away into `<body>` — the depth cap was once described as if it did, and it
+ * cannot: on a page listing people, `<body>` satisfies the walk's termination
+ * condition and is comfortably within 12 hops of the filter tab.  What stops
+ * it is {@link REACTIONS_MODAL_FORBIDDEN_SCOPE}; this bound is the second
+ * guard, for a page whose chrome is deeper than anything recorded.
+ *
+ * Carried over from the resolver this replaces (`wait-for-reactions-modal.ts`,
+ * #773), which still uses its own copy for the diagnostic ancestor-chain probe
+ * — deliberately, because that probe reports the shape of a page NO adapter
+ * could read, and tying it to an adapter would narrow the one artifact that
+ * has to stay wider than any binding.
+ */
+const REACTIONS_MODAL_WALK_DEPTH = 12;
+
+/**
+ * Elements this module refuses to return as a modal scope, whatever else they
+ * satisfy.
+ *
+ * The rule the resolvers on this surface obey, stated once: a document-level
+ * element is never "the modal".  Accepting one scopes the engager scrape to
+ * the whole page, and the failure that follows is the silent kind — a page
+ * that lists people anywhere (a feed, a search result, a "People also viewed"
+ * rail) yields `/in/` links, so the operation reports strangers as reactors
+ * with `extractedCount > 0` and no tier fires.
+ *
+ * It is the same refusal the `scopes` path already makes structurally by
+ * having no terminal `document` fallback; the walk needs it spelled out
+ * because a walk chooses its own terminus.  `<main>` is in the list for the
+ * same reason as the three document-level nodes: it is a page landmark, so an
+ * element that IS `<main>` is the page, not a region inside it.
+ *
+ * Matched with `Element.matches`, not compared against `document.body` and
+ * friends by identity: identity cannot express `<main>` at all, and the
+ * extraction source is separately pinned to read no page-wide text.
+ */
+const REACTIONS_MODAL_FORBIDDEN_SCOPE = "body, html, head, main";
+
+/**
+ * An engager's profile link inside the modal — the row anchor the shared read
+ * enumerates, and the termination signal the SDUI resolver walks toward.
+ */
+const REACTIONS_MODAL_ENGAGER_LINK = 'a[href*="/in/"]';
+
+/**
+ * How far the row walk climbs from an engager link's parent before giving up.
+ *
+ * Deliberately much tighter than {@link REACTIONS_MODAL_WALK_DEPTH}, which
+ * crosses a modal's layout chrome: this one crosses a ROW's, and a reactor row
+ * is a shallow structure — an avatar, a name lockup, a headline, a pictogram,
+ * an action button.  Four levels covers the deepest nesting any recorded
+ * dialect puts between the anchor and its row (`li > div > div > a`) with a
+ * level to spare; a walk that has climbed further without finding row content
+ * has left the row.
+ *
+ * The walk is bounded by the modal as well, so this cap only binds on a modal
+ * whose rows are deeper than anything observed — in which case the fallback
+ * below it is what answers.
+ */
+const REACTIONS_MODAL_ROW_WALK_DEPTH = 4;
+
+/**
+ * What a reactor ROW holds that the anchor alone does not: a headline
+ * candidate or a reaction pictogram.
+ *
+ * The structural signal the row walk accepts on.  Deliberately not a class
+ * name: no SDUI row selector has ever been measured, and guessing one is what
+ * this module refuses to do everywhere else.  These are the two things the row
+ * read actually consumes, so an ancestor holding either is by construction an
+ * ancestor the read can work with.
+ */
+const REACTIONS_MODAL_ROW_CONTENT = "p, span, img[alt]";
+
+// ---------------------------------------------------------------------------
+// reactions-modal :: legacy
+// ---------------------------------------------------------------------------
+
+/**
+ * The legacy reactions trigger — the control that opens the engager modal.
+ *
+ * *Measured* live on 2026-09-02 against a legacy post-detail page carrying two
+ * reactions: `<button data-reaction-details="" aria-label="2 reactions"
+ * class="…social-details-social-counts__count-value…">`, and clicking it was
+ * verified to open the modal.
+ *
+ * Its `textContent` is the bare string `"2"` — the word "reactions" exists
+ * ONLY in `aria-label`, with reaction-icon `<img>` elements in between.  That
+ * is why the text-only finder this replaces matched NOTHING on that page (the
+ * 2026-08-31 probe recorded the same strict pattern matching 0 document-wide),
+ * so the modal was never opened and the operation reported `engagers: []` with
+ * `total: 0` on a post that has two — #823 on this path.
+ *
+ * **Deliberately document-wide, and the residual risk is stated rather than
+ * papered over.**  Its SDUI sibling IS root-scoped
+ * ({@link SDUI_REACTIONS_MODAL_ADAPTER}), so the two dialects apply opposite
+ * rules on one surface, which is worth justifying.  On a post that HAS
+ * reactions, its own counts row precedes every comment in document order and
+ * {@link buildReactionsTriggerSource} takes the first visible hit, so the
+ * measured case cannot pick the wrong control.  The exposure is a post with
+ * ZERO reactions where some other `[data-reaction-details]` on the page reads
+ * `"<N> reactions"` — a comment's own reactor count, say — which would be
+ * clicked and scraped as if it were the post's, and would self-corroborate,
+ * because the cardinal is stamped off that same wrong control.
+ *
+ * **That exposure is CONFIRMED REACHABLE, not merely reasoned.**  An
+ * independent probe on 2026-09-02 built exactly that page — a zero-reaction
+ * post whose comment carries `aria-label="7 reactions"` — and this source
+ * returns `true` on it and stamps a cardinal of 7.  Nothing downstream can
+ * detect the substitution: both tiers see one consistent observation.
+ *
+ * Scoping it to {@link LEGACY_SOCIAL_COUNTS} would close that, and the
+ * element's own `social-details-social-counts__count-value` class says it is a
+ * BEM child of exactly that block.  It is NOT done here because the containment
+ * was never MEASURED: the 2026-09-02 probe recorded the element, and the
+ * 1-match reading of the counts row is from the separate 2026-08-31 probe.
+ * Narrowing a working, measured anchor on an inference is the move this file
+ * refuses everywhere else, and it would break extraction outright if the
+ * inference is wrong — a worse failure than the one it prevents.
+ *
+ * One probe settles both this and the zero-reaction premise below: open a
+ * zero-reaction legacy post and record (a) whether any
+ * `[data-reaction-details]` renders at all, and (b) whether the post's own
+ * trigger is a descendant of `.social-details-social-counts`.  See ADR-008
+ * § 2026-09-02 Amendment (#840).
+ *
+ * **The converse exclusivity direction lives here, and it is REASONED.**  Its
+ * SDUI sibling's non-match under legacy is measured (`[componentkey]` matched
+ * 0 on the 2026-08-31 probe).  That this attribute matches 0 under SDUI is
+ * not: `data-reaction-details` is the artdeco-era attribute the SDUI rewrite
+ * is understood to have replaced, an inference from the attribute scheme
+ * rather than an observation, because LinkedIn is not serving SDUI to this
+ * account.  If it is wrong, both reactions-modal adapters claim the page and
+ * the operation raises `DOMVariantAmbiguousError` on every SDUI post.  Same
+ * form the legacy search adapter states its own converse in.
+ */
+const LEGACY_REACTIONS_TRIGGER = "button[data-reaction-details]";
+
+/**
+ * The legacy reactors-modal wrapper.  *Measured* 2026-09-02:
+ * `<div data-test-modal role="dialog" class="artdeco-modal …
+ * social-details-reactors-modal" aria-labelledby="social-details-reactors-modal__header">`.
+ *
+ * DECISIVE among the anchors that element carries: it is semantically named
+ * for the reactors list and it sits on the wrapper itself.  The generic
+ * alternatives on the same element — `[data-test-modal]` and `[role="dialog"]`
+ * — describe *a* modal rather than *this* one, and `[role="dialog"]` measured
+ * 1 on that page only because this was the one dialog open; either would
+ * resolve an unrelated overlay on a page where the reactors modal is absent.
+ */
+const LEGACY_REACTORS_MODAL = ".social-details-reactors-modal";
+
+/**
+ * The same wrapper addressed through the header it labels.  *Measured* on the
+ * same element (`#social-details-reactors-modal__header` resolves), and kept
+ * as the second candidate because it survives a class rename while staying
+ * bound to the reactors modal by name — unlike the two generic anchors above,
+ * which survive a rename by ceasing to identify anything in particular.
+ */
+const LEGACY_REACTORS_MODAL_BY_LABEL =
+  '[aria-labelledby="social-details-reactors-modal__header"]';
+
+/**
+ * The legacy modal's own tab strip — this dialect's container-tier anchor.
+ *
+ * *Measured* 2026-09-02: four `[role="tab"]` elements inside a
+ * `[role="tablist"]`, present independently of whether the engager list held a
+ * single row.  It serves two bindings that must not drift apart: scoped to the
+ * wrapper it is this adapter's `ready`, and unscoped it is its
+ * {@link ReactionsModalVariantAdapter.rootSignal} — the same question asked of
+ * the page and of one candidate.
+ */
+const LEGACY_REACTIONS_TABLIST = '[role="tablist"]';
+
+/** `<root> [role="tablist"]` for each root. */
+function tablistWithin(roots: readonly string[]): string {
+  return roots.map((root) => `${root} ${LEGACY_REACTIONS_TABLIST}`).join(", ");
+}
+
+/**
+ * Legacy reactions-modal resolver: there is nothing left to resolve.
+ *
+ * Stated as an explicit `null` rather than by copying the SDUI walk below,
+ * because that walk is *measured dead* under this dialect — the 2026-09-02
+ * probe recorded its anchor, `button[aria-label$=" All reactions"]`, matching
+ * 0 while the modal was open.  A resolver that cannot fire is not a fallback,
+ * it is dead code with a comment justifying it.
+ */
+const LEGACY_REACTIONS_MODAL_RESOLVE = `(function () {
+  return null;
+})`;
+
+/**
+ * Legacy (pre-SDUI) reactions-modal adapter — the *measured* one.
+ *
+ * `ready` is the modal's own tab strip, scoped to whichever of this dialect's
+ * two wrapper anchors is present.  *Measured*: four `[role="tab"]` elements
+ * inside a `[role="tablist"]`, present independently of whether the engager
+ * list holds a single row.  Two things make it the right anchor and not merely
+ * a working one.  It is strictly stronger than the wrapper alone, which can be
+ * present in a skeleton state before the list region renders — the same
+ * argument the post-detail adapters make for gating on the author link rather
+ * than the container.  And it stops short of the engager rows themselves,
+ * which is what makes a genuinely-zero modal reach the cardinal tier instead
+ * of timing out.
+ *
+ * `scopes` is tightest-first and both candidates are the same measured
+ * element, so a page that selects this adapter resolves `scopes[0]`; the
+ * second entry becomes live only if the class is renamed.  It is recorded as
+ * such rather than described as a live path.
+ *
+ * `rootSignal` is that same tab strip unscoped, so a candidate is accepted as
+ * the modal only when it holds one.  Cheap here — the measured wrapper carries
+ * it — and it is what stops a second `.social-details-reactors-modal`-shaped
+ * element earlier in the document from being taken for this one.
+ */
+const LEGACY_REACTIONS_MODAL_ADAPTER: ReactionsModalVariantAdapter = {
+  surface: "reactions-modal",
+  variant: "legacy",
+  detect: LEGACY_REACTIONS_TRIGGER,
+  ready: tablistWithin([LEGACY_REACTORS_MODAL, LEGACY_REACTORS_MODAL_BY_LABEL]),
+  scopes: [LEGACY_REACTORS_MODAL, LEGACY_REACTORS_MODAL_BY_LABEL],
+  rootSignal: LEGACY_REACTIONS_TABLIST,
+  extract: LEGACY_REACTIONS_MODAL_RESOLVE,
+};
+
+// ---------------------------------------------------------------------------
+// reactions-modal :: sdui
+// ---------------------------------------------------------------------------
+
+/**
+ * The modal's "All reactions" filter tab.
+ *
+ * The ONE anchor recorded present on this dialect's engager modal: the #773
+ * Phase-1 diagnostic capture reported `reactionsButtonAriaLabels` including
+ * `"24 All reactions"` on a page where every canonical modal wrapper matched
+ * zero and the modal was visibly open.
+ */
+const SDUI_ALL_REACTIONS_TAB = 'button[aria-label$=" All reactions"]';
+
+/** `<scope> button, <scope> [role="button"], <scope> span, <scope> a`. */
+function controlCandidatesWithin(scopes: readonly string[]): string {
+  return scopes
+    .flatMap((scope) => [
+      `${scope} button`,
+      `${scope} [role="button"]`,
+      `${scope} span`,
+      `${scope} a`,
+    ])
+    .join(", ");
+}
+
+/**
+ * SDUI reactions-modal resolver — the tab-anchor ancestor walk from #773.
+ *
+ * Carried over verbatim from `RESOLVE_REACTIONS_MODAL_SCRIPT`'s stage 2, minus
+ * the canonical-wrapper stage that precedes it there, which is now this
+ * adapter's `scopes`.  It exists because this dialect's modal carries no
+ * selectable wrapper at all — the Phase-1 capture measured zero matching
+ * dialog wrappers *while the modal was open* — so the only way to name the
+ * region is to start from a control known to be inside it and walk up until an
+ * ancestor holds engager links.
+ *
+ * **Its termination condition is engager links, and that is a recorded
+ * limitation of this dialect, not a design choice.**  A genuinely-zero SDUI
+ * modal has no engager links, so the walk resolves nothing and the scrape
+ * raises where the legacy path would return an empty list.  Fixing it needs a
+ * container-tier anchor for THIS dialect, which is the measurement nobody has
+ * taken; inventing one would put a guessed selector where § Decision 3
+ * requires a decisive one.  LinkedIn is serving legacy today, so the falsifier
+ * is a live probe of an SDUI zero-reaction post's modal.
+ *
+ * **That termination condition is also not a validation, and the walk carries
+ * its own refusal because of it.**  "Holds engager links" is satisfied by
+ * every ancestor up to and including `<body>` on any page that lists people
+ * elsewhere — a feed behind the modal is enough — so within
+ * {@link REACTIONS_MODAL_WALK_DEPTH} the walk could return the document body,
+ * after which the scrape is scoped to the whole page and returns strangers as
+ * reactors with `extractedCount > 0`, which no tier can contradict.  It
+ * therefore rejects every element in {@link REACTIONS_MODAL_FORBIDDEN_SCOPE}
+ * as a result and keeps climbing, which on a document-level ancestor means
+ * resolving nothing at all.  Refusing is the correct answer there: the caller
+ * raises, which is loud, where the alternative ships wrong data quietly.
+ */
+const SDUI_REACTIONS_MODAL_RESOLVE = `(function () {
+  const tab = document.querySelector(${jsString(SDUI_ALL_REACTIONS_TAB)});
+  if (!tab || tab.offsetHeight === 0) return null;
+  let ancestor = tab.parentElement;
+  let depth = 0;
+  while (ancestor && depth < ${String(REACTIONS_MODAL_WALK_DEPTH)}) {
+    if (
+      !ancestor.matches(${jsString(REACTIONS_MODAL_FORBIDDEN_SCOPE)}) &&
+      ancestor.querySelectorAll(${jsString(REACTIONS_MODAL_ENGAGER_LINK)}).length > 0
+    ) {
+      return ancestor;
+    }
+    ancestor = ancestor.parentElement;
+    depth++;
+  }
+  return null;
+})`;
+
+/**
+ * SDUI reactions-modal adapter.
+ *
+ * **Provenance, stated precisely, because none of it has the standing of the
+ * legacy adapter above.**  LinkedIn is serving legacy right now, so this
+ * dialect's reactions modal cannot be probed and every anchor here is
+ * RECONSTRUCTED from the record rather than measured on a page.  The
+ * precedent for writing a reconstructed adapter honestly is
+ * {@link LEGACY_SEARCH_RESULTS_ADAPTER}; the same rule applies — treat this as
+ * the current best hypothesis with the evidence named, not as a verified
+ * claim.
+ *
+ * `detect` is the SDUI post-detail roots' own control candidates.  Two parts,
+ * with different evidence:
+ *
+ * - The roots carry UNEQUAL evidence, and only one of the two is measured.
+ *   {@link SDUI_CONTAINER} (`[componentkey]`) matched **0** document-wide on
+ *   the 2026-08-31 legacy probe, and #800 recorded the post-detail container
+ *   present across all four post types under SDUI.  {@link SDUI_SCREEN}
+ *   (`[data-sdui-screen="…"]`) has NO recorded count anywhere: it is an
+ *   inference from the same attribute scheme.  So "cannot claim a legacy page"
+ *   is measured for the first root and reasoned for the second.
+ *
+ *   The exclusivity conclusion is also TWO-DIRECTIONAL where the measurement
+ *   is one-directional.  Only *this* anchor not matching legacy is measured;
+ *   the converse — `data-reaction-details` matching 0 under SDUI — is recorded
+ *   on {@link LEGACY_REACTIONS_TRIGGER} as an inference, because LinkedIn is
+ *   not serving SDUI to this account.  What that costs if either direction is
+ *   wrong is a total outage rather than a degraded read: both reactions-modal
+ *   adapters would claim the page and the operation would raise
+ *   `DOMVariantAmbiguousError` on EVERY post of the affected dialect.  Stated
+ *   here so a reader diagnosing that is not doing it against a comment
+ *   claiming the collision was measured impossible.
+ * - The candidate list inside them is *the one the pre-#840 finder used*
+ *   (`button, [role="button"], span, a`), now confined to the dialect it was
+ *   measured working in: #773's capture recorded the modal visibly OPEN under
+ *   SDUI, which it could only be if that finder matched and the click landed.
+ *   Confining it is the whole point — as a document-wide list it also ran on
+ *   legacy pages, where it matches nothing, and reported "no reactions".
+ *
+ * It is deliberately BROADER than the legacy trigger anchor, and that is not a
+ * concession: no CSS anchor for this dialect's trigger has ever been recorded
+ * — what was recorded is that the trigger renders the words "N reactions" as
+ * its own text — so precision here comes from the shared accessible-name rule
+ * in {@link buildReactionsTriggerSource}, not from the selector.  The one
+ * consequence worth stating is that this adapter claims every SDUI
+ * post-detail page, including a post with no reactions at all; the trigger
+ * search then finds nothing and the operation returns an empty list — which is
+ * the right answer for that post *on a reasoned, unmeasured premise*, not a
+ * measured one.  The premise is that a zero-reaction post renders no trigger;
+ * the 2026-09-02 spike measured a post WITH reactions and the zero case was
+ * never observed.  Falsifier: a live probe of a zero-reaction post's DOM.  See
+ * {@link buildReactionsTriggerSource}, which owns the full statement of it.
+ *
+ * `ready` is the modal's filter tab — the one anchor recorded present on this
+ * dialect's modal (see {@link SDUI_ALL_REACTIONS_TAB}).  Whether it renders on
+ * a modal with zero engagers is unmeasured; its label carried a count in the
+ * one recording of it.
+ *
+ * `scopes` are the canonical wrappers the pre-registry resolver tried first.
+ * They are recorded here as *known insufficient* rather than as a live path:
+ * the Phase-1 capture measured zero of them on the open modal, which is why
+ * {@link SDUI_REACTIONS_MODAL_RESOLVE} exists and is load-bearing alone.  They
+ * are kept because a restoration would take effect without a code change, and
+ * because deleting them would leave this adapter with no `scopes` at all.
+ *
+ * They are also the reason {@link ReactionsModalVariantAdapter.rootSignal}
+ * exists: both are generic ARIA wrappers that match any modal on the page,
+ * including a closed `<dialog>`, so accepting one unvalidated would resolve an
+ * unrelated overlay as this dialect's engager modal.  `rootSignal` is the
+ * filter tab — the ONE anchor recorded present on this dialect's modal, and
+ * the same anchor `ready` polls — so a restored wrapper is accepted only when
+ * it actually holds the modal.  Deliberately not the engager link: that would
+ * make a genuinely-zero SDUI modal unresolvable through `scopes` too, which is
+ * already this dialect's recorded limitation on the resolver path and is not
+ * worth spreading.
+ */
+const SDUI_REACTIONS_MODAL_ADAPTER: ReactionsModalVariantAdapter = {
+  surface: "reactions-modal",
+  variant: "sdui",
+  detect: controlCandidatesWithin([SDUI_CONTAINER, SDUI_SCREEN]),
+  ready: SDUI_ALL_REACTIONS_TAB,
+  scopes: ["dialog", '[aria-modal="true"]'],
+  rootSignal: SDUI_ALL_REACTIONS_TAB,
+  extract: SDUI_REACTIONS_MODAL_RESOLVE,
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -899,6 +1420,10 @@ const ADAPTER_REGISTRY: {
   "search-results": [
     SDUI_SEARCH_RESULTS_ADAPTER,
     LEGACY_SEARCH_RESULTS_ADAPTER,
+  ],
+  "reactions-modal": [
+    SDUI_REACTIONS_MODAL_ADAPTER,
+    LEGACY_REACTIONS_MODAL_ADAPTER,
   ],
 };
 
@@ -978,6 +1503,11 @@ function adapterTableSource(
       if (hasCounts(adapter)) {
         fields.push(`counts: [${adapter.counts.map(jsString).join(", ")}]`);
       }
+      // Same structural rule, same reason: only the reactions-modal surface
+      // declares a root signal, and only its resolver reads one.
+      if (hasRootSignal(adapter)) {
+        fields.push(`rootSignal: ${jsString(adapter.rootSignal)}`);
+      }
       fields.push(`extract: ${adapter.extract}`);
     }
     return `{ ${fields.join(", ")} }`;
@@ -990,6 +1520,13 @@ function hasCounts(
   adapter: VariantAdapter,
 ): adapter is VariantAdapter & { readonly counts: readonly string[] } {
   return "counts" in adapter;
+}
+
+/** Does this adapter validate its resolved root against a signal? */
+function hasRootSignal(
+  adapter: VariantAdapter,
+): adapter is VariantAdapter & { readonly rootSignal: string } {
+  return "rootSignal" in adapter;
 }
 
 /**
@@ -1076,6 +1613,17 @@ export function buildDetectionSource(
  * Deliberately absent from the readiness and detection scripts, for the same
  * blast-radius reason {@link adapterTableSource} withholds the extractors from
  * them — neither script reads text, so a defect here cannot reach a poll loop.
+ *
+ * Emitted WHOLE, though, so a consumer that needs only some of it carries the
+ * rest: the reactions-modal extraction script uses the name and headline
+ * helpers and never calls the engagement-counts ones
+ * (`__LH_COUNTERS` … `__lhReadCount`), which post-detail alone reads.  That is
+ * a deliberate trade rather than an oversight — one block, one escape audit,
+ * and the withholding above is per-SCRIPT-KIND, which is where the blast
+ * radius actually lives.  Splitting it per consumer would give three blocks to
+ * keep in escape-agreement for no runtime benefit, since the payload cost is a
+ * few hundred bytes on a call that already ships an adapter table.  Named here
+ * because "shared text helpers" undersells what the block now contains.
  *
  * **Editing across the language seam.**  The literal below is TypeScript
  * emitting JavaScript, and the two languages share an escape character.  Every
@@ -1194,7 +1742,11 @@ function extractionHelpersSource(): string {
     if (__lhIsNameEcho(txt, authorName)) return false;
     if (/^\\d+[smhdw]$/.test(txt)) return false;
     if (/^\\d[\\d,]*\\s+(?:reactions?|comments?|reposts?|likes?)$/i.test(txt)) return false;
-    if (/^(?:Follow|Following|Promoted|Boost|Author|You)$/i.test(txt)) return false;
+    // The affordance labels rendered beside a name.  The last three arrived
+    // with the reactions modal (#840), whose engager rows carry a
+    // Connect / Message / Pending control each; every one of them clears the
+    // five-character floor above, so without this they read as headlines.
+    if (/^(?:Follow|Following|Promoted|Boost|Author|You|Connect|Message|Pending)$/i.test(txt)) return false;
     if (/^(?:Verified|Premium)(?:\\s+Profile)?$/i.test(txt)) return false;
     if (/^Skip to|^Keyboard shortcuts$|^Close jump menu$/i.test(txt)) return false;
     if (/^Feed\\s+(?:post|detail\\s+update)$/i.test(txt)) return false;
@@ -1515,6 +2067,461 @@ export function buildSearchResultsExtractionSource(
   }
 
   return { variant: adapter.variant, postCardCount: postCardCount, posts: posts };
+})()`;
+}
+
+/**
+ * In-page modal-root resolution for the reactions-modal surface, shared by
+ * every generated script that needs the OPEN modal.
+ *
+ * Defines `__lhReactionsModalRoot()` returning one of three shapes, mirroring
+ * the three selection outcomes exactly:
+ *
+ * - `{ ambiguousVariants: [...] }` — two or more adapters claimed the page
+ * - `null` — no adapter claimed it, OR the claiming adapter resolved neither
+ *   its own `scopes` candidates nor its own resolver.  Both are "no usable
+ *   adapter"; the caller raises rather than reporting an empty modal
+ * - `{ modal, variant }` — the resolved root and the dialect that resolved it
+ *
+ * **Every match of every scope candidate is examined, and each is validated
+ * against the adapter's own {@link ReactionsModalVariantAdapter.rootSignal}
+ * before it is accepted.**  Taking `querySelector`'s single first hit would
+ * hand back whichever `dialog` / `[aria-modal="true"]` / wrapper sits earliest
+ * in document order — a cookie banner, an unrelated overlay, or a CLOSED
+ * `<dialog>`, all of which still match — and the caller has no way to tell
+ * that from the real modal.  See that field for the two failure modes and for
+ * why the gate is per-adapter rather than the cross-dialect union the
+ * pre-registry resolver used.
+ *
+ * Emitted once per consuming script rather than shared through a global,
+ * because each consumer composes its own `Runtime.evaluate` expression and
+ * there is no page state between them to hang a helper on.
+ */
+function reactionsModalRootSource(
+  adapters: readonly ReactionsModalVariantAdapter[],
+): string {
+  return `${selectionSource(adapters, true)}
+  function __lhReactionsModalRoot() {
+    const selection = __lhSelect();
+    if (selection.matched.length > 1) {
+      return { ambiguousVariants: selection.matched };
+    }
+    const adapter = selection.adapter;
+    if (!adapter) return null;
+    for (const candidate of adapter.scopes) {
+      // querySelectorAll, not querySelector: a candidate that merely sits
+      // earliest in the document is not the modal, and rejecting it is the
+      // whole point of the signal check below.
+      for (const el of document.querySelectorAll(candidate)) {
+        if (el.querySelector(adapter.rootSignal)) {
+          return { modal: el, variant: adapter.variant };
+        }
+      }
+    }
+    // This dialect's OWN resolver, for a modal whose wrapper carries no
+    // selectable anchor.  Not a terminal fallback: it belongs to the selected
+    // adapter and it is allowed to return nothing.
+    //
+    // It is deliberately NOT re-gated by \`rootSignal\` here, and the reason is
+    // what the resolver is FOR.  A dialect reaches it only because its modal
+    // carries no selectable wrapper, so the resolver starts FROM that
+    // dialect's \`rootSignal\` anchor and walks UP: every element it can return
+    // contains that anchor by construction, and re-asking would be asking the
+    // question the walk began with.
+    //
+    // What the walk owes instead is a refusal of its own, and it carries one:
+    // it rejects every element this module forbids as a scope, so it cannot
+    // answer with the document body on a page that lists people outside the
+    // modal.  The ground recorded here before #840 round 2 — that stopping on
+    // an ancestor holding engager links IS the validation — was wrong, and
+    // wrong in the unsafe direction: on a people-listing page every ancestor
+    // up to \`<body>\` satisfies it.
+    const resolved = adapter.extract();
+    return resolved ? { modal: resolved, variant: adapter.variant } : null;
+  }`;
+}
+
+/**
+ * Reactions-trigger source — find the control that opens the engager modal,
+ * mark it for the humanized scroll + click, and record its cardinal.
+ *
+ * Returns `true` when a trigger was marked, `false` when this page has no
+ * reactions affordance for the selected dialect, and
+ * `{ ambiguousVariants: [...] }` when two or more adapters claimed the page.
+ *
+ * **`false` is deliberately not an error, and this is the one surface where
+ * that is true.**  On post detail and search results a page no adapter claims
+ * raises `DOMVariantUnsupportedError`, because a post-detail page always has a
+ * post.  Here a third reading is both common and benign — the post has no
+ * reactions, so no affordance is rendered — and raising would throw on
+ * ordinary posts.  Two or more adapters matching is still a hybrid page and
+ * still refuses to guess.  See ADR-008 § 2026-09-02 Amendment (#840).
+ *
+ * **That third reading is REASONED, not measured, and the bound belongs here
+ * rather than only in the amendment.**  A zero-reaction post is *believed* to
+ * render no `[data-reaction-details]` trigger at all, which would make an
+ * absent trigger a clean genuinely-zero discriminator.  The 2026-09-02 spike
+ * measured a post WITH reactions; the zero case was not observed.  Its
+ * falsifier is a live probe of a zero-reaction post's DOM: if such a post
+ * renders a trigger reading `"0 reactions"`, this branch is unreachable on it
+ * and the modal opens on an empty list instead — which the container tier
+ * handles correctly anyway.  What the bound forbids is the inverse
+ * "simplification": treating a not-found trigger as a POSITIVE zero signal,
+ * which would re-open #823 through the one branch that deliberately returns
+ * empty.
+ *
+ * **The recognition rule is shared across dialects on purpose.**  A trigger is
+ * a VISIBLE candidate whose ACCESSIBLE NAME — `aria-label` first, own text
+ * second — is exactly `"<N> reactions"`.  Both halves are measured, one per
+ * dialect: legacy labels the control `aria-label="2 reactions"` and renders
+ * only `"2"` as text (2026-09-02), while SDUI rendered the words as the
+ * element's text (#773, whose capture recorded the modal open, which the
+ * click could not have achieved otherwise).  Reading only the text is exactly
+ * what the finder this replaces did, and it is why the modal was never opened
+ * under legacy — the defect at the head of #823 on this path.  Which elements
+ * are even offered to the rule is per dialect and comes from `detect`.
+ *
+ * The cardinal is stamped onto the trigger here, before the click, and read
+ * back after it by {@link buildReactionsModalTotalSource}.  That is the whole
+ * reason to stamp rather than return it: the modal's own header is a worse
+ * source (it renders the bare word "Reactions" and its tab reads `"All 2"`
+ * without the parentheses the old read required), and reading the trigger
+ * costs no additional `Runtime.evaluate` at all when it rides on the marker
+ * this script already writes.
+ */
+export function buildReactionsTriggerSource(
+  adapters: readonly ReactionsModalVariantAdapter[],
+): string {
+  return `(() => {
+  ${selectionSource(adapters)}
+  const selection = __lhSelect();
+  if (selection.matched.length > 1) {
+    return { ambiguousVariants: selection.matched };
+  }
+  const adapter = selection.adapter;
+  if (!adapter) return false;
+
+  const name = /^(\\d[\\d,]*)\\s+reactions?$/i;
+  for (const el of document.querySelectorAll(adapter.detect)) {
+    if (!(el.offsetHeight > 0)) continue;
+    const label = (el.getAttribute('aria-label') || '').replace(/\\s+/g, ' ').trim();
+    const text = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+    const hit = name.exec(label) || name.exec(text);
+    if (!hit) continue;
+    el.setAttribute('data-lhremote-reactions', 'true');
+    el.setAttribute('data-lhremote-reactions-total', hit[1]);
+    return true;
+  }
+  return false;
+})()`;
+}
+
+/**
+ * Reactions-total source — the cardinal that corroborates an empty engager
+ * scrape.
+ *
+ * Returns a number, always.  Reads, in order:
+ *
+ * 1. the cardinal stamped on the trigger before the click
+ *    ({@link buildReactionsTriggerSource}).  Preferred because it comes from
+ *    the control whose accessible name IS the count, rather than from prose
+ *    the modal happens to render;
+ * 2. failing that, the modal's own text — `"<N> reactions"`, then an
+ *    `"All"` tab count.
+ *
+ * The parentheses around that tab count are **optional**, and that is a fix,
+ * not a loosening: the read this replaces required `"All (2)"` and legacy
+ * renders `"All 2"`, so with the modal open and two engagers inside it the
+ * function returned 0 — a self-contradiction pointing the opposite way from
+ * #823, and one that would have made a real contradiction look corroborated.
+ *
+ * `0` is returned when nothing could be read, which is the value that makes an
+ * empty scrape legal.  That is the honest answer here: a cardinal is only
+ * evidence of a contradiction when it is positive, and inventing a positive
+ * one from a failed read would raise on a page nobody has looked at.
+ *
+ * **Step 2 is STRUCTURAL under legacy, not a live path — say so rather than
+ * let a reader infer it is the fix.**  This script runs only after the find
+ * call returned `true`, and that return happens only after the trigger was
+ * stamped with a cardinal parsed out of `/^(\d[\d,]*)\s+reactions?$/`.  Those
+ * captured digits always survive `__lhToTotal`, so step 1 returns and step 2
+ * is unreachable — *unless* the marked element left the DOM between the two
+ * calls.  Under legacy that same element IS the adapter's `detect`, so losing
+ * it also loses selection and `__lhReactionsModalRoot()` returns `null`, which
+ * still stops short of the text reads.  Only the SDUI dialect, whose `detect`
+ * is a broad candidate set that can survive the loss, leaves step 2 reachable
+ * in production.  It is kept for that dialect and as the honest belt-and-braces
+ * for the read that returned 0 — deleting it would re-open #823's inverse the
+ * moment either premise moves.
+ *
+ * The consequence to keep in view: the parenthesis fix is exercised by Tier-1
+ * and is correct, but on legacy the defect it repairs is already headed off one
+ * step earlier.  Step 2's reads are also UNANCHORED — they flatten the whole
+ * modal, which is exactly the read post-detail abandoned (see
+ * {@link extractionHelpersSource}'s `__lhReadCount`).  On the SDUI path that is
+ * a live over-match risk: an engager headline reading "overall 20 years" would
+ * satisfy the `"All"` pattern.  Anchoring it needs a measured SDUI count
+ * element, which needs a live SDUI page — the same blocker as everything else
+ * unmeasured on this dialect.  Recorded, not silently carried.
+ */
+export function buildReactionsModalTotalSource(
+  adapters: readonly ReactionsModalVariantAdapter[],
+): string {
+  return `(() => {
+  ${reactionsModalRootSource(adapters)}
+  function __lhToTotal(raw) {
+    const parsed = parseInt(String(raw).replace(/,/g, ''), 10);
+    return isNaN(parsed) ? null : parsed;
+  }
+
+  const marked = document.querySelector('[data-lhremote-reactions]');
+  if (marked) {
+    const stamped = __lhToTotal(marked.getAttribute('data-lhremote-reactions-total') || '');
+    if (stamped !== null) return stamped;
+  }
+
+  const root = __lhReactionsModalRoot();
+  if (!root || root.ambiguousVariants) return 0;
+
+  const text = (root.modal.textContent || '').replace(/\\s+/g, ' ');
+  const inline = text.match(/(\\d[\\d,]*)\\s+reactions?/i);
+  if (inline) {
+    const parsed = __lhToTotal(inline[1]);
+    if (parsed !== null) return parsed;
+  }
+  const all = text.match(/All\\s*\\(?\\s*(\\d[\\d,]*)\\s*\\)?/i);
+  if (all) {
+    const parsed = __lhToTotal(all[1]);
+    if (parsed !== null) return parsed;
+  }
+  return 0;
+})()`;
+}
+
+/**
+ * Reactions-modal extraction source — the engager rows.
+ *
+ * Returns:
+ *
+ * - an ARRAY of engager records on success, empty included.  An empty array is
+ *   a positive claim: the container resolved and held no rows, which the
+ *   caller hands to the cardinal tier
+ * - `null` when no adapter claimed the page, or when the claiming adapter
+ *   resolved no modal root.  That IS the container tier, enforced
+ *   structurally and upstream of any per-field check exactly as on post
+ *   detail (ADR-008 § Decision 4): an adapter that cannot resolve its own
+ *   region has not read it, and the caller raises
+ * - `{ ambiguousVariants: [...] }` when two or more adapters claimed it
+ *
+ * The distinction between the first two is the point of this whole surface
+ * being registered.  The code this replaces coalesced them — `scraped ?? []` —
+ * so a modal nothing could resolve and a modal with nobody in it arrived at
+ * the caller as the same value.
+ *
+ * ## What is shared, and why it is not per-dialect
+ *
+ * Everything below the modal root: row enumeration by profile link, the
+ * de-duplication, the public-id parse, the name and headline reads, and the
+ * reaction-type mapping.  Nothing about any of that has been measured to
+ * differ between the dialects, and splitting an unmeasured read into two
+ * copies is how one measurement becomes two that drift.  The dialects differ
+ * in how the modal ROOT is found, and that is what `adapter.extract` carries
+ * on this surface.
+ *
+ * The name and headline go through the same shared helpers post detail uses,
+ * rather than through the bespoke scan this replaces.  That is a fix carried
+ * across: the bespoke read took the first `span[dir="ltr"]` or
+ * `span[aria-hidden="true"]` inside the link, which in the legacy dialect
+ * wraps BOTH the visible copy of a name and its assistive-technology twin and
+ * returns them concatenated (#836).
+ */
+export function buildReactionsModalExtractionSource(
+  adapters: readonly ReactionsModalVariantAdapter[],
+): string {
+  return `(() => {
+  ${extractionHelpersSource()}
+  ${reactionsModalRootSource(adapters)}
+  const root = __lhReactionsModalRoot();
+  if (!root) return null;
+  if (root.ambiguousVariants) return { ambiguousVariants: root.ambiguousVariants };
+  const modal = root.modal;
+
+  // Does this ancestor hold row content the link's own subtree does not?  The
+  // row walk's accept predicate — see the comment at its call site for why the
+  // signal is structural and why the exclusion is load-bearing.
+  function __lhHoldsRowContent(el, link) {
+    for (const node of el.querySelectorAll(${jsString(REACTIONS_MODAL_ROW_CONTENT)})) {
+      if (!link.contains(node)) return true;
+    }
+    return false;
+  }
+
+  const engagers = [];
+  const seen = new Set();
+
+  for (const link of modal.querySelectorAll(${jsString(REACTIONS_MODAL_ENGAGER_LINK)})) {
+    const href = (link.href || '').split('?')[0];
+    if (seen.has(href)) continue;
+
+    const idMatch = href.match(/\\/in\\/([^/?]+)/);
+    const publicId = idMatch ? idMatch[1] : null;
+
+    const name = __lhCleanName(__lhVisibleText(link)) || '';
+    const nameParts = name.split(/\\s+/);
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+    if (!firstName) continue;
+    // Recorded only now that the row yielded a usable name.  An actor lockup
+    // renders the avatar anchor BEFORE the name-bearing one at the same href,
+    // so claiming the de-dup slot before the reject would let the unreadable
+    // half consume it and skip the readable sibling — every row yielding
+    // nothing on a fully-rendered modal.
+    seen.add(href);
+
+    // The row this link belongs to.  \`li\` first, because a list item is the
+    // shape a reactor list renders and it names the row outright.  It walks
+    // from the PARENT, because \`closest\` includes the element it is called on
+    // and a LinkedIn anchor always carries a class — so \`link.closest(...)\`
+    // can return the link itself and scope the headline and pictogram reads to
+    // its own subtree, where neither exists.
+    //
+    // What follows the \`li\` try is a STRUCTURAL WALK rather than a second
+    // selector, and walking from the parent is why: \`from.closest('[class]')\`
+    // returns the nearest classed ancestor OF THE ANCHOR, which on any dialect
+    // nesting the link deeper than one level inside its row
+    // (\`li > div.row > div.name-wrapper > a\`) is the name wrapper — an
+    // intermediate element holding neither the headline nor the pictogram.
+    // Both reads then come back empty, the row ships as
+    // \`headline: null, engagementType: 'LIKE'\`, and \`extractedCount > 0\` means
+    // no tier fires: the original reported symptom, one level up.
+    //
+    // So the walk accepts the first ancestor that actually HOLDS row content —
+    // a headline candidate or a reaction pictogram that is NOT inside the
+    // link's own subtree, the exclusion being what stops a name span wrapped
+    // in the anchor from answering for the row.  A structural signal, never a
+    // guessed class name: no SDUI row selector has been measured, and inventing
+    // one is what this module refuses to do everywhere else.  Bounded three
+    // ways — it never leaves the modal, it stops before the modal itself, and
+    // it is depth-capped — and if it finds nothing it falls back to the
+    // parent-relative \`closest('[class]')\` this replaces, so the measured
+    // legacy path cannot regress.
+    const from = link.parentElement;
+    let entry = from ? from.closest('li') : null;
+    if (!entry && from) {
+      let ancestor = from;
+      let depth = 0;
+      while (
+        ancestor &&
+        ancestor !== modal &&
+        modal.contains(ancestor) &&
+        depth < ${String(REACTIONS_MODAL_ROW_WALK_DEPTH)}
+      ) {
+        if (__lhHoldsRowContent(ancestor, link)) { entry = ancestor; break; }
+        ancestor = ancestor.parentElement;
+        depth++;
+      }
+    }
+    if (!entry && from) entry = from.closest('[class]');
+
+    let headline = null;
+    if (entry) {
+      headline = __lhFirstHeadline(
+        Array.from(entry.querySelectorAll('p, span')),
+        name,
+      );
+    }
+
+    // The reaction pictogram's alt text.  Mapped to the engagement vocabulary
+    // this operation reports rather than to LinkedIn's own naming, and left
+    // at LIKE when no pictogram is recognised — a reactor with an unreadable
+    // icon still reacted.
+    let engagementType = 'LIKE';
+    if (entry) {
+      for (const img of entry.querySelectorAll('img[alt]')) {
+        const alt = (img.getAttribute('alt') || '').toLowerCase();
+        if (alt.includes('celebrate') || alt.includes('clap')) { engagementType = 'PRAISE'; break; }
+        if (alt.includes('support') || alt.includes('care')) { engagementType = 'EMPATHY'; break; }
+        if (alt.includes('love') || alt.includes('heart')) { engagementType = 'APPRECIATION'; break; }
+        if (alt.includes('insightful') || alt.includes('light')) { engagementType = 'INTEREST'; break; }
+        if (alt.includes('funny') || alt.includes('laugh')) { engagementType = 'ENTERTAINMENT'; break; }
+        if (alt.includes('like') || alt.includes('thumb')) { engagementType = 'LIKE'; break; }
+      }
+    }
+
+    engagers.push({
+      firstName: firstName,
+      lastName: lastName,
+      publicId: publicId,
+      headline: headline,
+      engagementType: engagementType,
+    });
+  }
+
+  return engagers;
+})()`;
+}
+
+/**
+ * Reactions-modal scroll source — advance the engager list by `distance` px.
+ *
+ * Returns:
+ *
+ * - `true` when the list actually moved
+ * - `false` when it did not.  That is the ordinary reached-the-bottom signal
+ *   and it must NOT be an error: the rows already scraped are a real
+ *   observation, and the cardinal tier is what decides whether they are enough
+ * - `null` when no adapter claimed the page, or when the claiming adapter
+ *   resolved no modal root
+ * - `{ ambiguousVariants: [...] }` when two or more adapters claimed it
+ *
+ * **The last two used to be `false` as well, and collapsing them there was the
+ * defect.**  The doc that stood here justified the single refusal with *"a
+ * refusal is how the collect loop learns it has reached the bottom"* — a
+ * rationale that covers did-not-move and nothing else, silently extended to
+ * could-not-resolve.  Those two conditions are exactly what
+ * {@link buildReactionsModalExtractionSource} reports as `null` and as the
+ * ambiguity record, and what the caller raises `DOMVariantUnsupportedError` /
+ * `DOMVariantAmbiguousError` for — so the operation held two contrary readings
+ * of one condition, and the scroll's was the one that swallowed it.  A modal
+ * that re-renders into an unresolvable state mid-collection read as *the
+ * bottom*, the loop broke, and the cardinal tier stayed quiet because rows
+ * scraped before the re-render make `extractedCount` positive (#840).
+ *
+ * The refusal shape mirrors the extraction source's on purpose: the caller
+ * classifies both with the same predicate and raises through the same
+ * construction, which is what keeps this one contract rather than a second
+ * copy of it.
+ *
+ * The distance is randomised by the caller rather than fixed, so a modal
+ * scroll does not carry the detection signal of a perfectly uniform cadence.
+ */
+export function buildReactionsModalScrollSource(
+  adapters: readonly ReactionsModalVariantAdapter[],
+  distance: number,
+): string {
+  return `(() => {
+  ${reactionsModalRootSource(adapters)}
+  const root = __lhReactionsModalRoot();
+  if (!root) return null;
+  if (root.ambiguousVariants) return { ambiguousVariants: root.ambiguousVariants };
+  const modal = root.modal;
+
+  let scrollable = null;
+  for (const div of modal.querySelectorAll('div')) {
+    const style = getComputedStyle(div);
+    if (
+      (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+      div.scrollHeight > div.clientHeight
+    ) {
+      scrollable = div;
+      break;
+    }
+  }
+  if (!scrollable) scrollable = modal;
+
+  const prev = scrollable.scrollTop;
+  scrollable.scrollTop += ${String(distance)};
+  return scrollable.scrollTop > prev;
 })()`;
 }
 

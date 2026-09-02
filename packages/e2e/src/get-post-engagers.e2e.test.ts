@@ -122,15 +122,28 @@ describeE2E("get-post-engagers operation", () => {
       // two very different causes, and the pick above already settles
       // which one applies — `find` misses only when no fetched post had
       // reactions — so report the picked post's own reactionCount instead
-      // of leaving a red build to guess.  The reactions-modal path is
-      // still unprobed (lhremote#830).
+      // of leaving a red build to guess.
+      //
+      // The reactions-modal path is PROBED as of lhremote#830 (answered
+      // 2026-09-02: the modal has a container tier) and registered by
+      // lhremote#840, which narrows what reaching this line with zero
+      // engagers can mean.  Most extraction regressions no longer arrive
+      // here at all — they raise one assertion earlier, at `result.isError`,
+      // as `DOMVariantUnsupportedError` (no adapter claimed the modal),
+      // `DOMVariantAmbiguousError` (a hybrid page) or `ExtractionFailedError`
+      // (the modal reported N reactions and the scrape found none).  So the
+      // remaining reading is specific: the container resolved, held no rows,
+      // and the modal's own cardinal did not contradict that.
       expect(
         parsed.engagers.length,
         `precondition: expected at least one engager for ${postUrl} — got 0. ` +
           `get-feed reported reactionCount=${String(pickedPost?.reactionCount)} for that post: ` +
           "0 means no fetched post had reactions and the test fell back to posts[0] " +
           "(fixture problem — re-run against a feed that has reactions), " +
-          "while >0 means engager extraction regressed",
+          "while >0 means the modal opened and resolved but held no rows, with its own " +
+          "reaction total reading 0 — a stale row selector, or a trigger that opened " +
+          "the wrong control (run with LHREMOTE_CAPTURE_DIAGNOSTICS=1 and read " +
+          "variantDetection in the bundle)",
       ).toBeGreaterThan(0);
 
       const engager = parsed.engagers[0] as PostEngager;

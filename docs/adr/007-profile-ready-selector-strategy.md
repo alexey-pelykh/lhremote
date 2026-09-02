@@ -203,6 +203,11 @@ that most needs an artifact produced none.
    registry (#830), so there is nothing to probe and a fabricated field would
    be worse than none.
 
+   > **Superseded on 2026-09-02** — the last two sentences only. The reactions
+   > modal was registered by #840, so it has adapters, the probe runs, and its
+   > bundle carries `variantDetection` exactly as the post-detail one does. See
+   > § 2026-09-02 Amendment below.
+
 **Unchanged, and load-bearing:** activation stays gated on
 `LHREMOTE_CAPTURE_DIAGNOSTICS=1` at every site, on every trigger. Widening
 what fires the capture must never widen who may write it — the artifacts
@@ -213,6 +218,37 @@ masks the caller's error all carry over untouched.
 
 The `navigateTo{Profile,Company}` captures are out of scope here: they remain
 timeout-only and their bundles carry no `trigger` field.
+
+### 2026-09-02 — The reactions-modal bundle carries `variantDetection` too (#840)
+
+Item 3 of the amendment above ends by stating, present-tense, that the
+reactions-modal bundle carries no `variantDetection` **on purpose**, because
+that surface has no entry in the variant-adapter registry (#830). That was true
+when it was written and is false now. #830 was answered on 2026-09-02 — the
+modal does have a container tier — and #840 registered the surface with a
+`legacy` and an `sdui` adapter. So:
+
+- the reactions-modal bundle **does** carry `variantDetection`, with the same
+  `matched` plus per-registered-adapter probe counts the post-detail bundle
+  carries, and it is read the same way (nothing matched ⇒ register an adapter;
+  two or more ⇒ hybrid page, tighten the detect anchors; exactly one ⇒ that
+  dialect's selectors went stale);
+- `null` there still means the probe yielded no usable reading, and still is
+  **not** the claim that no adapter matched;
+- nothing else in item 3 changes. The `trigger` field, the artifact-name table,
+  and the two trigger classes are unaffected.
+
+This is corrected rather than merely dated because the superseded sentences
+give an instruction — *do not add this field* — and the project's own
+`CLAUDE.md` ends its failure-diagnostics paragraph by pointing a reader at this
+amendment. A maintainer reconciling the two authorities would otherwise amend
+the CODE to match the ADR and delete a field that is now the one part of the
+bundle a fixed-selector probe structurally cannot supply.
+
+**Unchanged and still load-bearing:** activation stays gated on
+`LHREMOTE_CAPTURE_DIAGNOSTICS=1` at every site and on every trigger, for the
+reactions modal above all — its bundle carries engager names, profile slugs and
+headlines, i.e. personal data.
 
 ## Related
 
