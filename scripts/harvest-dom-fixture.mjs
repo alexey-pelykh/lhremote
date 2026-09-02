@@ -97,19 +97,33 @@ const TOP_SETTLE_MS = 800;
 // is cloned before the comment thread loads and the fixture comes out short,
 // looking exactly like a legitimately empty post. That is the defect these
 // fixtures exist to catch, so the harvester must not be able to manufacture it.
-const readNumericEnv = (name, fallback, min) => {
+// `integer` and `max` are per-variable rather than blanket, because the two
+// values have genuinely different domains.  A port must be a whole number in
+// the TCP range -- 62104.5 is finite and positive, so a bare finiteness check
+// passes it, and it then reaches discoverTargets() as
+// `http://127.0.0.1:62104.5/json/list`, failing later as a confusing connection
+// error rather than here as a bad value.  A settle of 1500.5 ms is meanwhile
+// perfectly valid and there is no ceiling worth inventing for it.
+const readNumericEnv = (name, fallback, { min, max, integer }) => {
   const raw = process.env[name];
   if (raw === undefined || raw === "") return fallback;
   const n = Number(raw);
-  if (!Number.isFinite(n) || n < min) {
-    console.error(`${name}=${JSON.stringify(raw)} is not a finite number >= ${min}.`);
+  const bad = !Number.isFinite(n)
+    || n < min
+    || (max !== undefined && n > max)
+    || (integer && !Number.isInteger(n));
+  if (bad) {
+    const want = (integer ? "an integer" : "a finite number")
+      + ` >= ${min}` + (max !== undefined ? ` and <= ${max}` : "");
+    console.error(`${name}=${JSON.stringify(raw)} is not ${want}.`);
     console.error(`Unset it to use the default (${fallback}), or give it a valid value.`);
     process.exit(2);
   }
   return n;
 };
-const PORT = readNumericEnv("LHREMOTE_CDP_PORT", DEFAULT_INSTANCE_CDP_PORT, 1);
-const SETTLE_MS = readNumericEnv("LHREMOTE_SETTLE_MS", DEFAULT_SETTLE_MS, 0);
+const PORT = readNumericEnv("LHREMOTE_CDP_PORT", DEFAULT_INSTANCE_CDP_PORT,
+  { min: 1, max: 65535, integer: true });
+const SETTLE_MS = readNumericEnv("LHREMOTE_SETTLE_MS", DEFAULT_SETTLE_MS, { min: 0 });
 const CORE_DIST = join(HERE, "..", "packages", "core", "dist");
 if (!existsSync(join(CORE_DIST, "cdp", "client.js"))) {
   console.error("packages/core is not built -- this script imports its compiled CDP client.");
