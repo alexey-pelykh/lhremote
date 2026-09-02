@@ -42,12 +42,22 @@
  * - two or more match -> `DOMVariantAmbiguousError`; a transitional or
  *   hybrid page, where picking one would silently blend two dialects
  *
+ * ## Two surfaces
+ *
+ * Post detail and search results are both registered.  They share detection,
+ * readiness and the no-terminal-fallback rule verbatim, and differ only in
+ * what an extraction produces — one record against one root, versus a list of
+ * records against a list of cards.  Each surface therefore narrows
+ * {@link VariantAdapter} into its own adapter type
+ * ({@link PostDetailVariantAdapter}, {@link SearchResultsVariantAdapter}) and
+ * has its own `build*ExtractionSource`.
+ *
  * ## Extending
  *
- * Registering a third dialect means appending one {@link VariantAdapter} to
- * the surface's array below.  Nothing at a call site branches on the variant
- * — detection, readiness and extraction are all *generated* from the array
- * by the `build*Source` functions — so no control flow changes.
+ * Registering a third dialect means appending one adapter to the surface's
+ * array below.  Nothing at a call site branches on the variant — detection,
+ * readiness and extraction are all *generated* from the array by the
+ * `build*Source` functions — so no control flow changes.
  */
 
 /**
@@ -69,13 +79,30 @@ export type DOMVariant = (typeof KNOWN_DOM_VARIANTS)[number] | (string & {});
 export const KNOWN_DOM_VARIANTS = ["sdui", "legacy"] as const;
 
 /**
+ * Which adapter shape reads each surface.
+ *
+ * This one declaration IS the surface set and the per-surface adapter type,
+ * which is what makes the registry below total: naming a surface here without
+ * registering an adapter array for it is a compile error, and
+ * {@link adaptersFor} hands each call site that surface's own adapter type
+ * rather than the base.  Widening the surface set therefore cannot leave a
+ * surface silently unregistered — the type checker walks the author to every
+ * site that has to change.
+ */
+interface SurfaceAdapterMap {
+  "post-detail": PostDetailVariantAdapter;
+  "search-results": SearchResultsVariantAdapter;
+}
+
+/**
  * A LinkedIn page kind being read.  Each surface owns its own adapter list,
  * because the same dialect renders different surfaces differently.
  */
-export type Surface = "post-detail";
+export type Surface = keyof SurfaceAdapterMap;
 
 /**
- * One dialect's binding for one surface.
+ * One dialect's binding for one surface — the part every surface's adapter
+ * carries.
  *
  * The four anchors are not interchangeable and the distinction is the point
  * of the whole module:
@@ -87,11 +114,20 @@ export type Surface = "post-detail";
  *   every markup change cannot detect a markup change: the anchor previously
  *   used here matched 85 elements on a page where every scraper selector
  *   matched 0, so the gate went green on a page the scrapers could not read.
- * - {@link scopes} are the extraction root, tried in order, all within this
+ * - {@link scopes} are the extraction roots, tried in order, all within this
  *   one dialect.  Ordering inside a dialect is a precision choice (tightest
  *   container first); it is not a cross-dialect cascade and it has no
- *   always-true terminal member.
- * - {@link extract} is the field extraction for this dialect.
+ *   always-true terminal member.  What a *resolved* scope then means is per
+ *   surface — see the two sub-interfaces below.
+ * - {@link extract} is the field extraction for this dialect.  Its call
+ *   signature and its returned field bag are per surface, for the same
+ *   reason.
+ *
+ * Surfaces NARROW this rather than sharing one widened type: a field only one
+ * surface consults — {@link PostDetailVariantAdapter.counts} — would
+ * otherwise have to be carried as a dead empty array by every surface that
+ * never reads it, and a field that gates nothing is ceremony a later reader
+ * has to disprove.
  */
 export interface VariantAdapter {
   /** The surface this adapter reads. */
@@ -118,6 +154,38 @@ export interface VariantAdapter {
    */
   readonly scopes: readonly string[];
   /**
+   * In-page JavaScript **function source** of the form
+   * `(function (...) { ...; return {...}; })`, evaluated by the surface's
+   * extraction script.  The parameters it is called with, and the field bag
+   * it returns, are fixed per surface by that script — see the sub-interfaces.
+   *
+   * Evaluated inside the extraction script, so the shared text helpers
+   * {@link extractionHelpersSource} emits — `__lhVisibleText`,
+   * `__lhCleanName`, `__lhFirstHeadline` — are in scope and may be called.
+   * They are shared rather than copied into each dialect because what differs
+   * between dialects there is *where* a string is rendered, not how a rendered
+   * string is read.
+   *
+   * Source rather than a structured selector bag because the dialects differ
+   * in extraction *algorithm*, not merely in selector strings — SDUI reads a
+   * `data-testid` leaf, legacy reads the longest `span[dir="ltr"]`.  Forcing
+   * both into one parameterised shape would either lose one dialect's logic
+   * or grow a per-dialect branch, which is what keying on the pair avoids.
+   */
+  readonly extract: string;
+}
+
+/**
+ * A post-detail adapter: one page, one post, one extraction root.
+ *
+ * {@link VariantAdapter.scopes} resolve to the SINGLE element the extractor
+ * is handed, and {@link VariantAdapter.extract} is
+ * `(function (scope) { ...; return { authorName, authorHeadline,
+ * authorProfileUrl, text, timestamp }; })`.
+ */
+export interface PostDetailVariantAdapter extends VariantAdapter {
+  readonly surface: "post-detail";
+  /**
    * Narrowing candidates for the engagement-counts row, tried in order
    * *within* the resolved scope.  When none matches — including the
    * deliberately empty list of a dialect whose counts row has never been
@@ -139,25 +207,41 @@ export interface VariantAdapter {
    * together with its neighbour.  See `__lhReadCount`.
    */
   readonly counts: readonly string[];
-  /**
-   * In-page JavaScript **function source** of the form
-   * `(function (scope) { ...; return {...}; })`, evaluated with the resolved
-   * scope element.  It returns the raw post-detail field bag.
-   *
-   * Evaluated inside the extraction script, so the shared text helpers
-   * {@link extractionHelpersSource} emits — `__lhVisibleText`,
-   * `__lhCleanName`, `__lhFirstHeadline` — are in scope and may be called.
-   * They are shared rather than copied into each dialect because what differs
-   * between dialects there is *where* a string is rendered, not how a rendered
-   * string is read.
-   *
-   * Source rather than a structured selector bag because the dialects differ
-   * in extraction *algorithm*, not merely in selector strings — SDUI reads a
-   * `data-testid` leaf, legacy reads the longest `span[dir="ltr"]`.  Forcing
-   * both into one parameterised shape would either lose one dialect's logic
-   * or grow a per-dialect branch, which is what keying on the pair avoids.
-   */
-  readonly extract: string;
+}
+
+/**
+ * A search-results adapter: one page, MANY result cards.
+ *
+ * Two inherited fields are reinterpreted, and that reinterpretation is why
+ * this is a distinct type rather than a reuse of the post-detail one:
+ *
+ * - {@link VariantAdapter.scopes} are the **card-enumeration candidates**,
+ *   tried in order, and the first candidate yielding at least one element
+ *   wins.  They resolve to a LIST of cards, not to a single extraction root.
+ *   The no-terminal-fallback rule is unchanged: when no candidate yields
+ *   anything, the adapter yields nothing — it never widens to `<main>` or
+ *   `document`.
+ * - {@link VariantAdapter.extract} is
+ *   `(function (card, authorName) { ...; return { authorHeadline, text,
+ *   timestamp }; })`, run once per card.  Only those three fields are
+ *   dialect-specific; everything else about a card is the shared skeleton
+ *   both dialects render, and lives in
+ *   {@link buildSearchResultsExtractionSource} rather than being copied into
+ *   each extractor.
+ *
+ * It adds no field of its own.  It exists so a post-detail adapter cannot be
+ * handed to the search-results extraction builder: the two extractors have
+ * incompatible call signatures, and nothing at runtime would report the
+ * mistake — the record would simply come back with every dialect-specific
+ * field null, which is the exact silent-empty this module exists to remove.
+ *
+ * There is deliberately no `counts` here.  That field narrows the
+ * engagement-counts row of ONE post; a search page renders one such row per
+ * card, and per-card counts are read from the card's own text by the shared
+ * builder.
+ */
+export interface SearchResultsVariantAdapter extends VariantAdapter {
+  readonly surface: "search-results";
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +412,7 @@ function authorLinkWithin(scopes: readonly string[]): string {
  * and the extractor excludes `replaceableComment_` subtrees so a commenter
  * still cannot be picked as the author.
  */
-const SDUI_POST_DETAIL_ADAPTER: VariantAdapter = {
+const SDUI_POST_DETAIL_ADAPTER: PostDetailVariantAdapter = {
   surface: "post-detail",
   variant: "sdui",
   detect: `${SDUI_CONTAINER}, ${SDUI_SCREEN}`,
@@ -494,7 +578,7 @@ const LEGACY_SOCIAL_COUNTS = ".social-details-social-counts";
  * exactly 1, rendering `"2 41 comments"` — two reactions and forty-one
  * comments, side by side.
  */
-const LEGACY_POST_DETAIL_ADAPTER: VariantAdapter = {
+const LEGACY_POST_DETAIL_ADAPTER: PostDetailVariantAdapter = {
   surface: "post-detail",
   variant: "legacy",
   detect: LEGACY_UPDATE_CONTAINER,
@@ -502,6 +586,291 @@ const LEGACY_POST_DETAIL_ADAPTER: VariantAdapter = {
   scopes: [LEGACY_UPDATE_CONTAINER],
   counts: [LEGACY_SOCIAL_COUNTS],
   extract: LEGACY_POST_DETAIL_EXTRACT,
+};
+
+// ---------------------------------------------------------------------------
+// search-results :: the card skeleton both dialects share
+// ---------------------------------------------------------------------------
+
+/**
+ * A search-result card, structurally.  `role="listitem"` is ARIA, not part of
+ * either dialect's attribute scheme, and commit `24052dd` — the change that
+ * moved this surface OFF the legacy dialect — carries it as an UNCHANGED
+ * CONTEXT line.  It was the card skeleton before that migration and after it.
+ */
+const SEARCH_RESULT_LISTITEM = 'div[role="listitem"]';
+
+/**
+ * The per-card three-dot control menu.
+ *
+ * **Adjudicated as dialect-independent**, which is why it lives here in the
+ * shared skeleton rather than inside either adapter.  Three grounds, and they
+ * are recorded because a fourth `[data-testid]`-looking site next to three
+ * that flipped is exactly the thing a later reader would "fix" by moving:
+ *
+ * 1. It is an ARIA label, not part of the `data-testid` attribute scheme that
+ *    measured 0 document-wide when LinkedIn reverted to legacy on 2026-08-31.
+ * 2. It was measured **working on pre-SDUI markup** — 2026-03-27, on the FEED
+ *    page, in `research/linkedin/feed-dom-selectors-20260326.md` § 13.
+ * 3. It was measured **present on the post-flip search page** — 2026-04-15, in
+ *    `research/linkedin/feed-dom-text-extraction-20260415.md` § 6 — and it
+ *    survived `24052dd` as an unchanged context line, like the listitem above.
+ *
+ * It is also the load-bearing one: a card without it is skipped outright, so
+ * had it been dialect-bound, EVERY card would have been skipped and the result
+ * set would have come back empty — a stronger and earlier failure than any
+ * null text field.
+ *
+ * Deliberately NOT `FEED_POST_MENU_BUTTON` from `selectors.ts`: that constant
+ * is scoped `[data-testid="mainFeed"] div[role="listitem"] button[...]`, which
+ * is both SDUI-bound and feed-bound.  Reusing it would narrow search results
+ * to the feed wrapper and match nothing here.
+ */
+const SEARCH_RESULT_MENU_BUTTON =
+  'button[aria-label^="Open control menu for post"]';
+
+/** The author anchor on a card — a member profile or a company page. */
+const SEARCH_RESULT_AUTHOR_LINK = 'a[href*="/in/"], a[href*="/company/"]';
+
+/**
+ * A result card's control menu button, addressed from the document root.
+ *
+ * It carries two roles, and they are the same element rather than two
+ * selectors that happen to agree.
+ *
+ * **Role 1 — the readiness anchor for this surface.  Both dialects
+ * deliberately share it, and that is not the shared-anchor defect ADR-008
+ * § Decision 1 forbids.**  The readiness predicate is a CONJUNCTION: exactly
+ * one adapter's `detect` matched AND that adapter's own `ready` is present.
+ * The dialect binding therefore already lives in `detect`, which is
+ * dialect-exclusive; `ready` carries the orthogonal claim that a result card
+ * has HYDRATED, and the card skeleton is precisely what the two dialects share
+ * (above).  Inventing a per-dialect hydration anchor would mean asserting a
+ * measurement nobody has taken.  It keeps the ADR-008 binding intact in the
+ * sense that matters: the gate polls an anchor the selected adapter's own
+ * extraction REQUIRES — a card with no menu button is skipped by the shared
+ * card loop.
+ *
+ * **Role 2 — the element `search-posts.ts` clicks** to read each post's URL
+ * off the "Copy link to post" item, which is why this is exported.  That is
+ * the one site outside this module addressing the same element, and it used to
+ * hand-write the same two parts a third time.  Rename the label and the
+ * readiness gate, the card filter and the URL read must all move together; a
+ * second copy drifting would leave the URL read matching nothing while the
+ * scrape still succeeds, which is this module's own failure mode one level up.
+ */
+export const SEARCH_RESULT_CARD_MENU_BUTTON = `${SEARCH_RESULT_LISTITEM} ${SEARCH_RESULT_MENU_BUTTON}`;
+
+// ---------------------------------------------------------------------------
+// search-results :: sdui
+// ---------------------------------------------------------------------------
+
+/**
+ * Search-result field extraction for the SDUI dialect LinkedIn served from
+ * 2026-04.
+ *
+ * Carried over verbatim from the strategy-1 body of the
+ * `SCRAPE_SEARCH_RESULTS_SCRIPT` that shipped in `search-posts.ts`, minus the
+ * card skeleton, which is now shared.  Its selectors are *measured*: the
+ * 2026-04-15 live probe of `/search/results/content/` recorded
+ * `[data-testid="expandable-text-box"]` present once per post and the `<p>`
+ * elements of the second author link carrying name, degree, headline and
+ * timestamp — on the same page where `span[dir="ltr"]` matched 0 per post.
+ *
+ * `authorName` is unused here; it is part of the shared calling convention
+ * because the legacy extractor needs it.
+ */
+const SDUI_SEARCH_RESULTS_EXTRACT = `(function (card, authorName) {
+  var authorHeadline = null;
+  var text = null;
+  var timestamp = null;
+
+  // Author headline + timestamp: the text-bearing SECOND author link.  Each
+  // card carries two links to the author profile — the first holds only an
+  // avatar (<figure>), the second holds <p> elements with name, degree,
+  // headline and timestamp.
+  //
+  // The link is re-queried here rather than handed in: the shared builder
+  // reads it to answer a different question (the profile URL), and a
+  // two-parameter extractor signature is what keeps every dialect's extractor
+  // interchangeable.
+  const authorLink = card.querySelector(${jsString(SEARCH_RESULT_AUTHOR_LINK)});
+  if (authorLink) {
+    const authorPath = new URL(authorLink.href).pathname;
+    const allLinks = Array.from(card.querySelectorAll('a[href*="' + authorPath + '"]'));
+    const textLink = allLinks.find(function (a) { return (a.textContent || '').trim().length > 0; });
+
+    if (textLink) {
+      const pEls = Array.from(textLink.querySelectorAll('p'));
+
+      // Timestamp: last <p> carrying a relative-time token (e.g. "18h •").
+      for (let i = pEls.length - 1; i >= 0; i--) {
+        const txt = (pEls[i].textContent || '').trim();
+        const timestampMatch = txt.match(/^(\\d+[smhdw])(?:\\s|[\\u2022\\u00B7]|$)/);
+        if (timestampMatch) {
+          timestamp = timestampMatch[1];
+          pEls.splice(i, 1);
+          break;
+        }
+      }
+
+      // Headline: 3rd <p> (index 2) — after name and connection degree.
+      // Company posts may carry only 2 <p> elements (name + timestamp), in
+      // which case the headline stays null.
+      if (pEls.length >= 3) {
+        authorHeadline = (pEls[2].textContent || '').trim() || null;
+      }
+    }
+  }
+
+  // Post text: the expandable text box with its "… more" affordance stripped.
+  // The clone is what keeps the strip from mutating the live page.
+  const textBox = card.querySelector('[data-testid="expandable-text-box"]');
+  if (textBox) {
+    const clone = textBox.cloneNode(true);
+    const moreBtn = clone.querySelector('[data-testid="expandable-text-button"]');
+    if (moreBtn) moreBtn.remove();
+    text = (clone.textContent || '').trim() || null;
+  }
+
+  return { authorHeadline: authorHeadline, text: text, timestamp: timestamp };
+})`;
+
+/**
+ * SDUI search-results adapter.
+ *
+ * `detect` is the SDUI text box **inside a result card**, not the bare
+ * attribute: scoping it to the listitem is what makes it say "this is a
+ * search-results page speaking SDUI" rather than merely "some SDUI is on this
+ * page".  It is exclusive by measurement — `[data-testid]` matched 0
+ * document-wide under legacy on 2026-08-31 — so it cannot collide with the
+ * legacy adapter below and selection cannot report a false ambiguity.
+ *
+ * It is also post-content-bound, and that is load-bearing for the empty-vs-
+ * error contract: a zero-result search page renders no post text, so it does
+ * not select this adapter at all and never reaches the cardinal check.
+ */
+const SDUI_SEARCH_RESULTS_ADAPTER: SearchResultsVariantAdapter = {
+  surface: "search-results",
+  variant: "sdui",
+  detect: `${SEARCH_RESULT_LISTITEM} [data-testid="expandable-text-box"]`,
+  ready: SEARCH_RESULT_CARD_MENU_BUTTON,
+  scopes: [SEARCH_RESULT_LISTITEM],
+  extract: SDUI_SEARCH_RESULTS_EXTRACT,
+};
+
+// ---------------------------------------------------------------------------
+// search-results :: legacy
+// ---------------------------------------------------------------------------
+
+/**
+ * Search-result field extraction for the pre-SDUI dialect.
+ *
+ * **Provenance, stated precisely.**  The 2026-08-31 legacy-reversion probe
+ * covered the **post-detail** surface only; *no live legacy probe of a
+ * search-results page exists*.  This dialect is therefore RECONSTRUCTED from
+ * two records rather than measured:
+ *
+ * - the 2026-03-26 selector study, which recorded search results exposing
+ *   activity URNs through `data-chameleon-result-urn`;
+ * - the diff of commit `24052dd` (2026-04-15), the migration that replaced
+ *   exactly this field logic with the SDUI logic above.  What it replaced is
+ *   what is restored here.
+ *
+ * One thing from that diff is deliberately NOT restored: its name read
+ * (`authorLink.querySelector('span[dir="ltr"], span[aria-hidden="true"]')`).
+ * That read was already broken — the first `a[href*="/in/"]` on a card is
+ * avatar-only, with empty text and no `span[dir="ltr"]` — and moving the name
+ * onto the menu-button `aria-label` is *why* `24052dd` was written.  Reviving
+ * it would ship a known bug under a new name.  The name comes from the shared
+ * builder, for both dialects.
+ *
+ * Treat all of this as the current best hypothesis with the evidence above,
+ * not as a verified claim.  It is still strictly better than the alternative
+ * it replaces: under legacy markup every `[data-testid]` matches zero, so the
+ * SDUI extractor returns null for every field on every card.
+ */
+const LEGACY_SEARCH_RESULTS_EXTRACT = `(function (card, authorName) {
+  var authorHeadline = null;
+  var text = null;
+  var timestamp = null;
+
+  // --- Author headline ---
+  // First <span> run that reads as a headline.  The rejections are the
+  // strings rendered beside a headline on a result card that would otherwise
+  // win the scan: a relative timestamp, an engagement counter, a Follow or
+  // Promoted affordance, and the author's own name — which is what the
+  // \`authorName\` parameter is for, and its only use.
+  for (const span of card.querySelectorAll('span')) {
+    const txt = (span.textContent || '').trim();
+    if (!txt) continue;
+    if (txt.length <= 5 || txt.length >= 200) continue;
+    if (txt === authorName) continue;
+    if (/^\\d+[smhdw]$/.test(txt)) continue;
+    if (/^\\d[\\d,]*\\s+(?:reactions?|comments?|reposts?|likes?)$/i.test(txt)) continue;
+    if (/^Follow$|^Promoted$/i.test(txt)) continue;
+    authorHeadline = txt;
+    break;
+  }
+
+  // --- Post text ---
+  // The longest \`span[dir="ltr"]\` that is neither the name nor the headline.
+  // The length floor is what keeps a stray label from winning when the post
+  // body itself failed to render.
+  let longestText = '';
+  for (const span of card.querySelectorAll('span[dir="ltr"]')) {
+    const txt = (span.textContent || '').trim();
+    if (txt.length > longestText.length && txt !== authorName && txt !== authorHeadline) {
+      longestText = txt;
+    }
+  }
+  if (longestText.length > 20) text = longestText;
+
+  // --- Timestamp ---
+  const timeEl = card.querySelector('time');
+  if (timeEl) {
+    const dt = timeEl.getAttribute('datetime');
+    if (dt) timestamp = dt;
+  }
+  if (!timestamp) {
+    const cardText = card.textContent || '';
+    const timeMatch = cardText.match(/(?:^|\\s)(\\d+[smhdw])(?:\\s|$|\\u00B7)/);
+    if (timeMatch) timestamp = timeMatch[1];
+  }
+
+  return { authorHeadline: authorHeadline, text: text, timestamp: timestamp };
+})`;
+
+/** The legacy search-result container, carrying the activity URN. */
+const LEGACY_RESULT_CONTAINER = "[data-chameleon-result-urn]";
+
+/**
+ * Legacy (pre-SDUI) search-results adapter.
+ *
+ * `detect` is the chameleon result container.  Its exclusivity is measured
+ * from the other side: the 2026-04-15 probe of the post-flip search page
+ * recorded `data-chameleon-result-urn` matching **0**, so it cannot claim an
+ * SDUI page, just as the SDUI adapter's `data-testid` anchor cannot claim a
+ * legacy one.  Neither can match the other's dialect, so selection cannot
+ * report a false ambiguity.
+ *
+ * `scopes` is tightest-first: the chameleon container, then the structural
+ * listitem.  **Status of that second candidate, stated rather than implied:**
+ * with `detect` and `scopes[0]` being the same selector, a page that selects
+ * this adapter always resolves `scopes[0]`, so the listitem entry is a
+ * structural fallback that becomes live only if this dialect's detect anchor
+ * is ever widened to something that is not itself the card container.  It is
+ * kept because the enumeration root and the detection anchor are separate
+ * concerns and the ordered list is where that separation is expressed — not
+ * because a page exists today that reaches it.
+ */
+const LEGACY_SEARCH_RESULTS_ADAPTER: SearchResultsVariantAdapter = {
+  surface: "search-results",
+  variant: "legacy",
+  detect: LEGACY_RESULT_CONTAINER,
+  ready: SEARCH_RESULT_CARD_MENU_BUTTON,
+  scopes: [LEGACY_RESULT_CONTAINER, SEARCH_RESULT_LISTITEM],
+  extract: LEGACY_SEARCH_RESULTS_EXTRACT,
 };
 
 // ---------------------------------------------------------------------------
@@ -514,13 +883,36 @@ const LEGACY_POST_DETAIL_ADAPTER: VariantAdapter = {
  * Order within a surface is irrelevant to selection: selection requires
  * exactly one match, so it is order-independent by construction.  There is
  * deliberately no "default" or "last resort" entry.
+ *
+ * The mapped type over {@link SurfaceAdapterMap} is what makes this table
+ * total AND per-surface typed at once: a new key in that map is a compile
+ * error here until its adapters are registered, and each surface's array
+ * keeps its own adapter type rather than collapsing to the base — which is
+ * how `buildPostDetailExtractionSource` goes on type-checking against
+ * `counts` while the search-results builder cannot be handed a post-detail
+ * adapter.
  */
-const ADAPTER_REGISTRY: Readonly<Record<Surface, readonly VariantAdapter[]>> = {
+const ADAPTER_REGISTRY: {
+  readonly [S in Surface]: readonly SurfaceAdapterMap[S][];
+} = {
   "post-detail": [SDUI_POST_DETAIL_ADAPTER, LEGACY_POST_DETAIL_ADAPTER],
+  "search-results": [
+    SDUI_SEARCH_RESULTS_ADAPTER,
+    LEGACY_SEARCH_RESULTS_ADAPTER,
+  ],
 };
 
-/** Adapters registered for a surface, in registration order. */
-export function adaptersFor(surface: Surface): readonly VariantAdapter[] {
+/**
+ * Adapters registered for a surface, in registration order.
+ *
+ * Generic over the surface so a caller passing a literal (`"post-detail"
+ * as const`) gets that surface's own adapter type back.  Passing the `Surface`
+ * union yields the union of both, which is all a variant-agnostic consumer
+ * needs.
+ */
+export function adaptersFor<S extends Surface>(
+  surface: S,
+): readonly SurfaceAdapterMap[S][] {
   return ADAPTER_REGISTRY[surface];
 }
 
@@ -529,7 +921,10 @@ export function adaptersFor(surface: Surface): readonly VariantAdapter[] {
  * `DOMVariantUnsupportedError` reports.
  */
 export function variantNamesFor(surface: Surface): readonly DOMVariant[] {
-  return adaptersFor(surface).map((adapter) => adapter.variant);
+  // Widened to the base type on the way in: this reads `variant` and nothing
+  // else, and a union of per-surface arrays is awkward to map over.
+  const adapters: readonly VariantAdapter[] = adaptersFor(surface);
+  return adapters.map((adapter) => adapter.variant);
 }
 
 // ---------------------------------------------------------------------------
@@ -574,12 +969,27 @@ function adapterTableSource(
     ];
     if (withExtractors) {
       fields.push(`scopes: [${adapter.scopes.map(jsString).join(", ")}]`);
-      fields.push(`counts: [${adapter.counts.map(jsString).join(", ")}]`);
+      // Emitted only where the adapter declares one, rather than as an empty
+      // array on every row.  The key is structural — "does this adapter carry
+      // counts?" — rather than a branch on the surface, because the only
+      // consumer, `__lhCountsRoot`, is keyed on the field and not on the page
+      // kind.  A search-results row would otherwise carry a field its own
+      // extraction script never reads.
+      if (hasCounts(adapter)) {
+        fields.push(`counts: [${adapter.counts.map(jsString).join(", ")}]`);
+      }
       fields.push(`extract: ${adapter.extract}`);
     }
     return `{ ${fields.join(", ")} }`;
   });
   return `[\n${rows.join(",\n")}\n]`;
+}
+
+/** Does this adapter narrow an engagement-counts row? */
+function hasCounts(
+  adapter: VariantAdapter,
+): adapter is VariantAdapter & { readonly counts: readonly string[] } {
+  return "counts" in adapter;
 }
 
 /**
@@ -932,7 +1342,7 @@ function extractionHelpersSource(): string {
  * words only in the control's `aria-label`.
  */
 export function buildPostDetailExtractionSource(
-  adapters: readonly VariantAdapter[],
+  adapters: readonly PostDetailVariantAdapter[],
 ): string {
   return `(() => {
   ${extractionHelpersSource()}
@@ -967,6 +1377,144 @@ export function buildPostDetailExtractionSource(
     commentCount: __lhReadCount(countsRoot, __LH_COUNTERS.commentCount),
     shareCount: __lhReadCount(countsRoot, __LH_COUNTERS.shareCount),
   };
+})()`;
+}
+
+/**
+ * Search-results extraction source.
+ *
+ * Selects the adapter, enumerates result cards from that adapter's own
+ * ordered `scopes` candidates, and runs its extractor once per card.
+ * Returns:
+ *
+ * - `{ variant, postCardCount, posts }` on success
+ * - `null` when no adapter claimed the page, OR when the claiming adapter
+ *   resolved no cards from any of its own candidates — both are "no usable
+ *   adapter", which the caller raises as unsupported.  There is no terminal
+ *   fallback here either: an adapter that cannot enumerate its own cards has
+ *   not read the page
+ * - `{ ambiguousVariants: [...] }` when two or more adapters claimed it
+ *
+ * ## What is shared, and why it is not per-dialect
+ *
+ * Everything about a card except three fields is the skeleton BOTH dialects
+ * render (see {@link SEARCH_RESULT_MENU_BUTTON} for the adjudication):
+ * enumeration, the height filter, the menu-button filter, the author name
+ * parsed out of that button's `aria-label`, the profile URL, the media type
+ * and the three engagement counters.  Only `authorHeadline`, `text` and
+ * `timestamp` differ, and those are what `adapter.extract` returns.  Copying
+ * the skeleton into each extractor would let two copies of one measurement
+ * drift apart, which is the failure the shared text helpers above already
+ * exist to prevent one level down.
+ *
+ * ## `postCardCount` — the cardinal, and why it is defined exactly this way
+ *
+ * It counts enumerated cards that are POST-SHAPED **excluding the
+ * menu-button filter**: cards clearing the height floor AND carrying an
+ * author link.  Two properties, and neither survives a redefinition:
+ *
+ * - **It is non-vacuous.**  Every *other* filter in the card loop is shared
+ *   with the count, so the count and `posts.length` diverge on exactly one
+ *   condition — the menu-button filter, which is the dominant suspected
+ *   failure path.  A cardinal defined as "cards that yielded a post" would
+ *   always equal `posts.length` and could never contradict it, which is a
+ *   corroborator that cannot fail.
+ * - **It cannot false-raise on a genuinely empty search.**  Chrome and
+ *   "no results" blocks carry no author link and are excluded; and the SDUI
+ *   `detect` anchor is post-content-bound, so a zero-result page selects no
+ *   adapter and never reaches the check at all.
+ *
+ * The caller feeds it to `assertCardinalCorroboration`; see ADR-008
+ * § Decision 4.
+ */
+export function buildSearchResultsExtractionSource(
+  adapters: readonly SearchResultsVariantAdapter[],
+): string {
+  return `(() => {
+  ${selectionSource(adapters, true)}
+  const selection = __lhSelect();
+  if (selection.matched.length > 1) {
+    return { ambiguousVariants: selection.matched };
+  }
+  const adapter = selection.adapter;
+  if (!adapter) return null;
+
+  // Card enumeration: this adapter's own candidates, in order, first one
+  // yielding at least one element wins.
+  let cards = [];
+  for (const candidate of adapter.scopes) {
+    const found = document.querySelectorAll(candidate);
+    if (found.length > 0) { cards = Array.from(found); break; }
+  }
+  // No terminal fallback, exactly as on post detail: an adapter that cannot
+  // enumerate its own cards has not read the page, and saying so is the point.
+  if (cards.length === 0) return null;
+
+  function __lhParseCount(text, pattern) {
+    const m = text.match(pattern);
+    if (!m) return 0;
+    const num = parseInt(m[1].replace(/,/g, ''), 10);
+    return isNaN(num) ? 0 : num;
+  }
+
+  const posts = [];
+  let postCardCount = 0;
+
+  for (const card of cards) {
+    // --- Shared with the cardinal: is this card post-shaped at all? ---
+    if (card.offsetHeight < 100) continue;
+    const authorLink = card.querySelector(${jsString(SEARCH_RESULT_AUTHOR_LINK)});
+    if (!authorLink) continue;
+    postCardCount++;
+
+    // --- The ONE filter deliberately NOT shared with the cardinal ---
+    // A card with no control menu yields no post.  Counting it anyway is what
+    // makes an all-cards-skipped scrape contradict its own page instead of
+    // reporting a search that found nothing.
+    const menuBtn = card.querySelector(${jsString(SEARCH_RESULT_MENU_BUTTON)});
+    if (!menuBtn) continue;
+
+    // Author name: parsed out of the menu button's label, for BOTH dialects.
+    // The card's own first author anchor is avatar-only — empty text, no
+    // name — which is why the name was moved here in the first place.
+    const menuLabel = menuBtn.getAttribute('aria-label') || '';
+    const authorNameMatch = menuLabel.match(/^Open control menu for post by\\s+(.+)$/);
+    const authorName = authorNameMatch ? authorNameMatch[1].trim() || null : null;
+
+    const authorProfileUrl = (authorLink.href || '').split('?')[0] || null;
+
+    let mediaType = null;
+    if (card.querySelector('video')) {
+      mediaType = 'video';
+    } else if (card.querySelector('img[src*="media.licdn.com"]')) {
+      for (const img of card.querySelectorAll('img[src*="media.licdn.com"]')) {
+        if (img.offsetHeight > 100) { mediaType = 'image'; break; }
+      }
+    }
+
+    // Per-post engagement counts, read unanchored from the card's own text.
+    // Deliberately unchanged: post detail moved to anchored per-element
+    // counting, this surface has not, and moving it is a behaviour change of
+    // its own.
+    const cardText = card.textContent || '';
+
+    const fields = adapter.extract(card, authorName);
+
+    posts.push({
+      url: null,
+      authorName: authorName,
+      authorHeadline: fields.authorHeadline,
+      authorProfileUrl: authorProfileUrl,
+      text: fields.text,
+      mediaType: mediaType,
+      reactionCount: __lhParseCount(cardText, /(\\d[\\d,]*)\\s+reactions?/i),
+      commentCount: __lhParseCount(cardText, /(\\d[\\d,]*)\\s+comments?/i),
+      shareCount: __lhParseCount(cardText, /(\\d[\\d,]*)\\s+reposts?/i),
+      timestamp: fields.timestamp,
+    });
+  }
+
+  return { variant: adapter.variant, postCardCount: postCardCount, posts: posts };
 })()`;
 }
 

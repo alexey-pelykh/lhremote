@@ -8,7 +8,8 @@ This ADR governs the **post-detail** surface: the readiness gate in
 `packages/core/src/cdp/wait-for-post-load.ts` and the extraction it gates in
 `packages/core/src/operations/get-post.ts`. It also states the empty-vs-error
 contract for every extraction surface, including
-`packages/core/src/operations/get-post-engagers.ts`.
+`packages/core/src/operations/get-post-engagers.ts`. It was subsequently bound to the
+**search-results** surface (`packages/core/src/operations/search-posts.ts`) — see § Amendments.
 
 **Relationship to ADR-007** — ADR-008 **reclaims** the post-detail citations that had
 borrowed ADR-007. ADR-007 remains `Accepted`, is **not modified by this reclamation**, and stays
@@ -459,6 +460,149 @@ not a measurement, and chasing it is out of this decision's scope.
 - **Probe the profile surface for the same flip**: currently an inference, not a measurement
   (§ Disposition of ADR-007).
 
+## Amendments
+
+### 2026-09-02 — The surface set is two: search results bound (#841)
+
+`search-posts.ts` carried the same defect class this ADR was written for, and was missed by the
+decomposition that produced it. It is an EXTRACTION operation, so it needed the full treatment —
+variant tolerance *and* corroboration — rather than the mechanical selector-sourcing applied to
+the action operations.
+
+**What changed, stated as the two narrowings of the body above.**
+
+`Surface` now admits `"post-detail"` and `"search-results"`, so § Decision 4's parenthetical
+*"`Surface` admits only `"post-detail"`"* no longer holds. Everything it was supporting still
+does: the reactions modal remains a surface with **no** registry entry, so it still has no
+container tier and still degrades to the cardinal tier alone, and `"reactions-modal"` still
+reaches the corroborator as a bare string naming the scraper rather than a dialect (#830 remains
+open). Only the reason the sentence gave has moved on.
+
+§ Decision 1's *"a readiness anchor MUST NOT be shared across dialects"* is **not** amended, but
+it needs reading with its own rationale, because the search-results adapters deliberately share
+one. The rule exists so that a gate cannot be blind to the change it is there to catch. The
+readiness predicate is a CONJUNCTION — *exactly one adapter's `detect` matched* AND *that
+adapter's own `ready` is present* — so on this surface the dialect binding is carried entirely by
+`detect`, which is dialect-exclusive by measurement in both directions. `ready` carries the
+orthogonal claim that a result CARD has hydrated, and the card skeleton is what the two dialects
+share. Inventing a per-dialect hydration anchor would mean asserting a measurement nobody has
+taken, which is the failure mode two rows down in this ADR's own § Consequences. The binding that
+matters is preserved literally: the polled anchor is one the selected adapter's own extraction
+REQUIRES — a card without a control menu is skipped by the card loop.
+
+**The search-results binding.**
+
+| | `sdui` | `legacy` |
+|---|---|---|
+| `detect` | `div[role="listitem"] [data-testid="expandable-text-box"]` | `[data-chameleon-result-urn]` |
+| `ready` | `div[role="listitem"] button[aria-label^="Open control menu for post"]` | identical, per the paragraph above |
+| `scopes` | `div[role="listitem"]` | `[data-chameleon-result-urn]`, then `div[role="listitem"]` |
+
+`scopes` are reinterpreted for this surface — they are the CARD-ENUMERATION candidates, tried in
+order, first candidate yielding at least one element wins, resolving to a LIST rather than to one
+extraction root. The no-terminal-fallback rule of § Decision 3 is unchanged: an adapter that
+enumerates no cards yields nothing and the page is reported unsupported. The legacy list's second
+candidate is, today, a structural fallback that no page reaches — `detect` and `scopes[0]` are the
+same selector — and it is recorded as such in the code rather than described as a live path.
+
+Exclusivity is measured in both directions rather than argued: `[data-testid]` matched **0**
+document-wide on the 2026-08-31 legacy post-detail probe, and `data-chameleon-result-urn` matched
+**0** on the 2026-04-15 probe of the post-flip search page. Neither anchor can claim the other's
+dialect, so selection cannot report a false ambiguity.
+
+**Adapters now narrow per surface.** `VariantAdapter` carries what every surface has; a
+`PostDetailVariantAdapter` adds `counts`, and a `SearchResultsVariantAdapter` adds nothing but
+its surface. `counts` narrows the engagement-counts row of ONE post and a search page renders one
+per card, so carrying it here as an empty array would be a field that gates nothing. The registry
+is a mapped type over the surface set, which makes adding a surface without registering its
+adapters a compile error and keeps each surface's adapter type at its call sites.
+
+**The cardinal for this surface is `postCardCount`** — the number of enumerated cards that were
+post-shaped **excluding the control-menu filter**: cards clearing the height floor AND carrying an
+author link. There is no scraped-text cardinal here; the per-post `reactionCount` /
+`commentCount` / `shareCount` are engagement counts, not a result-set total. Two properties hold
+it in place, and § Decision 4's contract depends on both:
+
+- **Non-vacuous.** Every other filter in the card loop is shared with the count, so the count and
+  `posts.length` diverge on exactly one condition — the control-menu filter, which is the dominant
+  suspected failure path. A cardinal defined as *"cards that yielded a post"* would always equal
+  `posts.length` and could never contradict it: a corroborator that cannot fail.
+- **Cannot false-raise on a genuinely empty search.** Chrome and "no results" blocks carry no
+  author link and are not counted; and the `sdui` detect anchor is post-content-bound, so a
+  zero-result page selects no adapter and never reaches the check. What such a page reaches
+  *instead* is the readiness gate, which is the next paragraph.
+
+It is asserted on the RAW scrape, after the scroll loop settles and BEFORE the cursor window is
+sliced — the two ways an empty window is legitimate rather than evidence (§ Decision 4's
+pagination rule, and a mid-scroll scrape taken while results are still streaming in).
+
+**A zero match means something different here, and the diagnosis says so.** § Decision 3 and
+§ Decision 5 both read zero-match as *LinkedIn changed; register an adapter*, and on post detail
+that reading is sound because a post-detail page always has a post. This surface does not have
+that property: a search that matched nothing renders no result cards, so no adapter's `detect`
+anchor can match either, and a working page is reported unsupported.
+
+The two states are genuinely indistinguishable **from the DOM** with what is measured today: no
+live probe of a zero-result search page exists, so there is no measured "empty results" container
+for either dialect to anchor on. Inventing one would put a *guessed* selector where § Decision 3
+requires a decisive one — the same move as the always-true `<main>` fallback it removed, and as
+the absence-of-`data-testid` discriminator this amendment records below. So the resolution is in
+the DIAGNOSIS, not in the outcome:
+
+- The **outcome is unchanged** — `DOMVariantUnsupportedError`, fail-loud. Returning `posts: []`
+  would hand a caller an empty result it cannot tell apart from a dialect flip, which is what
+  § Decision 4 exists to forbid, and softening the class would lose the operator action that is
+  right in the first reading.
+- The error's **`cause` states what was observed** — no registered adapter's detect anchor
+  matched, with the per-adapter probe counts — and **names both readings** rather than letting the
+  class's own wording assert the first. Tier-1 pins the text.
+
+The qualifier is deliberately confined to the readiness gate, which is the only path a zero-result
+search takes. The extraction-time `DOMVariantUnsupportedError` does **not** carry it: readiness
+already went green there, so exactly one adapter matched a card moments earlier and the
+markup-changed reading is sound again.
+
+Two things this leaves open, recorded rather than resolved. Distinguishing the two states needs a
+**live probe of a zero-result search page** — the measurement nobody has taken; until then the
+error class over-claims by construction. And the `cause` reaches an in-process consumer and a Node
+stack trace but **not the CLI or MCP text surface**, because `errorMessage()` renders `message`
+alone; the same is already true of the post-detail gate's probe counts.
+
+**The discriminator defect.** The replaced script chose its extraction strategy with
+`searchItems.length > 0 && !document.querySelector('[data-testid="mainFeed"]')`. Under legacy
+markup that negation evaluates TRUE — not because the condition it tests for holds, but because
+the attribute scheme is absent entirely — so it took the wrong branch rather than failing. It is
+the same class as the always-true `<main>` fallback § Decision 3 removed: **a check that cannot
+fail is not a check.** The discriminator now asks the registry which surface and dialect the page
+is speaking. With the negation gone, the script's second strategy was provably dead — it
+enumerated a strict subset of the first strategy's items and its per-item body was otherwise
+identical — and was deleted.
+
+**Deliberately not done here, so a reader does not infer it.** This surface gets no diagnostic
+capture (that is #835's pattern, and ADR-007 § 2026-09-01 Amendment owns it), and its engagement
+counts are still parsed unanchored from each card's own text rather than by the anchored
+per-element read post detail moved to. Both are follow-up candidates, not part of this binding.
+
+**And it has no Tier-2 coverage at all.** `dom-variant.integration.test.ts` exercises post detail
+in a real browser and does not mention this surface, so every claim here rests on Tier-1 against a
+hand-built stand-in for the page, plus the provenance below. That is a gap rather than an
+oversight of scope — the item asked for Tier-1 — and it is worth naming because a stand-in cannot
+falsify a belief about the DOM; only the page can. This surface has already been caught that way
+once: `24052dd` exists because a live check found `span[dir="ltr"]` matching **0** per post here
+while the code confidently read it. A Tier-2 fixture pass is the natural companion to the
+zero-result probe above, and the two would close the same class of unknown.
+
+**Provenance, because the two dialects do not have equal evidence behind them.** The `sdui`
+extraction is measured — the 2026-04-15 live probe of `/search/results/content/` recorded the
+expandable text box present once per post and the `<p>` run of the second author link carrying
+name, degree, headline and timestamp, on the same page where `span[dir="ltr"]` matched 0 per post.
+The `legacy` extraction is **reconstructed, not probed**: no live legacy probe of a search-results
+page exists, and it is rebuilt from the 2026-03-26 selector study plus the diff of commit
+`24052dd`, the migration that replaced exactly that field logic. One thing from that diff is
+deliberately NOT restored — its span-based name read, which was already broken (the first author
+anchor on a card is avatar-only) and whose brokenness is *why* that commit moved the name onto the
+control menu's `aria-label`. The name comes from the shared card skeleton, for both dialects.
+
 ## Related
 
 - Code: `packages/core/src/linkedin/dom-variant.ts`,
@@ -466,11 +610,13 @@ not a measurement, and chasing it is out of this decision's scope.
   `packages/core/src/cdp/wait-for-post-load.ts`,
   `packages/core/src/services/errors.ts`,
   `packages/core/src/operations/get-post.ts`,
-  `packages/core/src/operations/get-post-engagers.ts`
+  `packages/core/src/operations/get-post-engagers.ts`,
+  `packages/core/src/operations/search-posts.ts` (§ 2026-09-02 Amendment)
 - ADRs: [ADR-005](005-error-hierarchy-design.md) (error hierarchy this extends),
   [ADR-007](007-profile-ready-selector-strategy.md) (precedent instance on the profile surface;
   unmodified and still in force there)
 - Requirements: `docs/requirements/linkedin-dom-variant-tolerance-prd.md` (FR-13 / AC-13)
 - Design: `docs/design/linkedin-dom-variant-tolerance-solution-design.md` (§ 4.3, § 7.1, § 9)
 - Issues: #823 (the silent-empty report), #831 (adapter registry), #832 (typed extraction
-  errors), #834 (fail-loud), #839 (this ADR), #830 (reactions-modal container tier, open)
+  errors), #834 (fail-loud), #839 (this ADR), #841 (search-results binding, § 2026-09-02
+  Amendment), #830 (reactions-modal container tier, open)
