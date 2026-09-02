@@ -48,6 +48,16 @@ Each `.html` ships a `.measured.json` sidecar recording what was measured on the
 That sidecar is the fixture's own provenance: an assertion should agree with it, and a
 disagreement means the scrub changed structure it was not supposed to touch.
 
+Its schema is `{ label, measured, scrub, remediation? }`. The harvester writes the first three
+verbatim from the scrub run, so `scrub` mirrors the gate report field-for-field — including the
+empty arrays, which is the point: an absent gate field and a gate that found nothing are different
+claims, and only one of them is evidence.
+
+`remediation` is **optional and present only on a fixture that was post-processed after its
+harvest** — the harvester never emits it. It exists so that a file which is no longer purely the
+output of one harvest run says so, rather than presenting itself as one. A consumer should treat
+its absence as "this file is exactly what the harvester wrote".
+
 The two are a **pair and must stay one**. Optimising for the contradiction case alone yields
 always-throw-on-empty, which destroys a legal outcome; optimising for the control alone restores
 the silent-empty defect. Per the PRD's NFR-2/NFR-3 they are satisfied jointly or not at all.

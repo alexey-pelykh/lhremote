@@ -10,11 +10,23 @@
 //
 // Contract: evaluates to
 //   { error, measured, scrub, html, blocked }
+// on EVERY path, plus `diagnostics` when `error` is set.  The failure path used
+// to return a different shape entirely, so the stated contract was false for the
+// one case a caller is most likely to mishandle.  It reports `blocked: true`
+// rather than merely being shape-stable: a caller keying on `blocked` instead of
+// `error` must fail CLOSED, and `blocked: false` beside `html: null` would be a
+// green light to write nothing at all.
 (() => {
   const post = document.querySelector('.feed-shared-update-v2');
   if (!post) {
-    return { error: 'NO_LEGACY_POST_CONTAINER', href: location.href,
-      componentkey: document.querySelectorAll('[componentkey]').length };
+    return {
+      error: 'NO_LEGACY_POST_CONTAINER',
+      measured: null, scrub: null, html: null, blocked: true,
+      diagnostics: {
+        href: location.href,
+        componentkey: document.querySelectorAll('[componentkey]').length,
+      },
+    };
   }
 
   // Measured BEFORE scrubbing: these are what the oracle asserts, recorded as
