@@ -58,6 +58,12 @@ harvest** — the harvester never emits it. It exists so that a file which is no
 output of one harvest run says so, rather than presenting itself as one. A consumer should treat
 its absence as "this file is exactly what the harvester wrote".
 
+It is a **list**, oldest first, because a fixture can be post-processed more than once and both
+files now have been. A single object could record only the most recent pass, which is the one case
+where the field would quietly stop being true. Each entry carries `applied` / `why` / `scope` /
+`invariant` / `tool` — the last naming how the harvester was changed so a fresh harvest produces
+that form directly, which is what keeps a remediation from becoming permanent local drift.
+
 The two are a **pair and must stay one**. Optimising for the contradiction case alone yields
 always-throw-on-empty, which destroys a legal outcome; optimising for the control alone restores
 the silent-empty defect. Per the PRD's NFR-2/NFR-3 they are satisfied jointly or not at all.

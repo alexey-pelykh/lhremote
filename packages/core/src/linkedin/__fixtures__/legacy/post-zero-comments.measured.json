@@ -1,7 +1,7 @@
 {
   "label": "post-zero-comments",
   "measured": {
-    "href": "(redacted -- a live legacy post-detail page)",
+    "href": "(redacted: a live legacy post-detail page)",
     "updateComponentsText": 1,
     "dataIdUrn": 0,
     "commentEntities": 0,
@@ -27,11 +27,20 @@
     "residualNumerics": [],
     "suspectedResidualNames": []
   },
-  "remediation": {
-    "applied": "body-prose numeric scrub",
-    "why": "the harvest that produced this file synthesised prose word-by-word, and a letterless token has no letter to synthesise -- so a real statistics breakdown survived intact inside .update-components-text while every word around it became lorem",
-    "scope": "digits inside .update-components-text only; counts and every other text node untouched",
-    "invariant": "digit -> digit, so the file length is unchanged and the pre-scrub measurements above still hold",
-    "tool": "scripts/lib/harvest-scrub.js now applies this during the harvest; a numeric gate fails the harvest closed if it does not"
-  }
+  "remediation": [
+    {
+      "applied": "body-prose numeric scrub",
+      "why": "the harvest that produced this file synthesised prose word-by-word, and a letterless token has no letter to synthesise -- so a real statistics breakdown survived intact inside .update-components-text while every word around it became lorem",
+      "scope": "digits inside .update-components-text only; counts and every other text node untouched",
+      "invariant": "digit -> digit, so the file length is unchanged and the pre-scrub measurements above still hold",
+      "tool": "scripts/lib/harvest-scrub.js now applies this during the harvest; a numeric gate fails the harvest closed if it does not"
+    },
+    {
+      "applied": "header-comment `--` removal",
+      "why": "a bare `--` inside an HTML comment is non-conforming under XML/XHTML and HTML 4. It does NOT terminate an HTML5 comment -- measured in Chromium, this header parses as one comment node with its text intact and nothing spilled into the document -- so the fixture was never mis-parsed by the parser that actually reads it. Removed anyway, because the cost is two words and it makes the file valid under stricter tooling too",
+      "scope": "the generated header comment only: `SCRUBBED FIXTURE --` and the redacted href placeholder. The DOM payload below the comment is byte-identical, asserted by a complement diff at edit time",
+      "invariant": "everything from the comment's `-->` onward is unchanged, so every pre-scrub measurement above still describes this file",
+      "tool": "scripts/harvest-dom-fixture.mjs no longer emits `--` into the header, so a fresh harvest produces this form directly"
+    }
+  ]
 }

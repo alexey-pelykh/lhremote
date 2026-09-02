@@ -1,7 +1,7 @@
 {
   "label": "post-with-comments",
   "measured": {
-    "href": "(redacted -- a live legacy post-detail page)",
+    "href": "(redacted: a live legacy post-detail page)",
     "updateComponentsText": 41,
     "dataIdUrn": 40,
     "commentEntities": 40,
@@ -26,5 +26,14 @@
     "residualFetchUrls": [],
     "residualNumerics": [],
     "suspectedResidualNames": []
-  }
+  },
+  "remediation": [
+    {
+      "applied": "header-comment `--` removal",
+      "why": "a bare `--` inside an HTML comment is non-conforming under XML/XHTML and HTML 4. It does NOT terminate an HTML5 comment -- measured in Chromium, this header parses as one comment node with its text intact and nothing spilled into the document -- so the fixture was never mis-parsed by the parser that actually reads it. Removed anyway, because the cost is two words and it makes the file valid under stricter tooling too",
+      "scope": "the generated header comment only: `SCRUBBED FIXTURE --` and the redacted href placeholder. The DOM payload below the comment is byte-identical, asserted by a complement diff at edit time",
+      "invariant": "everything from the comment's `-->` onward is unchanged, so every pre-scrub measurement above still describes this file",
+      "tool": "scripts/harvest-dom-fixture.mjs no longer emits `--` into the header, so a fresh harvest produces this form directly"
+    }
+  ]
 }
