@@ -8,9 +8,11 @@ import {
   buildDetectionSource,
   buildPostDetailExtractionSource,
   buildReadinessPredicateSource,
+  buildSearchResultsExtractionSource,
   formatVariantProbes,
   KNOWN_DOM_VARIANTS,
-  type VariantAdapter,
+  type PostDetailVariantAdapter,
+  SEARCH_RESULT_CARD_MENU_BUTTON,
   variantNamesFor,
 } from "./dom-variant.js";
 
@@ -31,6 +33,11 @@ function fakeElement(sel: string): unknown {
     sel,
     textContent: "",
     href: "",
+    // A contentless stand-in has no laid-out box.  Stated rather than left
+    // `undefined`, because `undefined < 100` is `false` — an omitted height
+    // would sail through the search-results card-height filter, which is the
+    // false pass in the safe-looking direction.
+    offsetHeight: 0,
     getAttribute: () => null,
     closest: () => null,
     querySelector: () => null,
@@ -72,14 +79,28 @@ interface ElementSpec {
   readonly label?: string;
   /** `href`, where the element is an anchor. */
   readonly href?: string;
+  /** `datetime`, where the element is a `<time>`. */
+  readonly datetime?: string;
   /** This element's own text.  Leaves only, as in real markup. */
   readonly text?: string;
+  /**
+   * Laid-out height, defaulting to 0.
+   *
+   * Only the search-results surface reads it, and there it is a FILTER — a
+   * card below 100px is not a post, and a media image below 100px is a
+   * thumbnail rather than the post's media.  Defaulting to 0 rather than to
+   * something comfortably tall is deliberate: a fixture that forgets to set a
+   * height gets skipped and its assertion fails loudly, instead of silently
+   * grading a card the filter would have dropped.
+   */
+  readonly height?: number;
   readonly children?: readonly ElementSpec[];
 }
 
 interface FakeEl {
   readonly textContent: string;
   readonly href: string;
+  readonly offsetHeight: number;
   /** Every descendant in document order.  Node identity is stable, which is
    *  what makes `contains` an ancestry test rather than a value comparison. */
   readonly descendants: FakeEl[];
@@ -88,6 +109,10 @@ interface FakeEl {
   querySelectorAll(sel: string): FakeEl[];
   closest(sel: string): FakeEl | null;
   contains(other: FakeEl): boolean;
+  /** Deep copy, as `Node.cloneNode(true)`. */
+  cloneNode(deep: boolean): FakeEl;
+  /** Detach from the parent, as `ChildNode.remove()`. */
+  remove(): void;
   /** Whether this element answers to `sel`; `*` answers to everything. */
   matchesSelector(sel: string): boolean;
 }
@@ -118,28 +143,58 @@ function renderedText(spec: ElementSpec): string {
     .join(" ");
 }
 
-function buildElement(spec: ElementSpec): FakeEl {
-  const children = (spec.children ?? []).map(buildElement);
-  const descendants = children.flatMap((child) => [child, ...child.descendants]);
+/**
+ * Build a live node from a spec.
+ *
+ * `children` is MUTABLE and `textContent` / `descendants` are getters over it,
+ * so `remove()` actually changes what an ancestor's text reads as — which is
+ * the whole behaviour the SDUI search-results extractor depends on when it
+ * strips a "… more" affordance out of a cloned text box.  Node identity is
+ * still built once per node, so `contains` stays an ancestry test rather than
+ * a value comparison.
+ */
+function buildElement(spec: ElementSpec, parent?: { children: FakeEl[] }): FakeEl {
+  const holder: { children: FakeEl[] } = { children: [] };
   const matchesSelf = (sel: string): boolean =>
     sel.trim() === "*" || selectorMatches([spec.sel ?? ""], sel);
   const self: FakeEl = {
-    textContent: specText(spec),
+    get textContent(): string {
+      return (
+        (spec.text ?? "") +
+        holder.children.map((child) => child.textContent).join("")
+      );
+    },
     href: spec.href ?? "",
-    descendants,
+    offsetHeight: spec.height ?? 0,
+    get descendants(): FakeEl[] {
+      return holder.children.flatMap((child) => [child, ...child.descendants]);
+    },
     getAttribute: (name: string) => {
       if (name === "aria-label") return spec.label ?? null;
       if (name === "href") return spec.href ?? null;
+      if (name === "datetime") return spec.datetime ?? null;
       return null;
     },
     querySelectorAll: (sel: string) =>
-      descendants.filter((node) => node.matchesSelector(sel)),
+      self.descendants.filter((node) => node.matchesSelector(sel)),
     querySelector: (sel: string) =>
-      descendants.find((node) => node.matchesSelector(sel)) ?? null,
+      self.descendants.find((node) => node.matchesSelector(sel)) ?? null,
     closest: () => null,
-    contains: (other: FakeEl) => other === self || descendants.includes(other),
+    contains: (other: FakeEl) =>
+      other === self || self.descendants.includes(other),
+    // A fresh tree off the same spec.  Sound here because every clone in play
+    // is taken BEFORE any mutation, exactly as the extractor does it.
+    cloneNode: () => buildElement(spec),
+    remove: () => {
+      if (!parent) return;
+      const at = parent.children.indexOf(self);
+      if (at >= 0) parent.children.splice(at, 1);
+    },
     matchesSelector: matchesSelf,
   };
+  holder.children = (spec.children ?? []).map((child) =>
+    buildElement(child, holder),
+  );
   return self;
 }
 
@@ -177,7 +232,7 @@ function runScript(script: string, document: unknown): unknown {
  * below goes through this and nothing else — no production file is edited
  * and no call site is aware of it, which is the property under test.
  */
-const THIRD_ADAPTER: VariantAdapter = {
+const THIRD_ADAPTER: PostDetailVariantAdapter = {
   surface: "post-detail",
   variant: "hypothetical",
   detect: '[data-hypothetical-post="1"]',
@@ -255,7 +310,7 @@ describe("selector escaping", () => {
   });
 
   it("survives an adapter whose anchor contains a single quote and a backslash", () => {
-    const nasty: VariantAdapter = {
+    const nasty: PostDetailVariantAdapter = {
       ...THIRD_ADAPTER,
       detect: `[data-x="it's"][data-y="a\\\\b"]`,
       ready: `[data-x="it's"]`,
@@ -275,7 +330,7 @@ describe("blast radius of a defective adapter", () => {
   // able to take down readiness for the OTHER dialects: the readiness and
   // detection scripts never carry extractor source, so an extractor that
   // cannot even parse is inert until extraction actually runs.
-  const broken: VariantAdapter = {
+  const broken: PostDetailVariantAdapter = {
     ...THIRD_ADAPTER,
     extract: `(function (scope) { this is not valid javascript ]]] })`,
   };
@@ -432,7 +487,7 @@ describe("post-detail extraction", () => {
     // widening step, so this is "no usable adapter", not "empty post" — an
     // adapter that cannot find its own extraction root has not read the
     // page, and saying so is the point.
-    const split: VariantAdapter = {
+    const split: PostDetailVariantAdapter = {
       ...THIRD_ADAPTER,
       scopes: ['[data-scope-that-is-absent="1"]'],
     };
@@ -938,5 +993,479 @@ describe("author identity (#836)", () => {
     ) as Author;
 
     expect(result.authorHeadline).toBe("Software Architect • Agentic AI");
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// search-results (#841)
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * A search-results page.
+ *
+ * `cards` supplies the LIST a card-enumeration selector answers with.  That
+ * is the whole reason this exists beside {@link fakeDocument}: post detail
+ * reads ONE root, so a `querySelectorAll` returning a single element was
+ * enough there, and on this surface it would hide every multi-card behaviour
+ * — the enumeration order, the per-card filters, and the cardinal that counts
+ * cards the extraction skipped.
+ */
+function fakeSearchDocument(
+  present: readonly string[],
+  cards: Readonly<Record<string, readonly ElementSpec[]>> = {},
+): unknown {
+  const listFor = (sel: string): FakeEl[] | null => {
+    for (const [key, specs] of Object.entries(cards)) {
+      if (selectorMatches([key], sel)) return specs.map((s) => buildElement(s));
+    }
+    return null;
+  };
+  const matches = (sel: string): boolean => selectorMatches(present, sel);
+  return {
+    querySelector: (sel: string) => {
+      const list = listFor(sel);
+      if (list !== null) return list[0] ?? null;
+      return matches(sel) ? fakeElement(sel) : null;
+    },
+    querySelectorAll: (sel: string) => {
+      const list = listFor(sel);
+      if (list !== null) return list;
+      return matches(sel) ? [fakeElement(sel)] : [];
+    },
+  };
+}
+
+/**
+ * The per-card three-dot control menu, carrying the author name in its label.
+ *
+ * Written out literally rather than imported: this exact selector is the
+ * adjudicated dialect-INDEPENDENT anchor, and pinning the string here is what
+ * makes a later "tidy it into an adapter" edit fail a test rather than pass
+ * review.  It is also the fixed end of the composition check on
+ * {@link SEARCH_RESULT_CARD_MENU_BUTTON} — a pin only holds if one side of it
+ * is not the thing under test.
+ */
+const SEARCH_MENU_BUTTON = 'button[aria-label^="Open control menu for post"]';
+
+function menuButton(name: string): ElementSpec {
+  return {
+    sel: SEARCH_MENU_BUTTON,
+    label: `Open control menu for post by ${name}`,
+  };
+}
+
+/**
+ * An SDUI search-result card, as the 2026-04-15 live probe recorded one.
+ *
+ * Both author anchors answer to the profile-path selector, as a browser's
+ * would: the first is avatar-only (empty text, which is why the name cannot
+ * come from it) and the second carries the `<p>` run with name, degree,
+ * headline and timestamp.
+ */
+const SDUI_CARD: ElementSpec = {
+  sel: 'div[role="listitem"]',
+  height: 320,
+  children: [
+    {
+      sel: 'a[href*="/in/"], a[href*="/in/alice/"]',
+      href: "https://www.linkedin.com/in/alice/?trk=search_srp",
+      children: [{ sel: "figure" }],
+    },
+    menuButton("Alice Smith"),
+    {
+      sel: 'a[href*="/in/"], a[href*="/in/alice/"]',
+      href: "https://www.linkedin.com/in/alice/?trk=search_srp",
+      children: [
+        { sel: "p", text: "Alice Smith" },
+        { sel: "p", text: "• 1st" },
+        { sel: "p", text: "Engineer at Acme" },
+        { sel: "p", text: "18h •" },
+      ],
+    },
+    {
+      sel: '[data-testid="expandable-text-box"]',
+      children: [
+        { sel: "span", text: "Hello #linkedin world!" },
+        { sel: '[data-testid="expandable-text-button"]', text: "…more" },
+      ],
+    },
+    { sel: 'img[src*="media.licdn.com"]', height: 240 },
+    { sel: "span", text: " 42 reactions" },
+    { sel: "span", text: " 7 comments" },
+    { sel: "span", text: " 3 reposts" },
+  ],
+};
+
+/**
+ * A legacy search-result card, reconstructed from the 2026-03-26 selector
+ * study and the diff of `24052dd`.
+ *
+ * The author name appears ONLY in the control menu's label — no span carries
+ * it.  That is deliberate and it is the discriminating part of the fixture:
+ * the legacy read this dialect used before `24052dd` took the name off a span
+ * inside the first author anchor, which is avatar-only, and reviving it would
+ * ship a known-broken read under a new name.
+ */
+const LEGACY_CARD: ElementSpec = {
+  sel: "[data-chameleon-result-urn]",
+  height: 280,
+  children: [
+    {
+      sel: 'a[href*="/in/"]',
+      href: "https://www.linkedin.com/in/bob/?trk=search_srp",
+      children: [{ sel: "figure" }],
+    },
+    menuButton("Bob Jones"),
+    { sel: "span", text: "Follow" },
+    { sel: "span", text: "Staff Engineer at Globex" },
+    {
+      sel: 'span, span[dir="ltr"]',
+      text: "A legacy-rendered post body, long enough to clear the floor.",
+    },
+    { sel: "time", datetime: "2026-04-14T09:30:00.000Z" },
+    { sel: "span", text: " 5 reactions" },
+    { sel: "span", text: " 2 comments" },
+    { sel: "span", text: " 1 repost" },
+  ],
+};
+
+interface SearchScrape {
+  variant?: string;
+  postCardCount?: number;
+  posts?: {
+    url: string | null;
+    authorName: string | null;
+    authorHeadline: string | null;
+    authorProfileUrl: string | null;
+    text: string | null;
+    mediaType: string | null;
+    reactionCount: number;
+    commentCount: number;
+    shareCount: number;
+    timestamp: string | null;
+  }[];
+  ambiguousVariants?: string[];
+}
+
+describe("search-results adapter registry", () => {
+  const adapters = adaptersFor("search-results");
+  const [sdui, legacy] = adapters;
+
+  it("registers the known search-results dialects", () => {
+    expect(variantNamesFor("search-results")).toEqual([...KNOWN_DOM_VARIANTS]);
+  });
+
+  it("has no adapter whose detect anchor or scope is an always-true selector", () => {
+    // The same guard the post-detail adapters carry.  An adapter claiming
+    // every page claims pages it cannot read, and a scope matching every page
+    // enumerates "cards" that are not cards.
+    const alwaysTrue = ["main", "body", "html", ":root", "*", "document"];
+    for (const adapter of adapters) {
+      expect(alwaysTrue).not.toContain(adapter.detect.trim());
+      for (const scope of adapter.scopes) {
+        expect(alwaysTrue).not.toContain(scope.trim());
+      }
+      expect(adapter.scopes.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("shares one readiness anchor across both dialects, deliberately", () => {
+    // The post-detail suite asserts the OPPOSITE for its surface, so this is
+    // recorded as an intended difference rather than left to look like a
+    // slip.  The readiness predicate is a CONJUNCTION — exactly one adapter's
+    // `detect` matched AND that adapter's `ready` is present — so the dialect
+    // binding already lives in `detect`, which is dialect-exclusive.  `ready`
+    // carries the orthogonal claim that a card has HYDRATED, and the card
+    // skeleton is precisely what the two dialects share.  A per-dialect
+    // hydration anchor would be a measurement nobody has taken.
+    expect(sdui?.ready).toBe(legacy?.ready);
+  });
+
+  it("polls a readiness anchor the extraction itself requires", () => {
+    // The ADR-008 binding, in the form that survives a shared anchor: the
+    // gate must not go green on something the extractor does not need.  A
+    // card with no control menu is skipped by the shared card loop, so the
+    // anchor is load-bearing for extraction and not merely for liveness.
+    expect(sdui?.ready).toContain(SEARCH_MENU_BUTTON);
+    expect(buildSearchResultsExtractionSource(adapters)).toContain(
+      JSON.stringify(SEARCH_MENU_BUTTON),
+    );
+  });
+
+  it("exports one card-menu selector for the gate and the URL read to share", () => {
+    // `search-posts.ts` clicks these buttons to read each post's URL off the
+    // "Copy link to post" item, and used to hand-write the same two parts a
+    // third time.  Pinning the composed export against the literals is what
+    // keeps that de-duplication honest: a change to either part now has to
+    // move the gate, the card filter and the URL read together, or fail here.
+    expect(SEARCH_RESULT_CARD_MENU_BUTTON).toBe(
+      `div[role="listitem"] ${SEARCH_MENU_BUTTON}`,
+    );
+    for (const adapter of adapters) {
+      expect(adapter.ready).toBe(SEARCH_RESULT_CARD_MENU_BUTTON);
+    }
+  });
+
+  it("keeps the control-menu anchor out of both adapters", () => {
+    // Adjudicated dialect-independent (ARIA, measured on pre-SDUI markup in
+    // 2026-03, measured on the post-flip search page in 2026-04, and an
+    // unchanged context line through the migration that flipped the dialect).
+    // It belongs to the shared card skeleton; duplicating it per dialect is
+    // how two copies of one measurement drift apart.
+    for (const adapter of adapters) {
+      expect(adapter.detect).not.toContain("Open control menu");
+      expect(adapter.extract).not.toContain("Open control menu");
+    }
+  });
+
+  it("confines the SDUI attribute scheme to the SDUI adapter", () => {
+    // Acceptance criterion 2, structurally: every `[data-testid]` anchor now
+    // lives inside the dialect that owns it.  Under legacy markup they all
+    // match zero, which is exactly why a legacy page must not reach one.
+    expect(sdui?.detect).toContain("data-testid");
+    expect(sdui?.extract).toContain('[data-testid="expandable-text-box"]');
+    expect(legacy?.detect).not.toContain("data-testid");
+    expect(legacy?.extract).not.toContain("data-testid");
+  });
+
+  it("never decides a branch by the ABSENCE of a variant-specific attribute", () => {
+    // The defect this item removes: `!document.querySelector('[data-testid=
+    // "mainFeed"]')` as a discriminator.  Under legacy that negation is TRUE
+    // — not because the condition it tests for holds, but because the whole
+    // attribute scheme is gone — so it took the wrong branch instead of
+    // failing.  A check that cannot fail is not a check.
+    const sources = [
+      buildSearchResultsExtractionSource(adapters),
+      buildReadinessPredicateSource(adapters),
+      buildDetectionSource(adapters),
+    ];
+    for (const source of sources) {
+      expect(source).not.toMatch(/!\s*document\.querySelector/);
+    }
+  });
+});
+
+describe("search-results readiness predicate", () => {
+  const adapters = adaptersFor("search-results");
+  const script = buildReadinessPredicateSource(adapters);
+  const [sdui, legacy] = adapters;
+
+  it("is false when no adapter claims the page", () => {
+    expect(runScript(script, fakeSearchDocument([]))).toBe(false);
+  });
+
+  it("is false when the sole claimant's own ready anchor is absent", () => {
+    expect(runScript(script, fakeSearchDocument([sdui?.detect ?? ""]))).toBe(
+      false,
+    );
+  });
+
+  it("is true for an SDUI page whose cards have hydrated", () => {
+    expect(
+      runScript(
+        script,
+        fakeSearchDocument([sdui?.detect ?? "", sdui?.ready ?? ""]),
+      ),
+    ).toBe(true);
+  });
+
+  it("is true for a legacy page whose cards have hydrated", () => {
+    // The case the replaced gate could not distinguish: it asked only whether
+    // some listitem held a control menu, which is true on both dialects, so
+    // it went green on a page every SDUI selector matched zero on.
+    expect(
+      runScript(
+        script,
+        fakeSearchDocument([legacy?.detect ?? "", legacy?.ready ?? ""]),
+      ),
+    ).toBe(true);
+  });
+
+  it("is false when two adapters claim the page, even with the ready anchor present", () => {
+    expect(
+      runScript(
+        script,
+        fakeSearchDocument([
+          sdui?.detect ?? "",
+          legacy?.detect ?? "",
+          sdui?.ready ?? "",
+        ]),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("search-results extraction", () => {
+  const adapters = adaptersFor("search-results");
+  const script = buildSearchResultsExtractionSource(adapters);
+  const [sdui, legacy] = adapters;
+
+  /** An SDUI search page holding `cards` under the listitem enumeration. */
+  function sduiPage(cards: readonly ElementSpec[]): unknown {
+    return fakeSearchDocument([sdui?.detect ?? ""], {
+      'div[role="listitem"]': cards,
+    });
+  }
+
+  /** A legacy search page holding `cards` under the chameleon container. */
+  function legacyPage(cards: readonly ElementSpec[]): unknown {
+    return fakeSearchDocument([legacy?.detect ?? ""], {
+      "[data-chameleon-result-urn]": cards,
+    });
+  }
+
+  it("returns null when no adapter claims the page", () => {
+    expect(runScript(script, fakeSearchDocument([]))).toBeNull();
+  });
+
+  it("returns null when the claiming adapter enumerates no cards", () => {
+    // Detect matched but no scope candidate yielded an element.  There is
+    // deliberately no widening step, so this is "no usable adapter", not
+    // "a search that found nothing" — and the distinction is the whole
+    // empty-vs-error contract: `null` raises, a zero-card record does not.
+    expect(
+      runScript(script, fakeSearchDocument([sdui?.detect ?? ""])),
+    ).toBeNull();
+  });
+
+  it("reports the claimants when two adapters match, instead of picking one", () => {
+    const result = runScript(
+      script,
+      fakeSearchDocument([sdui?.detect ?? "", legacy?.detect ?? ""]),
+    ) as SearchScrape;
+    expect(result.ambiguousVariants).toEqual([...KNOWN_DOM_VARIANTS]);
+  });
+
+  it("extracts a full record under the SDUI dialect", () => {
+    const result = runScript(script, sduiPage([SDUI_CARD])) as SearchScrape;
+
+    expect(result.variant).toBe("sdui");
+    expect(result.postCardCount).toBe(1);
+    expect(result.posts).toHaveLength(1);
+    const [post] = result.posts ?? [];
+    expect(post?.authorName).toBe("Alice Smith");
+    expect(post?.authorHeadline).toBe("Engineer at Acme");
+    expect(post?.authorProfileUrl).toBe("https://www.linkedin.com/in/alice/");
+    // The "… more" affordance is stripped out of a CLONE, so the live page is
+    // never mutated and the post text is what a reader sees.
+    expect(post?.text).toBe("Hello #linkedin world!");
+    expect(post?.timestamp).toBe("18h");
+    expect(post?.mediaType).toBe("image");
+    expect(post?.reactionCount).toBe(42);
+    expect(post?.commentCount).toBe(7);
+    expect(post?.shareCount).toBe(3);
+    // Filled later by the three-dot-menu phase; search results expose no URL.
+    expect(post?.url).toBeNull();
+  });
+
+  it("extracts a full record under the legacy dialect", () => {
+    // The headline acceptance criterion. Every `[data-testid]` matches zero on
+    // this page, which is precisely how search results extracted empty before:
+    // the SDUI text box, the SDUI "… more" button and the negated `mainFeed`
+    // probe were the only reads, and none of them can see this markup.
+    const result = runScript(script, legacyPage([LEGACY_CARD])) as SearchScrape;
+
+    expect(result.variant).toBe("legacy");
+    expect(result.postCardCount).toBe(1);
+    expect(result.posts).toHaveLength(1);
+    const [post] = result.posts ?? [];
+    expect(post?.authorName).toBe("Bob Jones");
+    expect(post?.authorHeadline).toBe("Staff Engineer at Globex");
+    expect(post?.authorProfileUrl).toBe("https://www.linkedin.com/in/bob/");
+    expect(post?.text).toBe(
+      "A legacy-rendered post body, long enough to clear the floor.",
+    );
+    expect(post?.timestamp).toBe("2026-04-14T09:30:00.000Z");
+    expect(post?.reactionCount).toBe(5);
+    expect(post?.commentCount).toBe(2);
+    expect(post?.shareCount).toBe(1);
+  });
+
+  it("reads the author name off the control menu under legacy, not off a span", () => {
+    // `LEGACY_CARD` carries the name in the menu label and nowhere else, so
+    // this passes only if the shared builder is the one reading it.  The span
+    // read that `24052dd` replaced was already broken — the first author
+    // anchor on a card is avatar-only — and reviving it into this adapter
+    // would ship a known bug under a new name.
+    const result = runScript(script, legacyPage([LEGACY_CARD])) as SearchScrape;
+    const [post] = result.posts ?? [];
+
+    expect(post?.authorName).toBe("Bob Jones");
+    expect(legacy?.extract).not.toContain("aria-hidden");
+  });
+
+  it("falls back to the card's own text for a legacy timestamp with no <time>", () => {
+    const noTimeEl: ElementSpec = {
+      ...LEGACY_CARD,
+      children: [
+        { sel: "span", text: "2w · " },
+        ...(LEGACY_CARD.children ?? []).filter((child) => child.sel !== "time"),
+      ],
+    };
+    const result = runScript(script, legacyPage([noTimeEl])) as SearchScrape;
+
+    expect(result.posts?.[0]?.timestamp).toBe("2w");
+  });
+
+  it("raises nothing itself, but reports a cardinal that contradicts an empty scrape", () => {
+    // Corroborated-empty, at the layer that produces the evidence: a card
+    // that is post-shaped — tall enough, with an author link — but whose
+    // control menu never resolved. `postCardCount` counts it; `posts` does
+    // not. The operation is what turns that disagreement into an
+    // `ExtractionFailedError`; the script's job is to make it visible.
+    const menuless: ElementSpec = {
+      ...SDUI_CARD,
+      children: (SDUI_CARD.children ?? []).filter(
+        (child) => child.sel !== SEARCH_MENU_BUTTON,
+      ),
+    };
+    const result = runScript(script, sduiPage([menuless])) as SearchScrape;
+
+    expect(result.postCardCount).toBe(1);
+    expect(result.posts).toEqual([]);
+  });
+
+  it("reports a zero cardinal for a page that renders no post-shaped cards", () => {
+    // The other half of the contract, and the half a naive "empty means
+    // stale" rule breaks: a search that genuinely found nothing. The cardinal
+    // requires an author link, so a chrome or "no results" block is not
+    // counted and the empty scrape is corroborated rather than contradicted.
+    const noResults: ElementSpec = {
+      sel: 'div[role="listitem"]',
+      height: 180,
+      children: [{ sel: "span", text: "No results found" }],
+    };
+    const result = runScript(script, sduiPage([noResults])) as SearchScrape;
+
+    expect(result.postCardCount).toBe(0);
+    expect(result.posts).toEqual([]);
+  });
+
+  it("skips cards below the height floor without counting them", () => {
+    // The height filter is shared with the cardinal, deliberately: counting a
+    // card the extraction was never going to read would make the corroborator
+    // fire on a page that is fine.
+    const short: ElementSpec = { ...SDUI_CARD, height: 40 };
+    const result = runScript(script, sduiPage([short, SDUI_CARD]));
+
+    expect((result as SearchScrape).postCardCount).toBe(1);
+    expect((result as SearchScrape).posts).toHaveLength(1);
+  });
+
+  it("enumerates every card on the page, not just the first", () => {
+    const result = runScript(
+      script,
+      sduiPage([SDUI_CARD, SDUI_CARD, SDUI_CARD]),
+    ) as SearchScrape;
+
+    expect(result.postCardCount).toBe(3);
+    expect(result.posts).toHaveLength(3);
+  });
+
+  it("reads no page-wide text at all", () => {
+    // Counts are per-post here and are read from each card's own text. A
+    // page-wide read would make the first "<N> comments"-shaped run anywhere
+    // on the page every post's comment count.
+    expect(script).not.toContain("document.body");
   });
 });
