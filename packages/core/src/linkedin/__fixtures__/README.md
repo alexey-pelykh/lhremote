@@ -19,7 +19,7 @@ and never removes or renames an element, a class, or an attribute.
 | Engagement counts and the text carrying them (`"2 41 comments"`, `aria-label="2 reactions"`) | Personal names → `Test Person` |
 | Entity cardinality (comment count, `[data-id^="urn:li:"]` count) | Post and comment prose → deterministic lorem of the same length and word count |
 | `urn:li:{type}:` prefixes and shape, including the type name (`fsd_profile`) | URN ids → a synthetic token of the **same length and shape**: digits stay digits, opaque alphanumerics stay opaque. Covers percent-encoded forms (`urn%3Ali%3A…`) in href query strings. |
-| Presence/absence of the variant anchors (`[componentkey]`, `[data-testid]`) | Every `*.licdn.com` asset → `https://example.invalid/asset` |
+| Presence/absence of the variant anchors (`[componentkey]`, `[data-testid]`) | Every asset URL → an inline 1×1 transparent GIF `data:` URI |
 
 `<script>` and `<style>` **elements are kept** and only their payloads emptied — a selector count
 that changed because an element was deleted would be a fixture bug, not a variant flip.
@@ -60,6 +60,18 @@ the silent-empty defect. Per the PRD's NFR-2/NFR-3 they are satisfied jointly or
 Both are recorded rather than approximated: a fixture that does not come off a real page cannot
 witness a variant flip, which is the only thing these files are for.
 
+## No network
+
+These fixtures load with **zero outbound requests**, which the Tier-2 suite depends on.
+
+Every asset is an inline 1×1 transparent GIF `data:` URI rather than a placeholder URL. An
+unresolvable host like `example.invalid` is *not* good enough: the browser still attempts the
+lookup, so a fixture with 50 images turns into 50 DNS queries and the suite's "no network" property
+quietly becomes "the network fails fast enough". The `data:` URI removes the request entirely.
+
+This is **enforced by the network gate**, not just documented — a future edit that reintroduces a
+fetchable URL fails the harvest rather than silently costing the suite its offline guarantee.
+
 ## Privacy
 
 Source pages carry real third-party names, profile URLs, headlines and comment text, and this
@@ -71,7 +83,10 @@ either trips — naming each survivor and where it lives:
 - a **name** gate over text nodes *and* name-bearing attribute values, flagging capitalised runs
   that are neither LinkedIn UI vocabulary nor the scrubber's own synthetic output;
 - an **identifier** gate over the **whole serialised fixture**, flagging any `urn:li:…` token whose
-  id is not the synthetic placeholder — encoded or not, whatever the type name.
+  id is not the synthetic placeholder — encoded or not, whatever the type name;
+- a **network** gate, flagging any dereferenceable `http(s):` URL left in an attribute the browser
+  actually fetches (`src`, `srcset`, `poster`, `data-*-url`). `href` is deliberately exempt — an
+  `<a href>` is navigation, not a fetch, and those hrefs carry structure the adapters read.
 
 The two gates read different surfaces on purpose. Every leak found so far got through because a
 check read a *narrower* surface than the artifact it certified: the name gate once tag-stripped the

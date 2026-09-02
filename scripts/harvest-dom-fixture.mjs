@@ -25,8 +25,8 @@
 // backslash needs doubling, and one missed pair silently truncates a regex.
 //
 // Exit codes: 2 usage - 3 no LinkedIn target - 4 no legacy container on the page
-//             5 residual-identity gate tripped -- a name OR an identifier
-//               survived scrubbing; nothing is written
+//             5 a gate tripped -- a name, an identifier, or a network-
+//               reachable URL survived scrubbing; nothing is written
 import { CDPClient } from "../packages/core/dist/cdp/client.js";
 import { discoverTargets } from "../packages/core/dist/cdp/discovery.js";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -41,7 +41,20 @@ if (!POST_URL || !OUT) {
   console.error("usage: harvest-dom-fixture.mjs <post-url> <out.html> [--label NAME]");
   process.exit(2);
 }
-const LABEL = rest.includes("--label") ? rest[rest.indexOf("--label") + 1] : "fixture";
+// `--label` must carry a value.  A trailing `--label`, or one followed by
+// another flag, previously yielded `undefined` and embedded the string
+// "undefined" into the fixture header and its .measured.json sidecar -- a
+// silently mislabelled artifact rather than an error.
+const labelIdx = rest.indexOf("--label");
+if (labelIdx !== -1) {
+  const next = rest[labelIdx + 1];
+  if (next === undefined || next.startsWith("--")) {
+    console.error("usage: harvest-dom-fixture.mjs <post-url> <out.html> [--label NAME]");
+    console.error("       --label requires a value");
+    process.exit(2);
+  }
+}
+const LABEL = labelIdx !== -1 ? rest[labelIdx + 1] : "fixture";
 
 // Capture tuning.  These are wall-clock waits against a live, network-bound page,
 // so they are deliberately generous: harvesting early yields a fixture missing
@@ -107,6 +120,14 @@ try {
       console.error("\n  -> Extend scrubUrls/URN_ANY in scripts/lib/harvest-scrub.js.  Note the");
       console.error("     three axes an identifier can hide behind: percent-encoding, an");
       console.error("     underscore in the type name, and an opaque non-numeric id.");
+    }
+    const fetches = result.scrub.residualFetchUrls ?? [];
+    if (fetches.length > 0) {
+      console.error("\nDereferenceable URLs left in fetch-triggering attributes:");
+      for (const u of fetches) console.error("   " + u);
+      console.error("\n  -> These make the fixture reach the network on load, which breaks the");
+      console.error("     no-network contract of the Tier-2 suite.  Neutralise them to the");
+      console.error("     inline BLANK_ASSET in scripts/lib/harvest-scrub.js.");
     }
     console.error("\nNothing was written.  Fix the scrub and re-run -- do not hand-edit a fixture.");
     process.exit(5);

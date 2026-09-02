@@ -197,6 +197,12 @@
   ];
   const NAME_ATTRS = ['aria-label', 'alt', 'title', 'aria-description',
     'aria-roledescription', 'data-test-name', 'placeholder'];
+
+  // Attributes a browser DEREFERENCES on load.  `href` is deliberately absent:
+  // an <a href> is navigation, not a fetch, and the hrefs carry structure the
+  // adapters read.  Everything here is neutralised to an inline asset.
+  const FETCHING_ATTRS = ['src', 'srcset', 'poster', 'data-delayed-url',
+    'data-ghost-url', 'data-src', 'data-srcset'];
   // URN scrubbing has to cover three axes at once, and the first revision of this
   // missed a real `urn:li:fsd_profile:` identifier on ALL THREE independently:
   // it is PERCENT-ENCODED inside an href query string (`urn%3Ali%3A...`), its
@@ -211,8 +217,15 @@
   const scrubUrn = (whole, s1, s2, type, s3, id) =>
     'urn' + s1 + 'li' + s2 + type + s3
       + (/^[0-9]+$/.test(id) ? '1'.repeat(id.length) : 'A'.repeat(id.length));
+  // A 1x1 transparent GIF, inline.  NOT an `https://example.invalid/...`
+  // placeholder: `.invalid` never resolves, but the browser still ATTEMPTS the
+  // fetch, so loading a fixture would emit ~50 DNS lookups and make a suite
+  // advertised as "no network" quietly depend on those lookups failing fast.
+  // A data: URI makes the fixture genuinely self-contained.
+  const BLANK_ASSET =
+    'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
   const scrubUrls = (v) => v
-    .replace(/https?:\/\/[a-z0-9.-]*licdn\.com\/[^"'\s)]*/gi, 'https://example.invalid/asset')
+    .replace(/https?:\/\/[a-z0-9.-]*licdn\.com\/[^"'\s)]*/gi, BLANK_ASSET)
     .replace(URN_ANY, scrubUrn);
 
   // `root` itself is INCLUDED.  querySelectorAll('*') excludes the element it is
@@ -233,8 +246,8 @@
           report.slugs++;
         }
       }
-      if (name === 'src' || name === 'srcset' || name === 'data-delayed-url') {
-        v = 'https://example.invalid/asset';
+      if (FETCHING_ATTRS.indexOf(name) !== -1) {
+        v = BLANK_ASSET;
         report.images++;
       }
       if (NAME_ATTRS.indexOf(name) !== -1) {
@@ -246,7 +259,10 @@
       }
       v = scrubUrls(v);
       if (/^(data-id|data-urn|data-entity-urn|data-chameleon-result-urn)$/.test(name)) {
-        const nv = v.replace(/[0-9]{6,}/g, '1111111111111111111');
+        // Length-preserving, like scrubUrn above.  A hard-coded 19-digit
+        // constant contradicted the stated "shape is kept" contract and
+        // silently reshaped any id of a different length.
+        const nv = v.replace(/[0-9]{6,}/g, (d) => '1'.repeat(d.length));
         if (nv !== v) report.urns++;
         v = nv;
       }
@@ -314,6 +330,23 @@
   report.suspectedResidualIds = Array.from(residualUrns.entries())
     .sort((a, b) => b[1] - a[1]).slice(0, 15).map((e) => e[0] + ' x' + e[1]);
 
+  // NETWORK gate.  A fixture for a "no network" tier must not be able to reach
+  // the network at all, and that has to be ENFORCED rather than asserted in a
+  // README -- otherwise the suite's no-network property silently depends on
+  // every future edit remembering it.
+  const residualFetches = new Map();
+  {
+    const re = /\s(src|srcset|poster|data-delayed-url|data-ghost-url|data-src|data-srcset)=["']([^"']*)["']/gi;
+    let fm;
+    while ((fm = re.exec(serialised)) !== null) {
+      if (!/^https?:/i.test(fm[2].trim())) continue;
+      residualFetches.set(fm[1] + '=' + fm[2].slice(0, 60),
+        (residualFetches.get(fm[1] + '=' + fm[2].slice(0, 60)) || 0) + 1);
+    }
+  }
+  report.residualFetchUrls = Array.from(residualFetches.entries())
+    .sort((a, b) => b[1] - a[1]).slice(0, 10).map((e) => e[0] + ' x' + e[1]);
+
   const suspects = new Map();
   // Record WHERE each suspect lives, not just what it is.  A gate that names a
   // token without its context cannot distinguish "the sweep does not reach this
@@ -336,5 +369,6 @@
 
   return { error: null, measured, scrub: report, html: serialised,
     blocked: report.suspectedResidualNames.length > 0
-      || report.suspectedResidualIds.length > 0 };
+      || report.suspectedResidualIds.length > 0
+      || report.residualFetchUrls.length > 0 };
 })()
