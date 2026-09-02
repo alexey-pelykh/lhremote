@@ -957,7 +957,7 @@ here goes stale the next time one is added or closed.
   than as a side effect. Falsifier: a live measurement of whether the reactor list sits in a
   container that overflows at a SMALL row count. If it does, a partial first scrape still scrolls,
   the loop recovers on the next iteration, and the residual narrows to the case where hydration is
-  slower than a full scroll cycle.
+  slower than a full scroll cycle. Tracked as #874.
 
 **Deliberately not done here, so a reader does not infer it.** The trigger-absent branch does not
 attempt to distinguish *no reactions* from *trigger selector rotted*; the evidence to do so does not
