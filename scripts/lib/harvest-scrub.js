@@ -31,17 +31,25 @@
 
   // Measured BEFORE scrubbing: these are what the oracle asserts, recorded as
   // provenance rather than recomputed from the scrubbed artefact.
+  // Queried once and reused.  The double-query these replace could not actually
+  // throw -- this whole source is one synchronous `Runtime.evaluate` turn, and
+  // JS does not yield mid-expression, so no mutation can land between the two
+  // calls -- but reading an element twice to answer one question is worth not
+  // doing, and the `(x || {})` dance it required was the tell.
+  const socialCountsEl = document.querySelector('.social-details-social-counts');
+  const reactionsTriggerEl = document.querySelector('button[data-reaction-details]');
+
   const measured = {
     href: location.href,
     updateComponentsText: document.querySelectorAll('.update-components-text').length,
     dataIdUrn: document.querySelectorAll('[data-id^="urn:li:"]').length,
     commentEntities: document.querySelectorAll('article.comments-comment-entity').length,
     socialCounts: document.querySelectorAll('.social-details-social-counts').length,
-    socialCountsText: (document.querySelector('.social-details-social-counts') || {}).textContent
-      ? document.querySelector('.social-details-social-counts').textContent.replace(/\s+/g, ' ').trim()
+    socialCountsText: socialCountsEl && socialCountsEl.textContent
+      ? socialCountsEl.textContent.replace(/\s+/g, ' ').trim()
       : '',
-    reactionsTriggerAria: document.querySelector('button[data-reaction-details]')
-      ? document.querySelector('button[data-reaction-details]').getAttribute('aria-label') : null,
+    reactionsTriggerAria: reactionsTriggerEl
+      ? reactionsTriggerEl.getAttribute('aria-label') : null,
     componentkey: document.querySelectorAll('[componentkey]').length,
     dataTestid: document.querySelectorAll('[data-testid]').length,
     sduiScreen: document.querySelectorAll('[data-sdui-screen]').length,
