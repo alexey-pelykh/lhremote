@@ -1,0 +1,26 @@
+{
+  "label": "post-zero-comments",
+  "measured": {
+    "href": "(redacted -- a live legacy post-detail page)",
+    "updateComponentsText": 1,
+    "dataIdUrn": 0,
+    "commentEntities": 0,
+    "socialCounts": 0,
+    "socialCountsText": "",
+    "reactionsTriggerAria": null,
+    "componentkey": 0,
+    "dataTestid": 0,
+    "sduiScreen": 0,
+    "feedSharedUpdate": 1
+  },
+  "scrub": {
+    "slugs": 2,
+    "names": 5,
+    "images": 3,
+    "urns": 0,
+    "textNodes": 39,
+    "auditedAttrValues": 56,
+    "suspectedResidualIds": [],
+    "suspectedResidualNames": []
+  }
+}
