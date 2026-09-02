@@ -1,0 +1,26 @@
+{
+  "label": "post-with-comments",
+  "measured": {
+    "href": "(redacted -- a live legacy post-detail page)",
+    "updateComponentsText": 41,
+    "dataIdUrn": 40,
+    "commentEntities": 40,
+    "socialCounts": 1,
+    "socialCountsText": "2 41 comments",
+    "reactionsTriggerAria": "2 reactions",
+    "componentkey": 0,
+    "dataTestid": 0,
+    "sduiScreen": 0,
+    "feedSharedUpdate": 1
+  },
+  "scrub": {
+    "slugs": 85,
+    "names": 251,
+    "images": 50,
+    "urns": 40,
+    "textNodes": 348,
+    "auditedAttrValues": 696,
+    "suspectedResidualIds": [],
+    "suspectedResidualNames": []
+  }
+}
