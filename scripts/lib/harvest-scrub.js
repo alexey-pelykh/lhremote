@@ -224,9 +224,31 @@
   // A data: URI makes the fixture genuinely self-contained.
   const BLANK_ASSET =
     'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-  const scrubUrls = (v) => v
+  // URL handling is an ALLOWLIST, not a list of known-bad hosts.  A denylist of
+  // `licdn.com` + `urn:li:` was fail-open and left real trackable URLs in hrefs:
+  // an opaque `linkedin.com/services/page/{id}` and `lnkd.in/{code}` shortlinks
+  // out of the post body.  Anything not structurally required is redacted.
+  //
+  // Exactly two forms survive, both because the fixture STOPS WORKING without
+  // them: w3.org XML namespaces, without which the inline SVG does not parse,
+  // and linkedin.com/in/ profile links, which the adapters select on
+  // (`main a[href*="/in/"]`).  The second is additionally re-checked here rather
+  // than trusted -- a `/in/` slug that the slug map missed is a REAL identity,
+  // so the path shape is kept while the slug itself is forced synthetic.
+  const SAFE_NAMESPACE_URL = /^https?:\/\/(www\.)?w3\.org\//i;
+  const LINKEDIN_PROFILE_URL = /^https?:\/\/([a-z0-9-]+\.)*linkedin\.com\/in\//i;
+  const REDACTED_URL = 'https://example.invalid/redacted';
+  const scrubOtherUrls = (v) => v.replace(/https?:\/\/[^\s"'<>)]+/gi, (u) => {
+    if (SAFE_NAMESPACE_URL.test(u)) return u;
+    if (LINKEDIN_PROFILE_URL.test(u)) {
+      return u.replace(/\/in\/([^/?#]+)/, (seg, slug) =>
+        /^test-person-/.test(slug) ? seg : '/in/test-person-x');
+    }
+    return REDACTED_URL;
+  });
+  const scrubUrls = (v) => scrubOtherUrls(v
     .replace(/https?:\/\/[a-z0-9.-]*licdn\.com\/[^"'\s)]*/gi, BLANK_ASSET)
-    .replace(URN_ANY, scrubUrn);
+    .replace(URN_ANY, scrubUrn));
 
   // `root` itself is INCLUDED.  querySelectorAll('*') excludes the element it is
   // called on, so scrubbing that set alone left the post container's own
@@ -340,6 +362,24 @@
   // the network at all, and that has to be ENFORCED rather than asserted in a
   // README -- otherwise the suite's no-network property silently depends on
   // every future edit remembering it.
+  // URL gate.  Absolute URLs are allowlisted, so anything unrecognised in the
+  // finished artifact is by definition unscrubbed -- this is what turns the
+  // allowlist above from a policy into an enforced one.
+  const residualUrls = new Map();
+  {
+    const re = /https?:\/\/[^\s"'<>)]+/gi;
+    let rm;
+    while ((rm = re.exec(serialised)) !== null) {
+      const u = rm[0];
+      if (SAFE_NAMESPACE_URL.test(u)) continue;
+      if (u === REDACTED_URL) continue;
+      if (LINKEDIN_PROFILE_URL.test(u) && /\/in\/test-person-/.test(u)) continue;
+      residualUrls.set(u.slice(0, 70), (residualUrls.get(u.slice(0, 70)) || 0) + 1);
+    }
+  }
+  report.residualUrls = Array.from(residualUrls.entries())
+    .sort((a, b) => b[1] - a[1]).slice(0, 12).map((e) => e[0] + ' x' + e[1]);
+
   const residualFetches = new Map();
   {
     const re = /\s(src|srcset|poster|data-delayed-url|data-ghost-url|data-src|data-srcset)=["']([^"']*)["']/gi;
@@ -376,5 +416,6 @@
   return { error: null, measured, scrub: report, html: serialised,
     blocked: report.suspectedResidualNames.length > 0
       || report.suspectedResidualIds.length > 0
-      || report.residualFetchUrls.length > 0 };
+      || report.residualFetchUrls.length > 0
+      || report.residualUrls.length > 0 };
 })()

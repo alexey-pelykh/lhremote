@@ -25,12 +25,15 @@
 // backslash needs doubling, and one missed pair silently truncates a regex.
 //
 // Exit codes: 2 usage - 3 no LinkedIn target - 4 no legacy container on the page
-//             5 a gate tripped -- a name, an identifier, or a network-
-//               reachable URL survived scrubbing; nothing is written
-import { CDPClient } from "../packages/core/dist/cdp/client.js";
-import { discoverTargets } from "../packages/core/dist/cdp/discovery.js";
-import { readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+//             5 a gate tripped -- a name, an identifier, an unrecognised URL,
+//               or a network-reachable asset survived; nothing is written
+//             6 packages/core is not built
+// packages/core/dist is BUILD OUTPUT and is absent from a fresh checkout, so
+// these are imported dynamically behind an existence check: a bare static import
+// fails with a module-resolution stack trace that says nothing about the actual
+// remedy, which is to build core first.
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -83,6 +86,16 @@ const TOP_SETTLE_MS = 800;
 
 const PORT = Number(process.env.LHREMOTE_CDP_PORT || DEFAULT_INSTANCE_CDP_PORT);
 const SETTLE_MS = Number(process.env.LHREMOTE_SETTLE_MS || DEFAULT_SETTLE_MS);
+const CORE_DIST = join(HERE, "..", "packages", "core", "dist");
+if (!existsSync(join(CORE_DIST, "cdp", "client.js"))) {
+  console.error("packages/core is not built -- this script imports its compiled CDP client.");
+  console.error("Run:  pnpm --filter @lhremote/core build");
+  process.exit(6);
+}
+const { CDPClient } = await import(pathToFileURL(join(CORE_DIST, "cdp", "client.js")).href);
+const { discoverTargets } = await import(
+  pathToFileURL(join(CORE_DIST, "cdp", "discovery.js")).href);
+
 const SCRUB_SRC = readFileSync(join(HERE, "lib", "harvest-scrub.js"), "utf8");
 
 const targets = await discoverTargets(PORT, "127.0.0.1");

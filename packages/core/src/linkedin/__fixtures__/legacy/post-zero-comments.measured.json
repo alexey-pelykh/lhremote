@@ -22,6 +22,7 @@
     "auditedTextNodes": 40,
     "auditedAttrValues": 16,
     "suspectedResidualIds": [],
+    "residualUrls": [],
     "residualFetchUrls": [],
     "suspectedResidualNames": []
   }

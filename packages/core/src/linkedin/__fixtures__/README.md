@@ -20,6 +20,7 @@ and never removes or renames an element, a class, or an attribute.
 | Entity cardinality (comment count, `[data-id^="urn:li:"]` count) | Post and comment prose → deterministic lorem of the same length and word count |
 | `urn:li:{type}:` prefixes and shape, including the type name (`fsd_profile`) | URN ids → a synthetic token of the **same length and shape**: digits stay digits, opaque alphanumerics stay opaque. Covers percent-encoded forms (`urn%3Ali%3A…`) in href query strings. |
 | Presence/absence of the variant anchors (`[componentkey]`, `[data-testid]`) | Every asset URL → an inline 1×1 transparent GIF `data:` URI |
+| `w3.org` XML namespaces (inline SVG will not parse without them) and the `/in/` profile-link shape the adapters select on | Every **other** absolute URL → `https://example.invalid/redacted` — shortlinks, opaque `/services/page/{id}` links, anything outbound |
 
 `<script>` and `<style>` **elements are kept** and only their payloads emptied — a selector count
 that changed because an element was deleted would be a fixture bug, not a variant flip.
@@ -85,8 +86,15 @@ survivor and where it lives:
 - an **identifier** gate over the **whole serialised fixture**, flagging any `urn:li:…` token whose
   id is not the synthetic placeholder — encoded or not, whatever the type name;
 - a **network** gate, flagging any dereferenceable `http(s):` URL left in an attribute the browser
-  actually fetches (`src`, `srcset`, `poster`, `data-*-url`). `href` is deliberately exempt — an
-  `<a href>` is navigation, not a fetch, and those hrefs carry structure the adapters read.
+  actually fetches (`src`, `srcset`, `poster`, `data-*-url`);
+- a **URL** gate, flagging any absolute URL anywhere in the artifact that is not one of the two
+  structurally required forms or the redaction placeholder.
+
+URL handling is an **allowlist**, which is the point: a denylist of known-bad hosts was fail-open
+and left real trackable URLs in `href` attributes — an opaque `/services/page/{id}` link and
+`lnkd.in` shortlinks lifted from the post body. Only two forms survive, each because the fixture
+stops working without it, and a `/in/` slug that the slug map somehow missed is forced synthetic
+rather than trusted.
 
 The gates read different surfaces on purpose. Every leak found so far got through because a
 check read a *narrower* surface than the artifact it certified: the name gate once tag-stripped the
