@@ -90,8 +90,26 @@ const SCROLL_SETTLE_MS = 1500;
 /** Pause after scrolling back to the top, so lazy content settles before cloning. */
 const TOP_SETTLE_MS = 800;
 
-const PORT = Number(process.env.LHREMOTE_CDP_PORT || DEFAULT_INSTANCE_CDP_PORT);
-const SETTLE_MS = Number(process.env.LHREMOTE_SETTLE_MS || DEFAULT_SETTLE_MS);
+// Both overrides are validated rather than passed through Number(), because
+// both failure modes are SILENT and one of them corrupts the artifact.  A
+// non-numeric port yields `http://127.0.0.1:NaN/...` -- confusing, but loud.  A
+// non-numeric settle yields setTimeout(NaN), which fires IMMEDIATELY: the page
+// is cloned before the comment thread loads and the fixture comes out short,
+// looking exactly like a legitimately empty post. That is the defect these
+// fixtures exist to catch, so the harvester must not be able to manufacture it.
+const readNumericEnv = (name, fallback, min) => {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < min) {
+    console.error(`${name}=${JSON.stringify(raw)} is not a finite number >= ${min}.`);
+    console.error(`Unset it to use the default (${fallback}), or give it a valid value.`);
+    process.exit(2);
+  }
+  return n;
+};
+const PORT = readNumericEnv("LHREMOTE_CDP_PORT", DEFAULT_INSTANCE_CDP_PORT, 1);
+const SETTLE_MS = readNumericEnv("LHREMOTE_SETTLE_MS", DEFAULT_SETTLE_MS, 0);
 const CORE_DIST = join(HERE, "..", "packages", "core", "dist");
 if (!existsSync(join(CORE_DIST, "cdp", "client.js"))) {
   console.error("packages/core is not built -- this script imports its compiled CDP client.");
