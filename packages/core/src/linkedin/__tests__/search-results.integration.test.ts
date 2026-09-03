@@ -411,6 +411,30 @@ const PAGES: readonly Page[] = [
   },
 ];
 
+/**
+ * Look up a declared page by label, refusing to return a page that is not
+ * there.
+ *
+ * The obvious `PAGES.find(...)?.body ?? ""` installs an EMPTY DOCUMENT when
+ * the label does not resolve, and several tests here cannot tell that apart
+ * from the thing they assert: the zero-result case expects no adapter to
+ * match, no readiness and a null extraction, and a blank page satisfies every
+ * one of those.  A typo or a renamed {@link PAGES} entry would leave it green
+ * while grading nothing — the same degenerate-gate failure the canaries exist
+ * to prevent, entering through the fixture lookup instead of the install.
+ *
+ * Throwing names the real fault at the point it happens.
+ */
+function pageBody(label: string): string {
+  const page = PAGES.find((p) => p.label === label);
+  if (!page) {
+    throw new Error(
+      `No PAGES entry labelled ${JSON.stringify(label)} — declared labels: ${PAGES.map((p) => p.label).join(", ")}`,
+    );
+  }
+  return page.body;
+}
+
 /** The extraction record the shared card loop returns for a claimed page. */
 interface ExtractionRecord {
   readonly variant?: string;
@@ -569,7 +593,7 @@ describe("search-results Tier-2 oracle (integration)", () => {
   describe("selection outcomes the extraction script reports", () => {
     it("a hybrid page yields ambiguousVariants rather than a picked dialect", async () => {
       await install(
-        PAGES.find((p) => p.label === "hybrid-page")?.body ?? "",
+        pageBody("hybrid-page"),
       );
 
       const record = await client.evaluate<ExtractionRecord | null>(
@@ -585,8 +609,7 @@ describe("search-results Tier-2 oracle (integration)", () => {
 
     it("an sdui anchor outside every card does not make a legacy page ambiguous", async () => {
       await install(
-        PAGES.find((p) => p.label === "legacy-page-with-stray-sdui-chrome")
-          ?.body ?? "",
+        pageBody("legacy-page-with-stray-sdui-chrome"),
       );
 
       // The sdui `detect` anchor is scoped to a result card, which is what
@@ -1123,7 +1146,7 @@ describe("search-results Tier-2 oracle (integration)", () => {
       // needs the probe, which is #868's open residual; making the failure
       // legible in the field is #870.
       await install(
-        PAGES.find((p) => p.label === "zero-result-page")?.body ?? "",
+        pageBody("zero-result-page"),
       );
 
       const detection = await client.evaluate<{
