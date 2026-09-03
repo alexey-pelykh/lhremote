@@ -51,11 +51,18 @@ describe("DOM variant adapters (integration)", () => {
   beforeEach(async () => {
     client = new CDPClient(chromium.port, { timeout: BEFORE_EACH_TIMEOUT });
     await client.connect();
-    // innerHTML is blocked by Chromium's Trusted Types policy, so the page is
-    // torn down and rebuilt through DOM APIs.
-    await client.evaluate(
-      `while (document.body.firstChild) document.body.removeChild(document.body.firstChild)`,
-    );
+    // The document is replaced through CDP rather than drained from JS: the
+    // drain dereferenced `document.body` before the freshly-launched target
+    // had one, which is #866.  Setting the content also *creates* the body, so
+    // everything below can rely on it existing.  innerHTML stays unavailable
+    // either way (Trusted Types), so elements are still built through DOM APIs.
+    const { frameTree } = (await client.send("Page.getFrameTree", {})) as {
+      frameTree: { frame: { id: string } };
+    };
+    await client.send("Page.setDocumentContent", {
+      frameId: frameTree.frame.id,
+      html: "<html><body></body></html>",
+    });
   }, BEFORE_EACH_TIMEOUT);
 
   afterEach(() => {
@@ -354,9 +361,6 @@ describe("DOM variant adapters (integration)", () => {
       // the PAIR.  Reading that wrapper returned the name doubled and pushed
       // the plain name into the headline.
       await client.evaluate(`(() => {
-        while (document.body.firstChild) {
-          document.body.removeChild(document.body.firstChild);
-        }
         function pair(text) {
           const outer = document.createElement('span');
           const visible = document.createElement('span');
