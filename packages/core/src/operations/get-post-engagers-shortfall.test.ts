@@ -442,6 +442,34 @@ describe("getPostEngagers under-collection reporting (#874)", () => {
     expect(result.shortfall).toBeNull();
   });
 
+  // The fallback's own shape, pinned because two documented surfaces got it
+  // wrong: `paging.total` falls back to `allEngagers.length`, which is the
+  // count BEFORE the pagination window, while `paging.count` is the length of
+  // the slice after it. They diverge the moment `start` skips a collected row,
+  // and at `start` past the collected end the result reads `count: 0` beside a
+  // POSITIVE `total` — a total that is not a page cardinal at all, just the
+  // rows this call happened to collect, describing rows it did not return.
+  //
+  // `shortfall` stays null throughout: a cardinal of 0 contradicts nothing, and
+  // that is the correct outcome, not a second signal to lean on. Between them
+  // these two assertions are the whole reason the field's doc tells a caller
+  // that `paging.total` is not an independent answer to "are there more".
+  it("falls paging.total back to rows collected, not rows returned", async () => {
+    setupMocks({ totalReactions: 0, afterTotal: [rows(3), false] });
+
+    const result = await getPostEngagers({
+      postUrl: POST_URL,
+      cdpPort: CDP_PORT,
+      start: 5,
+      count: 20,
+    });
+
+    expect(result.engagers).toEqual([]);
+    expect(result.paging.count).toBe(0);
+    expect(result.paging.total).toBe(3);
+    expect(result.shortfall).toBeNull();
+  });
+
   // The field is present on every result, not only on the short ones. A signal
   // that vanishes on the healthy path is one an MCP or CLI consumer reading
   // serialized JSON never learns to check for, which is the silence this fix
