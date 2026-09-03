@@ -771,20 +771,34 @@ describe("search-results Tier-2 oracle (integration)", () => {
     });
 
     // ─────────────────────────────────────────────────────────────────────
-    // #869 — OPEN.  The two `it.fails` blocks below state the CORRECT
-    // contract rather than the current behaviour, so that fixing the parse
-    // turns them red and the flip has to be acknowledged in a visible
-    // `it.fails(` -> `it(` diff instead of being silently absorbed.
-    // Asserting `241` here would bake the defect into the oracle and make
-    // its fix look like the regression.
+    // #869 — OPEN.  The `it.fails` blocks below state the CORRECT contract
+    // rather than the current behaviour, so that fixing the parse turns them
+    // red and the flip has to be acknowledged in a visible `it.fails(` ->
+    // `it(` diff instead of being silently absorbed.  Asserting `241` here
+    // would bake the defect into the oracle and make its fix look like the
+    // regression.
     //
-    // The defect: `__lhParseCount` reads each counter out of
-    // `card.textContent` with no normalisation.  Under `textContent`,
-    // adjacent element text nodes concatenate with NO separator, so a
-    // counts row rendering `2` and `41 comments` as two elements flattens
-    // to `241 comments` — and the regex captures 241 while the reaction
-    // count vanishes.  Post detail already moved to anchored per-element
-    // counting (`__lhReadCount`); this surface has not.
+    // TWO defects, deliberately separated — they are independent, and a fix
+    // for one does not imply a fix for the other:
+    //
+    // 1. THE JOIN.  `__lhParseCount` reads each counter out of
+    //    `card.textContent` with no normalisation.  Under `textContent`
+    //    adjacent element text nodes concatenate with NO separator, so a row
+    //    rendering `2` and `41 comments` as two elements flattens to
+    //    `241 comments` and the comment regex captures 241.
+    // 2. THE LABEL.  LinkedIn renders a reaction count as a bare number with
+    //    the words only on the control's `aria-label`.  A text-only read
+    //    never looks there, so it finds no reaction count at all — which is
+    //    why `__lhReadCount` consults `aria-label` before text, and is a
+    //    separate miss from the concatenation.  Inserting a separator would
+    //    not fix it.
+    //
+    // Hence the fixture split.  The labelled row exercises both and its
+    // tripwire asserts both; the unlabelled row exercises the join alone, so
+    // its tripwire asserts the comment count ONLY — with no "reactions" token
+    // anywhere, 0 is correct before and after, and demanding otherwise would
+    // make that block unflippable.  Post detail already moved to anchored
+    // per-element counting; this surface has not.
     // ─────────────────────────────────────────────────────────────────────
 
     it("canary: the browser joins the row, and the word lives only on the label", async () => {
