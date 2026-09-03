@@ -321,9 +321,9 @@ export interface ReactionsModalVariantAdapter extends VariantAdapter {
    * Every other surface can take a scope's first match: a post-detail scope is
    * `[data-urn^="urn:li:activity:"]` or a chameleon result container, anchors
    * that name the thing they wrap.  A modal-root candidate does not have that
-   * property.  This dialect's are the generic `dialog` / `[aria-modal="true"]`
-   * (sdui) and, for legacy, a wrapper LinkedIn may render alongside unrelated
-   * overlays.  A cookie banner, a messaging overlay or a CLOSED `<dialog>`
+   * property.  This surface's candidates are the generic `dialog` /
+   * `[aria-modal="true"]` (sdui) and, for legacy, a wrapper LinkedIn may
+   * render alongside unrelated overlays.  A cookie banner, a messaging overlay or a CLOSED `<dialog>`
    * — which still matches `querySelector('dialog')` — would otherwise be
    * returned as "the modal" purely by sitting earlier in document order.  Two
    * failures follow, one loud and one silent: an overlay with no engager rows
