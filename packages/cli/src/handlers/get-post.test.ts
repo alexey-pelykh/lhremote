@@ -8,7 +8,11 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   return { ...actual, getPost: vi.fn() };
 });
 
-import { getPost, type GetPostOutput } from "@lhremote/core";
+import {
+  DOMVariantUnsupportedError,
+  getPost,
+  type GetPostOutput,
+} from "@lhremote/core";
 import { handleGetPost } from "./get-post.js";
 import { getStderr, getStdout } from "./testing/mock-helpers.js";
 
@@ -168,5 +172,29 @@ describe("handleGetPost", () => {
 
     expect(process.exitCode).toBe(1);
     expect(getStderr(stderrSpy)).toContain("connection refused");
+  });
+
+  /**
+   * The post-detail readiness gate puts its per-adapter detect probe counts
+   * in the error's `cause`, and those counts are what tell an operator which
+   * repair to make.  A CLI user reads stderr and nothing else, so asserting
+   * them on the error object would not prove they arrive.
+   */
+  it("writes the cause chain's diagnosis to stderr", async () => {
+    vi.mocked(getPost).mockRejectedValue(
+      new DOMVariantUnsupportedError("post-detail", ["sdui", "legacy"], {
+        cause: new Error("detect probes — sdui: 0, legacy: 0"),
+      }),
+    );
+
+    await handleGetPost(
+      "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678/",
+      {},
+    );
+
+    expect(process.exitCode).toBe(1);
+    const stderr = getStderr(stderrSpy);
+    expect(stderr).toContain("register an adapter");
+    expect(stderr).toContain("Caused by: detect probes — sdui: 0, legacy: 0");
   });
 });
