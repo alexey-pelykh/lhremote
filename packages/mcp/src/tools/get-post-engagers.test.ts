@@ -32,6 +32,10 @@ const MOCK_ENGAGERS = {
     },
   ],
   paging: { start: 0, count: 20, total: 2 },
+  // Always present on a real result, including when nothing is short — the
+  // field states that completeness was checked and held, rather than vanishing
+  // on the healthy path where nobody would learn to look for it (#874).
+  shortfall: null,
 };
 
 describe("registerGetPostEngagers", () => {

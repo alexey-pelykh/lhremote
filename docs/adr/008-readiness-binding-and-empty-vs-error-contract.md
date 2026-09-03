@@ -956,22 +956,17 @@ here goes stale the next time one is added or closed.
   earlier. Its reads are also UNANCHORED — they flatten the modal, the read post detail abandoned —
   which on the SDUI path is a live over-match risk (an engager headline reading *"overall 20 years"*
   satisfies the `"All"` pattern). Anchoring it needs a measured SDUI count element.
-- **A reactions modal caught mid-hydration under-collects silently, and the contract is why.**
-  `contradictsEmptyExtraction` short-circuits on ANY non-zero extraction, and that one predicate
-  gates BOTH the settle re-read and the cardinal raise. So a first scrape that lands with 3 of 50
-  rows rendered spends no settle re-read, and cannot be contradicted afterwards either: three rows
-  do not overflow their container, the scroll declines, the collect loop breaks, and the call
-  returns 3 engagers with `paging.total: 50`, an HTTP success and no error. Sharper than the
-  all-empty case the settle closes, because nothing anywhere reports it. It is recorded rather than
-  closed because the contract this surface implements is empty-vs-error, not complete-vs-error, and
-  the uneditable oracle SPECIFIES that: `get-post-engagers.test.ts`, "stops scrolling when modal is
-  at bottom", asserts one engager returned against `totalReactions: 5`. Both candidate repairs —
-  widening the settle gate to `extractedCount < cardinal`, or re-reading once after a declined
-  scroll — turn that test red, so closing this needs the oracle amended first, deliberately, rather
-  than as a side effect. Falsifier: a live measurement of whether the reactor list sits in a
-  container that overflows at a SMALL row count. If it does, a partial first scrape still scrolls,
-  the loop recovers on the next iteration, and the residual narrows to the case where hydration is
-  slower than a full scroll cycle. Tracked as #874.
+- ~~**A reactions modal caught mid-hydration under-collects silently, and the contract is why.**~~
+  **Falsifier run, residual CLOSED** (#874, § Amendments → *A short reactor collection is reported,
+  not raised*). It read: `contradictsEmptyExtraction` short-circuits on ANY non-zero extraction, and
+  that one predicate gates BOTH the settle re-read and the cardinal raise, so a first scrape landing
+  with 3 of 50 rows spends no settle re-read and cannot be contradicted afterwards either — the
+  scroll declines, the collect loop breaks, and the call returns 3 engagers with `paging.total: 50`,
+  an HTTP success and no error. Its falsifier was *a live measurement of whether the reactor list
+  sits in a container that overflows at a SMALL row count*; the measurement CONFIRMED the residual
+  rather than narrowing it, and put a number on the window. The premise that no repair was available
+  under the uneditable oracle was the part that did not survive: it held only for repairs that
+  RAISE, and reporting was never tried.
 
 **Deliberately not done here, so a reader does not infer it.** The trigger-absent branch does not
 attempt to distinguish *no reactions* from *trigger selector rotted*; the evidence to do so does not
@@ -1047,6 +1042,91 @@ inference — better grounded than the falsified half was, since the SDUI rewrit
 attributes with `componentkey` — but still without a recorded count. **Falsifier**: a captured SDUI
 post-detail fixture, counting `[data-urn^="urn:li:activity:"]` document-wide.
 
+### 2026-09-03 — A short reactor collection is reported, not raised (#874)
+
+The under-collection residual recorded in § Consequences is **closed**. Its falsifier was run first,
+and it came back the unwelcome way: the residual is real, reachable, and slightly wider than the
+report guessed.
+
+**The measurement.** Live probe on 2026-09-03 against a 227-reaction post under the legacy markup,
+driving the operation's own trigger, readiness and scroll sources rather than a re-derivation of
+them:
+
+| Reading | Value |
+|---|---|
+| Cardinal read from the modal | `227` |
+| Rows present when `waitForReactionsModal` returned green | `0` — pane `clientHeight: 56` |
+| Scroll source at that moment | `false` (no overflowing div; fell back to the modal, `scrollTop` write a no-op) |
+| Rows ~1.2 s later | `10` |
+| Reactor pane once populated | `.artdeco-modal__content.social-details-reactors-modal__content`, `clientHeight: 476`, `max-height: none`, `overflow-y: auto` |
+| Mean row height | `84 px` (range 71–107) |
+| Rows the pane fits before overflowing | `5` |
+
+So the falsifier's *"if the list sits in a short fixed-height container that overflows at a small row
+count"* is **false**. The pane is bounded by the modal's layout at 476 px, which takes about six rows
+to overflow; below that the scroll source finds no scrollable region at all and reports `false`,
+which the collect loop reads as *reached the bottom*. **The silent window is one to five rows**, and
+the same run observed the modal genuinely passing through a sub-window state — readiness green on an
+empty 56 px pane. Zero rows is the case the #840 settle already covers; one to five is the gap.
+
+Two further routes reach the same silence and never depended on hydration at all, which is why the
+repair is not scoped to it: a reactor list that legitimately renders fewer rows than its own count
+claims (blocked, deleted or restricted accounts), and exhaustion of the 20-scroll budget on a list
+longer than roughly 119 rows.
+
+**What changed.** A new predicate, `contradictsCompleteCollection`, beside
+`contradictsEmptyExtraction` in `corroboration.ts`; a `shortfall` field at the top level of
+`GetPostEngagersOutput`, carrying `collected`, `requested`, `cardinal` and `stoppedBecause`.
+
+**Why report and not raise, stated as the asymmetry it is.** The two predicates answer different
+questions and the answers are not two strengths of one rule. An empty scrape beside a positive
+cardinal is evidence the SELECTORS broke — no caller can tell that record apart from a real empty
+one, so it raises. A short scrape is evidence the COLLECTION stopped early; the rows that did arrive
+parsed fine, so the selectors are not implicated and the caller is the party that can judge whether
+the shortfall matters. Raising on it would fail a page that legitimately renders fewer reactor rows
+than its count claims, converting a routine call into a stale-selector diagnosis pointing at
+selectors that are fine.
+
+That reading is what dissolved the recorded blocker. § Consequences held that closing this needed the
+uneditable oracle amended first, because both candidate repairs turn "stops scrolling when modal is
+at bottom" red. Both of those repairs RAISE. The oracle requires one engager against
+`totalReactions: 5` to *return normally*; it says nothing about returning **quietly**, and the
+distinction is the whole repair. Confirmed by mutation rather than asserted: a mutant that raises on
+a short collection turns exactly two oracle cases red, and the oracle is unmodified — its blob still
+hashes to `f3f94ab0481d`.
+
+**Where the rule lives, and the one thing that surprised the design.** `contradictsCompleteCollection`
+takes `extractedCount`, `requestedCount` and `cardinal`, and an earlier draft carried a fourth field,
+a caller-asserted `collectionExhausted` flag. It was removed: a collector only ends BELOW what it
+went for when it could not get more, so the flag could never vary and was ceremony. The `requested`
+comparison is what keeps the signal off the ordinary pagination path — a caller asking for 5 of 227
+and getting 5 has a complete answer to the question it asked, and firing there would make the signal
+worth ignoring.
+
+The cost of that placement is that the operation's collect loop excludes the satisfied exit *before*
+the predicate is consulted, so the `requestedCount` guard is unreachable from the behavioural suite —
+a mutant deleting it survived every operation-level test. It is graded in
+`corroboration.test.ts` instead. Recorded because the general shape recurs: a guard that a caller
+also enforces is not covered by that caller's tests.
+
+**`shortfall` is present on every result, `null` when nothing is short.** An MCP or CLI consumer reads
+this as serialized JSON, and a field that vanishes on the healthy path is one nobody learns to check;
+an explicit `"shortfall": null` states that completeness was checked and held. `stoppedBecause` names
+only what was observed — `scroll-declined` or `scroll-budget-exhausted`. There is deliberately no
+`bottom-reached`: the modal declining to scroll and the modal having nothing more to give are
+indistinguishable from outside it, since the scroll source reports one `false` for both.
+
+**The check costs no `Runtime.evaluate`**, which is a constraint rather than an optimisation — the
+oracle pins the success-path evaluate sequence at 7 and 6 calls in its two polling cases.
+
+**Deliberately not done, so a reader does not infer it.** The window is not narrowed: nothing here
+makes the modal hydrate before readiness, and the settle still covers only the all-empty case.
+`get-post`'s comment collection is untouched and may carry the same shape — unmeasured, and not
+assumed. The measurement above is one post, one dialect, one viewport (`innerHeight: 668`); the
+five-row figure moves with the viewport, and it is the mechanism, not the constant, that the repair
+rests on. And this surface still has **no Tier-2 coverage**: the reactions modal has no committed
+fixture, so every claim here rests on the live probe plus Tier-1 against mocks.
+
 ## Related
 
 - Code: `packages/core/src/linkedin/dom-variant.ts`,
@@ -1066,4 +1146,5 @@ post-detail fixture, counting `[data-urn^="urn:li:activity:"]` document-wide.
   errors), #834 (fail-loud), #839 (this ADR), #841 (search-results binding, § 2026-09-02
   Amendment), #830 (reactions-modal container tier — answered: it has one), #840 (reactions-modal
   binding, § 2026-09-02 Amendment), #872 (legacy detect anchor read `data-id` instead of `data-urn`,
+  § 2026-09-03 Amendment), #874 (short reactor collection reported rather than raised,
   § 2026-09-03 Amendment)

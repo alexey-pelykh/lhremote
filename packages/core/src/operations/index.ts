@@ -228,6 +228,8 @@ export {
   getPostEngagers,
   type GetPostEngagersInput,
   type GetPostEngagersOutput,
+  type EngagerCollectionStop,
+  type EngagerShortfall,
 } from "./get-post-engagers.js";
 
 // Post search
