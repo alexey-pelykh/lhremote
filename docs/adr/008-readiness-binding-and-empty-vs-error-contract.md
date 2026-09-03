@@ -977,8 +977,9 @@ here goes stale the next time one is added or closed.
   says nothing contradicted it. The field's doc, the MCP description and the README were narrowed so
   none of them CLAIMS a check that did not run, which is a fix to the record and not to the silence.
   Recorded rather than closed because closing it needs a SECOND corroborator independent of the
-  modal's own header — `paging.total` cannot serve, since on exactly these paths it is the returned
-  row count corroborating itself — and #874's repair was bound to add no `Runtime.evaluate`.
+  modal's own header — `paging.total` cannot serve, since on exactly these paths it falls back to
+  `allEngagers.length`, the very count the predicate is comparing, so it corroborates itself — and
+  #874's repair was bound to add no `Runtime.evaluate`.
   Falsifier: a live probe of whether any reactions modal renders a count OUTSIDE its header, and
   whether the post-detail trigger's own stamp survives the modal opening and can be re-read after
   collection.
@@ -1140,16 +1141,28 @@ nobody learns to check. `stoppedBecause` names only what was observed — `scrol
 and the modal having nothing more to give are indistinguishable from outside it, since the scroll
 source reports one `false` for both.
 
-**`null` is the absence of a contradiction, never a certificate of completeness**, and an earlier
+**`null` means no contradiction was OBSERVED, never that completeness was verified**, and an earlier
 draft of this amendment said the second thing — that `"shortfall": null` "states that completeness
-was checked and held". That claim is false on the two paths that reach `null` without ever reading a
-cardinal: the trigger-absent return, and a modal whose own count is unreadable, where `total` falls
-back to `0` and `0` cannot contradict any row count. Both correctly report `null` — there is nothing
-to contradict — but neither verified anything, and a field asserting otherwise would certify exactly
-where it knows least, which is strictly worse than the silence this amendment closed: before it, a
-consumer had no signal; after a mis-stated one, it has a signal it is entitled to trust. The claim is
-narrowed at all four places it is made — the field's own doc comment, the MCP tool description, the
-README, and here. Recorded because the general shape recurs: a signal added to end a silence is
+was checked and held". Two paths never run the predicate at all: the satisfied exit, where
+`stoppedBecause` is `null` and the `&&` short-circuits, and the trigger-absent return, which leaves
+before reaching it. A third runs it against a cardinal that cannot contradict anything — an
+unreadable modal count, where `total` falls back to `0`. Every one of those is the correct outcome,
+and none of them verified completeness; a field asserting otherwise certifies exactly where it knows
+least, which is strictly worse than the silence this amendment closed: before it, a consumer had no
+signal; after a mis-stated one, it has a signal it is entitled to trust.
+
+The narrowing was itself iterative, which is the part worth recording. A first pass replaced the
+completeness claim with "the check ran and found no contradiction" — still false, on the two paths
+above. A second enumerated the paths and got both halves wrong, listing the unreadable-cardinal case
+as its own path when that one does run the predicate, and omitting the satisfied exit, which does
+not. A third pass stopped asserting a positive meaning at all, which is the form that holds: a claim
+about what was NOT observed stays true as paths are added, where every positive one had to be
+re-derived. Separately, two consumer-facing surfaces described `paging.total`'s fallback as the rows
+RETURNED when it is `allEngagers.length`, the count before the pagination window — so with `start`
+above zero it can exceed the returned slice, and at `start` past the collected end it reads a
+positive total beside `count: 0`. The claim is narrowed wherever it is made: the field's own doc
+comment, the MCP tool description and its test fixture, the README, and here. Recorded because the
+general shape recurs, and recurred four times inside one change: a signal added to end a silence is
 under pressure to promise more than its own predicate can see, and the predicate is the thing that
 gets read later.
 
