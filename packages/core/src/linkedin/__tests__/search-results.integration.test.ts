@@ -135,7 +135,7 @@ const BEFORE_EACH_TIMEOUT = 15_000;
  * infrastructure fault, which is the discrimination it exists to provide.
  */
 
-/** The document shell.  The doctype is load-bearing — see {@link install}. */
+/** The document shell.  The doctype is a standing guard — see {@link install}. */
 function shell(body: string): string {
   return `<!doctype html><html><head></head><body>${body}</body></html>`;
 }
@@ -166,17 +166,20 @@ function shell(body: string): string {
  * forever — the degenerate gate this file exists to prevent, arriving through
  * the opposite door.
  */
-const LABELLED_SPLIT_COUNTS_ROW = `<div class="social-details-social-counts"><button aria-label="2 reactions"><span>2</span></button><span>41 comments</span></div>`;
+const LABELLED_SPLIT_COUNTS_ROW = `<div><button aria-label="2 reactions"><span>2</span></button><span>41 comments</span></div>`;
 
 /**
  * The same split shape with the label REMOVED — a bare `2` carrying no
  * "reactions" token anywhere, in the text or on a control.
  *
- * This is a different claim from the row above, and the corpus has already
- * settled it: `dom-variant.integration.test.ts` pins `reactionCount: 0` for
- * exactly this rendering, with the reason stated as "0 reactions is the
+ * This is a different claim from the row above, and the corpus has settled
+ * the PRINCIPLE, though not on this exact markup: `dom-variant.integration
+ * .test.ts` pins `reactionCount: 0` for a post-detail row rendering both
+ * counters as ONE node ("2 41 comments"), reasoning that "0 reactions is the
  * honest answer, not a miss: this rendering carries no 'reactions' token
- * anywhere for a read to find."
+ * anywhere for a read to find."  That row has a separator and one text node;
+ * this one has neither, so the reasoning transfers but the rendering does
+ * not — see {@link ONE_NODE_COUNTS_ROW}, which carries the one-node shape.
  *
  * So this row's reaction count is 0 **before and after** #869, and asserting
  * anything else would demand a positional guess — "the leading bare number in
@@ -184,10 +187,30 @@ const LABELLED_SPLIT_COUNTS_ROW = `<div class="social-details-social-counts"><bu
  * anchor ADR-008 § Decision 3 removed.  Its comment count is still wrong
  * today, and that half IS a tripwire.
  */
-const UNLABELLED_SPLIT_COUNTS_ROW = `<div class="social-details-social-counts"><span>2</span><span>41 comments</span></div>`;
+const UNLABELLED_SPLIT_COUNTS_ROW = `<div><span>2</span><span>41 comments</span></div>`;
+
+/**
+ * Both counters as ONE text node WITH a separator — `2 41 comments`.
+ *
+ * The shape neither split row covers, and the one that discriminates a
+ * property of the #869 fix nothing else here can see.  Today's whole-card
+ * text read already answers it CORRECTLY (41 comments, 0 reactions), so this
+ * is a passing CONTROL, not a tripwire.
+ *
+ * What it guards: post detail's anchored read finds each counter by matching
+ * an ELEMENT against `^<N> comments$`, and no element here matches — the
+ * div's text is the whole phrase.  That read only recovers 41 by falling back
+ * to a loose scan, and the fallback is gated on having narrowed to a counts
+ * root first.  A search-results adapter declares no counts anchor, so a fix
+ * that ports the anchored read without adding one would never narrow, never
+ * reach the fallback, and return 0 for this row — a regression today's code
+ * does not have, in a shape the split rows cannot expose because both of
+ * theirs do match per element.
+ */
+const ONE_NODE_COUNTS_ROW = `<div>2 41 comments</div>`;
 
 /** The same two numbers rendered as whole phrases — the control. */
-const WHOLE_COUNTS_ROW = `<div class="social-details-social-counts"><span>2 reactions</span> <span>41 comments</span></div>`;
+const WHOLE_COUNTS_ROW = `<div><span>2 reactions</span> <span>41 comments</span></div>`;
 
 /**
  * A whole-phrase row that also renders reposts — the control that witnesses a
@@ -198,10 +221,10 @@ const WHOLE_COUNTS_ROW = `<div class="social-details-social-counts"><span>2 reac
  * all of them while turning the split-reposts tripwire green for the wrong
  * reason.
  */
-const WHOLE_REPOSTS_ROW = `<div class="social-details-social-counts"><span>2 reactions</span> <span>41 comments</span> <span>3 reposts</span></div>`;
+const WHOLE_REPOSTS_ROW = `<div><span>2 reactions</span> <span>41 comments</span> <span>3 reposts</span></div>`;
 
 /** The repost counter under the same split-sibling shape: `7` beside `3 reposts`. */
-const SPLIT_REPOSTS_ROW = `<div class="social-details-social-counts"><span>7</span><span>3 reposts</span></div>`;
+const SPLIT_REPOSTS_ROW = `<div><span>7</span><span>3 reposts</span></div>`;
 
 /**
  * A `legacy` search-result card.
@@ -271,18 +294,25 @@ interface PageSpec {
   /** `button[aria-label^="Open control menu for post"]` elements, anywhere. */
   readonly menuButtons: number;
   /**
-   * `body > *` elements — the page's own top-level content.
+   * `main h1` elements — the empty-state heading a zero-result search renders.
    *
-   * Every other field on this interface counts a CARD anchor, so all four go
-   * to zero on the zero-result page, whose whole point is that it renders no
-   * cards.  A spec of all zeros is satisfied by a blank document, which would
-   * leave that page's canary — and the six assertions leaning on it, the ones
-   * pinning the ADR-008 ambiguity — unable to tell "the zero-result page
-   * installed" from "nothing installed at all".  That is the one distinction
-   * a canary exists to make, so this field carries a positive claim for every
-   * page including that one.
+   * Every other field on this interface counts a CARD anchor, so all of them
+   * go to zero on the zero-result page, whose whole point is that it renders
+   * no cards.  A spec of all zeros is satisfied by a BLANK document, which
+   * would leave that page's canary unable to tell "the zero-result page
+   * installed" from "nothing installed at all" — the one distinction a canary
+   * exists to make, and the one the assertions pinning the ADR-008 ambiguity
+   * lean on.  So this field gives that page a POSITIVE claim of its own.
+   *
+   * It counts the page's own content rather than `body > *`, which was tried
+   * first and is the wrong instrument: a whole-document structural invariant
+   * asserts that nothing ELSE is on the page, which is a claim about the
+   * harness rather than about the installed fixture, and it went red in CI on
+   * one platform while every card anchor on the same page read correctly.
+   * A canary should fail when the fixture is missing, not when something
+   * unrelated is present.
    */
-  readonly bodyChildren: number;
+  readonly emptyStateHeadings: number;
 }
 
 interface Page {
@@ -313,7 +343,7 @@ const PAGES: readonly Page[] = [
       chameleonContainers: 1,
       textBoxes: 0,
       menuButtons: 1,
-      bodyChildren: 1,
+      emptyStateHeadings: 0,
     },
     detection: { matched: ["legacy"], probes: { sdui: 0, legacy: 1 } },
     ready: true,
@@ -327,7 +357,7 @@ const PAGES: readonly Page[] = [
       chameleonContainers: 0,
       textBoxes: 1,
       menuButtons: 1,
-      bodyChildren: 1,
+      emptyStateHeadings: 0,
     },
     detection: { matched: ["sdui"], probes: { sdui: 1, legacy: 0 } },
     ready: true,
@@ -341,7 +371,7 @@ const PAGES: readonly Page[] = [
       chameleonContainers: 1,
       textBoxes: 1,
       menuButtons: 2,
-      bodyChildren: 2,
+      emptyStateHeadings: 0,
     },
     detection: { matched: ["sdui", "legacy"], probes: { sdui: 1, legacy: 1 } },
     ready: false,
@@ -355,10 +385,10 @@ const PAGES: readonly Page[] = [
       chameleonContainers: 0,
       textBoxes: 0,
       menuButtons: 0,
-      // The discriminating claim: <main> is present.  Every other field on
-      // this page is legitimately zero, so this is the only one that can
-      // fail if the page did not install.
-      bodyChildren: 1,
+      // The discriminating claim: the empty-state heading is present.  Every
+      // other field on this page is legitimately zero, so this is the only
+      // one that can fail if the page did not install.
+      emptyStateHeadings: 1,
     },
     detection: { matched: [], probes: { sdui: 0, legacy: 0 } },
     ready: false,
@@ -374,7 +404,7 @@ const PAGES: readonly Page[] = [
       chameleonContainers: 1,
       textBoxes: 1,
       menuButtons: 1,
-      bodyChildren: 2,
+      emptyStateHeadings: 0,
     },
     detection: { matched: ["legacy"], probes: { sdui: 0, legacy: 1 } },
     ready: true,
@@ -484,7 +514,7 @@ describe("search-results Tier-2 oracle (integration)", () => {
       menuButtons: await count(
         'button[aria-label^="Open control menu for post"]',
       ),
-      bodyChildren: await count("body > *"),
+      emptyStateHeadings: await count("main h1"),
     };
   }
 
@@ -573,11 +603,18 @@ describe("search-results Tier-2 oracle (integration)", () => {
     });
 
     it("the legacy adapter enumerates from its own container, not from the listitem", async () => {
-      // `scopes` is tightest-first — the chameleon container, then the
-      // structural listitem — and `dom-variant.ts` records that the first
-      // entry is what a real page resolves.  A card carrying the container
-      // WITHOUT the listitem role is what tells the two apart: enumeration
-      // has to come off `scopes[0]`, or this page yields nothing.
+      // A card carrying the chameleon container WITHOUT the listitem role.
+      // Enumeration walks `adapter.scopes` in order, taking the first
+      // candidate that matches anything, so this page is readable only if
+      // enumeration consults that list at all rather than assuming the
+      // structural listitem every other fixture here happens to carry.
+      //
+      // Deliberately NOT claimed: that this pins the tightest-first ORDER.
+      // The loop falls through on a zero-match candidate, so reversing
+      // `scopes` would still find the container on the second pass and yield
+      // the same post.  Order is unasserted here, and cannot be asserted with
+      // today's selectors, since on every other fixture both candidates
+      // resolve the same element.
       await install(
         `<article data-chameleon-result-urn="urn:li:activity:5" style="height:300px">
            <a href="https://www.linkedin.com/in/test-person-5/"></a>
@@ -666,6 +703,20 @@ describe("search-results Tier-2 oracle (integration)", () => {
       expect(record?.posts?.[0]?.mediaType).toBe("video");
     });
 
+    it("reports no media type for a card carrying neither video nor image", async () => {
+      // The negative control the video assertion above needs.  Without it, an
+      // extractor that set `mediaType = "video"` unconditionally would satisfy
+      // every media assertion in this file — presence asserted, absence never.
+      await install(legacyCard({ counts: WHOLE_COUNTS_ROW }));
+
+      const record = await client.evaluate<ExtractionRecord | null>(
+        extractionSource,
+      );
+
+      expect(record?.posts).toHaveLength(1);
+      expect(record?.posts?.[0]?.mediaType).toBeNull();
+    });
+
     it("runs the same loop on an sdui card, off that dialect's own scope", async () => {
       // Everything above grades the shared loop through a LEGACY card, which
       // leaves this describe's own title — "the half both dialects run" —
@@ -749,6 +800,35 @@ describe("search-results Tier-2 oracle (integration)", () => {
       expect(record?.posts?.[0]?.shareCount).toBe(3);
     });
 
+    it("a one-node counts row parses correctly today, and must keep doing so", async () => {
+      // A CONTROL, not a tripwire: today's whole-card text read already gets
+      // this right, so it is green before #869 and must stay green after.
+      //
+      // It is the only fixture here whose counters do NOT each render on
+      // their own element, which makes it the only one that can catch a fix
+      // porting post detail's anchored per-element read WITHOUT giving this
+      // surface a counts anchor to narrow to.  Such a fix finds no element
+      // matching `^<N> comments$`, never reaches the loose fallback that
+      // rescues this shape, and returns 0 — turning a currently-correct read
+      // into a regression that every other fixture here would miss.
+      await install(legacyCard({ counts: ONE_NODE_COUNTS_ROW }));
+
+      const cardText = await client.evaluate<string>(
+        `(document.querySelector(${jsString("[data-chameleon-result-urn]")})?.textContent ?? "")`,
+      );
+
+      // The separator survives: this row is NOT the concatenation case.
+      expect(cardText).toContain("2 41 comments");
+
+      const record = await client.evaluate<ExtractionRecord | null>(
+        extractionSource,
+      );
+
+      expect(record?.posts).toHaveLength(1);
+      expect(record?.posts?.[0]?.commentCount).toBe(41);
+      expect(record?.posts?.[0]?.reactionCount).toBe(0);
+    });
+
     it("counts stay inside their own card", async () => {
       // The bound #869 names: the read is scoped to one card, so it cannot
       // pull a count in from a different post.  Pinned because it is what a
@@ -821,7 +901,7 @@ describe("search-results Tier-2 oracle (integration)", () => {
       expect(cardText).not.toContain("2 reactions");
       expect(
         await client.evaluate<string | null>(
-          `document.querySelector(${jsString(".social-details-social-counts button[aria-label]")})?.getAttribute("aria-label") ?? null`,
+          `document.querySelector(${jsString('[data-chameleon-result-urn] button:not([aria-label^="Open control menu"])')})?.getAttribute("aria-label") ?? null`,
         ),
       ).toBe("2 reactions");
     });
@@ -870,8 +950,12 @@ describe("search-results Tier-2 oracle (integration)", () => {
       // The join, witnessed for THIS row rather than inherited from the
       // labelled one: the two counters are different markup (a button there,
       // a bare span here), so the concatenation is a separate observation.
+      // Only the positive claim: a `not.toContain("2 reactions")` here could
+      // never fail, since this row renders no "reactions" token in text or in
+      // any attribute.  The same-looking assertion on the LABELLED row is not
+      // vacuous — there the string exists, on the button's `aria-label`, so it
+      // pins that attribute text stays out of `textContent`.
       expect(cardText).toContain("241 comments");
-      expect(cardText).not.toContain("2 reactions");
 
       const record = await client.evaluate<ExtractionRecord | null>(
         extractionSource,
@@ -923,8 +1007,8 @@ describe("search-results Tier-2 oracle (integration)", () => {
     );
 
     it("canary: the reposts page joins its own row and yields exactly one post", async () => {
-      // The reposts tripwire installs a DIFFERENT page from the two counts
-      // canaries above, so neither of them covers it.  Without this one, a
+      // The reposts tripwire installs a DIFFERENT page from every counts
+      // canary above, so none of them covers it.  Without this one, a
       // `SPLIT_REPOSTS_ROW` page that stopped installing — or stopped
       // yielding a card — would make `posts[0].shareCount` `undefined`,
       // fail the tripwire's `toBe(3)`, and turn `it.fails` green while
