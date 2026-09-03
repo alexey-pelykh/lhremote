@@ -356,6 +356,40 @@ describe("getPostEngagers under-collection reporting (#874)", () => {
   // The no-trigger early return never opens a modal and never reads a cardinal.
   // Its `total: 0` is a substitute, not an observation, so there is nothing for
   // a collection to fall short OF.
+  // The other path that reaches `null` without ever reading a cardinal, and the
+  // one no earlier case covered: the modal opened, but its own count came back
+  // unreadable, so `total` falls back to `0`. Zero contradicts no row count, so
+  // nothing fires — correctly, since the discriminator is a contradiction
+  // against a rendered cardinal and here nothing was rendered to contradict.
+  //
+  // What this kills: a predicate that drops the cardinal term and fires on the
+  // request shortfall alone (3 of 20 requested) — the NFR-3 false positive, on
+  // the path where there is least to go on.
+  //
+  // What it CANNOT kill, stated so the green is not read as wider than it is: a
+  // predicate that consults `paging.total` instead of the raw cardinal. The
+  // fallback IS the row count here, so it corroborates itself — `3 > 3` is
+  // false and the outcome is identical. That substitution is unobservable from
+  // any fixture on this path, which is the reason the raw `total` is passed to
+  // the predicate rather than the already-defaulted `paging.total`, and the
+  // reason that choice is recorded in prose at the call site instead of being
+  // left to a test to defend.
+  it("reports no shortfall when the modal's own count is unreadable", async () => {
+    setupMocks({ totalReactions: 0, afterTotal: [rows(3), false] });
+
+    const result = await getPostEngagers({
+      postUrl: POST_URL,
+      cdpPort: CDP_PORT,
+      count: 20,
+    });
+
+    expect(result.engagers).toHaveLength(3);
+    // The fallback, and the reason it cannot corroborate itself: `paging.total`
+    // is the row count, not a cardinal the page rendered.
+    expect(result.paging.total).toBe(3);
+    expect(result.shortfall).toBeNull();
+  });
+
   it("reports no shortfall when no reactions trigger was found", async () => {
     setupMocks({ totalReactions: 0, afterTotal: [], reactionsFound: false });
 

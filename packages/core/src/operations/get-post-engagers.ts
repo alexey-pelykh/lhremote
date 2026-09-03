@@ -122,14 +122,26 @@ export interface GetPostEngagersOutput {
     readonly total: number;
   };
   /**
-   * The under-collection report, or `null` when the collection got everything
-   * it went for.
+   * The under-collection report, or `null` when no reaction count the page
+   * rendered contradicted what was collected.
    *
    * Always present, never optional, and that is deliberate: an MCP or CLI
    * consumer reads this result as serialized JSON, and a field that simply
-   * vanishes on a healthy run is one nobody learns to look for.  An explicit
-   * `"shortfall": null` states that completeness was checked and held, which
-   * is the property a silent under-collection took away (#874).
+   * vanishes on a healthy run is one nobody learns to look for (#874).
+   *
+   * **`null` is the absence of a contradiction, not a certificate of
+   * completeness**, and the difference is load-bearing on two paths that reach
+   * it without ever reading a cardinal: the no-trigger return above, and a
+   * modal whose own count is unreadable (`total` falls back to `0`, which
+   * cannot contradict anything).  Both legitimately report `null` — there is
+   * nothing to contradict — but neither verified completeness, and a field
+   * that claimed otherwise would certify exactly where it knows least.  What
+   * `null` does state is that the check ran and found no contradiction, which
+   * is the property a silent under-collection took away.
+   *
+   * A caller that needs to know whether MORE exists reads `paging.total`; a
+   * caller that needs to know whether what it got is INTERNALLY consistent
+   * with the page reads this.
    */
   readonly shortfall: EngagerShortfall | null;
 }
