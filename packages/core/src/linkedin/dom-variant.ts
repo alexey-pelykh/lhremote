@@ -255,11 +255,13 @@ export interface PostDetailVariantAdapter extends VariantAdapter {
  * each counter one ELEMENT at a time, exactly as post detail does, so this
  * surface would use a narrowing anchor if it had one; what it lacks is a
  * counts row anyone has measured on a live search page.  Declaring a selector
- * on that evidence would assert a measurement nobody has taken — the failure
- * {@link VariantAdapter.counts} keeps an empty list for elsewhere.  Until one
- * is measured, the CARD is the narrowed counts root, which enumeration has
- * already reduced to one post; see {@link buildSearchResultsExtractionSource}
- * for why that narrowing is sound here and not on post detail.
+ * on that evidence would assert a measurement nobody has taken — the same
+ * posture {@link PostDetailVariantAdapter.counts} takes when it carries the
+ * deliberately empty list of a dialect whose counts row has never been
+ * measured.  Until one is measured, the CARD is the narrowed counts root,
+ * which enumeration has already reduced to one post; see
+ * {@link buildSearchResultsExtractionSource} for why that narrowing is sound
+ * here and not on post detail.
  */
 export interface SearchResultsVariantAdapter extends VariantAdapter {
   readonly surface: "search-results";
@@ -530,7 +532,8 @@ function authorLinkWithin(scopes: readonly string[]): string {
  * for this dialect, and guessing one would either match nothing (silently
  * zeroing every count) or match something that is not the counts row.  The
  * read therefore falls back to this adapter's own resolved scope, which the
- * anchored per-element matching makes safe — see {@link VariantAdapter.counts}.
+ * anchored per-element matching makes safe — see
+ * {@link PostDetailVariantAdapter.counts}.
  * The one thing the dialect does tell us is that the counters render INSIDE
  * that scope: this extractor's headline scan has had to exclude
  * `"<N> reactions"`-shaped runs found there since #800.  Narrow it the moment
