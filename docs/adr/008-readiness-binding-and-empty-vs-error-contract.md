@@ -645,7 +645,11 @@ per-element read post detail moved to. Both are follow-up candidates, not part o
 > **Half of that is now done.** The engagement counts ARE read by the anchored per-element read
 > as of #869 — see § Amendments → *Search-results engagement counts are read anchored*. The
 > diagnostic-capture half stands exactly as written and is tracked as #870. Read the paragraph
-> above as the record of what this binding scoped, not as a description of the code.
+> above as the record of what this binding scoped, not as a description of the code — and read the
+> one **below** the same way. #868 gave this surface the Tier-2 oracle that paragraph says is
+> absent: `packages/core/src/linkedin/__tests__/search-results.integration.test.ts`, a real browser
+> over measured fixtures. Its reasoning about what a stand-in cannot falsify still stands; its
+> verdict does not. The residual the oracle leaves open is narrower and stated in its own header.
 
 **And it has no Tier-2 coverage at all.** `dom-variant.integration.test.ts` exercises post detail
 in a real browser and does not mention this surface, so every claim here rests on Tier-1 against a
@@ -1247,10 +1251,10 @@ assert a measurement nobody has taken. When one is measured, the anchor becomes 
 **Evidence.** #868's Tier-2 oracle
 (`packages/core/src/linkedin/__tests__/search-results.integration.test.ts`) carried three
 `it.fails` tripwires stating the correct contract; all three are plain `it` as of this change, with
-every neighbouring canary and control still green — 78 passed + 3 expected-fail became 81 passed.
-That oracle is also why the § 2026-09-02 Amendment's *"no Tier-2 coverage at all"* for this surface
-no longer holds; the residual it leaves open is narrower and stated there (the three
-`adapter.extract` fields of the reconstructed `legacy` extractor).
+every neighbouring canary and control still green, and none of their assertions touched. That
+oracle is also why the § 2026-09-02 Amendment's *"no Tier-2 coverage at all"* for this surface no
+longer holds; the residual it leaves open is narrower and stated in that test file's own header
+(the three `adapter.extract` fields of the reconstructed `legacy` extractor).
 
 **Deliberately not done, so a reader does not infer it.** The counts read is dialect-shared —
 one site, both dialects — but every split-row fixture installs a `legacy` card, so the join is
