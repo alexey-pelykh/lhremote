@@ -36,13 +36,27 @@ async function withTimeout<T>(
 }
 
 /**
- * Helper to clear document body and create elements without innerHTML
- * (which is blocked by Chromium's Trusted Types policy).
+ * Reset the page to an empty document.
+ *
+ * This replaces the document through CDP rather than draining `document.body`
+ * from JS.  The drain dereferenced `document.body` before the freshly-launched
+ * target had one -- null on the slowest runner in the matrix, which is the
+ * whole of #866.  Three prior fixes raised timeouts instead; a deadline cannot
+ * help a null dereference, because the evaluation runs promptly and throws.
+ *
+ * Setting the content also *creates* the body, so the invariant holds for
+ * everything that runs afterwards rather than being raced for.  `innerHTML`
+ * remains unavailable either way (Chromium's Trusted Types policy blocks it),
+ * so elements are still built through DOM APIs.
  */
 async function resetBody(client: CDPClient): Promise<void> {
-  await client.evaluate(
-    `while (document.body.firstChild) document.body.removeChild(document.body.firstChild)`,
-  );
+  const { frameTree } = (await client.send("Page.getFrameTree", {})) as {
+    frameTree: { frame: { id: string } };
+  };
+  await client.send("Page.setDocumentContent", {
+    frameId: frameTree.frame.id,
+    html: "<html><body></body></html>",
+  });
 }
 
 describe("DOM automation (integration)", () => {
