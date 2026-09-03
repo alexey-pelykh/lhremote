@@ -10,8 +10,8 @@ import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 export function registerGetPostEngagers(server: McpServer): void {
   server.tool(
     "get-post-engagers",
-    "List people who engaged with a LinkedIn post (reacted, etc.) with their profile info and engagement type. Supports pagination. "
-      + "The `shortfall` field is null when the collection got everything it asked for; otherwise it reports how many rows were collected against the reaction count the page itself rendered, and why collection stopped.",
+    "List people who engaged with a LinkedIn post (reacted, etc.) with their profile info and engagement type. Supports pagination. " +
+      "The `shortfall` field is null when the collection got everything it asked for; otherwise it reports how many rows were collected against the reaction count the page itself rendered, and why collection stopped.",
     {
       postUrl: z
         .string()
