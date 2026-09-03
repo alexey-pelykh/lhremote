@@ -967,6 +967,30 @@ here goes stale the next time one is added or closed.
   rather than narrowing it, and put a number on the window. The premise that no repair was available
   under the uneditable oracle was the part that did not survive: it held only for repairs that
   RAISE, and reporting was never tried.
+- **An under-collection with no readable cardinal is still silent — the repair for the one above
+  opened this one.** `contradictsCompleteCollection` fires on a contradiction against a count the
+  page rendered, so where no count is readable there is nothing to contradict and `shortfall` is
+  `null`. Two paths reach that state: the trigger-absent early return, which evaluates the predicate
+  not at all, and a modal whose own total comes back unreadable, where `total` falls back to `0` and
+  `0` exceeds no row count. On the second, three collected rows of fifty return as
+  `paging: { total: 3 }` with `shortfall: null` — the #874 shape exactly, now wearing a field that
+  says nothing contradicted it. The field's doc, the MCP description and the README were narrowed so
+  none of them CLAIMS a check that did not run, which is a fix to the record and not to the silence.
+  Recorded rather than closed because closing it needs a SECOND corroborator independent of the
+  modal's own header — `paging.total` cannot serve, since on exactly these paths it is the returned
+  row count corroborating itself — and #874's repair was bound to add no `Runtime.evaluate`.
+  Falsifier: a live probe of whether any reactions modal renders a count OUTSIDE its header, and
+  whether the post-detail trigger's own stamp survives the modal opening and can be re-read after
+  collection.
+- **`get-post`'s comment collection may carry the same shape, and it is unmeasured.** The collect
+  loop there scrolls a list against a `commentCount` cardinal on the same empty-vs-error contract,
+  so the argument that produced #874 transfers on its face — but the pane geometry that made the
+  reactor window one-to-five rows was measured on the REACTIONS modal, and nothing here has been
+  measured on the comments pane. Recorded rather than assumed, and deliberately not repaired by
+  analogy: #874's own falsifier is the precedent for measuring first, and it came back the unwelcome
+  way. Falsifier: the same probe against a high-comment post — does the comments pane overflow at a
+  small row count, and does its scroll source report `false` below that?
+
 
 **Deliberately not done here, so a reader does not infer it.** The trigger-absent branch does not
 attempt to distinguish *no reactions* from *trigger selector rotted*; the evidence to do so does not
