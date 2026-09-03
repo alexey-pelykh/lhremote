@@ -58,6 +58,54 @@ describe("extraction errors surfaced through MCP", () => {
     expect(text).toContain("transitional or hybrid");
   });
 
+  /**
+   * The readiness gates put their per-adapter detect probe counts in the
+   * error's `cause`: no adapter matched means LinkedIn changed its markup,
+   * two matched means a hybrid page, exactly one means that adapter's field
+   * selectors went stale.  An agent cannot open devtools to work that out,
+   * so the counts have to reach the tool response text or the diagnosis is
+   * lost at the process boundary.
+   */
+  it("carries the cause chain's detect probe counts into the response", () => {
+    const text = textOf(
+      new DOMVariantUnsupportedError("post-detail", ["sdui", "legacy"], {
+        cause: new Error("detect probes — sdui: 0, legacy: 0"),
+      }),
+    );
+
+    expect(text).toContain("register an adapter");
+    expect(text).toContain("Caused by: detect probes — sdui: 0, legacy: 0");
+  });
+
+  /**
+   * The search-results gate's cause is the one that names BOTH readings of a
+   * zero match, because there the error class's own wording over-claims: a
+   * search that legitimately matched nothing renders no cards, so no detect
+   * anchor matches either.  Dropping this cause sends an agent to write an
+   * adapter for a page that is working perfectly.
+   *
+   * The cause text is a SHAPE FIXTURE, shortened from the production string.
+   * That wording is pinned where it is built, in the core package's
+   * `search-posts.test.ts`; this asserts only that such a cause reaches the
+   * tool response.
+   */
+  it("carries both readings of a search-results zero match", () => {
+    const text = textOf(
+      new DOMVariantUnsupportedError("search-results", ["sdui", "legacy"], {
+        cause: new Error(
+          "detect probes — sdui: 0, legacy: 0. No registered adapter's " +
+            "detect anchor matched. That observation has TWO readings on the " +
+            "search-results surface and the DOM cannot tell them apart: " +
+            "LinkedIn changed its markup (register an adapter for the new " +
+            "dialect), OR the search legitimately matched nothing.",
+        ),
+      }),
+    );
+
+    expect(text).toContain("TWO readings");
+    expect(text).toContain("the search legitimately matched nothing");
+  });
+
   it("is flagged as an error rather than returned as success", () => {
     const result = mcpCatchAll(
       new DOMVariantUnsupportedError("post-detail", []),
