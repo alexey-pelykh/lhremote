@@ -54,6 +54,23 @@ const {
   waitForPostLoad,
 } = await import("./wait-for-post-load.js");
 
+/**
+ * A selector fragment as it appears INSIDE the emitted JS string literal.
+ *
+ * Since #875 the module interpolates its selector constants through
+ * `jsString`, so a fragment carrying double quotes reaches the emitted source
+ * escaped.  `JSON.stringify(...).slice(1, -1)` drops the wrapping quotes and
+ * keeps the escaping — which is exactly a fragment's form once embedded.
+ *
+ * Deliberately `JSON.stringify` rather than the module's own `jsString`: the
+ * expectation must be an INDEPENDENT statement of the form the source should
+ * carry, not the same call the source made.  Grading `jsString` output against
+ * `jsString` would pass for any implementation, including a broken one.
+ */
+function escaped(fragment: string): string {
+  return JSON.stringify(fragment).slice(1, -1);
+}
+
 describe("waitForPostLoad", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -518,21 +535,28 @@ describe("capturePostLoadFailure", () => {
     expect(script).toContain("hasReactLikeButton");
     expect(script).toContain("hasCommentOnButton");
     expect(script).toContain("hasTopLevelEditor");
-    expect(script).toContain('aria-label^="React Like to "');
-    expect(script).toContain('aria-label^="Comment on"');
-    expect(script).toContain('aria-label^="Text editor for creating"');
+    // The marker fragments below are asserted in their ESCAPED form: since
+    // #875 every selector constant crosses the TS→JS seam through `jsString`,
+    // so the double quotes inside each one reach the emitted source as `\"`.
+    // Written as `JSON.stringify(...).slice(1, -1)` rather than as a
+    // hand-escaped literal so the expectation states the transform rather than
+    // its output — a hand-escaped string would drift silently the next time the
+    // seam's quoting rule moves.
+    expect(script).toContain(escaped('aria-label^="React Like to "'));
+    expect(script).toContain(escaped('aria-label^="Comment on"'));
+    expect(script).toContain(escaped('aria-label^="Text editor for creating"'));
     // lhremote#800 hardening: new SDUI readiness markers also probed
     // so a future timeout pins which-of-N-is-missing.
     expect(script).toContain("hasReactionsMenu");
     expect(script).toContain("hasPostDetailContainer");
-    expect(script).toContain('aria-label="Open reactions menu"');
+    expect(script).toContain(escaped('aria-label="Open reactions menu"'));
     expect(script).toContain(
-      '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]',
+      escaped('[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]'),
     );
     // #835: the comment layer the extraction-failure error names.  Every
     // other probe here answers a readiness question instead.
     expect(script).toContain("commentElementCount");
-    expect(script).toContain('[componentkey^="replaceableComment_"]');
+    expect(script).toContain(escaped('[componentkey^="replaceableComment_"]'));
     expect(script).toContain("bodyTextSnippet");
   });
 
@@ -1129,5 +1153,119 @@ describe("diagnosticCaptureEnabled", () => {
 
     delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
     expect(diagnosticCaptureEnabled()).toBe(false);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// The TS→JS seam in the diagnostic probe (#875)
+// ───────────────────────────────────────────────────────────────────────────
+//
+// The probe source is a JavaScript program inside a TypeScript template
+// literal, and nothing in the type system notices when that goes wrong.  A
+// hand-quoted `'${SELECTOR}'` compiles, lints, and emits either a syntax error
+// or a valid-but-DIFFERENT selector.  #840 fixed seven such sites on the
+// reactions-modal surface and pinned them there; the nine on THIS surface were
+// deliberately left to their own item, and until it landed nothing stopped a
+// tenth from being written.
+//
+// The consequence is worse here than at any other site, because this source
+// runs only when something has ALREADY failed and the capture swallows its own
+// errors: a probe that does not parse produces no json, no png and no warn
+// line, at the one moment an operator is reading diagnostics.  `probe script
+// collects all documented fields` above pins the probe's SHAPE; this pins that
+// it is a program at all, and that the selectors reached it intact.
+describe("post-detail diagnostic probe — emitted-source integrity", () => {
+  const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+
+  /**
+   * The selectors this module INTERPOLATES into the probe — all nine.
+   *
+   * Every one is a module-private constant with no public accessor, so they
+   * are restated here rather than exported purely to be asserted on, which
+   * makes this an independent statement of what they are rather than a
+   * tautology against the module's own values.
+   *
+   * Deliberately NOT the one-off selectors written inline in the probe
+   * (`article`, `main`, the `mainFeed` / listitem / menu-button anchors):
+   * those are literals in the emitted program rather than values crossing the
+   * seam, so a hand-quote rule over them would fail on correct code.
+   */
+  const INTERPOLATED_SELECTORS = [
+    'a[href*="/in/"], a[href*="/company/"]',
+    'main a[href*="/in/"], main a[href*="/company/"]',
+    'span[dir="ltr"]',
+    'main button[aria-label^="React Like to "]',
+    'main button[aria-label^="Comment on"]',
+    'main [role="textbox"][aria-label^="Text editor for creating"]',
+    'main button[aria-label="Open reactions menu"]',
+    '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]',
+    '[componentkey^="replaceableComment_"]',
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    } else {
+      process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalEnv;
+    }
+  });
+
+  /** The probe source as the capture actually hands it to `Runtime.evaluate`. */
+  async function emittedProbeSource(): Promise<string> {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const client = {
+      evaluate: vi.fn().mockResolvedValue({}),
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    await capturePostLoadFailure(client, {
+      trigger: "readiness-timeout",
+      detection: null,
+    });
+
+    warnSpy.mockRestore();
+    const source = String(vi.mocked(client.evaluate).mock.calls[0]?.[0] ?? "");
+    // Cardinality, not just content: an empty source would satisfy every
+    // `not.toContain` below without a single assertion having graded anything.
+    expect(source.length).toBeGreaterThan(0);
+    return source;
+  }
+
+  it("parses as JavaScript", async () => {
+    const source = await emittedProbeSource();
+
+    // The failure this catches is invisible by construction: the capture's own
+    // `.catch` swallows an evaluate that throws, so a source that is not a
+    // program looks exactly like a page that had nothing to report.
+    expect(() => new Function(source)).not.toThrow();
+  });
+
+  it("carries every interpolated selector in its JSON string form", async () => {
+    const source = await emittedProbeSource();
+
+    // Cardinality first: an empty list would make the loop below vacuous, and
+    // a green over zero selectors is not evidence that nine of them arrived.
+    expect(INTERPOLATED_SELECTORS).toHaveLength(9);
+    for (const selector of INTERPOLATED_SELECTORS) {
+      expect(source, `missing ${selector}`).toContain(JSON.stringify(selector));
+    }
+  });
+
+  it("hand-quotes none of the interpolated selectors", async () => {
+    const source = await emittedProbeSource();
+
+    // The form this item removed.  Asserted separately from the positive check
+    // above because the two fail for different reasons: a selector could reach
+    // the source in BOTH forms if a site were duplicated rather than converted.
+    for (const selector of INTERPOLATED_SELECTORS) {
+      expect(source, `hand-quoted ${selector}`).not.toContain(`'${selector}'`);
+    }
   });
 });

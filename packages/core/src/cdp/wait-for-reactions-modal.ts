@@ -17,6 +17,7 @@ import {
   ExtractionTimeoutError,
 } from "../services/errors.js";
 import { delay } from "../utils/delay.js";
+import { jsString } from "../utils/js-string.js";
 import type { CDPClient } from "./client.js";
 import {
   diagnosticCaptureEnabled,
@@ -107,13 +108,22 @@ const REACTIONS_TAB_FALLBACK_SELECTOR =
 const REACTIONS_MODAL_ENGAGER_LINK_SELECTOR = 'a[href*="/in/"]';
 
 // Both selectors above are interpolated into emitted JavaScript through
-// `JSON.stringify`, never by hand-quoting them as `'${CONST}'`.  Both contain
+// {@link jsString}, never by hand-quoting them as `'${CONST}'`.  Both contain
 // double quotes today, so hand-quoting happened to work; the moment either
 // grows a single quote or a backslash it would emit a syntax error or, worse,
 // a valid-but-different selector.  The failure would be invisible: the
 // capture's own `.catch` swallows an evaluate that throws, so the operator
 // gets no json, no png and no warn line at the one moment diagnostics matter.
-// Same discipline as `dom-variant.ts`'s `jsString`.
+//
+// The rule used to be restated here as a bare `JSON.stringify` per site, which
+// is the same primitive but leaves each new site re-deciding it.  It is now the
+// shared helper every module building in-page source calls, so the question at
+// a site is the greppable "does this go through `jsString`?" rather than the
+// unaskable "is this quoting correct?".
+//
+// {@link REACTIONS_MODAL_WRAPPER_SELECTORS} is deliberately NOT one of these:
+// it is interpolated whole, as an in-page *array* literal, which is a different
+// emission — see the resolver script below.
 
 /**
  * Maximum ancestor depth the tab-anchor fallback walks up from the
@@ -159,8 +169,8 @@ function __getReactionsModal() {
     for (let j = 0; j < candidates.length; j++) {
       const c = candidates[j];
       if (
-        c.querySelector(${JSON.stringify(REACTIONS_TAB_FALLBACK_SELECTOR)}) ||
-        c.querySelector(${JSON.stringify(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)})
+        c.querySelector(${jsString(REACTIONS_TAB_FALLBACK_SELECTOR)}) ||
+        c.querySelector(${jsString(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)})
       ) {
         return c;
       }
@@ -174,12 +184,12 @@ function __getReactionsModal() {
   // stable across the refresh; its closest ancestor that holds
   // engager links IS the modal.  Bounded depth so a
   // missing-engager-links page doesn't infinite-loop.
-  const tab = document.querySelector(${JSON.stringify(REACTIONS_TAB_FALLBACK_SELECTOR)});
+  const tab = document.querySelector(${jsString(REACTIONS_TAB_FALLBACK_SELECTOR)});
   if (!tab || tab.offsetHeight === 0) return null;
   let ancestor = tab.parentElement;
   let depth = 0;
   while (ancestor && depth < ${REACTIONS_MODAL_ANCESTOR_WALK_DEPTH}) {
-    if (ancestor.querySelectorAll(${JSON.stringify(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)}).length > 0) {
+    if (ancestor.querySelectorAll(${jsString(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)}).length > 0) {
       return ancestor;
     }
     ancestor = ancestor.parentElement;
@@ -551,7 +561,7 @@ async function captureReactionsModalFailureInner(
     const legacyDialogs = document.querySelectorAll('[role="dialog"]');
     const firstLegacyDialog = legacyDialogs[0] || null;
     const dialogHasInLinks = firstLegacyDialog
-      ? firstLegacyDialog.querySelectorAll(${JSON.stringify(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)}).length > 0
+      ? firstLegacyDialog.querySelectorAll(${jsString(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)}).length > 0
       : false;
     const dialogChildElementCount = firstLegacyDialog ? firstLegacyDialog.childElementCount : 0;
 
@@ -561,7 +571,7 @@ async function captureReactionsModalFailureInner(
     // resolver fallback in RESOLVE_REACTIONS_MODAL_SCRIPT must adapt.
     const htmlDialogCount = document.querySelectorAll('dialog').length;
     const ariaModalCount = document.querySelectorAll('[aria-modal="true"]').length;
-    const reactionsTab = document.querySelector(${JSON.stringify(REACTIONS_TAB_FALLBACK_SELECTOR)});
+    const reactionsTab = document.querySelector(${jsString(REACTIONS_TAB_FALLBACK_SELECTOR)});
     const hasReactionsTab = reactionsTab !== null && reactionsTab.offsetHeight > 0;
 
     // Walk up from the "All reactions" tab and capture each ancestor's
@@ -583,7 +593,7 @@ async function captureReactionsModalFailureInner(
         const classToken = ((ancestor.className && typeof ancestor.className === 'string')
           ? ancestor.className.trim().split(/\\s+/)[0]
           : '') || '';
-        const inLinks = ancestor.querySelectorAll(${JSON.stringify(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)}).length;
+        const inLinks = ancestor.querySelectorAll(${jsString(REACTIONS_MODAL_ENGAGER_LINK_SELECTOR)}).length;
         reactionsTabAncestorChain.push(
           tag + (role ? ' role=' + role : '') +
           (ariaModal ? ' aria-modal=' + ariaModal : '') +
