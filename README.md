@@ -836,7 +836,7 @@ Get engagement statistics for a LinkedIn post: reaction count (broken down by ty
 
 #### `get-post-engagers`
 
-List people who engaged with a LinkedIn post (reacted, etc.) with their profile info and engagement type. Supports pagination. *MCP tool only — no CLI command.*
+List people who engaged with a LinkedIn post (reacted, etc.) with their profile info and engagement type. Supports pagination. Returns a `shortfall` field alongside the engagers: `null` when the collection got everything it asked for, otherwise a record of how many rows were collected against the reaction count the page itself rendered, and why collection stopped. *MCP tool only — no CLI command.*
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
