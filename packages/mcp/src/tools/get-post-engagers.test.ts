@@ -33,8 +33,9 @@ const MOCK_ENGAGERS = {
   ],
   paging: { start: 0, count: 20, total: 2 },
   // Always present on a real result, including when nothing is short — the
-  // field states that completeness was checked and held, rather than vanishing
-  // on the healthy path where nobody would learn to look for it (#874).
+  // field reports the absence of a contradiction rather than vanishing on the
+  // healthy path where nobody would learn to look for it (#874). `null` is not
+  // a completeness guarantee; see `GetPostEngagersOutput.shortfall`.
   shortfall: null,
 };
 
@@ -75,6 +76,47 @@ describe("registerGetPostEngagers", () => {
       content: [
         { type: "text", text: JSON.stringify(MOCK_ENGAGERS, null, 2) },
       ],
+    });
+  });
+
+  // The populated case, asserted against a LITERAL rather than against
+  // `JSON.stringify(fixture)`. The success test above compares two expressions
+  // derived from the same object, so it cannot fail on anything about
+  // `shortfall`; this one names the four fields and their values outright, so a
+  // handler that dropped, renamed or flattened the record fails here.
+  //
+  // Worth having on this boundary specifically: the tool description makes four
+  // claims about `shortfall`, and the MCP surface is the only place a consumer
+  // ever reads it — there is no CLI command for this tool (#874).
+  it("serializes a populated shortfall through the tool boundary", async () => {
+    const { server, getHandler } = createMockServer();
+    registerGetPostEngagers(server);
+    vi.mocked(getPostEngagers).mockResolvedValue({
+      ...MOCK_ENGAGERS,
+      paging: { start: 0, count: 2, total: 50 },
+      shortfall: {
+        collected: 3,
+        requested: 20,
+        cardinal: 50,
+        stoppedBecause: "scroll-declined",
+      },
+    });
+
+    const handler = getHandler("get-post-engagers");
+    const result = (await handler({
+      postUrl: "urn:li:activity:7123456789012345678",
+      cdpPort: 9222,
+    })) as { content: { type: string; text: string }[] };
+
+    const parsed = JSON.parse(
+      (result.content[0] as { text: string }).text,
+    ) as Record<string, unknown>;
+
+    expect(parsed.shortfall).toEqual({
+      collected: 3,
+      requested: 20,
+      cardinal: 50,
+      stoppedBecause: "scroll-declined",
     });
   });
 

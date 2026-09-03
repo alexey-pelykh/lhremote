@@ -239,6 +239,45 @@ describe("getPostEngagers under-collection reporting (#874)", () => {
     expect(result.shortfall?.requested).toBe(21);
   });
 
+  // The cell the suite otherwise leaves empty, and the one where `shortfall`
+  // carries the whole signal on its own: a shortfall reported beside an EMPTY
+  // returned window.
+  //
+  // Every other reporting case here returns at least one row, so a regression
+  // that suppressed the shortfall whenever the returned window came back empty
+  // would pass the entire suite. That is the pre-slice/post-slice conflation
+  // the collect loop warns about in prose — corroboration is measured on the
+  // whole scrape, never on the pagination window — and the sibling raise
+  // contract already has its own oracle case for the same hazard
+  // (`get-post-engagers.test.ts`, "returns an empty window for a start past the
+  // end without throwing"). The report contract inherited the hazard without
+  // the test.
+  //
+  // Operationally this is a second-page call on a stalled collection: 3 of 227
+  // rows collected, a window starting at 20, so `engagers` is empty and
+  // `paging` reads `{ start: 20, count: 0, total: 227 }` — byte-identical to a
+  // caller who legitimately paged past the end. `shortfall` is the only thing
+  // that tells those two apart.
+  it("reports the shortfall even when the returned window is empty", async () => {
+    setupMocks({ totalReactions: 227, afterTotal: [rows(3), false] });
+
+    const result = await getPostEngagers({
+      postUrl: POST_URL,
+      cdpPort: CDP_PORT,
+      start: 20,
+      count: 20,
+    });
+
+    expect(result.engagers).toEqual([]);
+    expect(result.paging).toEqual({ start: 20, count: 0, total: 227 });
+    expect(result.shortfall).toEqual({
+      collected: 3,
+      requested: 40,
+      cardinal: 227,
+      stoppedBecause: "scroll-declined",
+    });
+  });
+
   // The settle-and-retry (#840) fires only on an EMPTY contradicted scrape, so
   // a re-read that lands short leaves the collection in exactly the state this
   // fix reports on. Pins the two mechanisms composing rather than one masking

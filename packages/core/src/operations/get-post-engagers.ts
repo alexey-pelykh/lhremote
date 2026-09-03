@@ -130,18 +130,20 @@ export interface GetPostEngagersOutput {
    * vanishes on a healthy run is one nobody learns to look for (#874).
    *
    * **`null` is the absence of a contradiction, not a certificate of
-   * completeness**, and the difference is load-bearing on two paths that reach
-   * it without ever reading a cardinal: the no-trigger return above, and a
-   * modal whose own count is unreadable (`total` falls back to `0`, which
-   * cannot contradict anything).  Both legitimately report `null` — there is
-   * nothing to contradict — but neither verified completeness, and a field
-   * that claimed otherwise would certify exactly where it knows least.  What
-   * `null` does state is that the check ran and found no contradiction, which
-   * is the property a silent under-collection took away.
+   * completeness**, and it does not even promise the predicate ran.  Three
+   * paths reach it: the predicate ran and found no contradiction; a modal
+   * whose own count came back unreadable, where `total` falls back to `0` and
+   * `0` contradicts no row count; and the no-trigger return above, which
+   * evaluates nothing at all.  All three are correct — there is nothing to
+   * contradict on the last two — but only the first checked anything, and a
+   * field claiming otherwise would certify exactly where it knows least.
    *
-   * A caller that needs to know whether MORE exists reads `paging.total`; a
-   * caller that needs to know whether what it got is INTERNALLY consistent
-   * with the page reads this.
+   * `paging.total` is not an independent second opinion here.  It carries the
+   * page's own reaction count when that was readable, and **falls back to the
+   * number of rows collected when it was not** — so on exactly the paths where
+   * `shortfall` has nothing to go on, `paging.total` is the row count
+   * corroborating itself.  A caller wanting a reliable "are there more" needs
+   * a reading this operation does not currently take.
    */
   readonly shortfall: EngagerShortfall | null;
 }
