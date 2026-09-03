@@ -308,6 +308,16 @@ describe("post-detail fixture oracle (integration)", () => {
             `${String(fixture.reactionCardinal)} reactions`,
           );
         } else {
+          // The row is ABSENT, asserted against the live DOM and not only
+          // against the sidecar constant beside it.  `countsText` reads `""`
+          // in two different situations — no row at all, and a row that
+          // rendered nothing — and the comment above grounds the legal-empty
+          // case in the first specifically, so the block has to tell them
+          // apart itself.  The sibling canary pins this same count, but a
+          // claim stated here should carry its own evidence: otherwise
+          // narrowing that canary would silently strip the grounding out of
+          // this one, and nothing would go red.
+          expect(await count(".social-details-social-counts")).toBe(0);
           expect(measured.socialCounts).toBe(0);
           expect(countsText).toBe("");
           expect(reactionsAria).toBeNull();
