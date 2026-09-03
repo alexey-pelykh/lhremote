@@ -379,10 +379,13 @@ describe("captureReactionsModalFailure", () => {
     // the probe so the diagnostic and the resolution rule stay aligned.
     expect(script).toContain('[role="dialog"]');
     // As a JSON string literal, not hand-quoted: every selector CONSTANT this
-    // module interpolates goes through `JSON.stringify`, because a selector
-    // that grows a single quote or a backslash would otherwise emit a syntax
-    // error the capture's own `.catch` swallows — no json, no png, no warn
-    // line, at the one moment diagnostics matter (#840).
+    // module interpolates goes through the shared `jsString` helper (#875;
+    // a bare `JSON.stringify` per site before that), because a selector that
+    // grows a single quote or a backslash would otherwise emit a syntax error
+    // the capture's own `.catch` swallows — no json, no png, no warn line, at
+    // the one moment diagnostics matter (#840).  Asserted here as
+    // `JSON.stringify` deliberately: the expectation must state the form
+    // independently of the call the module made.
     expect(script).toContain(JSON.stringify('a[href*="/in/"]'));
     // Resolver helper signature — probe re-uses RESOLVE_REACTIONS_MODAL_SCRIPT.
     expect(script).toContain("__getReactionsModal");
