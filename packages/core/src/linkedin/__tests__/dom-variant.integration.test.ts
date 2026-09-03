@@ -61,7 +61,7 @@ describe("DOM variant adapters (integration)", () => {
     };
     await client.send("Page.setDocumentContent", {
       frameId: frameTree.frame.id,
-      html: "<html><body></body></html>",
+      html: "<!doctype html><html><head></head><body></body></html>",
     });
   }, BEFORE_EACH_TIMEOUT);
 
