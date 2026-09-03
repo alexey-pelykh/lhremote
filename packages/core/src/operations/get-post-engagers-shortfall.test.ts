@@ -356,6 +356,19 @@ describe("getPostEngagers under-collection reporting (#874)", () => {
   // The no-trigger early return never opens a modal and never reads a cardinal.
   // Its `total: 0` is a substitute, not an observation, so there is nothing for
   // a collection to fall short OF.
+  it("reports no shortfall when no reactions trigger was found", async () => {
+    setupMocks({ totalReactions: 0, afterTotal: [], reactionsFound: false });
+
+    const result = await getPostEngagers({
+      postUrl: POST_URL,
+      cdpPort: CDP_PORT,
+    });
+
+    expect(result.engagers).toEqual([]);
+    expect(result.paging).toEqual({ start: 0, count: 0, total: 0 });
+    expect(result.shortfall).toBeNull();
+  });
+
   // The other path that reaches `null` without ever reading a cardinal, and the
   // one no earlier case covered: the modal opened, but its own count came back
   // unreadable, so `total` falls back to `0`. Zero contradicts no row count, so
@@ -387,19 +400,6 @@ describe("getPostEngagers under-collection reporting (#874)", () => {
     // The fallback, and the reason it cannot corroborate itself: `paging.total`
     // is the row count, not a cardinal the page rendered.
     expect(result.paging.total).toBe(3);
-    expect(result.shortfall).toBeNull();
-  });
-
-  it("reports no shortfall when no reactions trigger was found", async () => {
-    setupMocks({ totalReactions: 0, afterTotal: [], reactionsFound: false });
-
-    const result = await getPostEngagers({
-      postUrl: POST_URL,
-      cdpPort: CDP_PORT,
-    });
-
-    expect(result.engagers).toEqual([]);
-    expect(result.paging).toEqual({ start: 0, count: 0, total: 0 });
     expect(result.shortfall).toBeNull();
   });
 
