@@ -123,8 +123,8 @@ const POST_COMMENT_ELEMENT_SELECTOR = '[componentkey^="replaceableComment_"]';
  */
 const POST_LTR_SPAN_FALLBACK_SELECTOR = 'span[dir="ltr"]';
 
-// Every selector CONSTANT above is interpolated into the emitted probe through
-// {@link jsString}, never by hand-quoting it as `'${CONST}'`.  Several already
+// All nine selector CONSTANTS above are interpolated into the emitted probe
+// through {@link jsString}, never by hand-quoting as `'${CONST}'`.  Several
 // contain double quotes, so the hand-quoted form this replaced happened to
 // work; the moment one grows a single quote or a backslash it would emit a
 // syntax error or, worse, a valid-but-different selector.  Nothing in the type
@@ -135,8 +135,6 @@ const POST_LTR_SPAN_FALLBACK_SELECTOR = 'span[dir="ltr"]';
 // in the probe (`article`, `main`, the `mainFeed` / listitem / menu-button
 // anchors) are literals in the emitted program rather than values crossing the
 // TS→JS seam, so they are not this rule's subject.
-
-
 
 /**
  * Poll the DOM until a LinkedIn post detail page has rendered *in a dialect

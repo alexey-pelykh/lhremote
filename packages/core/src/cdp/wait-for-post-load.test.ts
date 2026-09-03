@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   adaptersFor,
@@ -1261,11 +1262,51 @@ describe("post-detail diagnostic probe — emitted-source integrity", () => {
   it("hand-quotes none of the interpolated selectors", async () => {
     const source = await emittedProbeSource();
 
+    // Cardinality again rather than by inheritance from the test above: this
+    // one is all-negative, so an empty list would satisfy it without grading
+    // anything, and deleting the test above would remove the only guard.
+    expect(INTERPOLATED_SELECTORS).toHaveLength(9);
     // The form this item removed.  Asserted separately from the positive check
     // above because the two fail for different reasons: a selector could reach
     // the source in BOTH forms if a site were duplicated rather than converted.
     for (const selector of INTERPOLATED_SELECTORS) {
       expect(source, `hand-quoted ${selector}`).not.toContain(`'${selector}'`);
     }
+  });
+
+  // The two tests above iterate INTERPOLATED_SELECTORS, so they grade only the
+  // sites someone remembered to list. That is precisely the failure this
+  // block's header warns about — "nothing stopped a tenth from being written"
+  // — and a tenth, hand-quoted, would pass every assertion above: the nine
+  // listed are all still correct, and nothing counts the module's own sites.
+  //
+  // The check has to read the MODULE SOURCE, not the emitted source. After
+  // emission a hand-quoted constant is indistinguishable from a legitimate
+  // inline one-off (`'article'`, `'[data-testid="mainFeed"]'`) — both are just
+  // single-quoted text in a JavaScript program. Before emission they are not:
+  // one carries a `${...}` and the other does not.
+  it("has no interpolation site outside the enumerated nine", () => {
+    // `node:fs`, not `node:fs/promises`: this file mocks the latter for the
+    // capture path, and that mock supplies no reader.
+    const moduleSource = readFileSync(
+      new URL("./wait-for-post-load.ts", import.meta.url),
+      "utf8",
+    );
+    // Comments quote the forbidden form in order to forbid it, so they must be
+    // dropped before the rule is applied — otherwise the file's own warning
+    // against hand-quoting would fail the check that enforces it.
+    const code = moduleSource
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("//"))
+      .join("\n");
+
+    // Every value crossing the TS→JS seam goes through the helper, and there
+    // are exactly as many such sites as selectors enumerated above.
+    expect(code.match(/\$\{jsString\(/g) ?? []).toHaveLength(
+      INTERPOLATED_SELECTORS.length,
+    );
+    // ...and none crosses it hand-quoted. This is the assertion that fires on
+    // a tenth site the enumeration never learned about.
+    expect(code).not.toMatch(/['"]\$\{/);
   });
 });
