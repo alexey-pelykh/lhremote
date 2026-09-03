@@ -642,6 +642,11 @@ capture (that is #835's pattern, and ADR-007 § 2026-09-01 Amendment owns it), a
 counts are still parsed unanchored from each card's own text rather than by the anchored
 per-element read post detail moved to. Both are follow-up candidates, not part of this binding.
 
+> **Half of that is now done.** The engagement counts ARE read by the anchored per-element read
+> as of #869 — see § Amendments → *Search-results engagement counts are read anchored*. The
+> diagnostic-capture half stands exactly as written and is tracked as #870. Read the paragraph
+> above as the record of what this binding scoped, not as a description of the code.
+
 **And it has no Tier-2 coverage at all.** `dom-variant.integration.test.ts` exercises post detail
 in a real browser and does not mention this surface, so every claim here rests on Tier-1 against a
 hand-built stand-in for the page, plus the provenance below. That is a gap rather than an
@@ -1188,6 +1193,74 @@ five-row figure moves with the viewport, and it is the mechanism, not the consta
 rests on. And this surface still has **no Tier-2 coverage**: the reactions modal has no committed
 fixture, so every claim here rests on the live probe plus Tier-1 against mocks.
 
+### 2026-09-03 — Search-results engagement counts are read anchored (#869)
+
+The § 2026-09-02 Amendment left this surface's engagement counts *"parsed unanchored from each
+card's own text"* and named that a follow-up candidate. This closes that half. The
+diagnostic-capture half of the same paragraph is untouched and is tracked as #870.
+
+**Two independent defects, and separating them is the finding.** The preamble that opened #869
+treated the concatenation as the reason the reaction count vanished. It is not, and #868's oracle
+proved it by measurement:
+
+- **The join.** Under `Element.textContent` adjacent element text nodes concatenate with NO
+  separator, so a counts row rendering `2` beside `41 comments` flattens to `241 comments` and the
+  unanchored comment pattern captured **241**; a row rendering `7` beside `3 reposts` gave **73**.
+  A separator would fix this half.
+- **The label.** LinkedIn renders a reaction count as a bare number with the word "reactions" only
+  on the control's `aria-label`. A text-only read never looks there, so it found **no** reaction
+  count at all — 0 before and after any separator. This is why `__lhReadCount` consults
+  `aria-label` BEFORE text, and it is why a fixture built to witness one defect cannot witness the
+  other. Re-fusing them is what produced a fixture that witnessed neither.
+
+**What changed.** `buildSearchResultsExtractionSource` now emits `extractionHelpersSource()` and
+reads each counter through `__lhReadCount` / `__LH_COUNTERS`, exactly as post detail does; the
+surface-local `__lhParseCount` is deleted. Worth recording because it was not what the item
+assumed: those helpers were **not** merely unread by this surface, they were **not emitted into
+its generated source at all** — measured by building all three extraction sources and scanning
+them, so a call to `__lhReadCount` here would have thrown `ReferenceError` in-page. #869's own body
+stated the opposite — *"`__LH_COUNTERS` and `__lhReadCount` are already emitted into the same
+generated source"* — and it is worth naming because that premise is what made the fix look smaller
+than it is. The neighbouring claim in `extractionHelpersSource`'s own doc comment, that those
+helpers are what *"post-detail alone reads"*, was accurate about reading and silent about emission,
+which is how the two coexisted.
+
+**The card is passed as an ALREADY-NARROWED counts root**, which is the one judgment here worth
+challenging, so the ground is stated rather than assumed. `narrowed` gates the loose fallback.
+Post detail marks its scope non-narrowed because that scope is a whole post container reached from
+`document`, where a number followed by "comments" is as likely to be prose as a counter. Here
+enumeration has already reduced the page to ONE card before any counter is read, and reading that
+card's whole text loosely is precisely what this surface did for *every* counter before this
+change — so as a fallback, reached only where no element renders the counter on its own, it can
+only remove a false capture and never add one. Marking it non-narrowed instead would return 0 for
+a row rendering both counters as a single node (`2 41 comments`), which reads correctly today:
+a regression, in the one shape a per-element read cannot see. #868's oracle set that trap
+deliberately and it is the sharpest constraint on this change.
+
+**No `counts` field was added, and that is a statement about measurement.** § Decision 4's
+type-narrowing — *"carrying it here as an empty array would be a field that gates nothing"* —
+still holds and is not amended. No counts row has ever been measured on a live search page; #868's
+fixtures render one as a bare `<div>` with no class. Declaring a selector on that evidence would
+assert a measurement nobody has taken. When one is measured, the anchor becomes a
+`counts`-carrying narrowing and this paragraph is what to re-open.
+
+**Evidence.** #868's Tier-2 oracle
+(`packages/core/src/linkedin/__tests__/search-results.integration.test.ts`) carried three
+`it.fails` tripwires stating the correct contract; all three are plain `it` as of this change, with
+every neighbouring canary and control still green — 78 passed + 3 expected-fail became 81 passed.
+That oracle is also why the § 2026-09-02 Amendment's *"no Tier-2 coverage at all"* for this surface
+no longer holds; the residual it leaves open is narrower and stated there (the three
+`adapter.extract` fields of the reconstructed `legacy` extractor).
+
+**Deliberately not done, so a reader does not infer it.** The counts read is dialect-shared —
+one site, both dialects — but every split-row fixture installs a `legacy` card, so the join is
+witnessed through `legacy` only; the `sdui` dialect is exercised against whole-phrase rows. Not a
+correctness hole, since the site is shared, but it means this tier cannot witness the join for the
+dialect this surface was last measured actually serving (`sdui`, 2026-04-15). The same defect class
+also remains live at `get-feed.ts`, `get-profile-activity.ts` and `get-post-stats.ts` (#857 owns
+the last, which is page-wide rather than per-item and so the worst of the three); none is touched
+here.
+
 ## Related
 
 - Code: `packages/core/src/linkedin/dom-variant.ts`,
@@ -1197,7 +1270,8 @@ fixture, so every claim here rests on the live probe plus Tier-1 against mocks.
   `packages/core/src/services/errors.ts`,
   `packages/core/src/operations/get-post.ts`,
   `packages/core/src/operations/get-post-engagers.ts`,
-  `packages/core/src/operations/search-posts.ts` (§ 2026-09-02 Amendment, #841)
+  `packages/core/src/operations/search-posts.ts` (§ 2026-09-02 Amendment, #841;
+  engagement counts read anchored per § 2026-09-03 Amendment, #869)
 - ADRs: [ADR-005](005-error-hierarchy-design.md) (error hierarchy this extends),
   [ADR-007](007-profile-ready-selector-strategy.md) (precedent instance on the profile surface;
   unmodified and still in force there)
@@ -1208,4 +1282,6 @@ fixture, so every claim here rests on the live probe plus Tier-1 against mocks.
   Amendment), #830 (reactions-modal container tier — answered: it has one), #840 (reactions-modal
   binding, § 2026-09-02 Amendment), #872 (legacy detect anchor read `data-id` instead of `data-urn`,
   § 2026-09-03 Amendment), #874 (short reactor collection reported rather than raised,
-  § 2026-09-03 Amendment)
+  § 2026-09-03 Amendment), #869 (search-results engagement counts read anchored,
+  § 2026-09-03 Amendment), #870 (diagnostic capture for this surface — still open, the half
+  § 2026-09-03 Amendment deliberately leaves)
