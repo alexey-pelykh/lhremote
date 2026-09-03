@@ -56,14 +56,27 @@ const BEFORE_EACH_TIMEOUT = 15_000;
  *
  * ## The canary, and why it is not tidiness
  *
- * Several assertions below are `it.fails` (see #872).  An `it.fails` block
- * passes whenever its body fails **for any reason**, so a fixture that never
- * loaded would make every one of them green while testing nothing — the
- * degenerate gate wearing the costume of the fix for it.  Each fixture
- * therefore carries a plain `it` canary, OUTSIDE every `it.fails`, grading
- * the installed DOM against the `.measured.json` sidecar recorded on the live
- * page before scrubbing.  A broken load goes red there instead of silently
- * green everywhere.
+ * The legacy assertions below were `it.fails` until #872 was fixed, and the
+ * canary is what kept that construct honest: an `it.fails` block passes
+ * whenever its body fails **for any reason**, so a fixture that never loaded
+ * would have made every one of them green while testing nothing — the
+ * degenerate gate wearing the costume of the fix for it.
+ *
+ * They are plain `it` now.  That inverts the failure without removing the
+ * need — and the inversion is PARTIAL, which is the part worth knowing.  A
+ * fixture that never loads leaves a blank document, and against a blank
+ * document roughly half the assertions here still pass: every value they
+ * compare is `0`, `""` or `null`, which is what a legal-empty page looks
+ * like.  So a dead load shows up as a confusing half-red board rather than a
+ * clean all-red one.
+ *
+ * The canary is what resolves it, and it is the SOLE discriminator.  It
+ * grades the installed DOM against the `.measured.json` sidecar recorded on
+ * the live page before scrubbing, using literal selectors only — so it stays
+ * green under a selector regression and goes red under an infrastructure
+ * fault.  That separates "the 352 KB fixture never installed" from "the
+ * adapter no longer claims this page", which are diagnosed in opposite
+ * directions.
  *
  * ## Documented coverage gap — two fixtures deliberately not captured
  *
@@ -220,14 +233,18 @@ describe("post-detail fixture oracle (integration)", () => {
       const measured = sidecar.measured;
 
       // ─────────────────────────────────────────────────────────────────────
-      // CANARY — a plain `it`, deliberately OUTSIDE every `it.fails` below.
+      // CANARY — the discriminator every other test in this describe leans
+      // on.  It grades the installed DOM against the numbers measured on the
+      // live page BEFORE scrubbing, so a load that silently did nothing is
+      // named as such rather than surfacing as "the adapter did not claim
+      // the page".
       //
-      // Every `it.fails` in this describe passes when its body fails for ANY
-      // reason, so "the 352 KB fixture never loaded" is indistinguishable
-      // from "the adapter did not claim it" inside one.  This test is the
-      // discriminator: it grades the installed DOM against the numbers
-      // measured on the live page BEFORE scrubbing, so a load that silently
-      // did nothing goes red here rather than green everywhere.
+      // It mattered even more while the legacy assertions below were
+      // `it.fails` (#872): such a block passes when its body fails for ANY
+      // reason, so a fixture that never loaded went green everywhere.  They
+      // are plain `it` now, so a dead load goes red — but red on every test
+      // at once, which is exactly as uninformative.  This is what tells the
+      // two apart.
       //
       // Asserting against the sidecar rather than against numbers read out of
       // the scrubbed file is the point — a disagreement is a finding about
@@ -279,9 +296,22 @@ describe("post-detail fixture oracle (integration)", () => {
         // one.
         if (fixture.commentCardinal > 0) {
           expect(countsText).toContain(`${String(fixture.commentCardinal)} comments`);
+          // The reaction cardinal gets the SAME treatment, and the asymmetry
+          // it removes is worth naming: without this, a wrong
+          // `reactionCardinal` still goes red — but only in the extraction
+          // assertion, where the cheapest way to clear the red is to edit the
+          // number to whatever the extractor returned, which makes that
+          // assertion circular.  Pinning it to the sidecar here is what makes
+          // "a disagreement is a finding about the fixture, not a number to
+          // adjust" enforceable for both counters instead of one.
+          expect(reactionsAria).toBe(
+            `${String(fixture.reactionCardinal)} reactions`,
+          );
         } else {
           expect(measured.socialCounts).toBe(0);
           expect(countsText).toBe("");
+          expect(reactionsAria).toBeNull();
+          expect(fixture.reactionCardinal).toBe(0);
         }
       });
 
@@ -304,15 +334,25 @@ describe("post-detail fixture oracle (integration)", () => {
       // THE MUTATION CHECK's anchor — a plain `it` that CALLS the generated
       // detection source.
       //
-      // It carries the one claim that survives #872 being open AND being
+      // It carries the one claim that survived #872 being open AND being
       // fixed: the probe reports a count per registered adapter.  Deleting an
       // adapter's `detect` anchor leaves an empty selector, `querySelectorAll`
       // raises `SyntaxError`, and this goes RED.
       //
-      // It must be a plain `it` for the same reason the canary is: under a
-      // deleted anchor the `it.fails` blocks below keep passing — their
-      // bodies merely fail for a new reason — so nothing else in this file
-      // would notice.
+      // It had to be a plain `it` while the legacy assertions below were
+      // `it.fails`: under a deleted anchor those kept passing — their bodies
+      // merely failed for a new reason — so nothing else in this file would
+      // have noticed.  Now that they are plain `it`, they go red on that
+      // mutation too, and by the SAME mechanism: `selectionSource` is
+      // embedded in all three generated scripts, so an empty selector raises
+      // `SyntaxError` in every one of them and `CDPClient.evaluate` reports
+      // each identically.  This test does NOT name the mutation more
+      // precisely than its neighbours do — do not read it as doing so.
+      //
+      // What it still uniquely carries is the assertion below that the SDUI
+      // adapter claims NOTHING here.  That is this file's only negative
+      // grading of the other dialect, and it is the reason to keep this test
+      // rather than fold it into the ones that follow.
       // ─────────────────────────────────────────────────────────────────────
       it("instrument: the detection probe reports one count per registered adapter", async () => {
         await installFixture(fixture.label);
@@ -352,8 +392,9 @@ describe("post-detail fixture oracle (integration)", () => {
       // test stays correct — and stays green — if the comment scraper is
       // later made variant-tolerant and begins finding the 40 entities on
       // `post-with-comments`.  Pinning `extractedCount` to 0 would leave an
-      // undeclared tripwire in the path of whoever fixes that, which is the
-      // same trap the `it.fails` blocks below are declared to avoid.
+      // undeclared tripwire in the path of whoever fixes that — the same
+      // trap the legacy assertions below avoided by declaring themselves
+      // `it.fails` until #872 landed.
       // ─────────────────────────────────────────────────────────────────────
       it("empty-vs-error: the corroborator's verdict on this page's own cardinal", async () => {
         await installFixture(fixture.label);
@@ -390,24 +431,28 @@ describe("post-detail fixture oracle (integration)", () => {
       });
 
       // ─────────────────────────────────────────────────────────────────────
-      // BLOCKED ON #872 — the legacy adapter's detect anchor is
-      // `[data-id^="urn:li:activity:"]`, but the activity URN lives on
-      // `data-urn`; every `data-id` URN on a real page is a
-      // `urn:li:comment:` entity.  So a genuine legacy page is currently
-      // reported unsupported, and the assertions below are the CONTRACT, not
-      // the current behaviour.
+      // #872 — FIXED, and these two are the regression gate for it.
       //
-      // `it.fails` passes while its body fails, so these land green today and
-      // turn RED the moment #872 is fixed — forcing the fixer to acknowledge
-      // the flip in a one-token `it.fails(` -> `it(` diff instead of silently
-      // absorbing it.  That red is the intended signal, not a regression.
+      // The legacy adapter's detect anchor read `[data-id^="urn:li:activity:"]`
+      // while the activity URN lives on `data-urn` — every `data-id` URN on a
+      // real page is a `urn:li:comment:` entity — so a genuine legacy page was
+      // reported unsupported and this adapter could not detect the pages it
+      // exists to serve.
       //
-      // Deliberately NOT asserting the current broken behaviour instead:
-      // that would bake #872 into the oracle and make its fix look like the
-      // defect.
+      // They landed as `it.fails`, stating the CONTRACT rather than the
+      // then-current behaviour, so that fixing the anchor turned them red and
+      // the flip had to be acknowledged in a visible one-token diff instead of
+      // being silently absorbed.  It did, and this is that acknowledgement:
+      // `it.fails(` -> `it(`, no change to either body.  Asserting the broken
+      // behaviour instead would have baked #872 into the oracle and made its
+      // fix look like the defect.
+      //
+      // Nothing about them is legacy-to-#872 now — they are ordinary
+      // assertions that the legacy dialect is claimed and scraped, and a
+      // future anchor regression is what they exist to catch.
       // ─────────────────────────────────────────────────────────────────────
-      it.fails(
-        "PENDING #872: the legacy adapter claims the page and readiness goes green",
+      it(
+        "the legacy adapter claims the page and readiness goes green",
         async () => {
           await installFixture(fixture.label);
 
@@ -422,8 +467,8 @@ describe("post-detail fixture oracle (integration)", () => {
         },
       );
 
-      it.fails(
-        "PENDING #872: extraction returns a legacy record carrying the page's own text and counts",
+      it(
+        "extraction returns a legacy record carrying the page's own text and counts",
         async () => {
           await installFixture(fixture.label);
 

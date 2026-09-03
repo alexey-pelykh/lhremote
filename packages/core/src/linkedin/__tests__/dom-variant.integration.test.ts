@@ -110,8 +110,13 @@ describe("DOM variant adapters (integration)", () => {
     attr: "componentkey",
     value: "expanded1234FeedType_FEED_DETAIL",
   };
+  // Hand-written on purpose, and NOT sourced from the adapter: deriving it
+  // would make this tier assert against markup authored from the very anchor
+  // under test.  It carried the same wrong belief the anchor did until #872 —
+  // the activity URN lives on `data-urn`; `data-id` on a real legacy page
+  // carries `urn:li:comment:` entities only.
   const LEGACY_CONTAINER = {
-    attr: "data-id",
+    attr: "data-urn",
     value: "urn:li:activity:7436698865522851840",
   };
   const SDUI_SCREEN = {
@@ -274,7 +279,7 @@ describe("DOM variant adapters (integration)", () => {
       // here and not in the unit tier.
       await buildPage([LEGACY_CONTAINER]);
       await client.evaluate(`(() => {
-        const container = document.querySelector('[data-id^="urn:li:activity:"]');
+        const container = document.querySelector('[data-urn^="urn:li:activity:"]');
         const row = document.createElement('div');
         row.className = 'social-details-social-counts';
         const reactions = document.createElement('button');
@@ -318,7 +323,7 @@ describe("DOM variant adapters (integration)", () => {
       // row the adapter itself declared, the looser read recovers 41.
       await buildPage([LEGACY_CONTAINER]);
       await client.evaluate(`(() => {
-        const container = document.querySelector('[data-id^="urn:li:activity:"]');
+        const container = document.querySelector('[data-urn^="urn:li:activity:"]');
         const row = document.createElement('div');
         row.className = 'social-details-social-counts';
         row.textContent = '2 41 comments';
@@ -374,7 +379,7 @@ describe("DOM variant adapters (integration)", () => {
         }
         const main = document.createElement('main');
         const container = document.createElement('div');
-        container.setAttribute('data-id', 'urn:li:activity:7436698865522851840');
+        container.setAttribute('data-urn', 'urn:li:activity:7436698865522851840');
         const anchor = document.createElement('a');
         anchor.setAttribute('href', 'https://www.linkedin.com/in/alexey-pelykh/');
         const title = pair('Alexey Pelykh');
@@ -392,7 +397,7 @@ describe("DOM variant adapters (integration)", () => {
       // live.
       expect(
         await client.evaluate<string>(
-          `document.querySelector('[data-id^="urn:li:activity:"] a').textContent`,
+          `document.querySelector('[data-urn^="urn:li:activity:"] a').textContent`,
         ),
       ).toBe(
         "Alexey PelykhAlexey PelykhSoftware Architect | Agentic AISoftware Architect | Agentic AI",

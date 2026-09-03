@@ -72,6 +72,13 @@ sound as *decisions* while their per-dialect selector bindings remain the curren
 rather than a measured fact. This is recorded here so a future selector regression is diagnosed
 against what was actually known, not against what this table appears to promise.
 
+> **Overtaken by events on 2026-09-03, and the two paragraphs above are exactly the record of why.**
+> #828 and #838 both landed, the legacy post-detail adapter became the first to be graded against
+> real captured markup, and the first of the two unmeasured halves named above turned out to be
+> **false**: the shipped anchor matched zero on a real legacy page. Left in place rather than
+> rewritten, because a regression diagnosed against "what was actually known" needs the prose that
+> said so. See § Amendments → *The legacy detect anchor read the wrong attribute* (#872).
+
 ### Why this is two defects, not one
 
 - **(a) The gate was not bound to the scraper it gates.** An anchor chosen for surviving
@@ -130,6 +137,11 @@ The distinction is not a property of the selector string. `a[href*="/in/"]` scop
 scope rather than replacing the selector — the old gate's author-link stage survives, now
 evaluated inside the selected adapter's own roots
 (`packages/core/src/linkedin/dom-variant.ts`, `authorLinkWithin`).
+
+> **The container's attribute is `data-urn`, not `data-id`** — corrected 2026-09-03. The point
+> this paragraph makes about scoping is unaffected; only its illustration was wrong, and it is
+> left as written because it is the illustration a reader would otherwise copy. See § Amendments →
+> *The legacy detect anchor read the wrong attribute* (#872).
 
 The readiness anchor is also deliberately **stricter than the adapter's detect anchor**: a
 container can be present in a skeleton state before the post body hydrates, so gating on
@@ -705,8 +717,10 @@ file was otherwise rewritten here.
 | `extract` | the #773 tab-anchor ancestor walk | an explicit `null` — nothing left to resolve |
 
 **`rootSignal` is a field this surface adds, and it is the reason a scope candidate is not simply
-the first match.** Every other surface's scopes name the thing they wrap — `[data-id^="urn:li:activity:"]`,
-a chameleon result container. A modal-root candidate does not: `dialog` and `[aria-modal="true"]`
+the first match.** Every other surface's scopes name the thing they wrap — `[data-id^="urn:li:activity:"]`
+(corrected to `[data-urn^=…]` on 2026-09-03; see § Amendments → *The legacy detect anchor read the
+wrong attribute*, #872 — the claim being made here is about scopes NAMING what they wrap, which the
+correction does not disturb), a chameleon result container. A modal-root candidate does not: `dialog` and `[aria-modal="true"]`
 match any modal on the page, a CLOSED `<dialog>` included, and the legacy wrapper may be rendered
 alongside unrelated overlays. So the resolver iterates EVERY match of every candidate and accepts
 only one that CONTAINS this anchor. Both failures it closes are silent-to-loud in the wrong
@@ -965,6 +979,74 @@ exist yet (see the falsifier above). Engagement-count parsing elsewhere is untou
 surface, like search-results, has **no Tier-2 coverage** — every claim above rests on the live probe
 plus Tier-1 against a hand-built stand-in, and a stand-in cannot falsify a belief about the DOM.
 
+### 2026-09-03 — The legacy detect anchor read the wrong attribute (#872)
+
+The first of the two unmeasured halves recorded in § Context is **falsified**. It was stated there
+as *"that at least one of the 40 hits is an `activity:` container (if they are all comments, the
+adapter claims nothing and a legacy page is reported unsupported)"*. They are all comments. The
+parenthetical is what actually happened.
+
+**What was wrong.** `LEGACY_UPDATE_CONTAINER` shipped as `[data-id^="urn:li:activity:"]`. Measured
+against the two committed fixtures (#828), that selector matches **zero** elements on a real legacy
+post-detail page, so the adapter never claimed the pages it exists to serve: detection returned
+`{matched: [], probes: {sdui: 0, legacy: 0}}`, readiness stayed `false`, and extraction returned an
+empty record. The defect this ADR was written to remove was still present on the legacy path after
+the migration that removed it.
+
+**The root cause generalises past this one anchor, which is why it is recorded here rather than
+only in the issue.** LinkedIn uses **both** attributes on a legacy page, split by ENTITY CLASS and
+not by dialect:
+
+| Element | Attribute carrying the URN | URN family |
+|---|---|---|
+| `.feed-shared-update-v2` — the update container, i.e. the extraction root | **`data-urn`** (`data-id` is `null`) | `urn:li:activity:` |
+| comment entities (40 of them on `post-with-comments`) | **`data-id`** | `urn:li:comment:` |
+
+So the live measurement of `[data-id^="urn:li:"]` matching 40 was never evidence that an *activity*
+container was among them — the attribute itself selects the comment class. The narrowing recorded in
+§ Context was reasoning correctly about the entity (a comment is not an extraction root) on the
+wrong attribute, and the measurement it leaned on could not have distinguished the two.
+
+**Rule for any future adapter**: an anchor naming a `urn:li:activity:` value reads `data-urn`; one
+naming a `urn:li:comment:` value reads `data-id`. Guessing between them fails **silently** — a
+zero-match adapter simply does not claim the page, so the wrong attribute surfaces as *"dialect
+unsupported"* rather than as a selector error. That is the same silent shape as the original defect,
+one level down, and § Decision's detect/scope coupling converts it into that shape by design: the
+coupling buys a guarantee that no caller receives a false empty record, and buys nothing at all
+towards telling a broken selector apart from an unregistered dialect.
+
+**What changed.** `LEGACY_UPDATE_CONTAINER` now reads `[data-urn^="urn:li:activity:"]`. `ready` and
+`scopes` are derived from the same constant and needed no separate edit. The union form
+`'[data-id^=…], [data-urn^=…]'` was considered and **not** taken: no measured page uses `data-id`
+for an activity URN, so the union would be a selector union of exactly the kind this ADR argues
+against, resting on a page nobody has seen.
+
+**A second copy of the same wrong belief, found by the fix.** `dom-variant.integration.test.ts`
+hand-writes its legacy container as `data-id` in a `LEGACY_CONTAINER` constant. That hardcoding is
+deliberate and stays — deriving the markup from the adapter would make the tier assert against a
+page authored from the anchor under test — but it means the description was independently wrong in
+the same way, and nine of its selection assertions went red on the corrected anchor. Corrected in
+place. The lesson is narrow and worth keeping: a hand-written stand-in is independent of the
+adapter's *code* and not of its *author's belief*, so it cannot witness this class of defect.
+
+**What is now fixture-verified, stated as a bound.** The Tier-2 oracle
+(`__tests__/fixture-oracle.integration.test.ts`, #838) asserts on both fixtures that exactly the
+legacy adapter claims the page, that readiness goes green, and that extraction returns a legacy
+record whose author name and profile link are non-empty, whose text is non-empty, and whose two
+engagement cardinals match the `.measured.json` sidecar exactly. Headline and timestamp are **not**
+graded and remain the best hypothesis § Context describes. The two assertions carrying this — four
+cases, one per fixture — landed as `it.fails` under #838 so that fixing the anchor would force a
+visible acknowledgement rather than a silent absorption; they are plain `it` as of this change.
+
+**The second unmeasured half is not closed — it moved.** The original worry was that `data-id` might
+also appear on an SDUI page, so that both adapters claim it and extraction reports ambiguity.
+Restated for `data-urn` it is the same worry with the same standing, and #828 captured legacy pages
+only, so no fixture can settle it. What the legacy fixtures *do* settle is the opposite direction:
+the SDUI adapter probes 0 on both, so a legacy page is unambiguous. The SDUI direction stays an
+inference — better grounded than the falsified half was, since the SDUI rewrite replaced these
+attributes with `componentkey` — but still without a recorded count. **Falsifier**: a captured SDUI
+post-detail fixture, counting `[data-urn^="urn:li:activity:"]` document-wide.
+
 ## Related
 
 - Code: `packages/core/src/linkedin/dom-variant.ts`,
@@ -983,4 +1065,5 @@ plus Tier-1 against a hand-built stand-in, and a stand-in cannot falsify a belie
 - Issues: #823 (the silent-empty report), #831 (adapter registry), #832 (typed extraction
   errors), #834 (fail-loud), #839 (this ADR), #841 (search-results binding, § 2026-09-02
   Amendment), #830 (reactions-modal container tier — answered: it has one), #840 (reactions-modal
-  binding, § 2026-09-02 Amendment)
+  binding, § 2026-09-02 Amendment), #872 (legacy detect anchor read `data-id` instead of `data-urn`,
+  § 2026-09-03 Amendment)
