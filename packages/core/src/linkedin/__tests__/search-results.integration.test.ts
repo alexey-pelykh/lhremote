@@ -830,23 +830,41 @@ describe("search-results Tier-2 oracle (integration)", () => {
       expect(record?.posts).toHaveLength(1);
     });
 
-    it("an unlabelled bare number is honestly zero, before and after #869", async () => {
-      // NOT a tripwire, and deliberately so.  With no "reactions" token in
-      // the text and none on a control, 0 is the correct reaction count — the
-      // position `dom-variant.integration.test.ts` already pins for post
-      // detail ("0 reactions is the honest answer, not a miss").
+    it("canary + control: an unlabelled bare number is honestly zero, before and after #869", async () => {
+      // Two jobs, and it carries both deliberately.
       //
-      // It is pinned here as a PASSING control because it is what stops #869
-      // being "fixed" by guessing position: a read that decided the leading
-      // bare number in a counts row is the reaction count would satisfy the
-      // tripwires above and break this, which is the always-true anchor
-      // ADR-008 § Decision 3 removed.
+      // As the CANARY for the unlabelled tripwire below, it is the only test
+      // installing that page — a different page from the labelled one the two
+      // canaries above install, so neither of those covers it.  It therefore
+      // carries the same two claims they do: the browser's join, and that a
+      // post came back at all.
+      //
+      // As a CONTROL, it pins what must NOT change.  With no "reactions"
+      // token in the text and none on a control, 0 is the correct reaction
+      // count — the position `dom-variant.integration.test.ts` already pins
+      // for post detail ("0 reactions is the honest answer, not a miss").  So
+      // it stays green across #869, and it is what stops the fix being a
+      // positional guess: a read deciding the leading bare number in a counts
+      // row is the reaction count would satisfy the tripwires and break this,
+      // reintroducing the always-true anchor ADR-008 § Decision 3 removed.
       await install(legacyCard({ counts: UNLABELLED_SPLIT_COUNTS_ROW }));
+
+      const cardText = await client.evaluate<string>(
+        `(document.querySelector(${jsString("[data-chameleon-result-urn]")})?.textContent ?? "")`,
+      );
+
+      // The join, witnessed for THIS row rather than inherited from the
+      // labelled one: the two counters are different markup (a button there,
+      // a bare span here), so the concatenation is a separate observation.
+      expect(cardText).toContain("241 comments");
+      expect(cardText).not.toContain("2 reactions");
 
       const record = await client.evaluate<ExtractionRecord | null>(
         extractionSource,
       );
 
+      expect(record?.variant).toBe("legacy");
+      expect(record?.postCardCount).toBe(1);
       expect(record?.posts).toHaveLength(1);
       expect(record?.posts?.[0]?.reactionCount).toBe(0);
     });
