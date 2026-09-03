@@ -129,14 +129,17 @@ export interface GetPostEngagersOutput {
    * consumer reads this result as serialized JSON, and a field that simply
    * vanishes on a healthy run is one nobody learns to look for (#874).
    *
-   * **`null` is the absence of a contradiction, not a certificate of
-   * completeness**, and it does not even promise the predicate ran.  Three
-   * paths reach it: the predicate ran and found no contradiction; a modal
-   * whose own count came back unreadable, where `total` falls back to `0` and
-   * `0` contradicts no row count; and the no-trigger return above, which
-   * evaluates nothing at all.  All three are correct — there is nothing to
-   * contradict on the last two — but only the first checked anything, and a
-   * field claiming otherwise would certify exactly where it knows least.
+   * **`null` means no contradiction was OBSERVED, and nothing stronger.**  It
+   * is not a completeness guarantee, and it does not imply the predicate even
+   * ran: the satisfied exit short-circuits it — `stoppedBecause` is `null`
+   * there and `&&` never evaluates the right operand — and the no-trigger
+   * return above never reaches it at all.  Where it does run, a cardinal of
+   * `0` from an unreadable modal count contradicts no row count and declines
+   * like any other non-contradiction.
+   *
+   * Every one of those is the correct outcome.  What none of them is, is a
+   * check that confirmed the collection was complete — and a field claiming
+   * otherwise would certify exactly where it knows least.
    *
    * `paging.total` is not an independent second opinion here.  It carries the
    * page's own reaction count when that was readable, and **falls back to the

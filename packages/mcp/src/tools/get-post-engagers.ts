@@ -11,7 +11,7 @@ export function registerGetPostEngagers(server: McpServer): void {
   server.tool(
     "get-post-engagers",
     "List people who engaged with a LinkedIn post (reacted, etc.) with their profile info and engagement type. Supports pagination. " +
-      "The `shortfall` field is null when no reaction count the page rendered contradicted what was collected — the absence of a contradiction, which does not guarantee completeness and does not promise a check ran: where the page rendered no readable count there is nothing to contradict. " +
+      "The `shortfall` field is null when no reaction count the page rendered contradicted what was collected — the absence of a contradiction, which neither guarantees completeness nor implies a check ran — a collection that reached what it asked for is not checked at all, and where the page rendered no readable count there is nothing to contradict. " +
       "Otherwise it reports how many rows were collected, how many were asked for, the reaction count the page itself rendered, and why collection stopped. " +
       "`paging.total` is the page's own reaction count where that was readable, and falls back to the number of rows returned where it was not, so it is not an independent answer to whether more exist.",
     {
