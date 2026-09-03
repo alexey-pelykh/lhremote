@@ -55,7 +55,7 @@ async function resetBody(client: CDPClient): Promise<void> {
   };
   await client.send("Page.setDocumentContent", {
     frameId: frameTree.frame.id,
-    html: "<html><body></body></html>",
+    html: "<!doctype html><html><head></head><body></body></html>",
   });
 }
 
