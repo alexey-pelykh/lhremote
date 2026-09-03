@@ -61,6 +61,8 @@
  * `build*Source` functions — so no control flow changes.
  */
 
+import { jsString } from "../utils/js-string.js";
+
 /**
  * The markup dialect a surface is speaking.
  *
@@ -1511,18 +1513,6 @@ export function variantNamesFor(surface: Surface): readonly DOMVariant[] {
 // ---------------------------------------------------------------------------
 // In-page source generation
 // ---------------------------------------------------------------------------
-
-/**
- * Emit a JavaScript string literal for a selector.
- *
- * `JSON.stringify` is the right primitive here rather than wrapping in
- * quotes: selectors legitimately contain both quote characters (`[href*="/in/"]`)
- * and backslashes, and hand-quoting silently produces a syntax error or, worse,
- * a valid-but-different selector.
- */
-function jsString(value: string): string {
-  return JSON.stringify(value);
-}
 
 /**
  * The adapter table as an in-page array literal.  Every generated script

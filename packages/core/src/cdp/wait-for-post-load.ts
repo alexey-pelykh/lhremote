@@ -20,6 +20,7 @@ import {
   ExtractionTimeoutError,
 } from "../services/errors.js";
 import { delay } from "../utils/delay.js";
+import { jsString } from "../utils/js-string.js";
 import type { CDPClient } from "./client.js";
 
 /** The page kind this gate reads; picks the adapter list it binds to. */
@@ -121,6 +122,21 @@ const POST_COMMENT_ELEMENT_SELECTOR = '[componentkey^="replaceableComment_"]';
  * nothing at all — it matched 82 elements in the 2026-08-31 probe run.
  */
 const POST_LTR_SPAN_FALLBACK_SELECTOR = 'span[dir="ltr"]';
+
+// Every selector CONSTANT above is interpolated into the emitted probe through
+// {@link jsString}, never by hand-quoting it as `'${CONST}'`.  Several already
+// contain double quotes, so the hand-quoted form this replaced happened to
+// work; the moment one grows a single quote or a backslash it would emit a
+// syntax error or, worse, a valid-but-different selector.  Nothing in the type
+// system notices — a hand-quoted site compiles and lints — and the failure
+// would be invisible here in particular: the capture's own `.catch` swallows an
+// evaluate that throws, so the operator gets no json, no png and no warn line
+// at the one moment diagnostics matter.  The one-off selectors written INLINE
+// in the probe (`article`, `main`, the `mainFeed` / listitem / menu-button
+// anchors) are literals in the emitted program rather than values crossing the
+// TS→JS seam, so they are not this rule's subject.
+
+
 
 /**
  * Poll the DOM until a LinkedIn post detail page has rendered *in a dialect
@@ -591,16 +607,16 @@ async function capturePostLoadFailureInner(
       mainFeedListItemCount: listItems.length,
       mainFeedListItemsWithMenuButton: itemsWithMenu.length,
       mainFeedListItemsViableForPostScrape: viableItems.length,
-      hasAuthorLink: document.querySelector('${POST_AUTHOR_LINK_DOCUMENT_WIDE_SELECTOR}') !== null,
-      hasAuthorLinkInMain: document.querySelector('${POST_READY_AUTHOR_LINK_SELECTOR}') !== null,
-      hasLtrSpans: document.querySelectorAll('${POST_LTR_SPAN_FALLBACK_SELECTOR}').length > 0,
+      hasAuthorLink: document.querySelector(${jsString(POST_AUTHOR_LINK_DOCUMENT_WIDE_SELECTOR)}) !== null,
+      hasAuthorLinkInMain: document.querySelector(${jsString(POST_READY_AUTHOR_LINK_SELECTOR)}) !== null,
+      hasLtrSpans: document.querySelectorAll(${jsString(POST_LTR_SPAN_FALLBACK_SELECTOR)}).length > 0,
       hasArticles: document.querySelectorAll('article').length > 0,
-      hasReactLikeButton: document.querySelector('${POST_REACT_LIKE_SELECTOR}') !== null,
-      hasCommentOnButton: document.querySelector('${POST_COMMENT_ON_SELECTOR}') !== null,
-      hasTopLevelEditor: document.querySelector('${POST_EDITOR_SELECTOR}') !== null,
-      hasReactionsMenu: document.querySelector('${POST_REACTIONS_MENU_SELECTOR}') !== null,
-      hasPostDetailContainer: document.querySelector('${POST_DETAIL_CONTAINER_SELECTOR}') !== null,
-      commentElementCount: document.querySelectorAll('${POST_COMMENT_ELEMENT_SELECTOR}').length,
+      hasReactLikeButton: document.querySelector(${jsString(POST_REACT_LIKE_SELECTOR)}) !== null,
+      hasCommentOnButton: document.querySelector(${jsString(POST_COMMENT_ON_SELECTOR)}) !== null,
+      hasTopLevelEditor: document.querySelector(${jsString(POST_EDITOR_SELECTOR)}) !== null,
+      hasReactionsMenu: document.querySelector(${jsString(POST_REACTIONS_MENU_SELECTOR)}) !== null,
+      hasPostDetailContainer: document.querySelector(${jsString(POST_DETAIL_CONTAINER_SELECTOR)}) !== null,
+      commentElementCount: document.querySelectorAll(${jsString(POST_COMMENT_ELEMENT_SELECTOR)}).length,
       bodyTextSnippet: (document.body ? document.body.innerText : "").slice(0, 800),
     };
   })()`);
