@@ -109,23 +109,40 @@ const BEFORE_EACH_TIMEOUT = 15_000;
  *
  * ## The canary, and why it is not tidiness
  *
- * `it.fails` passes whenever its body fails **for any reason**, so a page
- * that never installed would make every tripwire below green while testing
- * nothing — the degenerate gate wearing the costume of the fix for it.  Every
- * `it.fails` block here therefore has a plain-`it` canary outside it, and the
- * canaries carry two distinct claims because a single one would not cover the
- * hazard: that the DOM *installed* (structure, literal selectors), and that
- * the extraction *produced a post at all* (`postCardCount`, `posts.length`).
+ * Written while the #869 blocks below were `it.fails`, and kept in that tense
+ * because the hazard returns the moment anyone adds another one.  `it.fails`
+ * passes whenever its body fails **for any reason**, so a page that never
+ * installed would have made every tripwire green while testing nothing — the
+ * degenerate gate wearing the costume of the fix for it.  Every `it.fails`
+ * block here therefore had a plain-`it` canary outside it, and the canaries
+ * carry two distinct claims because a single one would not cover the hazard:
+ * that the DOM *installed* (structure, literal selectors), and that the
+ * extraction *produced a post at all* (`postCardCount`, `posts.length`).
  *
- * The second matters for a reason worth stating precisely, because the
+ * The second mattered for a reason worth stating precisely, because the
  * obvious version of it is wrong: a tripwire reading
  * `record?.posts?.[0]?.commentCount` against an empty array does **not**
  * throw — `[][0]` is `undefined`, and the optional chain short-circuits
  * rather than dereferencing.  It is the *comparison* that then fails,
- * `expect(undefined).toBe(41)`, which turns the `it.fails` block green while
+ * `expect(undefined).toBe(41)`, which turned the `it.fails` block green while
  * measuring nothing about the count it names.  Same outcome, different
  * mechanism; a maintainer who checks the throw claim, finds no throw, and
  * concludes the canary guards nothing would re-open exactly this hazard.
+ *
+ * ### What the canaries do now that those blocks are plain `it`
+ *
+ * Read this before deleting one.  The flip INVERTS the specific failure above
+ * — an empty `posts` array now turns the block RED rather than green — and it
+ * does **not** make the canaries redundant, for two reasons.
+ *
+ * They still separate *what* broke, which a single red block cannot say: a
+ * canary red alongside its neighbour means the page stopped installing or the
+ * adapter stopped claiming it; a canary green alongside a red neighbour means
+ * the parse itself regressed.  And one of them carries a claim nothing else
+ * in this file does — the label-only assertion beside the labelled split row
+ * pins that the words "2 reactions" live ONLY on the `aria-label`, which is
+ * the sole guarantee that its neighbour witnesses THE LABEL rather than a
+ * plain text read.
  *
  * The canaries use literal selectors hand-written in this file rather than
  * the adapters' own constants, for the reason `dom-variant.integration.test.ts`
@@ -184,8 +201,9 @@ const LABELLED_SPLIT_COUNTS_ROW = `<div><button aria-label="2 reactions"><span>2
  * So this row's reaction count is 0 **before and after** #869, and asserting
  * anything else would demand a positional guess — "the leading bare number in
  * a counts row is the reaction count" — which is precisely the always-true
- * anchor ADR-008 § Decision 3 removed.  Its comment count is still wrong
- * today, and that half IS a tripwire.
+ * anchor ADR-008 § Decision 3 removed.  Its comment count WAS wrong — 241,
+ * the join — and that half was the tripwire; it is a plain `it` and a
+ * regression test as of #869.
  */
 const UNLABELLED_SPLIT_COUNTS_ROW = `<div><span>2</span><span>41 comments</span></div>`;
 
@@ -796,10 +814,12 @@ describe("search-results Tier-2 oracle (integration)", () => {
 
   describe("per-card engagement counts", () => {
     it("a whole counts row parses to the numbers the page renders", async () => {
-      // The control for the tripwires below, and it must stay green: a fix
-      // for #869 that returned 0 everywhere would satisfy them and destroy
-      // this.  Same joint-satisfaction discipline as the post-detail
-      // fixture pair.
+      // The control for the blocks below, and it must stay green.  Written
+      // while they were `it.fails`, where a fix returning 0 everywhere would
+      // have satisfied all three and destroyed this; they are plain `it` as
+      // of #869, so that particular escape is closed.  The joint-satisfaction
+      // discipline the pairing encodes is the post-detail fixture pair's, and
+      // it still binds the next change to this parse.
       await install(legacyCard({ counts: WHOLE_COUNTS_ROW }));
 
       const record = await client.evaluate<ExtractionRecord | null>(
@@ -831,16 +851,25 @@ describe("search-results Tier-2 oracle (integration)", () => {
     });
 
     it("a one-node counts row parses correctly today, and must keep doing so", async () => {
-      // A CONTROL, not a tripwire: today's whole-card text read already gets
-      // this right, so it is green before #869 and must stay green after.
+      // A CONTROL, not a tripwire: the pre-#869 whole-card text read already
+      // got this right, so it was green before #869 and must stay green
+      // after.  Do NOT read "the whole-card text read" as a description of
+      // current code — #869 deleted it.  This control's reason to exist
+      // outlived it, and the reason is below.
       //
       // It is the only fixture here whose counters do NOT each render on
       // their own element, which makes it the only one that can catch a fix
       // porting post detail's anchored per-element read WITHOUT giving this
       // surface a counts anchor to narrow to.  Such a fix finds no element
       // matching `^<N> comments$`, never reaches the loose fallback that
-      // rescues this shape, and returns 0 — turning a currently-correct read
-      // into a regression that every other fixture here would miss.
+      // rescues this shape, and returns 0 — turning a correct read into a
+      // regression that every other fixture here would miss.
+      //
+      // #869 answered that by handing `__lhReadCount` the CARD as an
+      // already-narrowed counts root, and this block is the ONLY assertion in
+      // this file that would go red if that narrowing were dropped.  Deleting
+      // it leaves the sharpest judgment in that change with no witness at
+      // all.
       await install(legacyCard({ counts: ONE_NODE_COUNTS_ROW }));
 
       const cardText = await client.evaluate<string>(
@@ -931,10 +960,17 @@ describe("search-results Tier-2 oracle (integration)", () => {
 
       expect(cardText).toContain("241 comments");
 
-      // Load-bearing, and the reason the tripwire below is flippable at all:
-      // the words "2 reactions" are NOT in the card's text.  That is why the
-      // current text-only read reports no reactions, and why an anchored read
-      // that consults `aria-label` recovers them.
+      // Load-bearing, and it outlived the flip it was written for: the words
+      // "2 reactions" are NOT in the card's text.  That is why the pre-#869
+      // text-only read reported no reactions, and why the anchored read that
+      // consults `aria-label` recovers them.
+      //
+      // It is now the sole guarantee that the block below witnesses THE LABEL
+      // rather than a plain text read.  Let this fixture ever grow the words
+      // into its text and that block goes green through the join fix alone,
+      // still asserting `reactionCount` 2 and no longer testing the label at
+      // all — a degenerate gate arriving through the fixture rather than
+      // through the assertion.
       expect(cardText).not.toContain("2 reactions");
       expect(
         await client.evaluate<string | null>(
@@ -947,9 +983,11 @@ describe("search-results Tier-2 oracle (integration)", () => {
       // The second half of the canary, and it is not redundant.  A tripwire
       // reading `record?.posts?.[0]?.commentCount` against an EMPTY array
       // short-circuits through the optional chain to `undefined` rather than
-      // throwing, so `expect(undefined).toBe(41)` fails and the `it.fails`
-      // block goes green for a reason that has nothing to do with the count
-      // it names.  This pins that a post came back at all.
+      // throwing, so `expect(undefined).toBe(41)` failed and turned the
+      // `it.fails` block green for a reason that had nothing to do with the
+      // count it names.  The flip to plain `it` inverts that — an empty array
+      // now reddens the block — so this canary's job has changed rather than
+      // ended: it says WHICH of the two broke, an install fault or the parse.
       await install(legacyCard({ counts: LABELLED_SPLIT_COUNTS_ROW }));
 
       const record = await client.evaluate<ExtractionRecord | null>(
@@ -1008,11 +1046,11 @@ describe("search-results Tier-2 oracle (integration)", () => {
       "an unlabelled split row still yields the comment count the page renders",
       async () => {
         // The join half on its own, with the label removed.  The comment
-        // count is wrong today for the concatenation reason alone — 241 — and
-        // is 41 under any fix that stops flattening the card into one string.
+        // count was wrong for the concatenation reason alone — 241 — and is
+        // 41 under any fix that stops flattening the card into one string.
         // The reaction count is excluded from this block on purpose: it is 0
-        // both before and after, so asserting it here would make the block
-        // unflippable.
+        // both before and after, so asserting it here would have made the
+        // block unflippable.
         await install(legacyCard({ counts: UNLABELLED_SPLIT_COUNTS_ROW }));
 
         const record = await client.evaluate<ExtractionRecord | null>(
@@ -1044,14 +1082,16 @@ describe("search-results Tier-2 oracle (integration)", () => {
     );
 
     it("canary: the reposts page joins its own row and yields exactly one post", async () => {
-      // The reposts tripwire installs a DIFFERENT page from every counts
-      // canary above, so none of them covers it.  Without this one, a
+      // The reposts block installs a DIFFERENT page from every counts canary
+      // above, so none of them covers it.  Without this one, a
       // `SPLIT_REPOSTS_ROW` page that stopped installing — or stopped
-      // yielding a card — would make `posts[0].shareCount` `undefined`,
-      // fail the tripwire's `toBe(3)`, and turn `it.fails` green while
-      // measuring nothing about the parse.  Both claims are carried here for
-      // the same reason the split-counts pair carries them separately: the
-      // browser's join, and the fact that a post came back at all.
+      // yielding a card — would make `posts[0].shareCount` `undefined` and
+      // fail the `toBe(3)`, which under `it.fails` turned that block green
+      // while measuring nothing about the parse.  Since the flip it reddens
+      // instead, and this canary is what tells the two apart.  Both claims
+      // are carried here for the same reason the split-counts pair carries
+      // them separately: the browser's join, and the fact that a post came
+      // back at all.
       await install(legacyCard({ counts: SPLIT_REPOSTS_ROW }));
 
       const cardText = await client.evaluate<string>(

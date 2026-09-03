@@ -1828,13 +1828,18 @@ function extractionHelpersSource(): string {
   // is what every read below tries first.
   //
   // \`loose\` is the same pattern unanchored, and it is admissible in exactly
-  // one place: the whole text of a NARROWED counts row in which no single
-  // element — the row itself included — reads as a counter on its own (see
-  // \`__lhReadCount\`).  It exists because the row is
+  // one place: the whole text of a root its CALLER marked NARROWED, in which
+  // no single element — the root itself included — reads as a counter on its
+  // own (see \`__lhReadCount\`).  It exists because a counts row is
   // only *usually* built out of one control per counter — the shape the live
   // 2026-08-31 row had, and the shape everything below is designed around —
   // and a row that ever renders "2 41 comments" as one node should still
   // yield 41 rather than nothing.
+  //
+  // \`narrowed\` is a warrant the caller gives, NOT the claim that the root
+  // holds no prose; the two callers mark it differently and for different
+  // reasons.  Read \`__lhCountsRootOf\` before widening a \`loose\` pattern or
+  // adding a fourth counter.
   const __LH_COUNTERS = {
     reactionCount: {
       strict: /^(\\d[\\d,]*)\\s+reactions?$/i,
@@ -1858,6 +1863,10 @@ function extractionHelpersSource(): string {
   // render counts, a looser read is warranted; inside a whole post container
   // it is not — that container holds the post's own prose, where a number
   // followed by the word "comments" is a sentence, not a counter.
+  //
+  // That reasoning is THIS function's, and post detail is its only caller.
+  // Search results reaches \`__lhCountsRootOf\` directly and marks a whole
+  // card narrowed on a different ground; the general rule is stated there.
   function __lhCountsRoot(adapter, scope) {
     for (const candidate of adapter.counts) {
       const el = scope.querySelector(candidate);
@@ -1869,6 +1878,25 @@ function extractionHelpersSource(): string {
   // \`nodes\` is flattened once here rather than inside \`__lhReadCount\`, which
   // runs once per counter and would otherwise walk the same subtree three
   // times per post.
+  //
+  // \`narrowed\` gates the loose fallback and has TWO callers whose scopes
+  // differ in character, so read it as the caller's WARRANT rather than as a
+  // property of the element — this is the one place both callers are visible
+  // together, and \`__lhCountsRoot\` above states only post detail's half.
+  //
+  // Post detail marks a whole post container FALSE: that scope is reached
+  // from \`document\` and holds the post's own prose, so a loose read there
+  // would ADD false captures the surface never had.  Search results marks a
+  // single enumerated CARD true — which holds prose too — because reading
+  // that card's whole text loosely is precisely what that surface did for
+  // every counter before #869.  Reached only as a fallback, it can therefore
+  // only REMOVE a false capture there and never add one, while marking it
+  // false would return 0 for a row rendering both counters as one node
+  // ("2 41 comments"), which read correctly before.
+  //
+  // So the invariant is "a loose read over this root is no worse than what
+  // this surface already did", NOT "this root contains no prose".  Anything
+  // that widens what \`loose\` can match has to be checked against BOTH.
   function __lhCountsRootOf(el, narrowed) {
     return { el: el, narrowed: narrowed, nodes: [el, ...el.querySelectorAll('*')] };
   }
