@@ -1109,18 +1109,42 @@ a mutant deleting it survived every operation-level test. It is graded in
 `corroboration.test.ts` instead. Recorded because the general shape recurs: a guard that a caller
 also enforces is not covered by that caller's tests.
 
-**`shortfall` is present on every result, `null` when nothing is short.** An MCP or CLI consumer reads
-this as serialized JSON, and a field that vanishes on the healthy path is one nobody learns to check;
-an explicit `"shortfall": null` states that completeness was checked and held. `stoppedBecause` names
-only what was observed — `scroll-declined` or `scroll-budget-exhausted`. There is deliberately no
-`bottom-reached`: the modal declining to scroll and the modal having nothing more to give are
-indistinguishable from outside it, since the scroll source reports one `false` for both.
+**`shortfall` is present on every result, `null` when nothing contradicted the collection.** An MCP or
+CLI consumer reads this as serialized JSON, and a field that vanishes on the healthy path is one
+nobody learns to check. `stoppedBecause` names only what was observed — `scroll-declined` or
+`scroll-budget-exhausted`. There is deliberately no `bottom-reached`: the modal declining to scroll
+and the modal having nothing more to give are indistinguishable from outside it, since the scroll
+source reports one `false` for both.
+
+**`null` is the absence of a contradiction, never a certificate of completeness**, and an earlier
+draft of this amendment said the second thing — that `"shortfall": null` "states that completeness
+was checked and held". That claim is false on the two paths that reach `null` without ever reading a
+cardinal: the trigger-absent return, and a modal whose own count is unreadable, where `total` falls
+back to `0` and `0` cannot contradict any row count. Both correctly report `null` — there is nothing
+to contradict — but neither verified anything, and a field asserting otherwise would certify exactly
+where it knows least, which is strictly worse than the silence this amendment closed: before it, a
+consumer had no signal; after a mis-stated one, it has a signal it is entitled to trust. The claim is
+narrowed at all four places it is made — the field's own doc comment, the MCP tool description, the
+README, and here. Recorded because the general shape recurs: a signal added to end a silence is
+under pressure to promise more than its own predicate can see, and the predicate is the thing that
+gets read later.
+
+**Scope, stated so it is not re-litigated.** The discriminator BOUNDS detection: this contract fires
+on a contradiction against a cardinal the page rendered, so where no cardinal is readable there is no
+contradiction to find and nothing here fires. That is the deliberate reading of #874, whose own
+mechanism is cardinal-based throughout. An empty result on a post that has reactions is a different
+class — the recognition failure of #823, whose trigger-absent branch is dispositioned in the
+§ 2026-09-02 Amendment — and it is not narrowed, widened, or re-opened here.
 
 **The check costs no `Runtime.evaluate`**, which is a constraint rather than an optimisation — the
 oracle pins the success-path evaluate sequence at 7 and 6 calls in its two polling cases.
 
-**Deliberately not done, so a reader does not infer it.** The window is not narrowed: nothing here
-makes the modal hydrate before readiness, and the settle still covers only the all-empty case.
+**Deliberately not done, so a reader does not infer it.** An under-collection on a path with no
+readable cardinal stays unreported, by the scope paragraph above — the two `null`-without-a-check
+paths are named there rather than repaired, because repairing them means finding a second
+corroborator, and this amendment deliberately adds no new `Runtime.evaluate`. The window is not
+narrowed: nothing here makes the modal hydrate before readiness, and the settle still covers only
+the all-empty case.
 `get-post`'s comment collection is untouched and may carry the same shape — unmeasured, and not
 assumed. The measurement above is one post, one dialect, one viewport (`innerHeight: 668`); the
 five-row figure moves with the viewport, and it is the mechanism, not the constant, that the repair
