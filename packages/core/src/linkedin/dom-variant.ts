@@ -319,7 +319,7 @@ export interface ReactionsModalVariantAdapter extends VariantAdapter {
    * per-candidate validation gate on {@link VariantAdapter.scopes}.
    *
    * Every other surface can take a scope's first match: a post-detail scope is
-   * `[data-id^="urn:li:activity:"]` or a chameleon result container, anchors
+   * `[data-urn^="urn:li:activity:"]` or a chameleon result container, anchors
    * that name the thing they wrap.  A modal-root candidate does not have that
    * property.  This dialect's are the generic `dialog` / `[aria-modal="true"]`
    * (sdui) and, for legacy, a wrapper LinkedIn may render alongside unrelated
@@ -553,34 +553,51 @@ const SDUI_POST_DETAIL_ADAPTER: PostDetailVariantAdapter = {
 /**
  * Post-detail extraction for the pre-SDUI (Ember / artdeco) dialect.
  *
- * **Provenance, stated precisely because the three parts have different
- * evidence behind them.  None of this adapter is fixture-verified: no
- * committed DOM fixture exists yet (#828 harvests them, #838 asserts
- * extraction against them).**
+ * **Provenance, stated precisely because the parts have different evidence
+ * behind them.**  Two captured legacy pages are now committed (#828) and the
+ * Tier-2 oracle grades this adapter against them
+ * (`__tests__/fixture-oracle.integration.test.ts`, #838), so the claims below
+ * are no longer uniformly hypothesis — but they are not uniformly verified
+ * either, and which is which is recorded per part.
  *
  * *Measured* — live on 2026-08-31 against a fully-loaded 589 KB post-detail
  * page (LinkedHelper 2.130.29), the same probe run that recorded every SDUI
  * scraper selector matching 0: `[data-id^="urn:li:"]` matched 40,
  * `.update-components-text` matched 41, `span[dir="ltr"]` matched 82.
  *
- * *The shipped detect anchor is NOT one of those three.* It is
- * `[data-id^="urn:li:activity:"]` — a **narrowing** of the measured
- * `[data-id^="urn:li:"]`, because that measured selector also matches
- * `urn:li:comment:` entities and a comment is not the extraction root. The
- * narrowing is a hypothesis with two unmeasured halves, and it is worth
- * being blunt about both: that the 40 hits include at least one
- * `activity:` container (if they are all comment entities, this adapter
- * claims nothing and a legacy page is reported unsupported), and that
- * `data-id` never appears on an SDUI page (if it does, both adapters claim
- * healthy pages and extraction reports ambiguity). The second is the better
- * grounded of the two — the SDUI rewrite replaced `data-id` with
- * `componentkey` — but neither has a recorded count.
+ * *The detect anchor is NOT one of those three, and its first version was
+ * wrong* (#872).  It shipped as `[data-id^="urn:li:activity:"]` — a
+ * **narrowing** of the measured `[data-id^="urn:li:"]`, because that measured
+ * selector also matches `urn:li:comment:` entities and a comment is not the
+ * extraction root.  The narrowing was right about the entity and wrong about
+ * the ATTRIBUTE, and it was recorded here as a hypothesis with two unmeasured
+ * halves.  The fixtures falsified the first outright: all 40 of those hits
+ * ARE comment entities, the activity URN lives on `data-urn`, and the shipped
+ * anchor therefore matched **zero** on a real legacy page — this adapter
+ * could not detect the pages it exists to serve, and failed as "dialect
+ * unsupported" rather than as a selector error.  {@link
+ * LEGACY_UPDATE_CONTAINER} now reads `data-urn`, and the oracle asserts on
+ * both fixtures that exactly this adapter claims the page.
+ *
+ * *The second half is still unmeasured; moving attribute moved it rather than
+ * closing it.*  The original worry was that `data-id` might also appear on an
+ * SDUI page, so that both adapters claim it and extraction reports ambiguity;
+ * restated for `data-urn`, it is the same worry, and #828 captured legacy
+ * pages only, so no SDUI fixture can settle it.  What the legacy fixtures DO
+ * settle is the other direction: the SDUI adapter probes 0 on both, so a
+ * legacy page is unambiguous.  The SDUI direction stays an inference — better
+ * grounded than the falsified half was, since the SDUI rewrite replaced these
+ * attributes with `componentkey`, but still without a recorded count.
  *
  * *Field logic* — carried forward from the scraper this repository shipped
- * against this dialect before `15f5902` rewrote it for SDUI.  That code
- * demonstrably worked against this stack; the measured `span[dir="ltr"]`
- * count is consistent with it still applying.  Treat it as the current best
- * hypothesis with the evidence above, not as a verified claim.
+ * against this dialect before `15f5902` rewrote it for SDUI.  The oracle now
+ * grades a SUBSET of it against the fixtures: author name and profile link
+ * non-empty, post text non-empty, and both engagement cardinals exact against
+ * the `.measured.json` sidecar.  Headline and timestamp are NOT graded, and
+ * for them the paragraph this replaces still holds — that code demonstrably
+ * worked against this stack and the measured `span[dir="ltr"]` count is
+ * consistent with it still applying, which is a best hypothesis, not a
+ * verified claim.
  *
  * What is *not* carried forward is that scraper's `<main>`/`document` scope
  * fallback.  Scope resolution is confined to this dialect's own anchors; if
@@ -671,8 +688,21 @@ const LEGACY_POST_DETAIL_EXTRACT = `(function (scope) {
   return { authorName, authorHeadline, authorProfileUrl, text, timestamp };
 })`;
 
-/** The legacy update container, carrying the activity URN in `data-id`. */
-const LEGACY_UPDATE_CONTAINER = '[data-id^="urn:li:activity:"]';
+/**
+ * The legacy update container, carrying the activity URN in `data-urn`.
+ *
+ * **Which attribute holds it is measured, and it was the one thing this
+ * anchor got wrong** (#872).  The two attributes split by ENTITY CLASS, not
+ * by dialect: on the captured legacy post-detail page the update container
+ * carries `data-urn` and no `data-id` at all, while every one of the 40
+ * `data-id` URNs on that page is a `urn:li:comment:` entity.  So an anchor
+ * naming a `urn:li:activity:` value reads `data-urn`; one naming a
+ * `urn:li:comment:` value reads `data-id`.  Guessing between them fails
+ * SILENTLY — a zero-match adapter does not claim the page, so the wrong
+ * attribute is reported as "dialect unsupported" rather than as a selector
+ * error, which is the same silent shape this whole migration exists to fix.
+ */
+const LEGACY_UPDATE_CONTAINER = '[data-urn^="urn:li:activity:"]';
 
 /** The legacy engagement-counts row.  Measured: 1 match on 2026-08-31. */
 const LEGACY_SOCIAL_COUNTS = ".social-details-social-counts";
@@ -681,15 +711,40 @@ const LEGACY_SOCIAL_COUNTS = ".social-details-social-counts";
  * Legacy (pre-SDUI) post-detail adapter.
  *
  * `detect` and the primary scope are the same element on purpose: the update
- * container carries `data-id="urn:li:activity:<id>"` in this dialect, so
+ * container carries `data-urn="urn:li:activity:<id>"` in this dialect, so
  * "this dialect is present" and "here is the extraction root" are one
  * observation.  That coupling is what makes a *wrong scope anchor* impossible
  * to mistake for a legitimately empty post — if the container is not there,
  * detection yields nothing and the page is reported unsupported rather than
  * scraped into an empty record.
  *
- * The narrowing to the `activity` URN family, and its unmeasured status, are
- * documented on {@link LEGACY_POST_DETAIL_EXTRACT} above.
+ * **What the coupling does NOT buy, learned from #872.**  It converts a wrong
+ * anchor into "dialect unsupported" — loud enough that no caller receives a
+ * false empty record, and quiet enough that a *broken selector* reads exactly
+ * like *a dialect nobody has registered yet*.
+ *
+ * Nothing at RUNTIME separates those two, and it is worth saying so here
+ * because the nearest-looking instrument does not.  The diagnostic bundle's
+ * `variantDetection` distinguishes a *broken probe* (absent or malformed)
+ * from *no adapter claiming the page* (every count zero) — see
+ * `get-post-engagers.ts` on that field.  A registered adapter whose anchor is
+ * simply wrong lands in the SAME all-zero bucket as an unregistered dialect;
+ * #872 produced exactly `{matched: [], probes: {sdui: 0, legacy: 0}}`.  The
+ * Tier-2 fixture oracle is what tells them apart, and it can only do so
+ * because its pages were captured rather than authored.
+ *
+ * Neither synthetic tier can catch this class, for two DIFFERENT reasons —
+ * conflating them invites the wrong repair.  The unit tier builds its markup
+ * FROM the adapter's own anchor, so it asserts against a page authored to
+ * satisfy whatever that anchor happens to say; that is structural and no
+ * amount of care fixes it.  The integration tier hand-writes its markup and
+ * is therefore independent of the adapter's *code* — but not of its
+ * *author's belief*, which is why its legacy container carried the same wrong
+ * attribute and nine of its assertions went red on the corrected anchor.
+ *
+ * The `activity`-URN narrowing, the attribute it reads, and which half of its
+ * original hypothesis the fixtures falsified are documented on
+ * {@link LEGACY_POST_DETAIL_EXTRACT} above.
  *
  * `ready` is the author link inside that container — the same shape as the
  * SDUI adapter's, and for the same two reasons: it is the old gate's
@@ -697,10 +752,11 @@ const LEGACY_SOCIAL_COUNTS = ".social-details-social-counts";
  * it proves the update actually hydrated rather than merely that its
  * container exists.
  *
- * `counts` is *measured*, unlike this adapter's detect anchor: the same
- * 2026-08-31 probe run recorded `.social-details-social-counts` matching
- * exactly 1, rendering `"2 41 comments"` — two reactions and forty-one
- * comments, side by side.
+ * `counts` was *measured* from the start, which the detect anchor was not:
+ * the same 2026-08-31 probe run recorded `.social-details-social-counts`
+ * matching exactly 1, rendering `"2 41 comments"` — two reactions and
+ * forty-one comments, side by side.  The oracle now additionally grades what
+ * that row PARSES to, against each fixture's `.measured.json` sidecar.
  */
 const LEGACY_POST_DETAIL_ADAPTER: PostDetailVariantAdapter = {
   surface: "post-detail",
