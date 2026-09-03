@@ -347,6 +347,8 @@ export {
   getPostEngagers,
   type GetPostEngagersInput,
   type GetPostEngagersOutput,
+  type EngagerCollectionStop,
+  type EngagerShortfall,
   // Post search
   searchPosts,
   type SearchPostsInput,

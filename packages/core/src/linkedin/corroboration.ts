@@ -91,6 +91,89 @@ export function contradictsEmptyExtraction(observation: {
 }
 
 /**
+ * One finished collection, and the cardinal that corroborates or contradicts
+ * its COMPLETENESS.
+ *
+ * Deliberately a separate shape from {@link CardinalObservation}, which
+ * describes a single scrape and carries the terms an
+ * {@link ExtractionFailedError} prints.  Nothing here is printed in an error,
+ * because nothing here raises.
+ */
+export interface CollectionObservation {
+  /** How many records the collection produced, before any pagination window. */
+  readonly extractedCount: number;
+  /** How many the caller asked for — `start + count`, not `count` alone. */
+  readonly requestedCount: number;
+  /** The count LinkedIn rendered on the page that was just scraped. */
+  readonly cardinal: number;
+}
+
+/**
+ * Collection corroboration — the COMPLETE-vs-partial companion to
+ * {@link contradictsEmptyExtraction}, and deliberately not an extension of it.
+ *
+ * The two answer different questions and warrant different outcomes:
+ *
+ * - {@link contradictsEmptyExtraction} asks *did the scrape read the field at
+ *   all?*  A positive cardinal beside zero rows is a broken selector, so it
+ *   RAISES — a record no caller can tell apart from a real empty one is worse
+ *   than an error.
+ * - This asks *did the collector get everything it went for?*  Fewer rows than
+ *   the page claims is NOT evidence of a broken selector: the rows that did
+ *   arrive parsed fine.  It is evidence the collection stopped early, and the
+ *   caller is the party that can decide whether that matters.  So it REPORTS.
+ *
+ * Merging them — widening the empty predicate to `extractedCount < cardinal` —
+ * is the repair this deliberately is not.  It would raise on a page that
+ * legitimately renders fewer reactor rows than its own count claims (blocked,
+ * deleted or restricted accounts), turning a routine call into a stale-selector
+ * diagnosis pointing at selectors that are fine.  The uneditable oracle pins
+ * that outcome directly: `get-post-engagers.test.ts`, "stops scrolling when
+ * modal is at bottom", requires one engager against `totalReactions: 5` to
+ * return normally.
+ *
+ * **`requestedCount` is what keeps this off the ordinary pagination path**, and
+ * it is a count rather than a "did the collector give up" flag on purpose.  A
+ * caller that asks for 5 of 227 and gets 5 has a complete answer to the
+ * question it asked, and `paging.total` already tells it more exist; firing
+ * there would make the signal worth ignoring.  A collector only ends BELOW what
+ * it went for when it could not get more — that equivalence is what lets this
+ * be checked from the two counts instead of asserted by the caller, and a
+ * caller that stops early for some other reason would need to say so rather
+ * than reuse this.
+ *
+ * The measurement that made this real, taken live on 2026-09-03 against a
+ * 227-reaction post under the legacy markup: the reactor pane
+ * (`.artdeco-modal__content.social-details-reactors-modal__content`) is
+ * `clientHeight: 476` with `max-height: none` and rows averaging 84 px, so it
+ * takes about six rows to overflow.  Below that the scroll source finds no
+ * scrollable region at all, falls back to the modal, and its `scrollTop` write
+ * is a no-op — it returns `false`, which the collect loop reads as *reached the
+ * bottom*.  A first scrape landing at one to five rows therefore ends the
+ * collection outright.  Observed in the same run: readiness went green on a
+ * 56 px, zero-row pane, and the rows arrived about a second later (#874).
+ *
+ * @param observation - What was collected, what was asked for, and the count to
+ *   consult.
+ * @returns Whether the cardinal contradicts a collection that stopped.
+ */
+export function contradictsCompleteCollection(
+  observation: CollectionObservation,
+): boolean {
+  if (observation.extractedCount >= observation.requestedCount) return false;
+
+  // `>` against the extracted count, for the same reason the sibling predicate
+  // is written `cardinal > 0` rather than `!(cardinal <= 0)`: a strictly
+  // positive test lets every unusable cardinal fall through as "no
+  // contradiction".  `NaN > 3` is `false`, so a parsing regression upstream
+  // reports nothing here instead of manufacturing a shortfall against a count
+  // that was never read.  Equality falls through too — a collection that
+  // matched the cardinal exactly is complete, however short the caller finds
+  // it, and that is the legal "the page claims 5 and rendered 5" case.
+  return observation.cardinal > observation.extractedCount;
+}
+
+/**
  * Cardinal corroboration as an assertion — {@link contradictsEmptyExtraction}
  * plus the error it warrants.  The rule itself lives on that predicate; this
  * is the only place it becomes a raise.

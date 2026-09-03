@@ -16,6 +16,7 @@ import {
 } from "../cdp/wait-for-reactions-modal.js";
 import {
   assertCardinalCorroboration,
+  contradictsCompleteCollection,
   contradictsEmptyExtraction,
 } from "../linkedin/corroboration.js";
 import {
@@ -52,6 +53,61 @@ export interface GetPostEngagersInput extends ConnectionOptions {
 }
 
 /**
+ * Why the collect loop stopped without reaching what the caller asked for.
+ *
+ * Both values are things the collector OBSERVED, never a diagnosis of the
+ * page.  In particular there is no `bottom-reached`: the modal declining to
+ * scroll and the modal having nothing more to give are indistinguishable from
+ * outside it — the scroll source reports one `false` for both — so naming the
+ * second would assert something this code cannot see.
+ */
+export type EngagerCollectionStop =
+  /**
+   * The modal refused to scroll further.  Either the reactor list really is
+   * exhausted, or the pane does not yet overflow — measured at about six rows
+   * under the legacy markup, below which the scroll source finds no scrollable
+   * region and its `scrollTop` write is a no-op (#874).
+   */
+  | "scroll-declined"
+  /**
+   * The collector spent its whole scroll budget and the list still had more.
+   * Distinct from the above because it is a limit of THIS code, not of the
+   * page, and the caller can act on it by asking for fewer rows per call.
+   */
+  | "scroll-budget-exhausted";
+
+/**
+ * A collection that ended below both what the caller asked for and what the
+ * modal's own reaction count claims exists.
+ *
+ * Reported rather than raised, and the asymmetry with the empty case is the
+ * whole point — see `contradictsCompleteCollection` for why a short list is
+ * not evidence of a broken selector the way an empty one is.  What it replaces
+ * is silence: before this, a collection that stopped at three rows of fifty
+ * was indistinguishable from one that read the page correctly (#874).
+ */
+export interface EngagerShortfall {
+  /**
+   * Rows the collection produced, BEFORE the pagination window is applied.
+   * Deliberately not `paging.count`, which is the size of the returned slice
+   * and is smaller whenever `start` skips rows that were in fact collected.
+   */
+  readonly collected: number;
+  /** What the collector was going for — `start + count`, not `count` alone. */
+  readonly requested: number;
+  /**
+   * The reaction count the modal itself rendered, and the thing `collected`
+   * contradicts.  Equal to `paging.total` on every path that can reach this
+   * field, since a shortfall requires a cardinal above the collected count and
+   * `paging.total` only falls back to the row count when the cardinal is
+   * absent; it is restated here so the record reads on its own.
+   */
+  readonly cardinal: number;
+  /** What ended the collection. */
+  readonly stoppedBecause: EngagerCollectionStop;
+}
+
+/**
  * Output from the get-post-engagers operation.
  */
 export interface GetPostEngagersOutput {
@@ -65,6 +121,17 @@ export interface GetPostEngagersOutput {
     readonly count: number;
     readonly total: number;
   };
+  /**
+   * The under-collection report, or `null` when the collection got everything
+   * it went for.
+   *
+   * Always present, never optional, and that is deliberate: an MCP or CLI
+   * consumer reads this result as serialized JSON, and a field that simply
+   * vanishes on a healthy run is one nobody learns to look for.  An explicit
+   * `"shortfall": null` states that completeness was checked and held, which
+   * is the property a silent under-collection took away (#874).
+   */
+  readonly shortfall: EngagerShortfall | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -359,6 +426,11 @@ export async function getPostEngagers(
         postUrn,
         engagers: [],
         paging: { start, count: 0, total: 0 },
+        // Nothing claims more exists, so nothing is short. This branch never
+        // opened a modal and never read a cardinal — reporting a shortfall
+        // against the `0` it substitutes would invent a contradiction out of a
+        // count that was never taken.
+        shortfall: null,
       };
     }
 
@@ -452,6 +524,18 @@ export async function getPostEngagers(
     // in, so a modal that keeps coming back empty cannot spend
     // `EMPTY_SCRAPE_SETTLE_ATTEMPTS` again on every scroll.
     let settleAttempts = 0;
+    /**
+     * Which of the loop's three exits was taken, for the shortfall report
+     * below.  `null` is the satisfied exit — the collection reached
+     * `targetCount` and stopped because it had enough — and is the one exit
+     * that can never be a shortfall.
+     *
+     * Initialised to the budget exit because that is what falling out of the
+     * `for` means: it is the only way out with no `break`, so nothing assigns
+     * it and the initial value has to already be right.
+     */
+    let stoppedBecause: EngagerCollectionStop | null =
+      "scroll-budget-exhausted";
     for (let scroll = 0; scroll <= maxScrollAttempts; scroll++) {
       allEngagers = await scrapeEngagers();
 
@@ -503,19 +587,27 @@ export async function getPostEngagers(
       // circuits on ANY non-zero extraction, and that one predicate gates both
       // this settle and the cardinal raise below, so a short read spends no
       // re-read here and cannot be contradicted there.  Three rows do not
-      // overflow their container either, so the scroll declines, the loop
-      // breaks, and the call returns 3 engagers with `paging.total: 50` and no
-      // error.
+      // overflow their container either, so the scroll declines and the loop
+      // breaks.
       //
-      // That is not an oversight of this fix; it is the contract this surface
-      // implements.  Empty-vs-error, not complete-vs-error: a partial read
-      // against a larger cardinal is REQUIRED to return normally, and the
-      // uneditable oracle specifies it — `get-post-engagers.test.ts`, "stops
-      // scrolling when modal is at bottom", asserts one engager against
-      // `totalReactions: 5`.  Both candidate repairs (widening the gate to
-      // `extractedCount < cardinal`, or re-reading once after a declined
-      // scroll) turn that test red.  Recorded rather than closed, with its
-      // falsifier, in ADR-008 § Residuals, and tracked as #874.
+      // That is not an oversight; it is the contract this surface implements.
+      // Empty-vs-error, not complete-vs-error: a partial read against a larger
+      // cardinal is REQUIRED to return normally, and the uneditable oracle
+      // specifies it — `get-post-engagers.test.ts`, "stops scrolling when
+      // modal is at bottom", asserts one engager against `totalReactions: 5`.
+      // Both candidate repairs (widening the gate to `extractedCount <
+      // cardinal`, or re-reading once after a declined scroll) turn that test
+      // red.
+      //
+      // So the short read is REPORTED instead, on the `shortfall` field of the
+      // result, by `contradictsCompleteCollection` after the collect loop
+      // (#874).  Raising and reporting are not two strengths of one rule: an
+      // empty scrape beside a positive cardinal is evidence the SELECTORS
+      // broke, while a short one is evidence the COLLECTION stopped early, and
+      // the rows it did return parsed fine.  The measurement behind that
+      // choice — the reactor pane needs about six rows to overflow, so a
+      // one-to-five-row scrape cannot scroll its way out — is recorded on that
+      // predicate and in ADR-008 § Residuals.
       while (
         settleAttempts < EMPTY_SCRAPE_SETTLE_ATTEMPTS &&
         contradictsEmptyExtraction({
@@ -528,7 +620,10 @@ export async function getPostEngagers(
         allEngagers = await scrapeEngagers();
       }
 
-      if (allEngagers.length >= targetCount) break;
+      if (allEngagers.length >= targetCount) {
+        stoppedBecause = null;
+        break;
+      }
 
       if (scroll < maxScrollAttempts) {
         const modalDistance = Math.round(gaussianBetween(500, 75, 350, 650));
@@ -553,7 +648,10 @@ export async function getPostEngagers(
             isAmbiguous(scrolled) ? scrolled : null,
           );
         }
-        if (!scrolled) break;
+        if (!scrolled) {
+          stoppedBecause = "scroll-declined";
+          break;
+        }
         await gaussianDelay(1_000, 100, 800, 1_200);
 
         // Reading simulation: pause proportional to newly visible engager entries.
@@ -664,6 +762,41 @@ export async function getPostEngagers(
       engagementType: e.engagementType,
     }));
 
+    // The under-collection report (#874).  Reached only after the cardinal tier
+    // above declined to raise, which is the ordering the two contracts require:
+    // an empty scrape contradicted by a positive cardinal is an extraction
+    // FAILURE and never gets this far, so everything that arrives here read the
+    // modal correctly and merely read less of it than it went for.
+    //
+    // `stoppedBecause === null` is the satisfied exit and is excluded before
+    // the predicate is consulted at all.  That is belt-and-braces rather than
+    // load-bearing — the predicate's own `extractedCount >= requestedCount`
+    // guard already rejects it — and it is written this way because the
+    // narrowing is what lets `stoppedBecause` be assigned into the record
+    // without a non-null assertion.
+    //
+    // Costs no `Runtime.evaluate`: every term is already in hand from the
+    // collect loop.  That is not an optimisation, it is a constraint — the
+    // success-path evaluate sequence is pinned by the uneditable oracle
+    // (`get-post-engagers.test.ts`, "waits for post to load with polling"
+    // and "waits for modal to load with polling", at 7 and 6 calls).
+    let shortfall: EngagerShortfall | null = null;
+    if (
+      stoppedBecause !== null &&
+      contradictsCompleteCollection({
+        extractedCount: allEngagers.length,
+        requestedCount: targetCount,
+        cardinal: total,
+      })
+    ) {
+      shortfall = {
+        collected: allEngagers.length,
+        requested: targetCount,
+        cardinal: total,
+        stoppedBecause,
+      };
+    }
+
     await gaussianDelay(800, 300, 300, 1_800); // Post-action dwell
     return {
       postUrn,
@@ -673,6 +806,7 @@ export async function getPostEngagers(
         count: engagers.length,
         total: total || allEngagers.length,
       },
+      shortfall,
     };
   } finally {
     client.disconnect();
