@@ -193,19 +193,26 @@ const UNLABELLED_SPLIT_COUNTS_ROW = `<div><span>2</span><span>41 comments</span>
  * Both counters as ONE text node WITH a separator — `2 41 comments`.
  *
  * The shape neither split row covers, and the one that discriminates a
- * property of the #869 fix nothing else here can see.  Today's whole-card
- * text read already answers it CORRECTLY (41 comments, 0 reactions), so this
- * is a passing CONTROL, not a tripwire.
+ * property of the #869 fix nothing else here can see.  The pre-#869 whole-card
+ * text read already answered it CORRECTLY (41 comments, 0 reactions), so this
+ * was a passing CONTROL rather than a tripwire, and it stays one.
  *
- * What it guards: post detail's anchored read finds each counter by matching
- * an ELEMENT against `^<N> comments$`, and no element here matches — the
- * div's text is the whole phrase.  That read only recovers 41 by falling back
- * to a loose scan, and the fallback is gated on having narrowed to a counts
- * root first.  A search-results adapter declares no counts anchor, so a fix
- * that ports the anchored read without adding one would never narrow, never
- * reach the fallback, and return 0 for this row — a regression today's code
- * does not have, in a shape the split rows cannot expose because both of
- * theirs do match per element.
+ * What it guards: the anchored read finds each counter by matching an ELEMENT
+ * against `^<N> comments$`, and no element here matches — the div's text is
+ * the whole phrase.  That read only recovers 41 by falling back to a loose
+ * scan, and the fallback is gated on having narrowed to a counts root first.
+ * A search-results adapter declares no counts anchor, so porting the anchored
+ * read without giving this surface something to narrow TO would never narrow,
+ * never reach the fallback, and return 0 for this row — a regression the
+ * pre-#869 code did not have, in a shape the split rows cannot expose because
+ * both of theirs do match per element.
+ *
+ * That is the trap this row was written to set, and the fix answers it by
+ * handing `__lhReadCount` the CARD as an already-narrowed root: enumeration
+ * has reduced the page to one post before the counters are read, so the loose
+ * scan stays reachable while remaining scoped to a single card.  Which is why
+ * this row keeps its value as a control — it is the only assertion here that
+ * would go red if that narrowing were dropped.
  */
 const ONE_NODE_COUNTS_ROW = `<div>2 41 comments</div>`;
 
@@ -874,34 +881,41 @@ describe("search-results Tier-2 oracle (integration)", () => {
     });
 
     // ─────────────────────────────────────────────────────────────────────
-    // #869 — OPEN.  The `it.fails` blocks below state the CORRECT contract
-    // rather than the current behaviour, so that fixing the parse turns them
-    // red and the flip has to be acknowledged in a visible `it.fails(` ->
-    // `it(` diff instead of being silently absorbed.  Asserting `241` here
-    // would bake the defect into the oracle and make its fix look like the
-    // regression.
+    // #869 — FIXED.  The three blocks below were authored as `it.fails`
+    // stating the CORRECT contract rather than the behaviour of the day, so
+    // that fixing the parse turned them red and the flip had to be
+    // acknowledged in a visible `it.fails(` -> `it(` diff instead of being
+    // silently absorbed.  They are plain `it` now, and that is the whole of
+    // what the flip means: it records that the contract below is MET, not
+    // that the blocks became less load-bearing.  They are regression tests
+    // from here on — asserting `241` in any of them would bake the defect
+    // back into the oracle and make the next fix look like the regression.
     //
     // TWO defects, deliberately separated — they are independent, and a fix
-    // for one does not imply a fix for the other:
+    // for one does not imply a fix for the other.  Both are stated in the
+    // past tense because both are closed; the separation is kept because it
+    // is what the fixture split still encodes, and re-fusing them is how the
+    // first attempt produced a fixture that could witness neither:
     //
-    // 1. THE JOIN.  `__lhParseCount` reads each counter out of
+    // 1. THE JOIN.  `__lhParseCount` read each counter out of
     //    `card.textContent` with no normalisation.  Under `textContent`
     //    adjacent element text nodes concatenate with NO separator, so a row
-    //    rendering `2` and `41 comments` as two elements flattens to
-    //    `241 comments` and the comment regex captures 241.
+    //    rendering `2` and `41 comments` as two elements flattened to
+    //    `241 comments` and the comment regex captured 241.
     // 2. THE LABEL.  LinkedIn renders a reaction count as a bare number with
     //    the words only on the control's `aria-label`.  A text-only read
-    //    never looks there, so it finds no reaction count at all — which is
+    //    never looked there, so it found no reaction count at all — which is
     //    why `__lhReadCount` consults `aria-label` before text, and is a
     //    separate miss from the concatenation.  Inserting a separator would
-    //    not fix it.
+    //    not have fixed it.
     //
     // Hence the fixture split.  The labelled row exercises both and its
-    // tripwire asserts both; the unlabelled row exercises the join alone, so
-    // its tripwire asserts the comment count ONLY — with no "reactions" token
-    // anywhere, 0 is correct before and after, and demanding otherwise would
-    // make that block unflippable.  Post detail already moved to anchored
-    // per-element counting; this surface has not.
+    // block asserts both; the unlabelled row exercises the join alone, so its
+    // block asserts the comment count ONLY — with no "reactions" token
+    // anywhere, 0 is correct both before and after, and demanding otherwise
+    // would have made that block unflippable.  Both surfaces now run the same
+    // anchored per-element read: `dom-variant.ts` hands the card to
+    // `__lhReadCount` as an already-narrowed counts root.
     // ─────────────────────────────────────────────────────────────────────
 
     it("canary: the browser joins the row, and the word lives only on the label", async () => {
@@ -990,7 +1004,7 @@ describe("search-results Tier-2 oracle (integration)", () => {
       expect(record?.posts?.[0]?.reactionCount).toBe(0);
     });
 
-    it.fails(
+    it(
       "an unlabelled split row still yields the comment count the page renders",
       async () => {
         // The join half on its own, with the label removed.  The comment
@@ -1005,12 +1019,12 @@ describe("search-results Tier-2 oracle (integration)", () => {
           extractionSource,
         );
 
-        // Measured today: commentCount 241.
+        // Before #869 this measured commentCount 241 — the join.
         expect(record?.posts?.[0]?.commentCount).toBe(41);
       },
     );
 
-    it.fails(
+    it(
       "a labelled split counts row yields the reaction and comment counts the page renders",
       async () => {
         await install(legacyCard({ counts: LABELLED_SPLIT_COUNTS_ROW }));
@@ -1019,11 +1033,11 @@ describe("search-results Tier-2 oracle (integration)", () => {
           extractionSource,
         );
 
-        // Measured today: reactionCount 0 (the word is on the label, and the
-        // text-only read never looks there), commentCount 241 (the join).
-        // Both are recovered by an anchored per-element read that consults
-        // `aria-label` first — `__lhReadCount`, which post detail already
-        // runs.
+        // Before #869 this measured reactionCount 0 (the word is on the
+        // label, and the text-only read never looked there) and commentCount
+        // 241 (the join).  Both are recovered by the anchored per-element read
+        // that consults `aria-label` first — `__lhReadCount`, which this
+        // surface now runs alongside post detail.
         expect(record?.posts?.[0]?.reactionCount).toBe(2);
         expect(record?.posts?.[0]?.commentCount).toBe(41);
       },
@@ -1059,12 +1073,13 @@ describe("search-results Tier-2 oracle (integration)", () => {
       expect(record?.posts).toHaveLength(1);
     });
 
-    it.fails(
+    it(
       "a split reposts row yields the repost count the page renders",
       async () => {
         await install(legacyCard({ counts: SPLIT_REPOSTS_ROW }));
 
-        // Measured today: shareCount 73 — `7` and `3 reposts` joined.
+        // Before #869 this measured shareCount 73 — `7` and `3 reposts`
+        // joined.
         const record = await client.evaluate<ExtractionRecord | null>(
           extractionSource,
         );

@@ -250,10 +250,16 @@ export interface PostDetailVariantAdapter extends VariantAdapter {
  * mistake — the record would simply come back with every dialect-specific
  * field null, which is the exact silent-empty this module exists to remove.
  *
- * There is deliberately no `counts` here.  That field narrows the
- * engagement-counts row of ONE post; a search page renders one such row per
- * card, and per-card counts are read from the card's own text by the shared
- * builder.
+ * There is deliberately no `counts` here, and it is a statement about
+ * MEASUREMENT rather than about the read.  Since #869 the shared builder reads
+ * each counter one ELEMENT at a time, exactly as post detail does, so this
+ * surface would use a narrowing anchor if it had one; what it lacks is a
+ * counts row anyone has measured on a live search page.  Declaring a selector
+ * on that evidence would assert a measurement nobody has taken — the failure
+ * {@link VariantAdapter.counts} keeps an empty list for elsewhere.  Until one
+ * is measured, the CARD is the narrowed counts root, which enumeration has
+ * already reduced to one post; see {@link buildSearchResultsExtractionSource}
+ * for why that narrowing is sound here and not on post detail.
  */
 export interface SearchResultsVariantAdapter extends VariantAdapter {
   readonly surface: "search-results";
@@ -1663,13 +1669,14 @@ export function buildDetectionSource(
  * Emitted WHOLE, though, so a consumer that needs only some of it carries the
  * rest: the reactions-modal extraction script uses the name and headline
  * helpers and never calls the engagement-counts ones
- * (`__LH_COUNTERS` … `__lhReadCount`), which post-detail alone reads.  That is
- * a deliberate trade rather than an oversight — one block, one escape audit,
- * and the withholding above is per-SCRIPT-KIND, which is where the blast
- * radius actually lives.  Splitting it per consumer would give three blocks to
- * keep in escape-agreement for no runtime benefit, since the payload cost is a
- * few hundred bytes on a call that already ships an adapter table.  Named here
- * because "shared text helpers" undersells what the block now contains.
+ * (`__LH_COUNTERS` … `__lhReadCount`), which post detail and search results
+ * are the two readers of.  That is a deliberate trade rather than an oversight
+ * — one block, one escape audit, and the withholding above is per-SCRIPT-KIND,
+ * which is where the blast radius actually lives.  Splitting it per consumer
+ * would give three blocks to keep in escape-agreement for no runtime benefit,
+ * since the payload cost is a few hundred bytes on a call that already ships
+ * an adapter table.  Named here because "shared text helpers" undersells what
+ * the block now contains.
  *
  * **Editing across the language seam.**  The literal below is TypeScript
  * emitting JavaScript, and the two languages share an escape character.  Every
@@ -2005,6 +2012,23 @@ export function buildPostDetailExtractionSource(
  * drift apart, which is the failure the shared text helpers above already
  * exist to prevent one level down.
  *
+ * ## Engagement counts (#869)
+ *
+ * Read one counter per ELEMENT through `__lhReadCount`, the same anchored read
+ * post detail runs — which is why this script now emits the shared helpers it
+ * previously did without.  They used to be parsed out of `card.textContent`
+ * with an unanchored regex per counter, and that missed twice over: adjacent
+ * element text nodes concatenate with no separator, so `2` beside
+ * `41 comments` read as `241 comments`; and LinkedIn renders a reaction count
+ * as a bare number with the words only on the control's `aria-label`, where a
+ * text read never looks. Scoping to one card, which is all that read had,
+ * bounds the damage to one post but does nothing about either miss inside it.
+ *
+ * The card is passed as an ALREADY-NARROWED counts root — see the call site
+ * for why that is sound here and not on post detail.  The load-bearing half is
+ * that it keeps the loose fallback reachable, without which a row rendering
+ * both counters as a single node would regress from a correct read to zero.
+ *
  * ## `postCardCount` — the cardinal, and why it is defined exactly this way
  *
  * It counts enumerated cards that are POST-SHAPED **excluding the
@@ -2029,6 +2053,7 @@ export function buildSearchResultsExtractionSource(
   adapters: readonly SearchResultsVariantAdapter[],
 ): string {
   return `(() => {
+  ${extractionHelpersSource()}
   ${selectionSource(adapters, true)}
   const selection = __lhSelect();
   if (selection.matched.length > 1) {
@@ -2047,13 +2072,6 @@ export function buildSearchResultsExtractionSource(
   // No terminal fallback, exactly as on post detail: an adapter that cannot
   // enumerate its own cards has not read the page, and saying so is the point.
   if (cards.length === 0) return null;
-
-  function __lhParseCount(text, pattern) {
-    const m = text.match(pattern);
-    if (!m) return 0;
-    const num = parseInt(m[1].replace(/,/g, ''), 10);
-    return isNaN(num) ? 0 : num;
-  }
 
   const posts = [];
   let postCardCount = 0;
@@ -2090,11 +2108,33 @@ export function buildSearchResultsExtractionSource(
       }
     }
 
-    // Per-post engagement counts, read unanchored from the card's own text.
-    // Deliberately unchanged: post detail moved to anchored per-element
-    // counting, this surface has not, and moving it is a behaviour change of
-    // its own.
-    const cardText = card.textContent || '';
+    // Per-post engagement counts, read one counter per ELEMENT off this
+    // card — the same anchored read post detail runs, arrived at here via
+    // \`__lhReadCount\`.  Two defects it fixes, independent of one another:
+    //
+    // - THE JOIN.  Under \`textContent\` adjacent element text nodes
+    //   concatenate with NO separator, so a row rendering \`2\` beside
+    //   \`41 comments\` flattened to \`241 comments\` and the old whole-card
+    //   regex captured 241.  An element-anchored read never forms that
+    //   string; where an ancestor does, the DEEPEST hit wins.
+    // - THE LABEL.  LinkedIn renders a reaction count as a bare number with
+    //   the words only on the control's \`aria-label\`, so a text-only read
+    //   found no reaction count at all.  \`__lhReadCount\` reads the label
+    //   before the text.
+    //
+    // The card is handed over as an ALREADY-NARROWED counts root, which is
+    // what keeps the loose fallback reachable, and it is deliberate.  On post
+    // detail a non-narrowed scope is a whole post container reached from
+    // \`document\`, where a number followed by "comments" is as likely to be
+    // prose as a counter.  Here enumeration has already narrowed to ONE card,
+    // and reading that card's whole text loosely is exactly what this surface
+    // did for every counter before this change — so as a FALLBACK, reached
+    // only where no element renders the counter on its own, it can only
+    // remove a false capture and never add one.  Marking it non-narrowed
+    // instead would return 0 for a row rendering both counters as one node
+    // ("2 41 comments"), which reads correctly today: a regression, in the
+    // one shape a per-element read cannot see.
+    const countsRoot = __lhCountsRootOf(card, true);
 
     const fields = adapter.extract(card, authorName);
 
@@ -2105,9 +2145,9 @@ export function buildSearchResultsExtractionSource(
       authorProfileUrl: authorProfileUrl,
       text: fields.text,
       mediaType: mediaType,
-      reactionCount: __lhParseCount(cardText, /(\\d[\\d,]*)\\s+reactions?/i),
-      commentCount: __lhParseCount(cardText, /(\\d[\\d,]*)\\s+comments?/i),
-      shareCount: __lhParseCount(cardText, /(\\d[\\d,]*)\\s+reposts?/i),
+      reactionCount: __lhReadCount(countsRoot, __LH_COUNTERS.reactionCount),
+      commentCount: __lhReadCount(countsRoot, __LH_COUNTERS.commentCount),
+      shareCount: __lhReadCount(countsRoot, __LH_COUNTERS.shareCount),
       timestamp: fields.timestamp,
     });
   }
