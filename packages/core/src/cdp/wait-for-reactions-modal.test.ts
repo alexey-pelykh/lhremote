@@ -40,9 +40,8 @@ vi.mock("../utils/delay.js", () => ({
 const { captureReactionsModalFailure, waitForReactionsModal } = await import(
   "./wait-for-reactions-modal.js"
 );
-const { adaptersFor, buildReadinessPredicateSource } = await import(
-  "../linkedin/dom-variant.js"
-);
+const { adaptersFor, buildReadinessPredicateSource, formatVariantProbes } =
+  await import("../linkedin/dom-variant.js");
 const {
   DOMVariantAmbiguousError,
   DOMVariantUnsupportedError,
@@ -176,6 +175,49 @@ describe("waitForReactionsModal", () => {
     );
   });
 
+  it("attaches the detect probe counts as the unsupported error's cause", async () => {
+    // The class and its own wording come from `errors.ts`; the per-adapter
+    // probe counts come from HERE, and nothing else asserts them.  Deleting
+    // `{ cause: … }` from the branch above leaves the class-only test green
+    // while silently dropping the diagnosis that reaches CLI stderr and the
+    // MCP tool response text.
+    //
+    // The WHOLE message is pinned rather than a substring of it, because what
+    // a cause may hold is a privacy boundary: `errorMessage` renders it with
+    // no gate in front of it, and `error-message.ts` keeps page content in the
+    // `LHREMOTE_CAPTURE_DIAGNOSTICS`-gated bundle instead — noting that this
+    // is "a property of the producers, not something checked here".  This is a
+    // producer.  A `toContain` would accept a message that appended a scrape.
+    //
+    // The probe half is derived THROUGH `formatVariantProbes` rather than
+    // written as a look-alike literal, so a change to that rendering cannot
+    // strand a stale expectation here.  The formatter itself is separately
+    // pinned against literals in `dom-variant.test.ts`; the subject here is
+    // only whether production attaches a cause carrying it.
+    const detection = { matched: [], probes: { sdui: 0, legacy: 0 } };
+    const client = {
+      evaluate: evaluateBy({ detection }),
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+
+    const error = await waitForReactionsModal(client, 1).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(DOMVariantUnsupportedError);
+    // `as Error` rather than the concrete subclass, unlike the sibling gates'
+    // tests: this file reaches its error classes through `await import`, so
+    // they are values here and not types and the narrower cast is unavailable.
+    // `cause` is declared on `Error` anyway, and the subclass identity is
+    // already pinned on the line above.
+    const cause = (error as Error).cause;
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe(
+      `detect probes — ${formatVariantProbes(detection)}`,
+    );
+  });
+
   it("raises ambiguous when two adapters claim the page at the deadline", async () => {
     const client = {
       evaluate: evaluateBy({
@@ -186,6 +228,35 @@ describe("waitForReactionsModal", () => {
 
     await expect(waitForReactionsModal(client, 1)).rejects.toThrow(
       DOMVariantAmbiguousError,
+    );
+  });
+
+  it("attaches the detect probe counts as the ambiguous error's cause", async () => {
+    // A second, separate `{ cause: … }` site, so a separate pin: deleting
+    // either one alone has to be caught, which one test spanning both branches
+    // could not do.  The two counts differ on purpose — a symmetric
+    // expectation would also be satisfied by a cause built from some other
+    // symmetric detection.  Whole-message pin, derived probe text and `as
+    // Error` for the reasons the sibling test above states.
+    const detection = {
+      matched: ["sdui", "legacy"],
+      probes: { sdui: 3, legacy: 7 },
+    };
+    const client = {
+      evaluate: evaluateBy({ detection }),
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+
+    const error = await waitForReactionsModal(client, 1).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(DOMVariantAmbiguousError);
+    const cause = (error as Error).cause;
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe(
+      `detect probes — ${formatVariantProbes(detection)}`,
     );
   });
 
