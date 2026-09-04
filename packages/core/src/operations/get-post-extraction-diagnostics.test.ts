@@ -111,7 +111,14 @@ describe("getPost extraction-failure diagnostics (#835)", () => {
     hasCommentOnButton: false,
     hasTopLevelEditor: false,
     hasReactionsMenu: true,
-    hasPostDetailContainer: true,
+    // Since #853 the registry's own anchors reach the bundle here, under each
+    // dialect's name, in place of the `hasPostDetailContainer` boolean this
+    // fixture used to carry.  Kept in sync because a mock naming a field the
+    // probe no longer returns lies about the shape without ever failing.
+    variantAnchors: {
+      sdui: { ready: 1, scopes: {}, counts: {} },
+      legacy: { ready: 0, scopes: {}, counts: {} },
+    },
     // Non-zero: the comment layer IS rendered, which together with a
     // matching adapter is what says "the comment-field selectors went stale"
     // rather than "the page never rendered comments".

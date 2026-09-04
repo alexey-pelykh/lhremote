@@ -6,6 +6,7 @@ import {
   adaptersFor,
   asVariantDetection,
   buildDetectionSource,
+  buildPostDetailAnchorProbeSource,
   buildPostDetailExtractionSource,
   buildReactionsModalExtractionSource,
   buildReactionsModalScrollSource,
@@ -710,6 +711,65 @@ describe("registering a third adapter", () => {
     ) as { variant?: string; authorName?: string };
     expect(result.variant).toBe("hypothetical");
     expect(result.authorName).toBe("Third Dialect");
+  });
+
+  it("makes the diagnostic anchor probe report the new dialect with no call-site change", () => {
+    // The property the generator's PARAMETER exists for, and the only place
+    // it is observable: the post-detail capture resolves the registry itself,
+    // so a generator that also resolved it could never be handed a third
+    // adapter and this criterion would have no test at any tier.
+    //
+    // A declaration spliced into an IIFE and called from it — the same
+    // composition `wait-for-post-load.ts` performs, rather than a shape
+    // invented here, so a source that only works when wrapped differently
+    // does not pass.
+    const readings = runScript(
+      `(() => {${buildPostDetailAnchorProbeSource(extended)}
+        return __lhPostDetailAnchorProbe();
+      })()`,
+      // Only the third dialect's READY anchor is on this page.  Its detect
+      // anchor deliberately is not, which is what makes the `detect`-shaped
+      // absence below an observation rather than a coincidence.
+      fakeDocument([THIRD_ADAPTER.ready]),
+    ) as Record<
+      string,
+      {
+        ready: number;
+        scopes: Record<string, number>;
+        counts: Record<string, number>;
+      }
+    >;
+
+    // Every registered dialect is named, the new one among them, and nothing
+    // in `wait-for-post-load.ts` or `dom-variant.ts` was edited to add it.
+    expect(Object.keys(readings).sort()).toEqual(
+      extended.map((a) => String(a.variant)).sort(),
+    );
+
+    const third = readings.hypothetical;
+    expect(third).toBeDefined();
+    // Its own anchors, read off the page: ready present, scope absent.  Both
+    // halves matter — an all-zero reading would also be produced by a probe
+    // that emitted the right keys and looked at nothing.
+    expect(third?.ready).toBe(1);
+    expect(third?.scopes).toEqual({ [THIRD_ADAPTER.scopes[0] ?? ""]: 0 });
+    // An adapter declaring no counts candidates contributes an empty object,
+    // not a missing key: the absence is recorded rather than unwritten.
+    expect(third?.counts).toEqual({});
+    // `detect` carries no role of its own here by design: it is read on the
+    // classification path and reaches the bundle as `variantDetection`.
+    //
+    // Asserted as SHAPE — the three roles and nothing else — rather than as
+    // the absence of the detect STRING, which would be unsound twice over.
+    // `JSON.stringify` escapes the quotes inside a selector, so a raw needle
+    // never matches its own rendering and the check would pass for any
+    // reading at all; and this fixture's `detect` IS its `scopes[0]`, exactly
+    // as the real legacy adapter's is, so that string is legitimately a key
+    // of `scopes` and an absence assertion would contradict the one above.
+    // A role appearing that this probe does not own fails the shape.
+    expect(Object.keys(third ?? {}).sort()).toEqual(
+      ["counts", "ready", "scopes"].sort(),
+    );
   });
 
   it("leaves the previously-registered dialects selecting exactly as before", () => {

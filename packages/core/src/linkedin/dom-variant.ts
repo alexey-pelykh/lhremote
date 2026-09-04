@@ -2290,6 +2290,113 @@ export function buildSearchResultsCardFunnelSource(
 }
 
 /**
+ * In-page anchor probe for the post-detail surface — the diagnostic companion
+ * to {@link buildPostDetailExtractionSource}, emitted here rather than
+ * hand-maintained beside the capture that reads it.
+ *
+ * Defines `__lhPostDetailAnchorProbe()`, which returns one reading per
+ * REGISTERED adapter, keyed by that adapter's own `variant` first:
+ *
+ * ```json
+ * { "legacy": { "ready": 1,
+ *               "scopes": { "[data-urn^=\"urn:li:activity:\"]": 1 },
+ *               "counts": { ".social-details-social-counts": 1 } } }
+ * ```
+ *
+ * **Keyed by variant first, because the dialect is the diagnosis.**  A count
+ * that cannot be attributed to the adapter owning it collapses two different
+ * failures into one number: *both dialects rendered something* and *one
+ * dialect's anchor matched twice* want opposite repairs — register nothing and
+ * tighten the anchors, versus repair that dialect's selectors — and a flat
+ * selector-to-count map cannot separate them the moment two dialects share an
+ * anchor.  The nesting also makes a new adapter additive rather than a merge.
+ *
+ * **`detect` is deliberately EXCLUDED, and its absence is load-bearing.**  It
+ * is read once, earlier, on the classification path, and that single reading
+ * already feeds BOTH the raised error's `cause` and the bundle's
+ * `variantDetection`.  Giving it a second home here would report one anchor
+ * ROLE twice.  Note this is about the ROLE and not the selector: a dialect
+ * may use one string in two roles — `legacy`'s `detect` IS its `scopes[0]`
+ * — so that selector is read once per probe either way, and the two counts
+ * can differ because the reads happen at different moments on a page that
+ * is still hydrating.
+ * changing — and an operator shown two disagreeing accounts of the same page
+ * has to guess which one is real.  The three anchors that ARE here are exactly
+ * the ones nothing else in the bundle reports.
+ *
+ * **Counts rather than booleans**, on the same ground the detect probes are:
+ * zero-versus-one answers the readiness question, but one-versus-eighty-five
+ * is the question that was actually being asked on 2026-08-31, when a
+ * `<main>`-scoped author link matched 85 elements on a post-detail page every
+ * scraper selector read as empty.  A boolean cannot say that.
+ *
+ * Generated from the adapters rather than written out at the capture site, for
+ * the reason {@link buildSearchResultsCardFunnelSource} already records on the
+ * sibling surface: a second copy of an anchor drifts, and it drifts SILENTLY —
+ * a dialect renamed in the registry keeps being reported under its old name at
+ * the one moment the report is being read.  Registering a third adapter needs
+ * no edit here.
+ *
+ * **It narrows nothing, and must not be read as replacing the capture's
+ * supplementary markers.**  Those probe anchors NO adapter binds to — the
+ * `aria-label` interaction markers, the document-wide author link, the legacy
+ * `span[dir="ltr"]` fallback, the comment layer — and a failed read wants a
+ * which-of-these-is-missing picture across every marker the code knows about,
+ * which is deliberately wider than any registry.  This adds the registry's own
+ * anchors to that picture; it removes nothing from it.
+ *
+ * @param adapters - The post-detail surface's registered adapters.  Taken as a
+ *   parameter rather than resolved from the registry in here, so a third
+ *   adapter can be handed to this generator directly: a generator that
+ *   resolves its own registry makes the "registering an adapter needs no edit
+ *   here" property untestable at Tier 1, which is the property most worth
+ *   grading.
+ * @returns JavaScript source declaring `__lhPostDetailAnchorProbe()`.
+ *
+ * @internal Consumed by the post-detail diagnostic capture; not part of the
+ *   public API.
+ */
+export function buildPostDetailAnchorProbeSource(
+  adapters: readonly PostDetailVariantAdapter[],
+): string {
+  // Every selector crosses the TS -> JS seam through `jsString`, never
+  // hand-quoted: three of the four post-detail anchors already contain double
+  // quotes, and a hand-quoted site compiles, lints, and emits either a syntax
+  // error or a valid-but-different selector.
+  const rows = adapters.map(
+    (adapter) =>
+      `      { variant: ${jsString(String(adapter.variant))}, ready: ${jsString(adapter.ready)}, scopes: [${adapter.scopes.map(jsString).join(", ")}], counts: [${adapter.counts.map(jsString).join(", ")}] }`,
+  );
+  return `
+  function __lhPostDetailAnchorProbe() {
+    const readings = {};
+    for (const a of [
+${rows.join(",\n")}
+    ]) {
+      // Keyed by the selector itself, so a reader sees WHICH of a dialect's
+      // ordered candidates resolved without holding the registry in their
+      // head.  An adapter declaring no candidates (SDUI's counts, today)
+      // contributes an empty object rather than a missing key: the absence is
+      // then a recorded one, not a field that failed to be written.
+      const scopes = {};
+      for (const selector of a.scopes) {
+        scopes[selector] = document.querySelectorAll(selector).length;
+      }
+      const counts = {};
+      for (const selector of a.counts) {
+        counts[selector] = document.querySelectorAll(selector).length;
+      }
+      readings[a.variant] = {
+        ready: document.querySelectorAll(a.ready).length,
+        scopes: scopes,
+        counts: counts,
+      };
+    }
+    return readings;
+  }`;
+}
+
+/**
  * In-page modal-root resolution for the reactions-modal surface, shared by
  * every generated script that needs the OPEN modal.
  *

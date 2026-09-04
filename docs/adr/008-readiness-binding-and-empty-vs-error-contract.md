@@ -492,12 +492,14 @@ not a measurement, and chasing it is out of this decision's scope.
 
 ## Follow-ups
 
-- **Correct one stale unit-test comment**: `wait-for-post-load.test.ts` describes the
-  `aria-label` interaction markers as *"the exact selectors the new readiness predicate uses"*.
-  That claim is now false — those markers are diagnostic-only, and the predicate is bound to the
-  selected adapter's own anchor (§ Decision 1). The needed edit is to correct the behavioral
-  claim, not merely to re-point its ADR-007 citation. Comment-only, and it sat outside this
-  change's ratified file list; fix it when that file is next modified.
+- ~~**Correct one stale unit-test comment**~~ — **done** (#853). `wait-for-post-load.test.ts`
+  described the `aria-label` interaction markers as *"the exact selectors the new readiness
+  predicate uses"*. That claim was false — those markers are diagnostic-only, and the predicate
+  is bound to the selected adapter's own anchor (§ Decision 1). The comment now states the
+  behavioral fact rather than merely re-pointing its ADR-007 citation: the markers are
+  diagnostic-only, kept because they are anchors **no adapter binds to**, which is exactly the
+  boundary #853 drew through that file. It was discharged there because #853 is the change that
+  next modified the file, which is the condition this follow-up set.
 - **`wait-for-reactions-modal.ts` needs no action.** Its ADR-007 reference is a
   *diagnostic-capture* citation, which ADR-007 owns; by the rule in § Citation-reclamation scope
   it must **not** be re-pointed. It is named here so a future maintainer working from a
@@ -655,7 +657,7 @@ per-element read post detail moved to. Both are follow-up candidates, not part o
 > diagnostic-capture half is CLOSED by #870: this surface captures at three sites — the readiness
 > gate's deadline, its scrape's own container-tier refusal, and cardinal corroboration — behind the
 > same `LHREMOTE_CAPTURE_DIAGNOSTICS=1` gate as every other surface. ADR-007 still owns the
-> pattern; see its § 2026-09-04 Amendment for what the search-results bundle carries and why its
+> pattern; see its § 2026-09-04 Amendment (#870) for what the search-results bundle carries and why its
 > `variantDetection` reads with one branch more than any other surface's. Read the paragraph
 > above as the record of what this binding scoped, not as a description of the code — and read the
 > one **below** the same way. #868 gave this surface the Tier-2 oracle that paragraph says is
@@ -1214,7 +1216,7 @@ fixture, so every claim here rests on the live probe plus Tier-1 against mocks.
 The § 2026-09-02 Amendment left this surface's engagement counts *"parsed unanchored from each
 card's own text"* and named that a follow-up candidate. This closes that half. The
 diagnostic-capture half of the same paragraph was untouched here and tracked as #870; it has since
-been closed in turn — see ADR-007 § 2026-09-04 Amendment.
+been closed in turn — see ADR-007 § 2026-09-04 Amendment (#870).
 
 **Two independent defects, and separating them is the finding.** The preamble that opened #869
 treated the concatenation as the reason the reaction count vanished. It is not, and #868's oracle
@@ -1323,9 +1325,13 @@ only that a cause is attached and what it says — that it then reaches an opera
 
 ## Related
 
-- Code: `packages/core/src/linkedin/dom-variant.ts`,
+- Code: `packages/core/src/linkedin/dom-variant.ts` (also generates the post-detail
+  diagnostic anchor probe, #853 — the registry is the single source for the capture's
+  per-dialect readings as well as for readiness, detection and extraction),
   `packages/core/src/linkedin/corroboration.ts`,
-  `packages/core/src/cdp/wait-for-post-load.ts`,
+  `packages/core/src/cdp/wait-for-post-load.ts` (its diagnostic capture reports each
+  registered adapter's own `ready` / `scopes` / `counts` anchors, #853; the constants it still
+  hand-maintains are markers no adapter binds to — see ADR-007 § 2026-09-04 Amendment (#853)),
   `packages/core/src/cdp/wait-for-reactions-modal.ts` (§ 2026-09-02 Amendment, #840),
   `packages/core/src/services/errors.ts`,
   `packages/core/src/operations/get-post.ts`,
@@ -1346,10 +1352,13 @@ only that a cause is attached and what it says — that it then reaches an opera
   § 2026-09-03 Amendment), #874 (short reactor collection reported rather than raised,
   § 2026-09-03 Amendment), #869 (search-results engagement counts read anchored,
   § 2026-09-03 Amendment), #870 (diagnostic capture for this surface — CLOSED; the half
-  § 2026-09-03 Amendment left, landed as ADR-007 § 2026-09-04 Amendment), #857 (`get-post-stats`
+  § 2026-09-03 Amendment left, landed as ADR-007 § 2026-09-04 Amendment (#870)), #857 (`get-post-stats`
   engagement counts read anchored, third and last instance of the count-concatenation class on a
   post-detail page), #852 (`get-post-stats` readiness seam — OPEN, deliberately not decided by
   #857), #890 (`get-post-stats` writes no diagnostic bundle at its extraction-failure branches —
   the boundary #857 declared rather than crossed), #867 (`errorMessage` renders the cause chain, so
   the gates' probe counts reach the CLI and MCP text surfaces, § 2026-09-04 Amendment), #883 (the
-  attachment of those causes is pinned at all six sites, § 2026-09-04 Amendment)
+  attachment of those causes is pinned at all six sites, § 2026-09-04 Amendment), #853 (the
+  post-detail diagnostic capture's per-dialect anchor readings are generated from this registry
+  rather than hand-maintained beside it; discharges the stale-comment follow-up above, and
+  recorded in full as ADR-007 § 2026-09-04 Amendment (#853), which owns the capture pattern)
