@@ -2,10 +2,19 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { resolveInstancePort } from "../cdp/index.js";
+import {
+  DOMVariantAmbiguousError,
+  DOMVariantUnsupportedError,
+} from "../services/errors.js";
 import type { PostStats } from "../types/post-analytics.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { waitForPostLoad } from "../cdp/wait-for-post-load.js";
+import {
+  adaptersFor,
+  buildPostDetailExtractionSource,
+  variantNamesFor,
+} from "../linkedin/dom-variant.js";
 import { gaussianDelay } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
@@ -61,48 +70,117 @@ export function resolvePostDetailUrl(input: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Raw shape returned by the in-page scraping script
+// Raw shapes returned by the in-page scraping script
 // ---------------------------------------------------------------------------
 
+/**
+ * The subset of the post-detail extraction record this operation reads.
+ *
+ * The script returns the whole record — author, text, timestamp and the three
+ * counters.  Only the counters are named here, because only they are read:
+ * declaring the rest would advertise fields this operation neither uses nor
+ * grades.
+ */
 interface RawPostStats {
   reactionCount: number;
   commentCount: number;
   shareCount: number;
 }
 
+/**
+ * Two or more adapters claimed the page — a transitional or hybrid dialect.
+ * Reported rather than resolved, for the reason `get-post` reports it:
+ * counters assembled out of two dialects are wrong in a way nothing
+ * downstream can detect.
+ */
+interface AmbiguousPostStats {
+  ambiguousVariants: string[];
+}
+
+function isAmbiguous(
+  raw: RawPostStats | AmbiguousPostStats,
+): raw is AmbiguousPostStats {
+  return Array.isArray((raw as AmbiguousPostStats).ambiguousVariants);
+}
+
 // ---------------------------------------------------------------------------
 // In-page DOM scraping script
 // ---------------------------------------------------------------------------
+
+/** The page kind this operation reads; picks the adapter list it binds to. */
+const POST_DETAIL_SURFACE = "post-detail" as const;
 
 /**
  * JavaScript source evaluated inside the LinkedIn post detail page to
  * extract engagement statistics from the rendered DOM.
  *
- * The post detail page renders engagement counts as text content
- * (e.g. "42 reactions", "5 comments", "3 reposts").  The script
- * searches the page body text for these patterns.
+ * This is the SAME generated script `get-post` evaluates, and that identity is
+ * the fix rather than an economy (#857).  What it replaces was a hand-written
+ * regex sweep over `document.body.textContent`, byte-identical to the parse
+ * `#824` / `#836` had already removed from the post-detail path — the same
+ * code against the same flattened page, so it returned the same wrong numbers.
+ * Three independent ways, none of them visible in the number that comes back:
+ *
+ * - **The join.**  Under `textContent` adjacent element text nodes concatenate
+ *   with NO separator, so a counts row rendering `2` beside `41 comments`
+ *   flattens to `241 comments` and the comment pattern captures 241.  Measured
+ *   live on the `get-post` path: LinkedHelper 2.130.29, a 589 KB post-detail
+ *   page whose true comment count was 41.
+ * - **The label.**  LinkedIn renders a reaction count as a bare number and puts
+ *   the words only on the control's `aria-label` — "2", labelled
+ *   "2 reactions".  A text-only read finds no reaction count at all, so
+ *   inserting a separator would have fixed only the first half.
+ * - **The scope.**  With no scope, the first `"<N> comments"`-shaped run
+ *   ANYWHERE in the document wins: page chrome, a sibling module, a comment's
+ *   own counter, or the post's prose.
+ *
+ * Reusing the post-detail builder rather than growing a counts-only one is
+ * deliberate.  A second builder would need its own copy of adapter selection
+ * and scope resolution, and `dom-variant.ts` is explicit throughout that
+ * hand-maintained copies of a rule drift apart — its two copies of the
+ * headline rule already had, with neither a superset of the other.  One script
+ * means one selection, one scope cascade, and one already-graded set of
+ * integration assertions covering the join, the label and the scope
+ * (`dom-variant.integration.test.ts`).  The cost is the field extraction this
+ * operation discards, which is a handful of in-page `querySelector` calls on a
+ * page it has just navigated to.
+ *
+ * ## What this does NOT settle
+ *
+ * The readiness gate is untouched — `waitForPostLoad` still polls the selected
+ * post-detail adapter's own anchor — and #852, the seam between that gate and
+ * this extraction, stays open.  Both of its directions are worth naming,
+ * because binding the parse moved one of them and not the other:
+ *
+ * - **False readiness** survives unchanged.  A green gate says nothing about
+ *   whether the counts region rendered, and where no element renders a counter
+ *   the read still returns 0 rather than refusing.
+ * - **False refusal** is now enforced here as well as at the gate.  The
+ *   extraction resolves adapters itself, so a page no post-detail adapter
+ *   claims raises instead of yielding whatever a whole-page regex found.  That
+ *   narrows #852's remedy space rather than deciding it: relaxing the gate
+ *   ALONE would no longer let counts through from such a page, because this
+ *   read refuses independently.  Which remedy #852 takes is still its call.
+ *
+ * One behaviour delta the trade carries, recorded because it is not free.  The
+ * old read was loose over the whole body; this one is strict per element, with
+ * the loose fallback gated on a counts root the adapter itself declared.  The
+ * `legacy` adapter declares one, so a row rendering both counters as a single
+ * node still yields 41.  The `sdui` adapter declares `counts: []` — its counts
+ * row has never been measured — so there the root is the post container,
+ * `narrowed` is false, and such a row now yields 0 where the loose whole-page
+ * read returned 41.  Unmeasured in both directions, and the net is still
+ * strongly favourable: the shapes measured live are the ones this fixes.
+ *
+ * No diagnostic bundle is written at the two failure branches below, where
+ * `get-post` writes one for the same two outcomes of the same script.  That is
+ * a boundary rather than an oversight — capture sites are enumerated in
+ * `CLAUDE.md` and ADR-007, and adding one is a behaviour change with its own
+ * acceptance, not part of fixing a parse.  Tracked as #890.
  */
-const SCRAPE_POST_STATS_SCRIPT = `(() => {
-  let reactionCount = 0;
-  let commentCount = 0;
-  let shareCount = 0;
-
-  const countText = document.body.textContent || '';
-
-  function parseCount(pattern) {
-    const m = countText.match(pattern);
-    if (!m) return 0;
-    const raw = m[1].replace(/,/g, '');
-    const num = parseInt(raw, 10);
-    return isNaN(num) ? 0 : num;
-  }
-
-  reactionCount = parseCount(/(\\d[\\d,]*)\\s+reactions?/i);
-  commentCount = parseCount(/(\\d[\\d,]*)\\s+comments?/i);
-  shareCount = parseCount(/(\\d[\\d,]*)\\s+reposts?/i);
-
-  return { reactionCount, commentCount, shareCount };
-})()`;
+const SCRAPE_POST_DETAIL_SCRIPT = buildPostDetailExtractionSource(
+  adaptersFor(POST_DETAIL_SURFACE),
+);
 
 // ---------------------------------------------------------------------------
 // Main operation
@@ -168,11 +246,27 @@ export async function getPostStats(
     // Wait for the post content to render
     await waitForPostLoad(client);
 
-    // Extract engagement stats from the DOM
-    const raw = await client.evaluate<RawPostStats>(SCRAPE_POST_STATS_SCRIPT);
+    // Extract engagement stats from the DOM.  The script has already selected
+    // the adapter and resolved its counts root; what arrives here is one of
+    // the three selection outcomes, and neither of the two failures is an
+    // empty record.  Refusing rather than returning zeroes is ADR-008's
+    // empty-vs-error contract: a page nothing read is not a page with no
+    // engagement on it.
+    const raw = await client.evaluate<RawPostStats | AmbiguousPostStats>(
+      SCRAPE_POST_DETAIL_SCRIPT,
+    );
     if (!raw) {
-      throw new Error(
-        "Failed to extract post stats from the DOM",
+      // Zero adapters claimed the page, or the claiming adapter could not
+      // resolve its own scope.  Either way nothing read the page.
+      throw new DOMVariantUnsupportedError(
+        POST_DETAIL_SURFACE,
+        variantNamesFor(POST_DETAIL_SURFACE).map(String),
+      );
+    }
+    if (isAmbiguous(raw)) {
+      throw new DOMVariantAmbiguousError(
+        POST_DETAIL_SURFACE,
+        raw.ambiguousVariants,
       );
     }
 
