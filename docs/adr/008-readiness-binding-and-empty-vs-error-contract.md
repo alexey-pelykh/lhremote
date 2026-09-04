@@ -627,6 +627,14 @@ error class over-claims by construction. And the `cause` reaches an in-process c
 stack trace but **not the CLI or MCP text surface**, because `errorMessage()` renders `message`
 alone; the same is already true of the post-detail gate's probe counts.
 
+> **The second of those two is no longer true.** `errorMessage()` renders the whole cause chain as
+> of #867, so these probe counts DO reach CLI stderr and the MCP tool response text — and so do the
+> post-detail gate's, which the sentence above names alongside them. Left as written rather than
+> edited, because the paragraph is the record of what this binding knew when it was taken; see
+> § Amendments → *The cause reaches the CLI and MCP text surfaces, and the attachment is pinned*
+> (#867, #883). The first of the two — the missing live probe of a zero-result search page — still
+> stands.
+
 **The discriminator defect.** The replaced script chose its extraction strategy with
 `searchItems.length > 0 && !document.querySelector('[data-testid="mainFeed"]')`. Under legacy
 markup that negation evaluates TRUE — not because the condition it tests for holds, but because
@@ -1279,6 +1287,40 @@ here.
 > onto the shared builder, not a new parse; and the readiness seam #852 names is untouched, so a
 > `get-post-stats` run over a page whose counts region never rendered still returns zeroes.
 
+### 2026-09-04 — The cause reaches the CLI and MCP text surfaces, and the attachment is pinned (#867, #883)
+
+Two clauses of this ADR turned stale at once, in opposite directions, and both are corrected here.
+
+**What changed under the ADR.** `errorMessage()` now walks an error's `cause` chain and renders each
+link as a `Caused by:` line (#867, landed in PR #882). Every readiness gate's per-adapter detect
+probe counts therefore reach CLI stderr and the MCP tool response text, where § Decision 4's
+search-results paragraph above records them as reaching neither. That paragraph named the
+post-detail gate's counts as sharing the limitation, so the correction covers all three gates.
+
+**The privacy boundary this moves, and where it is now enforced.** A `cause` is rendered with no
+`LHREMOTE_CAPTURE_DIAGNOSTICS` gate in front of it, so what a producer may attach to one is now a
+disclosure decision rather than an internal detail. `errorMessage`'s own documentation states the
+rule — page content belongs in the gated bundle, never in a `cause` — and states outright that
+holding to it is *"a property of the producers, not something checked here"*. The gates are those
+producers, and until #883 nothing checked them either: each attached its probe counts and no test
+read the result back.
+
+**What #883 pins.** Each of the six diagnostic-`cause` sites across the three gates now has a test
+asserting the cause's message. Five had none; the sixth, the search-results zero-match branch, was
+already covered and is the pattern the others follow. The assertion is whole-message rather than a
+substring, so a producer that later appended page content to a cause fails rather than passing
+unnoticed, and the probe text is derived through `formatVariantProbes` rather than restated as a
+literal, so a change to that rendering cannot strand a stale expectation. The falsifier that defines
+the pin: deleting `{ cause: … }` from any one site turns exactly its own test red.
+
+**Deliberately not done, so a reader does not infer it.** The `ExtractionTimeoutError` raised when
+exactly one adapter matched still carries no cause, and no test asks it to — that diagnosis has a
+designed home in the diagnostic bundle, per ADR-007 § 2026-09-01 Amendment. The extraction-time
+raises in `search-posts.ts` likewise carry no cause; `ExtractionTimeoutError`'s constructor takes no
+`ErrorOptions` at all, so that one is structural rather than chosen. And the claim pinned here is
+only that a cause is attached and what it says — that it then reaches an operator is
+`errorMessage`'s own contract, pinned separately by #882.
+
 ## Related
 
 - Code: `packages/core/src/linkedin/dom-variant.ts`,
@@ -1308,4 +1350,6 @@ here.
   engagement counts read anchored, third and last instance of the count-concatenation class on a
   post-detail page), #852 (`get-post-stats` readiness seam — OPEN, deliberately not decided by
   #857), #890 (`get-post-stats` writes no diagnostic bundle at its extraction-failure branches —
-  the boundary #857 declared rather than crossed)
+  the boundary #857 declared rather than crossed), #867 (`errorMessage` renders the cause chain, so
+  the gates' probe counts reach the CLI and MCP text surfaces, § 2026-09-04 Amendment), #883 (the
+  attachment of those causes is pinned at all six sites, § 2026-09-04 Amendment)
