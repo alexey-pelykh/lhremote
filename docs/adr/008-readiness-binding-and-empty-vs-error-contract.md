@@ -1270,6 +1270,15 @@ also remains live at `get-feed.ts`, `get-profile-activity.ts` and `get-post-stat
 the last, which is page-wide rather than per-item and so the worst of the three); none is touched
 here.
 
+> **Overtaken by events on 2026-09-04 for one of the three.** #857 landed, and `get-post-stats.ts`
+> now evaluates the post-detail extraction script the registry generates rather than sweeping
+> `document.body.textContent` — so the sentence above is false for that site and the list is down
+> to `get-feed.ts` and `get-profile-activity.ts`. Left in place rather than rewritten, because the
+> list is what the remaining two will be scoped from and a reader needs to see which member left
+> and why. Two consequences worth carrying into that scoping: the remedy was a call-site change
+> onto the shared builder, not a new parse; and the readiness seam #852 names is untouched, so a
+> `get-post-stats` run over a page whose counts region never rendered still returns zeroes.
+
 ## Related
 
 - Code: `packages/core/src/linkedin/dom-variant.ts`,
@@ -1279,6 +1288,8 @@ here.
   `packages/core/src/services/errors.ts`,
   `packages/core/src/operations/get-post.ts`,
   `packages/core/src/operations/get-post-engagers.ts`,
+  `packages/core/src/operations/get-post-stats.ts` (engagement counts read through the
+  post-detail adapter's own counts root, #857; its readiness seam stays open as #852),
   `packages/core/src/operations/search-posts.ts` (§ 2026-09-02 Amendment, #841;
   engagement counts read anchored per § 2026-09-03 Amendment, #869)
 - ADRs: [ADR-005](005-error-hierarchy-design.md) (error hierarchy this extends),
@@ -1293,4 +1304,8 @@ here.
   § 2026-09-03 Amendment), #874 (short reactor collection reported rather than raised,
   § 2026-09-03 Amendment), #869 (search-results engagement counts read anchored,
   § 2026-09-03 Amendment), #870 (diagnostic capture for this surface — CLOSED; the half
-  § 2026-09-03 Amendment left, landed as ADR-007 § 2026-09-04 Amendment)
+  § 2026-09-03 Amendment left, landed as ADR-007 § 2026-09-04 Amendment), #857 (`get-post-stats`
+  engagement counts read anchored, third and last instance of the count-concatenation class on a
+  post-detail page), #852 (`get-post-stats` readiness seam — OPEN, deliberately not decided by
+  #857), #890 (`get-post-stats` writes no diagnostic bundle at its extraction-failure branches —
+  the boundary #857 declared rather than crossed)

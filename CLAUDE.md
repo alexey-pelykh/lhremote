@@ -88,7 +88,7 @@ Architecture Decision Records live in `docs/adr/` and explain *why* the codebase
 | [005](docs/adr/005-error-hierarchy-design.md) | Error hierarchy design | `packages/core/src/*/errors.ts` |
 | [006](docs/adr/006-operations-layer.md) | Operations layer | `packages/core/src/operations/` |
 | [007](docs/adr/007-profile-ready-selector-strategy.md) | Profile page readiness selector strategy | `packages/core/src/operations/navigate-to-profile.ts` |
-| [008](docs/adr/008-readiness-binding-and-empty-vs-error-contract.md) | Readiness binding and the empty-vs-error contract (post-detail; search-results and reactions-modal per the § 2026-09-02 Amendments) | `packages/core/src/linkedin/dom-variant.ts`, `packages/core/src/linkedin/corroboration.ts`, `packages/core/src/cdp/wait-for-post-load.ts`, `packages/core/src/cdp/wait-for-reactions-modal.ts`, `packages/core/src/operations/get-post.ts`, `packages/core/src/operations/get-post-engagers.ts`, `packages/core/src/operations/search-posts.ts`, `packages/core/src/services/errors.ts` |
+| [008](docs/adr/008-readiness-binding-and-empty-vs-error-contract.md) | Readiness binding and the empty-vs-error contract (post-detail; search-results and reactions-modal per the § 2026-09-02 Amendments) | `packages/core/src/linkedin/dom-variant.ts`, `packages/core/src/linkedin/corroboration.ts`, `packages/core/src/cdp/wait-for-post-load.ts`, `packages/core/src/cdp/wait-for-reactions-modal.ts`, `packages/core/src/operations/get-post.ts`, `packages/core/src/operations/get-post-engagers.ts`, `packages/core/src/operations/get-post-stats.ts`, `packages/core/src/operations/search-posts.ts`, `packages/core/src/services/errors.ts` |
 
 ## Task Tracking
 

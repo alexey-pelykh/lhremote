@@ -904,7 +904,10 @@ describe("search-results Tier-2 oracle (integration)", () => {
       // The bound #869 names: the read is scoped to one card, so it cannot
       // pull a count in from a different post.  Pinned because it is what a
       // document-wide "fix" would break — the failure `get-post-stats`
-      // already carries as #857.
+      // carried until #857 bound it to the post-detail adapter's own counts
+      // root.  Kept in the past tense rather than dropped: the bound is what
+      // stops the next widening, and the site that demonstrated it is worth
+      // naming even now that it is fixed.
       await install(
         legacyCard({ counts: WHOLE_COUNTS_ROW }) +
           legacyCard({ urn: "urn:li:activity:2", name: "Other Person" }),
