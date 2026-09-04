@@ -4,6 +4,10 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { CDPClient } from "../../cdp/client.js";
 import {
+  EMPTY_DOCUMENT_HTML,
+  installDocument,
+} from "../../cdp/testing/install-document.js";
+import {
   launchChromium,
   type ChromiumInstance,
 } from "../../cdp/testing/launch-chromium.js";
@@ -53,16 +57,12 @@ describe("DOM variant adapters (integration)", () => {
     await client.connect();
     // The document is replaced through CDP rather than drained from JS: the
     // drain dereferenced `document.body` before the freshly-launched target
-    // had one, which is #866.  Setting the content also *creates* the body, so
-    // everything below can rely on it existing.  innerHTML stays unavailable
-    // either way (Trusted Types), so elements are still built through DOM APIs.
-    const { frameTree } = (await client.send("Page.getFrameTree", {})) as {
-      frameTree: { frame: { id: string } };
-    };
-    await client.send("Page.setDocumentContent", {
-      frameId: frameTree.frame.id,
-      html: "<!doctype html><html><head></head><body></body></html>",
-    });
+    // had one, which is #866.  Installing a document also *creates* the body,
+    // so everything below can rely on it existing.  innerHTML stays
+    // unavailable either way (Trusted Types), so elements are still built
+    // through DOM APIs.  The shared helper is what makes "installed" mean
+    // "observable by the next `evaluate`" -- see `installDocument` (#888).
+    await installDocument(client, EMPTY_DOCUMENT_HTML);
   }, BEFORE_EACH_TIMEOUT);
 
   afterEach(() => {

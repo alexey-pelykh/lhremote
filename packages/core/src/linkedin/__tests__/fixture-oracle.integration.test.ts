@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { CDPClient } from "../../cdp/client.js";
+import { installDocument } from "../../cdp/testing/install-document.js";
 import {
   launchChromium,
   type ChromiumInstance,
@@ -207,17 +208,17 @@ describe("post-detail fixture oracle (integration)", () => {
   /**
    * Install a captured page into the live document.
    *
+   * Through the shared gate, which is what makes the counts below meaningful:
+   * an `evaluate` resolving against a document that is not the one just
+   * installed answers `0` for every selector rather than throwing, so the
+   * canary reported a clean, wrong number roughly once per full windows suite
+   * (#888).  `installDocument` does not return until the installed markup has
+   * been observed through that same `evaluate` path.
+   *
    * @param label - Fixture file stem under `__fixtures__/legacy/`.
    */
   async function installFixture(label: string): Promise<void> {
-    const html = readFileSync(fixturePath(label, "html"), "utf8");
-    const { frameTree } = (await client.send("Page.getFrameTree", {})) as {
-      frameTree: { frame: { id: string } };
-    };
-    await client.send("Page.setDocumentContent", {
-      frameId: frameTree.frame.id,
-      html,
-    });
+    await installDocument(client, readFileSync(fixturePath(label, "html"), "utf8"));
   }
 
   /** Count elements matching a selector on the installed page. */
