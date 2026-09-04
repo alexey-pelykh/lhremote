@@ -642,9 +642,13 @@ capture (that is #835's pattern, and ADR-007 § 2026-09-01 Amendment owns it), a
 counts are still parsed unanchored from each card's own text rather than by the anchored
 per-element read post detail moved to. Both are follow-up candidates, not part of this binding.
 
-> **Half of that is now done.** The engagement counts ARE read by the anchored per-element read
+> **Both halves are now done.** The engagement counts ARE read by the anchored per-element read
 > as of #869 — see § Amendments → *Search-results engagement counts are read anchored*. The
-> diagnostic-capture half stands exactly as written and is tracked as #870. Read the paragraph
+> diagnostic-capture half is CLOSED by #870: this surface captures at three sites — the readiness
+> gate's deadline, its scrape's own container-tier refusal, and cardinal corroboration — behind the
+> same `LHREMOTE_CAPTURE_DIAGNOSTICS=1` gate as every other surface. ADR-007 still owns the
+> pattern; see its § 2026-09-04 Amendment for what the search-results bundle carries and why its
+> `variantDetection` reads with one branch more than any other surface's. Read the paragraph
 > above as the record of what this binding scoped, not as a description of the code — and read the
 > one **below** the same way. #868 gave this surface the Tier-2 oracle that paragraph says is
 > absent: `packages/core/src/linkedin/__tests__/search-results.integration.test.ts`, a real browser
@@ -1201,7 +1205,8 @@ fixture, so every claim here rests on the live probe plus Tier-1 against mocks.
 
 The § 2026-09-02 Amendment left this surface's engagement counts *"parsed unanchored from each
 card's own text"* and named that a follow-up candidate. This closes that half. The
-diagnostic-capture half of the same paragraph is untouched and is tracked as #870.
+diagnostic-capture half of the same paragraph was untouched here and tracked as #870; it has since
+been closed in turn — see ADR-007 § 2026-09-04 Amendment.
 
 **Two independent defects, and separating them is the finding.** The preamble that opened #869
 treated the concatenation as the reason the reaction count vanished. It is not, and #868's oracle
@@ -1287,5 +1292,5 @@ here.
   binding, § 2026-09-02 Amendment), #872 (legacy detect anchor read `data-id` instead of `data-urn`,
   § 2026-09-03 Amendment), #874 (short reactor collection reported rather than raised,
   § 2026-09-03 Amendment), #869 (search-results engagement counts read anchored,
-  § 2026-09-03 Amendment), #870 (diagnostic capture for this surface — still open, the half
-  § 2026-09-03 Amendment deliberately leaves)
+  § 2026-09-03 Amendment), #870 (diagnostic capture for this surface — CLOSED; the half
+  § 2026-09-03 Amendment left, landed as ADR-007 § 2026-09-04 Amendment)
