@@ -71,10 +71,14 @@ export interface RawDomPost {
  *
  * - **Post text**: `[data-testid="expandable-text-box"]` (clone, strip
  *   `expandable-text-button` child, take `textContent`).
- * - **Author anchor**: the profile anchor whose own text carries the
- *   `[name, connection degree, headline, relative time]` run — a mention, a
- *   repost chip or a suggested-connection link renders a bare name, so an
- *   earlier profile link is not mistaken for the author's.
+ * - **Author anchor**: the last profile anchor inside the post's actor header
+ *   — the region ending at the first of the control-menu button and the post
+ *   body.  A mention or a suggested-connection link sits below that region; a
+ *   repost chip sits inside it but above the actor's own block, so it is never
+ *   the last.  An anchor's href and text alone cannot separate a chip that
+ *   renders the way the actor block does, which is why the region bound, not
+ *   the `[name, connection degree, headline, relative time]` run, is what
+ *   decides here.
  * - **Author name**: visible text of that author anchor — the same element
  *   the profile URL is read from, so the two cannot describe two people.
  *   Read from inside the anchor's `aria-hidden="true"` wrapper when it has
@@ -101,6 +105,44 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // Profile anchors inside a post, in document order.
   function profileLinksIn(item) {
     return Array.from(item.querySelectorAll('a[href*="/in/"], a[href*="/company/"]'));
+  }
+
+  // The same profile anchors PLUS the two elements that close the post's actor
+  // header: the control-menu button and the post body.  Queried together in one
+  // call, because a single \`querySelectorAll\` returns nodes in document order
+  // by spec — so the boundary is the anchors' real position relative to those
+  // markers rather than an assumption about the markup's shape.
+  const HEADER_SCAN_SELECTOR =
+    'a[href*="/in/"], a[href*="/company/"], ' +
+    'button[aria-label^="Open control menu for post"], ' +
+    '[data-testid="expandable-text-box"]';
+
+  // The profile anchors rendered inside the post's actor header — those before
+  // the FIRST of the control-menu button and the post body.  Both markers are
+  // already load-bearing here (post detection and text extraction), so bounding
+  // the region adds no new dialect dependency; taking whichever comes first is
+  // what makes the bound hold whichever order LinkedIn serves them in.
+  //
+  // Returns an empty list when the region is empty OR when neither marker is
+  // present at all — both mean "this signal has nothing to say", and the caller
+  // falls back.  Returning every link in the post instead would not restore the
+  // previous behaviour, it would invent a third one: the cascade below this
+  // region is first-wins, so handing it an unbounded list to resolve last-wins
+  // would select mentions and embedded actors by construction.
+  function headerLinksIn(item, links) {
+    const ordered = Array.from(item.querySelectorAll(HEADER_SCAN_SELECTOR));
+    const boundary = ordered.findIndex(function (node) {
+      return links.indexOf(node) < 0;
+    });
+    return boundary < 0 ? [] : ordered.slice(0, boundary);
+  }
+
+  // The last element of a list satisfying a predicate, or null.
+  function lastWhere(list, pred) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (pred(list[i])) return list[i];
+    }
+    return null;
   }
 
   // Path part of an anchor's href, or null when it cannot be parsed.
@@ -169,30 +211,93 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     });
   }
 
+  // Is this anchor's profile linked more than once inside the post?  LinkedIn
+  // usually links the author twice — once for the avatar, once for the name
+  // block — while chips and mentions are linked once.
+  function isPairedIn(links) {
+    return function (a) {
+      const path = linkPath(a);
+      if (path === null) return false;
+      return links.filter(function (other) { return linkPath(other) === path; }).length > 1;
+    };
+  }
+
+  // The author among the anchors of the post's actor header.
+  //
+  // Inside that region POSITION is evidence, which it is nowhere else: every
+  // decoy the region still admits — a repost chip, an "X commented on this"
+  // chip — renders BEFORE the actor's own block, never after it.  So each
+  // signal takes the LAST anchor it admits rather than the first.
+  //
+  //   1. The author's profile is linked twice (avatar + name block); a chip is
+  //      linked once.
+  //   2. Failing that, the actor block renders its name inside a run where a
+  //      chip may be bare text.
+  //   3. Failing that, position alone: the last anchor carrying any text.
+  //
+  // Signal 1 counts multiplicity WITHIN the region, never across the whole post.
+  // Both of the author's anchors — avatar and name block — are inside the actor
+  // header, so the region loses nothing by being the corpus; counting across the
+  // post instead lets a chip win on evidence drawn from outside the region it is
+  // being ranked in.  A resharer who is also mentioned in the post's own body is
+  // linked twice that way, and would outrank a singly-linked author.
+  //
+  // The relative-time signal is deliberately NOT consulted here.  It is a proxy
+  // for "this is the actor block", and inside the header the region bound plus
+  // position answer that question directly — while the proxy misfires outright
+  // on a decoy whose own bare text ends in a time-like token ("Deco Yperson 2d"),
+  // which is one of the shapes issue #859 measured.  It stays in the fallback
+  // below, where there is no positional evidence to replace it.
+  function pickHeaderAuthor(candidates) {
+    const named = candidates.filter(hasVisibleText);
+    if (named.length === 0) return null;
+    return lastWhere(named, isPairedIn(candidates))
+      || lastWhere(named, hasNameRun)
+      || named[named.length - 1];
+  }
+
   // The post's AUTHOR anchor — not merely a profile anchor.  Reading both
   // fields off one element makes them agree; picking the right element is what
   // makes them agree about the right person, and any profile link rendered
   // before the author's (a mention, a repost chip, a suggested connection) is a
   // candidate for being mistaken for it.
   //
-  // Tried in order, strongest signal first, each keyed on nothing but an
-  // anchor's href and the text it renders:
+  // An anchor's href and its own text are not enough on their own: a repost
+  // chip that renders its name exactly the way the actor block does is
+  // indistinguishable on those two inputs (issue #859).  The third input is
+  // WHERE the anchor sits — inside the actor header or below it — which
+  // \`headerLinksIn\` bounds using markers this script already depends on.
   //
-  //   1. The author block is the only profile anchor whose own text carries the
-  //      [name, connection degree, headline, relative time] run this file's DOM
-  //      notes describe; a chip or a mention renders a bare name.  The run is
-  //      recognised by its time token, read off the anchor's text rather than
-  //      off whichever element holds it, so both name shapes satisfy it.
-  //   2. Failing that, LinkedIn usually links the author twice — once for the
-  //      avatar, once for the name block — while chips and mentions are linked
-  //      once, so a profile carrying more than one anchor is the author's.
-  //   3. Failing that, the author block still wraps its name in a run where a
-  //      chip is bare text.
+  // So: prefer the actor header's own answer; fall back to the whole post only
+  // when the header holds no text-bearing anchor at all, and there use the
+  // original cascade unchanged, first-wins:
+  //
+  //   1. The anchor whose own text carries the [name, connection degree,
+  //      headline, relative time] run this file's DOM notes describe.  The run
+  //      is recognised by its time token, read off the anchor's text rather
+  //      than off whichever element holds it, so both name shapes satisfy it.
+  //   2. Failing that, the profile linked more than once.
+  //   3. Failing that, the anchor wrapping its name in a run.
   //   4. Then the first anchor carrying any text, and finally the first anchor
   //      at all, so a post with only a text-less or empty author link still
   //      yields a URL rather than nothing.
+  //
+  // A quote-repost — a reshare carrying its own commentary — resolves correctly
+  // out of this: the outer post has a body of its own, so the region closes on
+  // it and the embedded original's actor anchors fall outside; the outer
+  // resharer, who authored that commentary, is selected, and that is also who
+  // LinkedIn's own control-menu label names.  A BARE reshare carries no
+  // commentary and so no body of its own, and there the region closes on the
+  // embedded original's body instead and the original author is selected —
+  // which is the right answer for that shape, and the one issue #859's own
+  // reproductions ask for.
   function findAuthorAnchor(item) {
     const links = profileLinksIn(item);
+    if (links.length === 0) return null;
+
+    const header = pickHeaderAuthor(headerLinksIn(item, links));
+    if (header) return header;
+
     const named = links.filter(hasVisibleText);
 
     const dated = named.find(function (a) {
@@ -200,11 +305,7 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     });
     if (dated) return dated;
 
-    const paired = named.find(function (a) {
-      const path = linkPath(a);
-      if (path === null) return false;
-      return links.filter(function (other) { return linkPath(other) === path; }).length > 1;
-    });
+    const paired = named.find(isPairedIn(links));
     if (paired) return paired;
 
     return named.find(hasNameRun) || named[0] || links[0] || null;
