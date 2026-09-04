@@ -187,6 +187,10 @@ that most needs an artifact produced none.
    send the next reader hunting a slow page that was never slow. The caller
    label stays a single identifier token, per the same amendment's convention.
 
+   > **Extended on 2026-09-04** — this table gains two rows for the
+   > search-results surface, which captured nothing at either of its failure
+   > sites until #870. Nothing above changes. See § 2026-09-04 Amendment.
+
 3. **Two bundle fields.** Every post-detail and reactions-modal bundle now
    carries `trigger`, because artifacts get copied out of their `mkdtemp`
    directory and a bundle that cannot say what it was capturing leaves its
@@ -250,10 +254,122 @@ bundle a fixed-selector probe structurally cannot supply.
 reactions modal above all — its bundle carries engager names, profile slugs and
 headlines, i.e. personal data.
 
+### 2026-09-04 — The search-results surface captures too (#870)
+
+The § 2026-09-01 Amendment above generalized capture from *timeout* to
+*failure* and enumerated the sites that do it. The **search-results** surface
+was not among them, and until #870 it captured **nothing** at any of its
+failure sites — while every other place this codebase can fail to read a
+LinkedIn page wrote a bundle. ADR-008 § 2026-09-02 Amendment recorded that gap
+as *"deliberately not done here, so a reader does not infer it"*; this closes
+it. (That date carries two ADR-008 amendments; this is the search-results one,
+#841.)
+
+**Why this surface warrants it more than the others, not less.** It has the
+least offline evidence behind it: its `legacy` adapter is *reconstructed* from
+a 2026-03-26 selector study and the diff of commit `24052dd` rather than
+probed, and no live probe of a legacy or a zero-result search page exists. A
+live capture is therefore the only route by which a field failure yields a page
+to read at all. It is also the surface where the error alone is least
+diagnostic — see the `variantDetection` note below.
+
+**The two trigger classes already defined, across three call sites:**
+
+| Trigger | Stem | `console.warn` tag |
+|---|---|---|
+| readiness timeout, search results | `wait-for-search-results` | `[waitForSearchResults]` |
+| extraction failure, search results | `search-results-extraction-failure` | `[searchResultsExtraction]` |
+
+- `waitForSearchResults` captures when its polling deadline expires. The
+  capture fires **ahead of** the post-deadline classification rather than once
+  per branch, so all three outcomes — `DOMVariantUnsupportedError`,
+  `DOMVariantAmbiguousError`, `ExtractionTimeoutError` — produce the same
+  artifact, and the one detect probe already read for the error's `cause` is
+  the one recorded in the bundle. They cannot disagree about what was on the
+  page.
+- `searchPosts` captures at its **container tier** — the scroll-loop scrape
+  coming back `null` (no adapter read the page, or the claiming one enumerated
+  no cards) or reporting two claimants.
+- `searchPosts` captures at its **cardinal tier** — the `ExtractionFailedError`
+  corroboration raises when `postCardCount > 0` contradicts an empty `posts`.
+
+The last two are the same pair `getPost` covers on post detail, and the same
+pair `getPostEngagers` covers through its own `unreadableModalError`. Neither
+reaches a deadline: readiness went green in milliseconds, an adapter claimed
+the page — and only then did the read fail. That is precisely why a
+timeout-gated capture could not see either, and why this surface's dominant
+suspected failure path produced no artifact at all.
+
+An earlier draft of this amendment scoped the container tier OUT and justified
+it by claiming `getPostEngagers` drew that line. It does not — `get-post-engagers.ts`'s
+`unreadableModalError` captures before raising either variant error — so the
+scope went with the justification rather than surviving it. Recorded because a
+reader meeting only the narrower shape would have no way to tell a deliberate
+boundary from an oversight.
+
+**Bundle fields, and the one that reads differently here.** The bundle carries
+`trigger` and `variantDetection` exactly as its two siblings do, plus two
+fields of its own:
+
+- a **card funnel** — a `scopeMatchCounts` map and a deduplicated
+  `candidateCardCount`, then the three cumulative counts
+  `cardsClearingHeightFloor` → `cardsWithAuthorLink` → `cardsWithMenuButton`.
+  Each of those three is the population that survived every filter above it, in
+  the card loop's own order, so the step where the number collapses names the
+  layer that broke. The first two are not survivor counts and are not part of
+  that chain: `candidateCardCount` is the union the funnel enumerates from, and
+  can exceed what any single adapter would have enumerated. It is *generated from the adapter
+  registry* by `buildSearchResultsCardFunnelSource`, next to the extraction
+  source whose filters it mirrors, rather than hand-written at the capture
+  site: a second copy of a card selector drifting would leave the funnel
+  confidently measuring a layer the loop no longer applies, and a diagnostic
+  that lies is worse than one that is absent. It enumerates the **union** of
+  every adapter's scopes, deduplicated by element identity — deliberately
+  wider than any single adapter's binding, because this is the artifact read
+  precisely when no adapter could claim the page.
+- a **`cardinals`** block — the scrape's self-reported `variant` beside
+  `postCardCount` and `extractedCount`. This is what makes an
+  `ExtractionFailedError` on this surface self-explaining rather than merely
+  typed. `null` on the readiness-timeout trigger, where no scrape ran; the
+  `trigger` field narrows what a `null` means — under `readiness-timeout` no
+  scrape was attempted, under `extraction-failure` the scrape itself was
+  unreadable — so the field is always present rather than sometimes absent.
+
+**`variantDetection` has an extra branch on this surface, and the bundle
+cannot close it.** Everywhere else, *nothing matched* means LinkedIn served a
+dialect nobody registered. Here it means that **or** that the search
+legitimately matched nothing — a result-less page renders no cards, so no
+`detect` anchor can match either (ADR-008 § 2026-09-02 Amendment, #841). The two are
+indistinguishable from the DOM with what is measured today, and the funnel
+cannot separate them: both produce an all-zero reading. What separates them is
+`bodyTextSnippet` and the screenshot beside it — a result-less search page says
+so in words a reader can read.
+
+That is deliberately **not** a probe. A `hasNoResultsBlock`-style selector
+would put an unmeasured anchor into the one artifact an operator consults when
+they have no other evidence, and a confident wrong reading there is worse than
+none — the same refusal `zeroMatchCause` makes one layer up, on the same
+grounds ADR-008 § Decision 3 gives for removing the always-true `<main>`
+fallback. Settling this properly needs a live probe of a zero-result search
+page, which remains open.
+
+**Unchanged, and load-bearing:** activation stays gated on
+`LHREMOTE_CAPTURE_DIAGNOSTICS=1` at both new sites. A search-results bundle
+carries author names, profile slugs, headlines and post bodies — third
+parties' personal data — so CLI and MCP remain default-off. The per-invocation
+`mkdtemp` directory, the `0o700`/`0o600` modes, the cancellation cap, and the
+rule that a capture-side failure never masks the caller's error all carry over
+untouched. On the extraction site the detect probe is additionally skipped
+outright when capture is off: unlike `getPostEngagers`, nothing on that path
+needs it for the *error* — the settled scrape already reported its own dialect
+— so its sole consumer is the bundle.
+
 ## Related
 
 - Code: `packages/core/src/operations/navigate-to-profile.ts`
 - Branch: `fix/navigate-to-profile-diagnostics` (initial selector
   decision); `fix/unfollow-profile-company-urls` (2026-04-29 amendment)
 - Issues: #757 (company-page extension); #835 (2026-09-01 amendment —
-  capture on extraction failure, per-adapter detect counts in the bundle)
+  capture on extraction failure, per-adapter detect counts in the bundle);
+  #840 (2026-09-02 amendment — reactions-modal `variantDetection`); #870
+  (2026-09-04 amendment — the search-results readiness and extraction sites)
