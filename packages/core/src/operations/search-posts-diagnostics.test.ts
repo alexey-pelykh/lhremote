@@ -64,6 +64,9 @@ vi.mock("node:fs/promises", () => ({
 }));
 
 import { lstat, mkdtemp, writeFile } from "node:fs/promises";
+// Real, unmocked: the assertions about where artifacts land must use the same
+// platform-correct path semantics the capture composed them with.
+import { dirname } from "node:path";
 
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
@@ -540,16 +543,22 @@ describe("captureSearchResultsFailure itself — the wrapper properties", () => 
       .mock.calls.find((call) => String(call[0]).endsWith(".png"));
     expect(pngCall?.[2]).toMatchObject({ mode: 0o600 });
 
-    // No shared parent: the only directory in the path is the one mkdtemp
+    // No shared parent: the directory holding the bundle IS the one mkdtemp
     // just made, which is what closes the TOCTOU window (ADR-007
     // § 2026-05-05 Amendment).
+    //
+    // Asserted through `path.dirname` rather than by splitting on a literal
+    // "/": the paths under test come out of `path.join`, so on Windows they
+    // carry `\` and a POSIX-separator split would return the whole path and
+    // compare it against itself-with-a-prefix.  `node:path` is deliberately
+    // NOT mocked here, so this is the same platform-correct implementation
+    // the capture itself composed the path with.
     const baseDir = String(
       await vi.mocked(mkdtemp).mock.results[0]?.value ?? "",
     );
     expect(baseDir).not.toBe("");
-    expect(String(jsonCall?.[0])).toBe(
-      `${baseDir}/${String(jsonCall?.[0]).split("/").pop() ?? ""}`,
-    );
+    expect(dirname(String(jsonCall?.[0]))).toBe(baseDir);
+    expect(dirname(String(pngCall?.[0]))).toBe(baseDir);
     warnSpy.mockRestore();
   });
 
