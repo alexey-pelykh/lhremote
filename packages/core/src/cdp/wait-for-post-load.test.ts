@@ -235,9 +235,16 @@ describe("waitForPostLoad", () => {
     // the formatter is separately pinned against literals in
     // `dom-variant.test.ts`, and the subject is only whether production
     // attaches a cause carrying it.
+    // Keyed on `probes[a.variant]` — source `buildDetectionSource` actually
+    // emits — rather than the bare `probes` the two class-only tests above
+    // use.  Both discriminate correctly today, since that generator is the
+    // only source emitting either; the tighter one cannot start aliasing onto
+    // a readiness predicate or an extraction script that later happens to
+    // carry the word, which is the rule `search-posts.test.ts` states for its
+    // own markers.  The looser neighbours are inherited, not endorsed.
     const detection = { matched: [], probes: { sdui: 0, legacy: 0 } };
     const evaluate = vi.fn(async (script: string) =>
-      script.includes("probes") ? detection : false,
+      script.includes("probes[a.variant]") ? detection : false,
     );
     const client = { evaluate, send: vi.fn() } as unknown as CDPClient;
 
@@ -282,7 +289,7 @@ describe("waitForPostLoad", () => {
       probes: { sdui: 3, legacy: 7 },
     };
     const evaluate = vi.fn(async (script: string) =>
-      script.includes("probes") ? detection : false,
+      script.includes("probes[a.variant]") ? detection : false,
     );
     const client = { evaluate, send: vi.fn() } as unknown as CDPClient;
 
