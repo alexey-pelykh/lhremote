@@ -11,6 +11,7 @@ import {
   it,
 } from "vitest";
 import { CDPClient } from "../../cdp/client.js";
+import { installDocument } from "../../cdp/testing/install-document.js";
 import {
   launchChromium,
   type ChromiumInstance,
@@ -545,15 +546,16 @@ describe("search-results Tier-2 oracle (integration)", () => {
    * guard for the fixtures this file will grow — the moment one relies on
    * content flow, box-model differences start deciding which side of the
    * floor a card lands on — not a claim that the present ones need it.
+   *
+   * The send goes through the shared gate, which is what makes the counts
+   * below meaningful: an `evaluate` resolving against a document that is not
+   * the one just installed answers `0` for every selector rather than
+   * throwing, so the canary reported a clean, wrong number roughly once per
+   * full windows suite (#888).  `installDocument` does not return until the
+   * installed markup has been observed through that same `evaluate` path.
    */
   async function install(body: string): Promise<void> {
-    const { frameTree } = (await client.send("Page.getFrameTree", {})) as {
-      frameTree: { frame: { id: string } };
-    };
-    await client.send("Page.setDocumentContent", {
-      frameId: frameTree.frame.id,
-      html: shell(body),
-    });
+    await installDocument(client, shell(body));
   }
 
   /** Count elements matching a selector on the installed page. */

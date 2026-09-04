@@ -5,6 +5,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { CDPClient } from "../../cdp/client.js";
 import { CDPEvaluationError, CDPTimeoutError } from "../../cdp/errors.js";
 import {
+  EMPTY_DOCUMENT_HTML,
+  installDocument,
+} from "../../cdp/testing/install-document.js";
+import {
   launchChromium,
   type ChromiumInstance,
 } from "../../cdp/testing/launch-chromium.js";
@@ -35,30 +39,6 @@ async function withTimeout<T>(
   }
 }
 
-/**
- * Reset the page to an empty document.
- *
- * This replaces the document through CDP rather than draining `document.body`
- * from JS.  The drain dereferenced `document.body` before the freshly-launched
- * target had one -- null on the slowest runner in the matrix, which is the
- * whole of #866.  Three prior fixes raised timeouts instead; a deadline cannot
- * help a null dereference, because the evaluation runs promptly and throws.
- *
- * Setting the content also *creates* the body, so the invariant holds for
- * everything that runs afterwards rather than being raced for.  `innerHTML`
- * remains unavailable either way (Chromium's Trusted Types policy blocks it),
- * so elements are still built through DOM APIs.
- */
-async function resetBody(client: CDPClient): Promise<void> {
-  const { frameTree } = (await client.send("Page.getFrameTree", {})) as {
-    frameTree: { frame: { id: string } };
-  };
-  await client.send("Page.setDocumentContent", {
-    frameId: frameTree.frame.id,
-    html: "<!doctype html><html><head></head><body></body></html>",
-  });
-}
-
 describe("DOM automation (integration)", () => {
   let chromium: ChromiumInstance;
   let client: CDPClient;
@@ -74,7 +54,21 @@ describe("DOM automation (integration)", () => {
   beforeEach(async () => {
     client = new CDPClient(chromium.port, { timeout: BEFORE_EACH_TIMEOUT });
     await withTimeout(client.connect(), BEFORE_EACH_TIMEOUT, "client.connect()");
-    await withTimeout(resetBody(client), BEFORE_EACH_TIMEOUT, "resetBody()");
+    // Reset through the shared install gate rather than by draining
+    // `document.body` from JS.  The drain dereferenced `document.body` before
+    // the freshly-launched target had one -- null on the slowest runner in the
+    // matrix, which is the whole of #866; installing a document *creates* the
+    // body instead, so everything below can rely on it existing.  `innerHTML`
+    // stays unavailable either way (Trusted Types), so elements are still
+    // built through DOM APIs.  The gate is what makes "installed" mean
+    // "observable by the next `evaluate`" -- see `installDocument` (#888).
+    //
+    // Deliberately NOT wrapped in `withTimeout`: this hook runs on vitest's
+    // default 10 s budget, so a 15 s guard could never fire ahead of the
+    // runner, and `installDocument` carries its own 3 s deadline whose message
+    // names the sentinel that never matched -- strictly more diagnostic than
+    // any label a wrapper could add.
+    await installDocument(client, EMPTY_DOCUMENT_HTML);
   });
 
   afterEach(() => {
