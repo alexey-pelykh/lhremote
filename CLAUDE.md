@@ -53,6 +53,7 @@ Do **not** dismiss or ignore Copilot feedback. Every comment must be explicitly 
 - Tier 1 and 2 run together via `pnpm test` — no separate commands needed.
 - Integration tests use `*.integration.test.ts` suffix.
 - Test helper `packages/core/src/cdp/testing/launch-chromium.ts` manages Chromium lifecycle.
+- Test helper `packages/core/src/cdp/testing/install-document.ts` installs fixture markup into that page. Every Tier-2 install goes through it and none calls `Page.setDocumentContent` directly: it does not return until the installed document has been observed through the same `client.evaluate` path the assertions use, and without that gate an evaluation landing on a document that is not the one just installed counts 0 for every selector rather than throwing — a clean, wrong number (#888).
 - Chromium is installed in CI via `npx playwright-core install chromium --with-deps`.
 - E2E tests live in `packages/e2e/src/` and are **not** run in CI. Always run `pnpm test:e2e` locally before submitting PRs that add or modify E2E tests.
 - Run a single E2E file: `pnpm --filter @lhremote/e2e test:e2e:file <pattern>` (e.g., `list-accounts`). Do **not** use `--` before the pattern — pnpm forwards it literally and vitest ignores args after `--` for file filtering.
