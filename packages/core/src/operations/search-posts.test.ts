@@ -39,6 +39,7 @@ import type { RawDomPost } from "./get-feed.js";
 import {
   adaptersFor,
   buildReadinessPredicateSource,
+  formatVariantProbes,
 } from "../linkedin/dom-variant.js";
 import {
   DOMVariantAmbiguousError,
@@ -549,6 +550,59 @@ describe("searchPosts variant binding", () => {
     const rejection = waitForSearchResults(client, 1);
     await expect(rejection).rejects.toBeInstanceOf(DOMVariantAmbiguousError);
     await expect(rejection).rejects.toThrow("sdui, legacy");
+  });
+
+  it("attaches the detect probe counts as the ambiguous error's cause", async () => {
+    // The zero-match branch above already pins its own cause; this is the
+    // other `{ cause: … }` site on this gate, and deleting either one alone
+    // has to be caught — which one test spanning both branches could not do.
+    //
+    // Unlike the zero-match cause this one carries no prose — but NOT because
+    // the observation has a single reading.  It has two: the page really is
+    // hybrid, or a `detect` anchor is over-broad and claimed a sibling's
+    // dialect.  ADR-008 § Decision 1 requires `detect` to be exclusive for
+    // exactly that reason, and its § Amendments record a reactions-modal case
+    // where the collision is inferred rather than measured.  What is true is
+    // that both readings take the SAME repair, and the error's own message
+    // already carries it: tighten the detect anchors.  So there is nothing
+    // for prose to disambiguate here, and the probe counts are the whole
+    // diagnosis — which is a claim about the repair, not about the page.
+    //
+    // The WHOLE message is pinned rather than a substring of it, because what
+    // a cause may hold is a privacy boundary: `errorMessage` renders it with
+    // no gate in front of it, and `error-message.ts` keeps page content in the
+    // `LHREMOTE_CAPTURE_DIAGNOSTICS`-gated bundle instead — noting that this
+    // is "a property of the producers, not something checked here".  This is a
+    // producer.  A `toContain` would accept a message that appended a scrape.
+    //
+    // The probe half is derived THROUGH `formatVariantProbes` rather than
+    // written as a look-alike literal, so a change to that rendering cannot
+    // strand a stale expectation here; the formatter itself is separately
+    // pinned against literals in `dom-variant.test.ts`.  The two counts differ
+    // on purpose — a symmetric expectation would also be satisfied by a cause
+    // built from some other symmetric detection.
+    const detection = {
+      matched: ["sdui", "legacy"],
+      probes: { sdui: 3, legacy: 7 },
+    };
+    const client = fakeClient((script) => {
+      const s = String(script);
+      if (s.includes(READINESS_MARKER)) return Promise.resolve(false);
+      if (s.includes(DETECTION_MARKER)) return Promise.resolve(detection);
+      return Promise.resolve(null);
+    });
+
+    const error = await waitForSearchResults(client, 1).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(DOMVariantAmbiguousError);
+    const cause = (error as DOMVariantAmbiguousError).cause;
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe(
+      `detect probes — ${formatVariantProbes(detection)}`,
+    );
   });
 
   it("reports a plain timeout when exactly one adapter matched", async () => {

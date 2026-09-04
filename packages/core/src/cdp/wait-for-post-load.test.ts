@@ -7,6 +7,7 @@ import {
   adaptersFor,
   buildDetectionSource,
   buildReadinessPredicateSource,
+  formatVariantProbes,
 } from "../linkedin/dom-variant.js";
 import {
   DOMVariantAmbiguousError,
@@ -212,6 +213,47 @@ describe("waitForPostLoad", () => {
     );
   });
 
+  it("attaches the detect probe counts as the unsupported error's cause", async () => {
+    // The class and its own wording come from `errors.ts`; the per-adapter
+    // probe counts come from HERE, and nothing else asserts them.  Deleting
+    // `{ cause: … }` from the branch above leaves every class-and-message test
+    // green while silently dropping the diagnosis that reaches CLI stderr and
+    // the MCP tool response text.
+    //
+    // The WHOLE message is pinned rather than a substring of it, because what
+    // a cause may hold is a privacy boundary: `errorMessage` renders it with
+    // no gate in front of it, and `error-message.ts` keeps page content in the
+    // `LHREMOTE_CAPTURE_DIAGNOSTICS`-gated bundle instead — noting that this
+    // is "a property of the producers, not something checked here".  This is a
+    // producer.  A `toContain` would accept a message that appended a scrape.
+    //
+    // The probe half is derived THROUGH `formatVariantProbes` rather than
+    // written as a look-alike literal, so a change to that rendering cannot
+    // strand a stale expectation here.  That is not the circularity
+    // `escaped()` above refuses: there `jsString`'s own output is the subject,
+    // so grading it against itself would pass for any implementation.  Here
+    // the formatter is separately pinned against literals in
+    // `dom-variant.test.ts`, and the subject is only whether production
+    // attaches a cause carrying it.
+    const detection = { matched: [], probes: { sdui: 0, legacy: 0 } };
+    const evaluate = vi.fn(async (script: string) =>
+      script.includes("probes") ? detection : false,
+    );
+    const client = { evaluate, send: vi.fn() } as unknown as CDPClient;
+
+    const error = await waitForPostLoad(client, 1).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(DOMVariantUnsupportedError);
+    const cause = (error as DOMVariantUnsupportedError).cause;
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe(
+      `detect probes — ${formatVariantProbes(detection)}`,
+    );
+  });
+
   it("raises DOMVariantAmbiguousError when two adapters claim the page at the deadline", async () => {
     const evaluate = vi.fn(async (script: string) =>
       script.includes("probes")
@@ -225,6 +267,35 @@ describe("waitForPostLoad", () => {
     await expect(rejection).rejects.toThrow(DOMVariantAmbiguousError);
     await expect(rejection).rejects.toThrow(
       /Multiple DOM adapters matched the post-detail page/,
+    );
+  });
+
+  it("attaches the detect probe counts as the ambiguous error's cause", async () => {
+    // A second, separate `{ cause: … }` site, so a separate pin: deleting
+    // either one alone has to be caught, which one test spanning both branches
+    // could not do.  The two counts differ on purpose — a symmetric
+    // expectation would also be satisfied by a cause built from some other
+    // symmetric detection.  Whole-message pin and derived probe text for the
+    // reasons the sibling test above states.
+    const detection = {
+      matched: ["sdui", "legacy"],
+      probes: { sdui: 3, legacy: 7 },
+    };
+    const evaluate = vi.fn(async (script: string) =>
+      script.includes("probes") ? detection : false,
+    );
+    const client = { evaluate, send: vi.fn() } as unknown as CDPClient;
+
+    const error = await waitForPostLoad(client, 1).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(DOMVariantAmbiguousError);
+    const cause = (error as DOMVariantAmbiguousError).cause;
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe(
+      `detect probes — ${formatVariantProbes(detection)}`,
     );
   });
 
