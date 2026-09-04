@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   adaptersFor,
   buildDetectionSource,
+  buildPostDetailAnchorProbeSource,
   buildReadinessPredicateSource,
   formatVariantProbes,
 } from "../linkedin/dom-variant.js";
@@ -52,6 +53,7 @@ const {
   capturePostLoadFailure,
   diagnosticCaptureEnabled,
   ensureSecureDiagnosticDir,
+  POST_DETAIL_CAPTURE_PROBE_SCRIPT,
   probeVariantDetection,
   waitForPostLoad,
 } = await import("./wait-for-post-load.js");
@@ -72,6 +74,23 @@ const {
 function escaped(fragment: string): string {
   return JSON.stringify(fragment).slice(1, -1);
 }
+
+/**
+ * A page-read mock's `variantAnchors` field, with nothing matching.
+ *
+ * The mocks below stand in for `client.evaluate`'s resolved value, so what
+ * they owe is the probe's FIELD SET — a fixture naming a field the probe no
+ * longer returns lies about the shape without failing, which is what
+ * `hasPostDetailContainer` did here until #853.  Their per-selector keys are
+ * deliberately empty rather than a copy of the registry's anchors: restating
+ * those here would be the second hand-maintained copy this change removed, and
+ * the READINGS are graded where they can actually be taken — the Tier-2 oracle
+ * in `wait-for-post-load.integration.test.ts`, against a real page.
+ */
+const EMPTY_ANCHOR_READINGS = {
+  sdui: { ready: 0, scopes: {}, counts: {} },
+  legacy: { ready: 0, scopes: {}, counts: {} },
+};
 
 describe("waitForPostLoad", () => {
   beforeEach(() => {
@@ -201,7 +220,7 @@ describe("waitForPostLoad", () => {
 
   it("raises DOMVariantUnsupportedError when no adapter claims the page at the deadline", async () => {
     const evaluate = vi.fn(async (script: string) =>
-      script.includes("probes") ? { matched: [], probes: { sdui: 0, legacy: 0 } } : false,
+      script.includes("probes[a.variant]") ? { matched: [], probes: { sdui: 0, legacy: 0 } } : false,
     );
     const client = { evaluate, send: vi.fn() } as unknown as CDPClient;
 
@@ -263,7 +282,7 @@ describe("waitForPostLoad", () => {
 
   it("raises DOMVariantAmbiguousError when two adapters claim the page at the deadline", async () => {
     const evaluate = vi.fn(async (script: string) =>
-      script.includes("probes")
+      script.includes("probes[a.variant]")
         ? { matched: ["sdui", "legacy"], probes: { sdui: 1, legacy: 1 } }
         : false,
     );
@@ -311,7 +330,7 @@ describe("waitForPostLoad", () => {
     // "LinkedIn changed" would send the operator to write an adapter that
     // already exists.
     const evaluate = vi.fn(async (script: string) =>
-      script.includes("probes")
+      script.includes("probes[a.variant]")
         ? { matched: ["sdui"], probes: { sdui: 1, legacy: 0 } }
         : false,
     );
@@ -330,7 +349,7 @@ describe("waitForPostLoad", () => {
     const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
     const evaluate = vi.fn(async (script: string) => {
-      if (script.includes("probes")) throw new Error("probe blew up");
+      if (script.includes("probes[a.variant]")) throw new Error("probe blew up");
       if (script.includes("hasMainFeed")) return { href: "", title: "" };
       return false;
     });
@@ -415,7 +434,7 @@ describe("waitForPostLoad", () => {
           hasCommentOnButton: false,
           hasTopLevelEditor: false,
           hasReactionsMenu: false,
-          hasPostDetailContainer: false,
+          variantAnchors: EMPTY_ANCHOR_READINGS,
           bodyTextSnippet: "",
         };
       }
@@ -456,7 +475,7 @@ describe("waitForPostLoad", () => {
     // Zero adapters claim the page: the classification probe decides
     // DOMVariantUnsupportedError, and the SAME reading must reach the bundle.
     const evaluate = vi.fn(async (script: string) => {
-      if (script.includes("probes")) {
+      if (script.includes("probes[a.variant]")) {
         return { matched: [], probes: { sdui: 0, legacy: 0 } };
       }
       if (script.includes("hasMainFeed")) return { href: "", title: "" };
@@ -488,7 +507,7 @@ describe("waitForPostLoad", () => {
       // Exactly one detect probe: the capture reuses the classification's
       // reading rather than taking a second, later one.
       const detectCalls = evaluate.mock.calls.filter((call) =>
-        String(call[0]).includes("probes"),
+        String(call[0]).includes("probes[a.variant]"),
       );
       expect(detectCalls).toHaveLength(1);
     } finally {
@@ -545,7 +564,7 @@ describe("capturePostLoadFailure", () => {
         hasCommentOnButton: false,
         hasTopLevelEditor: false,
         hasReactionsMenu: false,
-        hasPostDetailContainer: false,
+        variantAnchors: EMPTY_ANCHOR_READINGS,
         commentElementCount: 0,
         bodyTextSnippet: "Post body text\n",
       }),
@@ -609,8 +628,14 @@ describe("capturePostLoadFailure", () => {
     expect(script).toContain("hasAuthorLinkInMain");
     expect(script).toContain("hasLtrSpans");
     expect(script).toContain("hasArticles");
-    // Post-#771: aria-label-based interactive markers per ADR-007 —
-    // exact selectors the new readiness predicate uses.
+    // Post-#771: aria-label-based interactive markers, DIAGNOSTIC-ONLY.  They
+    // are not the readiness predicate's selectors and have not been since the
+    // adapter registry landed: the predicate is bound to the selected
+    // adapter's own anchor (ADR-008 § Decision 1), and these are markers no
+    // adapter anchors on, kept because a failed read wants a
+    // which-of-these-is-missing picture wider than any one binding.  (The
+    // superseded "exact selectors the new readiness predicate uses" wording
+    // was ADR-008 § Follow-ups' deferred comment fix, discharged by #853.)
     expect(script).toContain("hasReactLikeButton");
     expect(script).toContain("hasCommentOnButton");
     expect(script).toContain("hasTopLevelEditor");
@@ -624,11 +649,17 @@ describe("capturePostLoadFailure", () => {
     expect(script).toContain(escaped('aria-label^="React Like to "'));
     expect(script).toContain(escaped('aria-label^="Comment on"'));
     expect(script).toContain(escaped('aria-label^="Text editor for creating"'));
-    // lhremote#800 hardening: new SDUI readiness markers also probed
-    // so a future timeout pins which-of-N-is-missing.
+    // lhremote#800 hardening: the new SDUI-era marker is also probed so a
+    // future timeout pins which-of-N-is-missing.
     expect(script).toContain("hasReactionsMenu");
-    expect(script).toContain("hasPostDetailContainer");
     expect(script).toContain(escaped('aria-label="Open reactions menu"'));
+    // That hardening's other marker — the SDUI post-detail container — is no
+    // longer a boolean of this module's own (#853).  The SELECTOR is still
+    // probed, under the dialect that owns it, so this assertion stays as the
+    // anti-narrowing floor while its `hasPostDetailContainer` companion goes:
+    // asserting the field name would pin the shape the change deliberately
+    // replaced, asserting the selector pins that the reading survived.
+    expect(script).toContain("variantAnchors");
     expect(script).toContain(
       escaped('[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]'),
     );
@@ -748,7 +779,7 @@ describe("capturePostLoadFailure", () => {
         hasCommentOnButton: false,
         hasTopLevelEditor: false,
         hasReactionsMenu: false,
-        hasPostDetailContainer: false,
+        variantAnchors: EMPTY_ANCHOR_READINGS,
         bodyTextSnippet: "",
       }),
       send: vi.fn().mockRejectedValue(new Error("captureScreenshot failed")),
@@ -1075,9 +1106,17 @@ describe("capturePostLoadFailure — trigger and detection (#835)", () => {
     hasCommentOnButton: false,
     hasTopLevelEditor: false,
     hasReactionsMenu: true,
-    hasPostDetailContainer: true,
     commentElementCount: 41,
     bodyTextSnippet: "Post body text\n",
+    // The field that replaced `hasPostDetailContainer` here (#853).  Given a
+    // NON-uniform reading on purpose: the case below asserts that the DOM half
+    // of the probe rides into the bundle beside the detect half, and an
+    // all-zero stand-in would be satisfied by a bundle that dropped the field
+    // and re-derived it from the all-zero `variantDetection` next to it.
+    variantAnchors: {
+      sdui: { ready: 0, scopes: {}, counts: {} },
+      legacy: { ready: 1, scopes: {}, counts: {} },
+    },
   };
 
   beforeEach(() => {
@@ -1125,13 +1164,19 @@ describe("capturePostLoadFailure — trigger and detection (#835)", () => {
       detection: { matched: [], probes: { sdui: 0, legacy: 0 } },
     });
 
-    // All-zero probes: nobody claimed the page, so the next step is
+    // All-zero DETECT probes: nobody claimed the page, so the next step is
     // registering an adapter — NOT hunting a stale field selector.  No other
-    // field in the bundle can say this; every other probe is a fixed
-    // selector that answers a different question.
+    // field in the bundle can say this; the fixed-selector probes each answer
+    // a different question, and `variantAnchors` reports how far a dialect's
+    // OWN anchors got rather than whether that dialect is present at all.
+    //
+    // Both halves of the page read are pinned: the detect counts the caller
+    // supplied, and a DOM-probe field carried through from the evaluate.  A
+    // bundle that carried only one of the two would pass an assertion naming
+    // only the other.
     expect(bundle).toMatchObject({
       trigger: "readiness-timeout",
-      hasPostDetailContainer: true,
+      variantAnchors: { sdui: { ready: 0 }, legacy: { ready: 1 } },
       variantDetection: { matched: [], probes: { sdui: 0, legacy: 0 } },
     });
   });
@@ -1243,9 +1288,9 @@ describe("diagnosticCaptureEnabled", () => {
 // literal, and nothing in the type system notices when that goes wrong.  A
 // hand-quoted `'${SELECTOR}'` compiles, lints, and emits either a syntax error
 // or a valid-but-DIFFERENT selector.  #840 fixed seven such sites on the
-// reactions-modal surface and pinned them there; the nine on THIS surface were
-// deliberately left to their own item, and until it landed nothing stopped a
-// tenth from being written.
+// reactions-modal surface and pinned them there; the ones on THIS surface were
+// deliberately left to their own item, and until it landed nothing stopped one
+// more from being written unnoticed.
 //
 // The consequence is worse here than at any other site, because this source
 // runs only when something has ALREADY failed and the capture swallows its own
@@ -1257,7 +1302,7 @@ describe("post-detail diagnostic probe — emitted-source integrity", () => {
   const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
 
   /**
-   * The selectors this module INTERPOLATES into the probe — all nine.
+   * The selectors this module INTERPOLATES into the probe — all eight.
    *
    * Every one is a module-private constant with no public accessor, so they
    * are restated here rather than exported purely to be asserted on, which
@@ -1268,6 +1313,16 @@ describe("post-detail diagnostic probe — emitted-source integrity", () => {
    * (`article`, `main`, the `mainFeed` / listitem / menu-button anchors):
    * those are literals in the emitted program rather than values crossing the
    * seam, so a hand-quote rule over them would fail on correct code.
+   *
+   * Nor the REGISTRY's anchors, which is why this list shrank by one at #853.
+   * The SDUI container selector it used to carry crossed the seam from a
+   * module-private constant that no longer exists: the capture reaches that
+   * selector — and every other anchor the registry owns — through source
+   * `buildPostDetailAnchorProbeSource` generates, where `jsString` is applied
+   * on the far side of an import this block cannot see.  Grading a generated
+   * fragment's quoting HERE would grade `dom-variant.ts` from the wrong file;
+   * the anchors' presence in the emitted source is graded by the #853 block
+   * below, against the registry rather than against a literal.
    */
   const INTERPOLATED_SELECTORS = [
     'a[href*="/in/"], a[href*="/company/"]',
@@ -1277,7 +1332,6 @@ describe("post-detail diagnostic probe — emitted-source integrity", () => {
     'main button[aria-label^="Comment on"]',
     'main [role="textbox"][aria-label^="Text editor for creating"]',
     'main button[aria-label="Open reactions menu"]',
-    '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]',
     '[componentkey^="replaceableComment_"]',
   ];
 
@@ -1330,8 +1384,8 @@ describe("post-detail diagnostic probe — emitted-source integrity", () => {
     const source = await emittedProbeSource();
 
     // Cardinality first: an empty list would make the loop below vacuous, and
-    // a green over zero selectors is not evidence that nine of them arrived.
-    expect(INTERPOLATED_SELECTORS).toHaveLength(9);
+    // a green over zero selectors is not evidence that eight of them arrived.
+    expect(INTERPOLATED_SELECTORS).toHaveLength(8);
     for (const selector of INTERPOLATED_SELECTORS) {
       expect(source, `missing ${selector}`).toContain(JSON.stringify(selector));
     }
@@ -1343,7 +1397,7 @@ describe("post-detail diagnostic probe — emitted-source integrity", () => {
     // Cardinality again rather than by inheritance from the test above: this
     // one is all-negative, so an empty list would satisfy it without grading
     // anything, and deleting the test above would remove the only guard.
-    expect(INTERPOLATED_SELECTORS).toHaveLength(9);
+    expect(INTERPOLATED_SELECTORS).toHaveLength(8);
     // The form this item removed.  Asserted separately from the positive check
     // above because the two fail for different reasons: a selector could reach
     // the source in BOTH forms if a site were duplicated rather than converted.
@@ -1354,16 +1408,16 @@ describe("post-detail diagnostic probe — emitted-source integrity", () => {
 
   // The two tests above iterate INTERPOLATED_SELECTORS, so they grade only the
   // sites someone remembered to list. That is precisely the failure this
-  // block's header warns about — "nothing stopped a tenth from being written"
-  // — and a tenth, hand-quoted, would pass every assertion above: the nine
-  // listed are all still correct, and nothing counts the module's own sites.
+  // block's header warns about, and an unlisted hand-quoted site would pass
+  // every assertion above: the ones listed are all still correct, and nothing
+  // counts the module's own sites.
   //
   // The check has to read the MODULE SOURCE, not the emitted source. After
   // emission a hand-quoted constant is indistinguishable from a legitimate
   // inline one-off (`'article'`, `'[data-testid="mainFeed"]'`) — both are just
   // single-quoted text in a JavaScript program. Before emission they are not:
   // one carries a `${...}` and the other does not.
-  it("has no interpolation site outside the enumerated nine", () => {
+  it("has no interpolation site outside the enumerated eight", () => {
     // `node:fs`, not `node:fs/promises`: this file mocks the latter for the
     // capture path, and that mock supplies no reader.
     const moduleSource = readFileSync(
@@ -1384,7 +1438,210 @@ describe("post-detail diagnostic probe — emitted-source integrity", () => {
       INTERPOLATED_SELECTORS.length,
     );
     // ...and none crosses it hand-quoted. This is the assertion that fires on
-    // a tenth site the enumeration never learned about.
+    // a site the enumeration never learned about — stated without an ordinal,
+    // which would mirror the enumeration's own length and go stale with it.
     expect(code).not.toMatch(/['"]\$\{/);
+  });
+});
+
+describe("post-detail diagnostic probe — registry-derived anchor readings (#853)", () => {
+  const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    } else {
+      process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalEnv;
+    }
+  });
+
+  /**
+   * The probe source as the capture actually hands it to `Runtime.evaluate`.
+   *
+   * Every case below grades this rather than the written bundle, and the
+   * reason is that at this tier the bundle's DOM half is *mock-supplied*:
+   * `capturePostLoadFailure` spreads whatever `client.evaluate` resolved to,
+   * so a case asserting `variantAnchors` on the bundle would be asserting the
+   * fixture it just wrote.  The emitted source is the artifact this module
+   * actually authors, and it is where a hand-written constant and a
+   * registry-derived one are still distinguishable.  The per-page READING is
+   * graded a tier up, in `wait-for-post-load.integration.test.ts`.
+   */
+  async function emittedSource(): Promise<string> {
+    const client = {
+      evaluate: vi.fn().mockResolvedValue({}),
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    await capturePostLoadFailure(client, {
+      trigger: "readiness-timeout",
+      detection: null,
+    });
+    warnSpy.mockRestore();
+    const source = String(vi.mocked(client.evaluate).mock.calls[0]?.[0] ?? "");
+    // Cardinality before content: an empty source satisfies every negative
+    // assertion below without a single one having graded anything.
+    expect(source.length).toBeGreaterThan(0);
+    return source;
+  }
+
+  /** This module's own text, comments stripped so a quoted form is not a hit. */
+  function moduleCode(): string {
+    // `node:fs`, not `node:fs/promises`: this file mocks the latter for the
+    // capture path, and that mock supplies no reader.
+    const moduleSource = readFileSync(
+      new URL("./wait-for-post-load.ts", import.meta.url),
+      "utf8",
+    );
+    return moduleSource
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("//"))
+      .join("\n");
+  }
+
+  it("emits every registered adapter's ready, scopes and counts anchors", async () => {
+    const source = await emittedSource();
+    const adapters = adaptersFor("post-detail");
+
+    // Cardinality first, and against the REGISTRY rather than a literal: a
+    // registry that came back empty would make every loop below vacuous, and
+    // "the probe reports each of zero adapters" is evidence of nothing.
+    expect(adapters.length).toBeGreaterThanOrEqual(2);
+
+    for (const adapter of adapters) {
+      // The dialect must be nameable in the artifact.  A count that cannot be
+      // attributed to the adapter owning it is exactly the union this surface
+      // cannot afford: "both dialects match" and "one anchor matched twice"
+      // are different diagnoses with different repairs.
+      expect(source, `missing variant ${String(adapter.variant)}`).toContain(
+        escaped(String(adapter.variant)),
+      );
+      expect(
+        source,
+        `missing ready anchor of ${String(adapter.variant)}`,
+      ).toContain(escaped(adapter.ready));
+      for (const scope of adapter.scopes) {
+        expect(source, `missing scope ${scope}`).toContain(escaped(scope));
+      }
+      for (const counts of adapter.counts) {
+        expect(source, `missing counts anchor ${counts}`).toContain(
+          escaped(counts),
+        );
+      }
+    }
+  });
+
+  it("splices the registry-derived probe verbatim rather than a hand-inlined copy", async () => {
+    const source = await emittedSource();
+
+    // The assertion that separates "derived" from "looks derived".  A copy
+    // pasted into this module would satisfy every other case here while
+    // measuring a layer the registry has since moved on from — which is the
+    // whole defect #853 names, reintroduced in a form that greps clean.
+    expect(source).toContain(
+      buildPostDetailAnchorProbeSource(adaptersFor("post-detail")),
+    );
+  });
+
+  it("sends the composed expression itself, not a lookalike", async () => {
+    const source = await emittedSource();
+
+    // The composition — a hand-written wrapper with a generated program
+    // spliced into it — is the one part of this capture nothing else grades.
+    // A syntax error there makes `client.evaluate` reject, the capture's own
+    // `.catch` swallows it, and the operator gets no json, no png and no warn
+    // line at the one moment they are reading diagnostics.
+    expect(source).toBe(POST_DETAIL_CAPTURE_PROBE_SCRIPT);
+    expect(() => new Function(source)).not.toThrow();
+  });
+
+  it("stops restating the SDUI container the registry owns", () => {
+    const code = moduleCode();
+
+    // The one literal duplicate #853 names: byte-identical to the SDUI
+    // adapter's own `scopes[0]`, hand-maintained here, and read at the single
+    // moment the report is being read.  Graded against the MODULE SOURCE
+    // because after emission a hand-written constant and a registry-derived
+    // one are indistinguishable — both are just text in a JavaScript program.
+    //
+    // Canary: the read reached a real module, so the miss below is an absence
+    // rather than an empty string trivially containing nothing.
+    expect(code).toContain("capturePostLoadFailure");
+    expect(code).not.toContain(
+      '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]',
+    );
+  });
+
+  it("drops the hand-written container boolean the anchor readings supersede", async () => {
+    const source = await emittedSource();
+
+    // Not a narrowing: the same selector is still probed — as a count under
+    // its own dialect's name rather than as a boolean, alongside the SDUI
+    // screen fallback the boolean never covered.  Pinned on the emitted
+    // source, not the bundle, because the bundle's DOM half is mock-supplied
+    // here and would report the field's absence without the module having
+    // dropped it.
+    expect(source).not.toContain("hasPostDetailContainer");
+    expect(moduleCode()).not.toContain("hasPostDetailContainer");
+  });
+
+  it("keeps the markers no adapter anchors on", async () => {
+    const source = await emittedSource();
+
+    // The eight extra markers are why the block survived #831 rather than
+    // being deleted: a timeout wants a which-of-these-is-missing picture
+    // across every dialect the code knows about, INCLUDING markers no adapter
+    // anchors on.  Enumerated here as an independent statement of what they
+    // are, so a refactor that "derives everything" and quietly drops them
+    // fails rather than passing for having removed the drift.
+    //
+    // A floor rather than a red-before-green: this is green today and must
+    // stay green, which is the anti-narrowing criterion in its Tier-1 form.
+    const SUPPLEMENTARY_MARKERS = [
+      'a[href*="/in/"], a[href*="/company/"]',
+      'main a[href*="/in/"], main a[href*="/company/"]',
+      'span[dir="ltr"]',
+      'main button[aria-label^="React Like to "]',
+      'main button[aria-label^="Comment on"]',
+      'main [role="textbox"][aria-label^="Text editor for creating"]',
+      'main button[aria-label="Open reactions menu"]',
+      '[componentkey^="replaceableComment_"]',
+    ];
+    expect(SUPPLEMENTARY_MARKERS).toHaveLength(8);
+    for (const marker of SUPPLEMENTARY_MARKERS) {
+      expect(source, `dropped supplementary marker ${marker}`).toContain(
+        escaped(marker),
+      );
+    }
+  });
+
+  it("takes no extra page read to report the anchors", async () => {
+    const client = {
+      evaluate: vi.fn().mockResolvedValue({}),
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    await capturePostLoadFailure(client, {
+      trigger: "readiness-timeout",
+      detection: null,
+    });
+    warnSpy.mockRestore();
+
+    // One read, still.  The anchor probe is a function DECLARED inside the
+    // capture's existing expression and CALLED in its return object — a
+    // splice, not a second `Runtime.evaluate`.  A design taking its own later
+    // read would also put two readings of one page into one bundle, and they
+    // can disagree.
+    expect(vi.mocked(client.evaluate).mock.calls).toHaveLength(1);
   });
 });
