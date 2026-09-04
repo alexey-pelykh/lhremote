@@ -6,6 +6,7 @@ import { CDPClient } from "../../cdp/client.js";
 import { CDPEvaluationError, CDPTimeoutError } from "../../cdp/errors.js";
 import {
   EMPTY_DOCUMENT_HTML,
+  INSTALL_TEST_TIMEOUT_MS,
   installDocument,
 } from "../../cdp/testing/install-document.js";
 import {
@@ -17,7 +18,7 @@ import { click, scrollTo, typeText, waitForElement } from "../dom-automation.js"
 /** Timeout for beforeEach operations (connect + reset) on slow CI runners. */
 const BEFORE_EACH_TIMEOUT = 15_000;
 
-describe("DOM automation (integration)", () => {
+describe("DOM automation (integration)", { timeout: INSTALL_TEST_TIMEOUT_MS }, () => {
   let chromium: ChromiumInstance;
   let client: CDPClient;
 
@@ -46,10 +47,10 @@ describe("DOM automation (integration)", () => {
     // never fire: the races were armed at 15 s inside a hook running on
     // vitest's undeclared 10 s default, so the runner's own abort always won
     // and the labelled message was unreachable.  Declaring the budget is what
-    // the label was reaching for, and `installDocument` carries its own 3 s
-    // deadline naming the sentinel that never matched.
+    // the label was reaching for, and `installDocument` carries its own budget,
+    // whose failure names the sentinel that never matched.
     await installDocument(client, EMPTY_DOCUMENT_HTML);
-  }, BEFORE_EACH_TIMEOUT);
+  }, INSTALL_TEST_TIMEOUT_MS);
 
   afterEach(() => {
     client.disconnect();

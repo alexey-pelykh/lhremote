@@ -5,7 +5,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { CDPClient } from "../../cdp/client.js";
-import { installDocument } from "../../cdp/testing/install-document.js";
+import {
+  INSTALL_TEST_TIMEOUT_MS,
+  installDocument,
+} from "../../cdp/testing/install-document.js";
 import {
   launchChromium,
   type ChromiumInstance,
@@ -40,9 +43,10 @@ const BEFORE_EACH_TIMEOUT = 15_000;
  * with real DOM APIs and "deliberately does NOT assert extracted field values
  * against harvested LinkedIn markup — that needs real captured pages and is
  * the fixture oracle's job".  This is that job.  Extending that file would
- * contradict the boundary it declares; the browser setup is reused rather
- * than duplicated (`launchChromium`, `CDPClient`), and only fixture
- * installation is new.
+ * contradict the boundary it declares; nothing about the browser setup is
+ * duplicated here — `launchChromium`, `CDPClient` and `installDocument` are
+ * all shared with it — and what is specific to this file is which fixture is
+ * installed and what is asserted about it.
  *
  * ## Loading a fixture
  *
@@ -50,8 +54,9 @@ const BEFORE_EACH_TIMEOUT = 15_000;
  * `file:` URLs (`Unsafe URL scheme`), and `innerHTML` is blocked by
  * Chromium's Trusted Types policy — which is why the sibling file rebuilds
  * its small synthetic DOM through DOM APIs, impractical for a 352 KB page.
- * `Page.setDocumentContent` is neither, so that is what {@link installFixture}
- * uses.  Fixtures load with zero outbound requests (every asset is an inline
+ * `Page.setDocumentContent` is neither, so a document replacement is the
+ * route — taken through the shared `installDocument` gate rather than sent
+ * from here, which is what {@link installFixture} wraps.  Fixtures load with zero outbound requests (every asset is an inline
  * `data:` URI, enforced by the harvester's network gate), so this suite runs
  * on a CI runner with no network and no LinkedHelper.
  *
@@ -179,7 +184,7 @@ function readSidecar(label: string): Sidecar {
   ) as Sidecar;
 }
 
-describe("post-detail fixture oracle (integration)", () => {
+describe("post-detail fixture oracle (integration)", { timeout: INSTALL_TEST_TIMEOUT_MS }, () => {
   let chromium: ChromiumInstance;
   let client: CDPClient;
 
@@ -210,10 +215,12 @@ describe("post-detail fixture oracle (integration)", () => {
    *
    * Through the shared gate, which is what makes the counts below meaningful:
    * an `evaluate` resolving against a document that is not the one just
-   * installed answers `0` for every selector rather than throwing, so the
-   * canary reported a clean, wrong number roughly once per full windows suite
-   * (#888).  `installDocument` does not return until the installed markup has
-   * been observed through that same `evaluate` path.
+   * installed answers `0` for every selector rather than throwing, so a canary
+   * reported a clean, wrong number rather than failing.  On the windows runner
+   * that landed roughly once per full suite across all four install sites, on
+   * a different canary each time — not once per suite in this file (#888).
+   * `installDocument` does not return until the installed markup has been
+   * observed through that same `evaluate` path.
    *
    * @param label - Fixture file stem under `__fixtures__/legacy/`.
    */

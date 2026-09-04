@@ -11,7 +11,10 @@ import {
   it,
 } from "vitest";
 import { CDPClient } from "../../cdp/client.js";
-import { installDocument } from "../../cdp/testing/install-document.js";
+import {
+  INSTALL_TEST_TIMEOUT_MS,
+  installDocument,
+} from "../../cdp/testing/install-document.js";
 import {
   launchChromium,
   type ChromiumInstance,
@@ -478,7 +481,7 @@ interface ExtractionRecord {
   }[];
 }
 
-describe("search-results Tier-2 oracle (integration)", () => {
+describe("search-results Tier-2 oracle (integration)", { timeout: INSTALL_TEST_TIMEOUT_MS }, () => {
   let chromium: ChromiumInstance;
   let client: CDPClient;
 
@@ -550,8 +553,10 @@ describe("search-results Tier-2 oracle (integration)", () => {
    * The send goes through the shared gate, which is what makes the counts
    * below meaningful: an `evaluate` resolving against a document that is not
    * the one just installed answers `0` for every selector rather than
-   * throwing, so the canary reported a clean, wrong number roughly once per
-   * full windows suite (#888).  `installDocument` does not return until the
+   * throwing, so a canary reported a clean, wrong number rather than failing.
+   * On the windows runner that landed roughly once per full suite across all
+   * four install sites, on a different canary each time — not once per suite
+   * in this file (#888).  `installDocument` does not return until the
    * installed markup has been observed through that same `evaluate` path.
    */
   async function install(body: string): Promise<void> {

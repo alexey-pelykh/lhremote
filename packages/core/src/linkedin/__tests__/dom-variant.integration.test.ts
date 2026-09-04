@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { CDPClient } from "../../cdp/client.js";
 import {
   EMPTY_DOCUMENT_HTML,
+  INSTALL_TEST_TIMEOUT_MS,
   installDocument,
 } from "../../cdp/testing/install-document.js";
 import {
@@ -40,7 +41,7 @@ const BEFORE_EACH_TIMEOUT = 15_000;
  * tier too, against a hand-rolled stand-in; the duplication is the point,
  * because it is the stand-in's fidelity that is in question.
  */
-describe("DOM variant adapters (integration)", () => {
+describe("DOM variant adapters (integration)", { timeout: INSTALL_TEST_TIMEOUT_MS }, () => {
   let chromium: ChromiumInstance;
   let client: CDPClient;
 
@@ -63,7 +64,7 @@ describe("DOM variant adapters (integration)", () => {
     // through DOM APIs.  The shared helper is what makes "installed" mean
     // "observable by the next `evaluate`" -- see `installDocument` (#888).
     await installDocument(client, EMPTY_DOCUMENT_HTML);
-  }, BEFORE_EACH_TIMEOUT);
+  }, INSTALL_TEST_TIMEOUT_MS);
 
   afterEach(() => {
     client.disconnect();

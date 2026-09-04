@@ -6,6 +6,7 @@ import { CDPClient } from "../client.js";
 import { CDPTimeoutError } from "../errors.js";
 import {
   EMPTY_DOCUMENT_HTML,
+  INSTALL_TEST_TIMEOUT_MS,
   installDocument,
 } from "./install-document.js";
 import { launchChromium, type ChromiumInstance } from "./launch-chromium.js";
@@ -28,7 +29,7 @@ const BEFORE_EACH_TIMEOUT = 15_000;
  * flaked before, so a regression re-opens as a failure here rather than as one
  * canary in 2068 on the windows runner.
  */
-describe("installDocument (integration)", () => {
+describe("installDocument (integration)", { timeout: INSTALL_TEST_TIMEOUT_MS }, () => {
   let chromium: ChromiumInstance;
   let client: CDPClient;
 
@@ -70,12 +71,12 @@ describe("installDocument (integration)", () => {
     // is the proof — but it is the cheapest way to keep an accidental
     // regression from needing a full windows suite to surface.
     //
-    // Scoped honestly, because the arithmetic is checkable: rounds 2..25 add
-    // nothing over round 1 against a DETERMINISTIC regression, and against the
-    // only rate measured here they add a couple of percent on windows and
-    // nothing on the runners this executes on most.  What they do cover is
-    // state leaking between installs — residue accumulating, a token colliding
-    // with its predecessor — which a single round cannot see at all.
+    // Scoped honestly: rounds 2..25 add nothing over round 1 against a
+    // DETERMINISTIC regression, and against a fault as rare as the one being
+    // closed they add a fraction of a percent — worth stating so nobody reads
+    // the round count as the evidence.  What they do cover is state leaking
+    // between installs — residue accumulating, a token colliding with its
+    // predecessor — which a single round cannot see at all.
     for (let round = 0; round < 25; round++) {
       await installDocument(client, PAGE);
       expect(await count('div[role="listitem"]')).toBe(3);
@@ -136,13 +137,63 @@ describe("installDocument (integration)", () => {
     // `CDPTimeoutError` too, so a mutant that dropped the gate loop and let a
     // request timeout escape would satisfy a type-only assertion — and this is
     // the one test in this tier with power over the loop existing at all.
+    // Deliberately bulky, and with a counted number of children: the probe's
+    // readings only discriminate against a scale.  A body of one paragraph is
+    // barely longer than `about:blank`'s own shell, so `documentLength > 0`
+    // would be satisfied by exactly the blank page the reading is supposed to
+    // rule out.
+    const filler = "<p>x</p>".repeat(40);
     const failure = await installDocument(
       client,
-      "<!doctype html><html><body><p>x</p><!-- ",
+      `<!doctype html><html><body>${filler}<!-- `,
       { timeout: 500 },
     ).catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(CDPTimeoutError);
     expect((failure as Error).message).toMatch(/sentinel .* never matched/);
+    // Every attempt is named, so the log distinguishes "the gate is broken"
+    // from "this markup can never satisfy it" without a rerun.
+    expect((failure as Error).message).toMatch(/attempt 1: /);
+    expect((failure as Error).message).toMatch(/attempt 3: /);
+    // ...and the probe is a real reading off a real page, not a placeholder:
+    // the unterminated comment swallowed the marker, so the document is there
+    // and carries no sentinel.  That is the pair of numbers the next windows
+    // failure has to be read against.
+    const probe = /page state at giving up: (.*)$/s.exec(
+      (failure as Error).message,
+    )?.[1];
+    const reading = JSON.parse(String(probe)) as {
+      url: string;
+      readyState: string;
+      documentLength: number;
+      bodyChildren: number;
+      sentinels: number;
+    };
+    expect(reading).toMatchObject({
+      url: "about:blank",
+      readyState: "complete",
+      bodyChildren: 40,
+      sentinels: 0,
+    });
+    // Against the installed markup's own scale, not against zero.  `40` and
+    // `> 300` together say "the caller's document is present and carries no
+    // marker" -- which a blank page, whose body is empty and whose shell is
+    // 39 characters, cannot satisfy.  That is the discrimination the
+    // probe exists to make.
+    expect(reading.documentLength).toBeGreaterThan(300);
+  }, 15_000);
+
+  it("leaves the page installable again after exhausting its attempts", async () => {
+    // The retry navigates the frame to `about:blank`, which is a heavier move
+    // than anything this helper did before.  A failed install must not wedge
+    // the client for the tests that follow it -- in `fixture-oracle` and
+    // `search-results` the next install is the next test, sharing the page.
+    await installDocument(client, "<!doctype html><html><body><!-- ", {
+      timeout: 200,
+    }).catch(() => undefined);
+
+    await installDocument(client, PAGE);
+
+    expect(await count('div[role="listitem"]')).toBe(3);
   }, 15_000);
 });
