@@ -79,14 +79,69 @@ export interface RawDomPost {
  *   renders the way the actor block does, which is why the region bound, not
  *   the `[name, connection degree, headline, relative time]` run, is what
  *   decides here.
- * - **Author name**: visible text of that author anchor — the same element
- *   the profile URL is read from, so the two cannot describe two people.
- *   Read from inside the anchor's `aria-hidden="true"` wrapper when it has
- *   one, so the screen-reader-only copy of the name beside it is not mistaken
- *   for the rendered one.
+ * - **Author fields**: the visible copies that anchor renders, read as a FIELD
+ *   SEQUENCE in document order — `[name, connection degree, headline, relative
+ *   time]`, members optionally absent.  A field is a leaf `<p>`/`<span>` run of
+ *   the anchor's outermost `aria-hidden="true"` wrappers, or of the anchor
+ *   itself when it has none, so the screen-reader-only copy rendered beside
+ *   each visible one is never mistaken for it.  Asking whether a run exists
+ *   rather than which tag carries it is what serves the SDUI `<p>` dialect and
+ *   the legacy `<span>` dialect from one rule; the three reads below are all
+ *   taken off this one sequence.
+ * - **Author name**: a leading PREFIX of that sequence, chosen by how well its
+ *   folded letters prefix-match the anchor's OWN href slug.  The slug is a
+ *   second *reading* of the single element both author fields come from — never
+ *   a second source — so the name and the profile URL still cannot describe two
+ *   people.  Wrapper membership alone cannot decide this: a name split across
+ *   wrappers and a name sitting beside a badge in its own wrapper are
+ *   structurally identical, so any rule reading only membership must get one of
+ *   those two families wrong.  What the slug decides is deliberately narrow —
+ *   how far the name extends from where the name STARTS, and whether a badge is
+ *   glued onto it — never WHICH field is the name: candidates are prefixes of
+ *   the leading fields that are neither a bare badge nor a bare relative time,
+ *   so a role or brand slug (`/in/head-of-widgets/`) cannot promote the
+ *   headline into the name slot.  Falsified by a slug the fields do not
+ *   corroborate at all — an opaque one, or a transliterated non-Latin name —
+ *   and there this read declines and the first name-bearing run is used
+ *   instead, so the signal degrades rather than inventing.  A slug that merely
+ *   omits part of the display name ("Ada Lovelace, PhD" under
+ *   `/in/ada-lovelace/`) does NOT decline: it corroborates a prefix of the
+ *   name's own field, and the whole field is returned.
  * - **Author profile URL**: `href` of that same author anchor.
- * - **Author headline**: 3rd `<p>` in the author anchor.
- * - **Timestamp**: last `<p>` matching `\d+[smhdw]` in that anchor.
+ * - **Author headline**: the first field that is none of a relative time, a
+ *   badge that is wholly a connection degree, the actor header's own chrome, or
+ *   one of the fields the NAME was read out of — the last excluded by INDEX,
+ *   using the span the name read already knows, never by testing a field's text
+ *   against the name.  A content test cannot separate the name's own field from
+ *   a headline that merely contains the name ("Ada Lovelace Consulting"), so it
+ *   discarded both; the origin is not ambiguous that way.  A positional rule
+ *   ("3rd `<p>`") cannot survive here either: the legacy and accessible shapes
+ *   render many more runs, so a tag index means nothing across dialects.  The
+ *   rule is one of EXCLUSION and has no positive test, so a token the
+ *   classifiers fail to recognise is reported to the user as the headline —
+ *   which is why they carry the same badge and relative-time vocabulary as this
+ *   repository's other three extractors rather than a private subset.  Its
+ *   accepted cost, measured rather than predicted: a token those classifiers do
+ *   not know ("• Open to work") is emitted AS the headline.
+ * - **The one shape the name read cannot decide.** A slug whose tail continues
+ *   into the NEXT field, with no badge between them, is genuine evidence that
+ *   the two fields are one name — and it is also what an eponymous business
+ *   renders.  `/in/ada-lovelace-consulting/` over "Ada Lovelace" then
+ *   "Consulting" fuses both and leaves the headline null.  This is left fused
+ *   deliberately: two runs reading "Ada Lovelace" / "Consulting" are
+ *   structurally identical to a display name split across two runs, which is
+ *   the very shape #860 asks to fuse, and the slug is the only extra evidence
+ *   there is.  What is NOT left fused is the case where the second field
+ *   carries real text the slug does not account for ("Photography & Video"
+ *   under `/in/john-smith-photography/`) — see `MAX_NAME_TAIL`, which bounds
+ *   how much uncorroborated text may cross a field boundary.  The falsifier for
+ *   the residue is a feed capture showing an eponymous slug whose business
+ *   suffix is a single fully-corroborated word; this repository holds no feed
+ *   capture at all (#897), so the bound is set from what a display name's own
+ *   honorific suffixes cost, not from any observed headline.
+ * - **Timestamp**: the last field opening with `\d+mo` or `\d+[smhdw]`.  Null
+ *   when the anchor carries no time field at all, which on some post shapes is
+ *   the truth rather than a miss — LinkedIn renders it outside the anchor there.
  *
  * Post URNs are NOT available in the DOM.  They are extracted in a
  * separate phase by opening each post's three-dot menu, clicking
@@ -177,13 +232,10 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   //
   // An anchor often carries several wrappers, one per field: the name, then the
   // connection degree, the headline, the timestamp, sometimes the avatar's
-  // initials.  They are NOT joined — that swallows the neighbouring fields into
-  // the name.  The name is the one rendered as a run, the same <p>/<span> shape
-  // every other read here keys on, where a badge or a set of initials is bare
-  // text in its wrapper.  Outermost wrappers only, so a nested one is not
-  // considered twice, and decoration-only wrappers are dropped so a separator
-  // bullet can never become the name.
-  function visibleRoot(a) {
+  // initials.  Outermost wrappers only, so a nested one is not considered
+  // twice, and decoration-only wrappers are dropped so a separator bullet can
+  // never become the name.
+  function hiddenWrappers(a) {
     const parts = [];
     for (const node of Array.from(a.querySelectorAll('[aria-hidden="true"]'))) {
       const txt = (node.textContent || '').trim();
@@ -191,7 +243,35 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
       if (parts.some(function (p) { return p.contains(node); })) continue;
       parts.push(node);
     }
+    return parts;
+  }
+
+  // The single wrapper the name-run heuristic bets on: the first rendering a
+  // run, on the reasoning that a badge or a set of initials is bare text in its
+  // wrapper.  That is an assumption about markup rather than a property of it,
+  // and issue #860 measured it inverting — a wrapper holding ONLY a badge run
+  // beside a name rendered as bare text returns "2nd" as the name.  It survives
+  // as the FALLBACK for \`anchorName\`, used when the href carries no usable
+  // signal; \`fieldRoots\` below is what the primary read uses instead.
+  function visibleRoot(a) {
+    const parts = hiddenWrappers(a);
     return parts.find(hasNameRun) || parts[0] || a;
+  }
+
+  // Every part of the anchor holding a visible copy, considered JOINTLY.
+  //
+  // Which wrapper holds the name is not decidable from wrapper membership: a
+  // name SPLIT ACROSS wrappers and a name sitting BESIDE A BADGE in its own
+  // wrapper are the same shape structurally, so a rule reading only membership
+  // can choose which of the two families to serve and must get the other wrong.
+  // Issue #860 is that pair.  What separates them is evidence from OUTSIDE the
+  // wrappers, which \`slugName\` supplies.
+  //
+  // Falls back to the anchor itself when no wrapper qualifies — the legacy
+  // dialect's whole shape, and the decoration-only-wrapper case with it.
+  function fieldRoots(a) {
+    const parts = hiddenWrappers(a);
+    return parts.length > 0 ? parts : [a];
   }
 
   // The name runs an element renders: <p> in the SDUI shape, <span> in the
@@ -324,6 +404,353 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     return bare && NAME_LIKE.test(bare) ? bare : null;
   }
 
+  // The runs of \`root\` that hold no further run — the leaves of the run tree.
+  // A field's text lives on a leaf; an ancestor run's \`textContent\` is every
+  // field beneath it concatenated, which is how neighbouring fields fuse.
+  function leafRuns(root) {
+    return nameRuns(root).filter(function (node) {
+      return nameRuns(node).length === 0;
+    });
+  }
+
+  // The anchor's rendered fields, in document order.  In every dialect this is
+  // [name, connection degree, headline, relative time] with members optionally
+  // absent: the legacy shape renders them as <span> runs, the SDUI shape as <p>
+  // runs, and this reads both because \`nameRuns\` asks only WHETHER a run
+  // exists, never which tag carries it.
+  //
+  // A root contributes its own bare text when it produced NO field — not merely
+  // when it renders no run.  A wrapper can render runs that are all EMPTY: the
+  // one real actor-header capture in this repository,
+  // \`linkedin/__fixtures__/legacy/post-with-comments.html\`, wraps two
+  // whitespace-only \`white-space-pre\` spans and an <svg> around a bare
+  // "• Adi", and those spans ARE leaves — so a rescue gated on "renders no
+  // run" never fires and the wrapper yields nothing at all.  Gating on
+  // "produced no field" is what lets the bare-text branch reach that shape.  On
+  // that capture the lost field is the connection degree, which is harmless;
+  // the identical construction around a name or a headline loses it silently.
+  function anchorFields(a) {
+    const fields = [];
+    for (const root of fieldRoots(a)) {
+      const before = fields.length;
+      for (const leaf of leafRuns(root)) {
+        const txt = (leaf.textContent || '').trim();
+        if (txt && NAME_LIKE.test(txt)) fields.push(txt);
+      }
+      if (fields.length === before) {
+        const bare = (root.textContent || '').trim();
+        if (bare && NAME_LIKE.test(bare)) fields.push(bare);
+      }
+    }
+    return fields;
+  }
+
+  // --- Field classifiers ---
+  //
+  // Neither vocabulary is invented here.  The sibling post-detail extractors
+  // \`linkedin/dom-variant.ts\` and \`operations/get-post.ts\` each carry
+  // \`(?:1st|2nd|3rd|You)\` for the connection degree and \`[1-9]\\d*mo\` for the
+  // relative time, and \`parseTimestamp\` further down THIS file accepts \`Nmo\`
+  // ("LinkedIn emits \`Nmo\` for posts ~30-330 days old").  Before this change the
+  // feed extractor was the only one of the four that could not classify a token
+  // its own downstream parser expects.
+
+  // A field the WHOLE of which is a connection badge.  Anchored at both ends on
+  // purpose: a genuine headline that merely STARTS with an ordinal ("1st Officer
+  // at Acme") is a headline, not a degree.
+  //
+  // \`You\` occupies the degree position on the logged-in account's own posts.
+  // Without it, every post the account authored emitted "• You" as the
+  // HEADLINE, because the headline is chosen by exclusion and nothing else
+  // excluded it.
+  const DEGREE_ONLY = /^[\\s\\u2022\\u00B7]*(?:\\d+(?:st|nd|rd|th)\\+?|You)[\\s\\u2022\\u00B7]*$/;
+
+  // The rest of the actor header's chrome, matched the same way: anchored at
+  // both ends, so a genuine headline that merely CONTAINS one of these words
+  // ("Following the Money at Acme", "Premium Support Lead") is a headline.
+  //
+  // The headline is chosen by EXCLUSION and has no positive test of its own, so
+  // every token these classifiers fail to recognise is emitted to the user AS
+  // the headline.  \`DEGREE_ONLY\` above covered the ordinals and \`You\` and
+  // nothing else, which is why "• Following" — the ordinary follow-state token
+  // in a COMPANY actor header — displaced the real headline rather than being
+  // skipped.
+  //
+  // The degree half widens toward the vocabulary this repository already
+  // carries for the same position: \`linkedin/dom-variant.ts\` and
+  // \`operations/get-post.ts\` both spell it \`(?:1st|2nd|3rd|You)\`.  The
+  // unabbreviated form ("1st degree connection") is the accessible rendering of
+  // that same field, which neither of those two extractors meets and this one
+  // does.
+  const HEADER_CHROME = /^[\\s\\u2022\\u00B7+]*(?:Following|Follow|Premium|Promoted|\\d+(?:st|nd|rd|th)\\+?\\s+degree\\s+connection)[\\s\\u2022\\u00B7]*$/;
+
+  // The relative-time token a field opens with, as the timestamp read below
+  // reports it.  Anchored, so a screen-reader string ("18 hours ago") is not a
+  // timestamp.  \`mo\` is tried BEFORE \`[smhdw]\` for the reason \`parseTimestamp\`
+  // gives for its own alternation: \`m\` is in \`[smhdw]\`, so the shorter branch
+  // matches the "1m" of "1mo" and then fails on the "o" — which is how "1mo •"
+  // used to be classified as neither a timestamp nor a degree, and so became the
+  // headline.
+  const FIELD_TIMESTAMP = /^(\\d+mo|\\d+yr|\\d+y|\\d+[smhdw])(?:\\s|[\\u2022\\u00B7]|$)/;
+
+  // Trailing tokens a display name never ends with.  Trimming these is the ONLY
+  // way a name candidate may end INSIDE a field — which is precisely what stops
+  // "Ada Lovelace, PhD" being shortened to "Ada Lovelace" when the slug is
+  // /in/ada-lovelace/: ", PhD" is words, not a badge, so there is no candidate
+  // that ends there.
+  const TRAILING_BADGE = /[\\s\\u2022\\u00B7]*(?:\\d+(?:st|nd|rd|th)\\+?|You|\\d+mo|\\d+yr|\\d+y|\\d+[smhdw])[\\s\\u2022\\u00B7]*$/;
+  const TRAILING_DECORATION = /[\\s\\u2022\\u00B7]+$/;
+
+  // How many LEADING fields a name may span.  The shape this bounds is a name
+  // split one word per wrapper ("Mary" / "Jane" / "Watson"); the cap keeps a
+  // pathological anchor from making the candidate set large.
+  const MAX_NAME_FIELDS = 4;
+
+  // The shortest shared prefix that is evidence rather than coincidence — for a
+  // slug long enough to have one.  Read it together with the \`Math.min\` at the
+  // acceptance test in \`slugName\`: the bar is \`min(MIN_SLUG_MATCH, target.length)\`,
+  // so a slug SHORTER than this stays usable exactly when a candidate explains it
+  // in FULL.  /company/ibm/ against "IBM" scores 3 and is accepted; an absolute
+  // floor of 4 could never be cleared by ANY 3-character slug, which permanently
+  // excluded /company/ge/, /company/hp/, /company/sap/ and /in/ada/ from the
+  // mechanism.  The comparison is \`<\`, so a score of exactly MIN_SLUG_MATCH is
+  // ACCEPTED, not rejected.
+  const MIN_SLUG_MATCH = 4;
+
+  // How much UNCORROBORATED text a candidate may carry once it reaches past the
+  // FIRST field.  Inside one field the slug is the only evidence there is and
+  // the score below arbitrates; crossing a field boundary is different, because
+  // the boundary is itself evidence that LinkedIn considers the two things
+  // separate.  A second field therefore has to be nearly all slug to be read as
+  // part of the name.
+  //
+  // Without this, /in/john-smith-photography/ over the fields "John Smith" then
+  // "Photography & Video" scored the two-field candidate 20 - 5 = 15 against
+  // "John Smith"'s 9 and returned "John Smith Photography & Video" -- the
+  // eponymous-business slug, which is common, and a regression against the read
+  // that shipped before #860.  The bound is what separates that from the split
+  // name it otherwise looks exactly like: "John" then "Smith Jr" under
+  // /in/john-smith/ leaves only "jr" uncorroborated and is still fused.
+  //
+  // Sized to the honorific suffixes a display name actually carries -- Jr, Sr,
+  // II, III, MD, PhD, MBA -- and NOT to any observed headline, so a headline
+  // short enough to slip under it fuses anyway.  That residue is the accepted
+  // cost recorded in this file's header.
+  const MAX_NAME_TAIL = 3;
+
+  // Fold text and slug to one comparable form: NFD-normalise, drop combining
+  // marks, lowercase, and remove everything that is not ASCII alphanumeric.
+  // "Ada Lovelace" and "ada-lovelace" both become "adalovelace"; "Renée"
+  // matches "renee".  A name in a non-Latin script folds to the empty string,
+  // which scores zero and routes to the fallback — the honest answer, since
+  // LinkedIn transliterates such slugs and the two are not comparable here.
+  function squash(s) {
+    return s.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  // The profile slug an anchor's href carries: the segment after /in/ or
+  // /company/, the two forms every anchor considered here is selected by.
+  // Taking the last path segment instead would read "recent-activity" off a
+  // deep link.
+  function anchorSlug(a) {
+    const path = linkPath(a);
+    if (path === null) return null;
+    const parts = path.split('/').filter(function (p) { return p.length > 0; });
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (parts[i] === 'in' || parts[i] === 'company') return parts[i + 1];
+    }
+    return null;
+  }
+
+  function commonPrefixLen(x, y) {
+    const n = Math.min(x.length, y.length);
+    let i = 0;
+    while (i < n && x.charCodeAt(i) === y.charCodeAt(i)) i++;
+    return i;
+  }
+
+  // The maximal LEADING run of fields that are neither a bare connection badge
+  // nor a bare relative-time field: where the name is, and the only place a name
+  // candidate is allowed to start.
+  //
+  // In [name, degree, headline, time] the region is just [name].  In the split
+  // family it is every fragment of the name.  Where no badge separates the name
+  // from the headline it also takes in the headline — which the score in
+  // \`slugName\` then rejects, because the slug does not corroborate it.
+  function nameRegion(fields) {
+    let end = 0;
+    while (end < fields.length &&
+           !DEGREE_ONLY.test(fields[end]) &&
+           !FIELD_TIMESTAMP.test(fields[end])) {
+      end++;
+    }
+    return fields.slice(0, end);
+  }
+
+  // The end offset of \`source.slice(0, end)\` with trailing badge, relative-time
+  // and decoration tokens removed, repeatedly.  Returns \`end\` unchanged when
+  // there is nothing to remove, and never trims a candidate that is ENTIRELY a
+  // badge down to nothing.
+  function trimTrailingBadge(source, end) {
+    let cut = end;
+    for (let guard = 0; guard <= MAX_NAME_FIELDS + 1; guard++) {
+      const badge = TRAILING_BADGE.exec(source.slice(0, cut));
+      if (badge === null || badge.index === 0) break;
+      cut = badge.index;
+    }
+    const decoration = TRAILING_DECORATION.exec(source.slice(0, cut));
+    if (decoration !== null && decoration.index > 0) cut = decoration.index;
+    return cut;
+  }
+
+  // The name, disambiguated by the anchor's OWN href (issue #860).
+  //
+  // The slug already encodes the name, and it is a property of the SAME element
+  // both author fields are read from — so consulting it cannot make name and
+  // profile URL describe two people, which is the invariant issue #825 bought
+  // and #825's AC-2 still pins.  It is not a second SOURCE; it is a second
+  // reading of the one source.
+  //
+  // The slug's job is deliberately NARROW: it decides how far the name extends
+  // from where the name STARTS, and whether a badge is glued onto it.  It does
+  // not get to choose WHICH field is the name.  Candidates are therefore
+  // PREFIXES of the name region, so a candidate always begins at the name's own
+  // position.  Searching every window across all fields instead let a role,
+  // brand or nickname slug — /in/head-of-widgets/, /in/thegrowthguy/,
+  // /in/coach-mike/ — match the HEADLINE better than the real name, and the two
+  // swapped places.
+  //
+  // Compare SQUASHED PREFIXES rather than whole strings: one rule then absorbs
+  // both LinkedIn's trailing disambiguation hash (/in/john-smith-1a2b3c/ still
+  // matches "John Smith") and separator-less slugs (/in/alexeypelykh/ matches
+  // "Alexey Pelykh").
+  //
+  // Score = the characters of a candidate the slug CORROBORATES, minus those it
+  // does not.  Subtracting, rather than using the uncorroborated tail only as a
+  // tie-break, is what stops a badge paying for itself: against
+  // /in/john-smith-1a2b3c/ the candidate "John Smith · 1st" shares one
+  // character MORE than "John Smith" does — the hash's leading "1" meeting the
+  // degree's — so on longest-prefix alone the badge-contaminated candidate wins,
+  // which is #860's own bug re-created inside the fix for it.
+  //
+  // Returns null — deliberately, not a guess — when no candidate clears the bar;
+  // the caller falls back to \`anchorName\`.  On success it returns the name AND
+  // how many fields that name was read from, which is what lets the headline be
+  // chosen by ORIGIN rather than by a content test (see \`nameFieldSpan\`).
+  function slugName(a, fields) {
+    const slug = anchorSlug(a);
+    if (slug === null) return null;
+    const target = squash(slug);
+    if (target.length === 0) return null;
+
+    const region = nameRegion(fields);
+    if (region.length === 0) return null;
+
+    // The region joined ONCE, so every candidate below is a slice of a single
+    // string: "Jean-Luc Picard" must come back carrying its hyphen, which
+    // rebuilding a candidate out of its words would lose.
+    let source = '';
+    const ends = [];
+    const span = Math.min(region.length, MAX_NAME_FIELDS);
+    for (let k = 0; k < span; k++) {
+      source += (k === 0 ? '' : ' ') + region[k];
+      ends.push(source.length);
+    }
+
+    let best = null;
+    function consider(end) {
+      if (end <= 0) return;
+      const candidate = source.slice(0, end);
+      if (!NAME_LIKE.test(candidate)) return;
+      const folded = squash(candidate);
+      const common = commonPrefixLen(folded, target);
+      const excess = folded.length - common;
+
+      // Crossing a field boundary costs more than the score alone charges for:
+      // the boundary is LinkedIn's own statement that these are separate
+      // things, so a multi-field candidate must be corroborated nearly in full.
+      if (ends.length > 0 && end > ends[0] && excess > MAX_NAME_TAIL) return;
+
+      const score = common - excess;
+      if (best === null || score > best.score ||
+          (score === best.score && common > best.common) ||
+          (score === best.score && common === best.common && end < best.end)) {
+        best = { end: end, common: common, score: score };
+      }
+    }
+
+    for (const end of ends) {
+      consider(end);
+      const trimmed = trimTrailingBadge(source, end);
+      if (trimmed !== end) consider(trimmed);
+    }
+
+    if (best === null || best.common < Math.min(MIN_SLUG_MATCH, target.length)) {
+      return null;
+    }
+
+    // How many FIELDS the accepted candidate consumed.  \`best.end\` is an offset
+    // into the joined region and may land INSIDE a field rather than on its
+    // boundary — the fused "Ada Lovelace · 1st" case, where the cut falls before
+    // the badge — so the field the cut lands in counts as consumed as well.
+    let consumed = 1;
+    for (let k = 0; k < ends.length; k++) {
+      if (ends[k] < best.end) consumed = k + 2;
+    }
+    return { name: source.slice(0, best.end), fields: consumed };
+  }
+
+  // Does \`haystack\` carry \`needle\` as a whole PHRASE — bounded at both ends by
+  // something that is neither a letter nor a digit?  The boundary is what keeps
+  // a short name from swallowing an unrelated headline: "Ada" occurs inside
+  // "Adaptive Systems Lead", and without the guard that headline would be
+  // discarded as the name's own field and the post would report none at all.
+  function phraseContains(haystack, needle) {
+    if (needle.length === 0) return false;
+    let from = 0;
+    for (;;) {
+      const at = haystack.indexOf(needle, from);
+      if (at < 0) return false;
+      const before = at > 0 ? haystack.charAt(at - 1) : '';
+      const after = haystack.charAt(at + needle.length);
+      if (!NAME_LIKE.test(before) && !NAME_LIKE.test(after)) return true;
+      from = at + 1;
+    }
+  }
+
+  // WHICH fields the name was read from, as a half-open [from, to) range of
+  // indices.  They are the only fields the headline may not be chosen from, and
+  // the suppression is by ORIGIN rather than by content.
+  //
+  // The previous rule tested every field for phrase containment against the
+  // resolved name, in both directions.  That drops the name's own field in both
+  // of #860's families — the contaminated "Ada Lovelace · 1st", and the
+  // fragments "Ada" / "Multi" of a name split across wrappers — but it also
+  // drops a GENUINE headline that happens to contain the name, which on
+  // LinkedIn is a whole class and not a corner: eponymous consultancies ("Ada
+  // Lovelace Consulting"), "Founder at Ada Lovelace Studio", and the
+  // "Name | Role" pattern.  A four-field actor header returned each of those
+  // before that rule and null after it.
+  //
+  // No content test is needed, because the origin is already known.  When the
+  // slug-scored read produced the name it consumed a known PREFIX of the name
+  // region, and that prefix IS the span.  When it declined and \`anchorName\`
+  // produced the name, the span is the one field that name came out of.
+  //
+  // Accepted and pre-existing: where a leading screen-reader copy is itself the
+  // field the name is read from, the excluded field is that copy and the real
+  // name field becomes the headline.  The pre-#860 read behaves the same way,
+  // and the accessible shape LinkedIn actually serves puts that copy beside an
+  // \`aria-hidden\` sibling, which \`hiddenWrappers\` already resolves.
+  function nameFieldSpan(scored, name, fields) {
+    if (scored !== null) return { from: 0, to: scored.fields };
+    if (name === null) return { from: 0, to: 0 };
+    for (let i = 0; i < fields.length; i++) {
+      if (phraseContains(fields[i], name)) return { from: i, to: i + 1 };
+    }
+    return { from: 0, to: 0 };
+  }
   // --- Step 1: Find the feed list via data-testid ---
   const feedList = document.querySelector('[data-testid="mainFeed"]');
   if (!feedList) return posts;
@@ -367,28 +794,61 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     const authorAnchor = findAuthorAnchor(item);
     if (authorAnchor) {
       authorProfileUrl = authorAnchor.href.split('?')[0] || null;
-      authorName = anchorName(authorAnchor);
 
-      // Headline + timestamp come from that same anchor: it carries the
-      // <p> run [name, connection degree, headline, timestamp].
-      const pEls = Array.from(authorAnchor.querySelectorAll('p'));
+      // All three remaining fields are read from ONE field sequence taken off
+      // that same anchor.  The previous read took the 3rd <p> for the headline
+      // and the last time-like <p> for the timestamp, which returned nothing at
+      // all for an anchor rendering its fields as <span> runs — the whole legacy
+      // dialect, issue #898 — and the positional rule does not survive being
+      // widened to <span>, because the accessible shapes render many more of
+      // them.  Reading FIELDS rather than tags is what makes this dialect-
+      // agnostic; what falsifies it is LinkedIn rendering a field outside the
+      // anchor, and there the honest answer is null, which is what it returns.
+      const fields = anchorFields(authorAnchor);
 
-      // Timestamp: last <p> containing a relative-time token (e.g. "18h •")
-      for (let i = pEls.length - 1; i >= 0; i--) {
-        const txt = (pEls[i].textContent || '').trim();
-        const timestampMatch = txt.match(/^(\\d+[smhdw])(?:\\s|[\\u2022\\u00B7]|$)/);
+      const scored = slugName(authorAnchor, fields);
+      authorName = scored !== null ? scored.name : anchorName(authorAnchor);
+
+      // The fields the name came out of, so the headline can be excluded from
+      // them by position rather than by testing its content against the name.
+      const nameSpan = nameFieldSpan(scored, authorName, fields);
+
+      // Timestamp: the LAST field opening with a relative-time token.
+      for (let i = fields.length - 1; i >= 0; i--) {
+        const timestampMatch = fields[i].match(FIELD_TIMESTAMP);
         if (timestampMatch) {
           timestamp = timestampMatch[1];
-          pEls.splice(i, 1);
           break;
         }
       }
 
-      // Headline: 3rd <p> (index 2) — after name and connection degree.
-      // Company posts may have only 2 <p> elements (name + timestamp),
-      // in which case authorHeadline stays null.
-      if (pEls.length >= 3) {
-        authorHeadline = (pEls[2].textContent || '').trim() || null;
+      // Headline: the FIRST field that is none of the fields the name was read
+      // from, a relative time, or the actor header's own chrome.
+      //
+      // The name's fields are dropped by INDEX, using the span the read above
+      // already knows, rather than by testing each field's content against the
+      // name.  A content test cannot tell the name's own field from a headline
+      // that merely contains the name, so it discarded both; the origin is not
+      // ambiguous that way.  It covers both of #860's families for the same
+      // reason — a split name spans indices 0..1, a contaminated single field
+      // spans just 0 — without needing to know which family this anchor is in.
+      //
+      // Every field opening with a relative time is skipped, not merely the one
+      // the timestamp was taken from: this rule chooses by EXCLUSION and has no
+      // positive test of its own, so any token the classifiers fail to
+      // recognise is emitted to the user AS the headline.  That is why they
+      // carry the same vocabulary as this repository's other three extractors
+      // rather than a private subset of it, and why \`HEADER_CHROME\` exists at
+      // all — before it, "• Following" in a company actor header WAS the
+      // headline this loop reported.
+      for (let i = 0; i < fields.length; i++) {
+        const field = fields[i];
+        if (i >= nameSpan.from && i < nameSpan.to) continue;
+        if (FIELD_TIMESTAMP.test(field)) continue;
+        if (DEGREE_ONLY.test(field)) continue;
+        if (HEADER_CHROME.test(field)) continue;
+        authorHeadline = field;
+        break;
       }
     }
 
@@ -597,10 +1057,15 @@ export function parseTimestamp(raw: string | null): number | null {
   const asDate = Date.parse(raw);
   if (!isNaN(asDate)) return asDate;
 
-  // Relative time: Ns, Nm, Nh, Nd, Nw, Nmo (mo = ~30 days).  The alternation
-  // tries `mo` before `[smhdw]` so `1mo` matches `mo` (longer alternative),
-  // not `m` followed by leftover `o`.
-  const match = raw.match(/^(\d+)(mo|[smhdw])$/);
+  // Relative time: Ns, Nm, Nh, Nd, Nw, Nmo (mo = ~30 days), Ny / Nyr (~365
+  // days).  The alternation tries the longer units first so `1mo` matches `mo`
+  // (not `m` with a leftover `o`) and `1yr` matches `yr` (not `y` with a
+  // leftover `r`) — the same reason the feed extractor's own `FIELD_TIMESTAMP`
+  // orders its branches that way.  The year units are accepted here because
+  // that extractor can now EMIT them: a token it classifies as a timestamp and
+  // this parser drops would silently reset `publishedAt` to null for older
+  // reshared posts, which is the failure `mo` was added to fix.
+  const match = raw.match(/^(\d+)(mo|yr|y|[smhdw])$/);
   if (!match) return null;
 
   const value = parseInt(match[1] ?? "0", 10);
@@ -614,6 +1079,8 @@ export function parseTimestamp(raw: string | null): number | null {
     d: 86_400_000,
     w: 604_800_000,
     mo: 2_592_000_000,
+    y: 31_536_000_000,
+    yr: 31_536_000_000,
   };
 
   return now - value * (multipliers[unit] ?? 0);
