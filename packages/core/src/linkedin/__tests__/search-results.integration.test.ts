@@ -21,9 +21,11 @@ import {
   adaptersFor,
   buildDetectionSource,
   buildReadinessPredicateSource,
+  buildSearchResultsCardFunnelSource,
   buildSearchResultsExtractionSource,
   variantNamesFor,
 } from "../dom-variant.js";
+import { SEARCH_RESULTS_CAPTURE_PROBE_SCRIPT } from "../../operations/search-posts.js";
 
 /** Timeout for beforeEach operations (connect) on slow CI runners. */
 const BEFORE_EACH_TIMEOUT = 15_000;
@@ -500,6 +502,16 @@ describe("search-results Tier-2 oracle (integration)", () => {
   const detectionSource = buildDetectionSource(adapters);
   const readinessSource = buildReadinessPredicateSource(adapters);
   const extractionSource = buildSearchResultsExtractionSource(adapters);
+  // The funnel declares a function rather than evaluating to a value, so it is
+  // wrapped to be evaluated on its own.  This wrapper is NOT what the capture
+  // sends — that is `SEARCH_RESULTS_CAPTURE_PROBE_SCRIPT`, imported and graded
+  // separately below, and the distinction is load-bearing: a file that graded
+  // only its own wrapper would leave the composed expression the operator
+  // actually depends on unexecuted by any tier.
+  const funnelSource = `(() => {
+    ${buildSearchResultsCardFunnelSource(adapters)}
+    return __lhSearchResultCardFunnel();
+  })()`;
 
   /**
    * Install a page body into the live document.
@@ -1218,6 +1230,201 @@ describe("search-results Tier-2 oracle (integration)", () => {
       expect(
         await client.evaluate<ExtractionRecord | null>(extractionSource),
       ).toBeNull();
+    });
+  });
+
+  describe("the diagnostic card funnel — what a captured artifact reports", () => {
+    // The funnel is the adapter-derived half of the search-results diagnostic
+    // bundle (#870).  This is the only tier that grades the source it emits:
+    // the unit suite mocks the evaluate away, so nothing there would notice
+    // the emitted JavaScript failing to parse, `offsetHeight` answering
+    // differently than the card loop's own read, or the union enumeration
+    // double-counting.  Everything below is a real `querySelectorAll` and a
+    // real layout read.
+
+    /** What `__lhSearchResultCardFunnel()` returns. */
+    interface Funnel {
+      readonly scopeMatchCounts: Readonly<Record<string, number>>;
+      readonly candidateCardCount: number;
+      readonly cardsClearingHeightFloor: number;
+      readonly cardsWithAuthorLink: number;
+      readonly cardsWithMenuButton: number;
+    }
+
+    it("names the layer that collapsed on the corroboration failure", async () => {
+      // The same page the empty-vs-error block above raises on, read through
+      // the funnel instead.  Every card filter is shared with the cardinal
+      // except the control-menu one, so this reading — post-shaped cards
+      // beside no cards yielding posts — is the contradiction's fingerprint,
+      // and it says outright which selector went stale rather than leaving
+      // the reader of a bare `postCardCount=1` to work it out.
+      await install(legacyCard({ menuButton: false, counts: WHOLE_COUNTS_ROW }));
+
+      const funnel = await client.evaluate<Funnel>(funnelSource);
+
+      expect(funnel.candidateCardCount).toBe(1);
+      expect(funnel.cardsClearingHeightFloor).toBe(1);
+      expect(funnel.cardsWithAuthorLink).toBe(1);
+      expect(funnel.cardsWithMenuButton).toBe(0);
+    });
+
+    it("agrees with the card loop on the page that extracts cleanly", async () => {
+      // The control, and it is not optional: a funnel that reported zero
+      // menu-button cards on EVERY page would satisfy the case above while
+      // measuring nothing — the degenerate gate wearing the costume of the
+      // diagnostic.
+      await install(legacyCard({ counts: WHOLE_COUNTS_ROW }));
+
+      const funnel = await client.evaluate<Funnel>(funnelSource);
+      const record = await client.evaluate<ExtractionRecord | null>(
+        extractionSource,
+      );
+
+      expect(funnel.cardsWithAuthorLink).toBe(record?.postCardCount);
+      expect(funnel.cardsWithMenuButton).toBe(record?.posts?.length);
+      expect(funnel.cardsWithMenuButton).toBe(1);
+    });
+
+    it("deduplicates a card both dialects' scope selectors match", async () => {
+      // A legacy card IS a `div[role="listitem"]` carrying the chameleon
+      // attribute, so both scope selectors return the same single element.
+      // The per-selector counts each report it; the union counts it once.
+      // Without the dedupe every legacy page would double every funnel
+      // number, which is a diagnostic that lies in the direction that looks
+      // most like a healthy page.
+      await install(legacyCard({ counts: WHOLE_COUNTS_ROW }));
+
+      const funnel = await client.evaluate<Funnel>(funnelSource);
+
+      expect(funnel.scopeMatchCounts['div[role="listitem"]']).toBe(1);
+      expect(funnel.scopeMatchCounts["[data-chameleon-result-urn]"]).toBe(1);
+      expect(funnel.candidateCardCount).toBe(1);
+    });
+
+    it("applies the same height floor the card loop applies", async () => {
+      // Layout, read by the browser.  A funnel measuring a different floor
+      // than the loop it claims to mirror would misreport which layer dropped
+      // a card — the one question the artifact is consulted for — which is
+      // why the number is a shared constant rather than a literal at each
+      // site.
+      await install(
+        legacyCard({ height: 40, counts: WHOLE_COUNTS_ROW }) +
+          legacyCard({
+            urn: "urn:li:activity:2",
+            height: 300,
+            counts: WHOLE_COUNTS_ROW,
+          }),
+      );
+
+      const funnel = await client.evaluate<Funnel>(funnelSource);
+
+      expect(funnel.candidateCardCount).toBe(2);
+      expect(funnel.cardsClearingHeightFloor).toBe(1);
+      expect(funnel.cardsWithMenuButton).toBe(1);
+    });
+
+    it("cannot separate the two readings of the zero-result page — by construction", async () => {
+      // The honest limit, pinned so nobody later reads an all-zero funnel as
+      // the claim "LinkedIn changed its markup".  A dialect flip and a search
+      // that matched nothing produce the SAME funnel, which is exactly why
+      // the bundle carries a body-text snippet and a screenshot beside it and
+      // deliberately does NOT probe for an "empty results" anchor: no such
+      // anchor has been measured on either dialect, and a guess sitting in
+      // the one artifact an operator has left is worse than none.
+      await install(pageBody("zero-result-page"));
+
+      const funnel = await client.evaluate<Funnel>(funnelSource);
+
+      expect(funnel.candidateCardCount).toBe(0);
+      expect(funnel.cardsClearingHeightFloor).toBe(0);
+      expect(funnel.cardsWithAuthorLink).toBe(0);
+      expect(funnel.cardsWithMenuButton).toBe(0);
+
+      // The canary this block owes: the page really did install, so the zeros
+      // above are a reading rather than a blank document.  `emptyStateHeadings`
+      // is the same positive claim {@link PageSpec} declares for this page and
+      // for the same reason — every card anchor on it is legitimately zero.
+      expect(await count("main h1")).toBe(1);
+    });
+  });
+
+  describe("the composed capture probe — the expression the operation sends", () => {
+    // `SEARCH_RESULTS_CAPTURE_PROBE_SCRIPT` is a hand-written wrapper with the
+    // generated funnel spliced into it.  Nothing else executes it: the Tier-1
+    // suite mocks `evaluate` away and matches the string by substring, and the
+    // funnel block above evaluates its own wrapper.  So this is the only tier
+    // where a syntax error in that composition — a hand-quoted selector, a
+    // stray backtick in one of its comments — is ever observed.
+    //
+    // The consequence of NOT observing it is silent: `client.evaluate`
+    // rejects, the capture's own `.catch` swallows it, and the operator gets
+    // no json, no png and no warn line at the one moment they are reading
+    // diagnostics.
+
+    it("parses and runs, returning exactly the documented key set", async () => {
+      await install(legacyCard({ counts: WHOLE_COUNTS_ROW }));
+
+      const probe = await client.evaluate<Record<string, unknown>>(
+        SEARCH_RESULTS_CAPTURE_PROBE_SCRIPT,
+      );
+
+      // Exact, not a superset: the funnel is spread LAST, so a funnel key
+      // colliding with a fixed field would silently shadow it and the bundle
+      // would carry a number under a name that means something else.
+      expect(Object.keys(probe).sort()).toEqual(
+        [
+          "bodyTextSnippet",
+          "candidateCardCount",
+          "cardsClearingHeightFloor",
+          "cardsWithAuthorLink",
+          "cardsWithMenuButton",
+          "dataTestIdCount",
+          "hasMain",
+          "href",
+          "scopeMatchCounts",
+          "title",
+        ].sort(),
+      );
+    });
+
+    it("reads the page it is pointed at, not a constant", async () => {
+      // The control: a probe returning fixed values would satisfy the key-set
+      // case above while measuring nothing.  Two structurally different pages
+      // must produce different readings.
+      await install(legacyCard({ menuButton: false, counts: WHOLE_COUNTS_ROW }));
+      const withoutMenu = await client.evaluate<Record<string, unknown>>(
+        SEARCH_RESULTS_CAPTURE_PROBE_SCRIPT,
+      );
+
+      await install(legacyCard({ counts: WHOLE_COUNTS_ROW }));
+      const withMenu = await client.evaluate<Record<string, unknown>>(
+        SEARCH_RESULTS_CAPTURE_PROBE_SCRIPT,
+      );
+
+      expect(withoutMenu.cardsWithAuthorLink).toBe(1);
+      expect(withoutMenu.cardsWithMenuButton).toBe(0);
+      expect(withMenu.cardsWithMenuButton).toBe(1);
+      // The legacy-reversion fingerprint, measured document-wide: this page
+      // carries no `[data-testid]` at all.
+      expect(withMenu.dataTestIdCount).toBe(0);
+      expect(withMenu.hasMain).toBe(false);
+    });
+
+    it("bounds the body-text snippet it carries off the page", async () => {
+      // The snippet is what settles the two readings of a zero detect match,
+      // and it is the one field that carries page PROSE rather than a count —
+      // so its 800-character cap is a data-minimisation control, not a
+      // formatting choice, and it is measured here against real `innerText`.
+      await install(
+        `<main><h1>No results found</h1><p>${"x".repeat(4000)}</p></main>`,
+      );
+
+      const probe = await client.evaluate<{ bodyTextSnippet: string }>(
+        SEARCH_RESULTS_CAPTURE_PROBE_SCRIPT,
+      );
+
+      expect(probe.bodyTextSnippet.length).toBe(800);
+      expect(probe.bodyTextSnippet).toContain("No results found");
     });
   });
 });

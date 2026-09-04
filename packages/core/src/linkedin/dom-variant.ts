@@ -824,6 +824,18 @@ const SEARCH_RESULT_MENU_BUTTON =
 const SEARCH_RESULT_AUTHOR_LINK = 'a[href*="/in/"], a[href*="/company/"]';
 
 /**
+ * Rendered height below which an enumerated card is not a post.
+ *
+ * The skeleton/hidden-item floor the card loop applies before anything else,
+ * named rather than left as a literal because a second reader of the same
+ * number now exists: {@link buildSearchResultsCardFunnelSource} reports how
+ * many candidates clear it, and a funnel measuring a DIFFERENT floor than the
+ * loop it claims to mirror would misreport which layer dropped a card — the
+ * one question that diagnostic is for.
+ */
+const SEARCH_RESULT_CARD_MIN_HEIGHT = 100;
+
+/**
  * A result card's control menu button, addressed from the document root.
  *
  * It carries two roles, and they are the same element rather than two
@@ -2109,7 +2121,7 @@ export function buildSearchResultsExtractionSource(
 
   for (const card of cards) {
     // --- Shared with the cardinal: is this card post-shaped at all? ---
-    if (card.offsetHeight < 100) continue;
+    if (card.offsetHeight < ${String(SEARCH_RESULT_CARD_MIN_HEIGHT)}) continue;
     const authorLink = card.querySelector(${jsString(SEARCH_RESULT_AUTHOR_LINK)});
     if (!authorLink) continue;
     postCardCount++;
@@ -2185,6 +2197,96 @@ export function buildSearchResultsExtractionSource(
 
   return { variant: adapter.variant, postCardCount: postCardCount, posts: posts };
 })()`;
+}
+
+/**
+ * In-page card-funnel probe for the search-results surface — the diagnostic
+ * companion to {@link buildSearchResultsExtractionSource}, emitted here rather
+ * than written out at the capture site.
+ *
+ * Defines `__lhSearchResultCardFunnel()`, which returns the per-layer counts a
+ * failed read is diagnosed from:
+ *
+ * ```json
+ * { "scopeMatchCounts": { "div[role=\"listitem\"]": 10 },
+ *   "candidateCardCount": 10, "cardsClearingHeightFloor": 10,
+ *   "cardsWithAuthorLink": 10, "cardsWithMenuButton": 0 }
+ * ```
+ *
+ * **The counts are CUMULATIVE, not independent.**  Each is the population that
+ * survived every filter above it, in the card loop's own order: the height
+ * floor, then the author anchor, then the control menu.  Read as a funnel, the
+ * step where the number collapses names the layer that broke — the shape above
+ * is the corroboration failure exactly (`postCardCount > 0` beside an empty
+ * `posts`), and it says outright that the menu-button selector is what went
+ * stale rather than leaving a reader to infer it.  `cardsWithAuthorLink` is
+ * the `postCardCount` analogue and `cardsWithMenuButton` the `posts.length`
+ * analogue, which is why the funnel mirrors the loop's filter ORDER and not
+ * merely its selectors.
+ *
+ * **Deliberately WIDER than any single adapter's binding**, on the same ground
+ * the reactions-modal diagnostic selectors are: this is the artifact a reader
+ * consults precisely when NO adapter could read the page, which is the one
+ * moment an adapter-bound enumeration has nothing to say.  So it enumerates the
+ * UNION of every registered adapter's `scopes` — deduplicated by element
+ * identity — instead of the loop's "first candidate yielding at least one
+ * element wins".  Two consequences worth stating rather than discovering:
+ * `candidateCardCount` can exceed what any one adapter would have enumerated
+ * (a dialect whose scope candidates nest contributes both the outer and the
+ * inner element), and `scopeMatchCounts` is what decomposes it — keyed by the
+ * selector itself, so a reader can see which dialect's root produced the
+ * candidates without holding the registry in their head.
+ *
+ * Generated from the adapters rather than hand-written at the capture site for
+ * the reason {@link SEARCH_RESULT_CARD_MENU_BUTTON} already records one level
+ * up: a second copy of a card selector drifting would leave the funnel
+ * confidently measuring a layer the loop no longer applies, and a diagnostic
+ * that lies is worse than one that is absent.
+ *
+ * @param adapters - The search-results surface's registered adapters.
+ * @returns JavaScript source declaring `__lhSearchResultCardFunnel()`.
+ *
+ * @internal Consumed by the search-results diagnostic capture; not part of the
+ *   public API.
+ */
+export function buildSearchResultsCardFunnelSource(
+  adapters: readonly SearchResultsVariantAdapter[],
+): string {
+  const scopeSelectors = [...new Set(adapters.flatMap((a) => a.scopes))];
+  return `
+  function __lhSearchResultCardFunnel() {
+    const scopeMatchCounts = {};
+    // A Set, so a selector matching an element another selector already
+    // returned contributes to its own count without inflating the union.
+    const candidates = new Set();
+    for (const selector of ${JSON.stringify(scopeSelectors)}) {
+      const found = document.querySelectorAll(selector);
+      scopeMatchCounts[selector] = found.length;
+      for (const el of found) candidates.add(el);
+    }
+
+    let cardsClearingHeightFloor = 0;
+    let cardsWithAuthorLink = 0;
+    let cardsWithMenuButton = 0;
+    for (const card of candidates) {
+      // Same filters, same order as the card loop above — see this function's
+      // doc for why the order is what makes the counts readable.
+      if (card.offsetHeight < ${String(SEARCH_RESULT_CARD_MIN_HEIGHT)}) continue;
+      cardsClearingHeightFloor++;
+      if (!card.querySelector(${jsString(SEARCH_RESULT_AUTHOR_LINK)})) continue;
+      cardsWithAuthorLink++;
+      if (!card.querySelector(${jsString(SEARCH_RESULT_MENU_BUTTON)})) continue;
+      cardsWithMenuButton++;
+    }
+
+    return {
+      scopeMatchCounts: scopeMatchCounts,
+      candidateCardCount: candidates.size,
+      cardsClearingHeightFloor: cardsClearingHeightFloor,
+      cardsWithAuthorLink: cardsWithAuthorLink,
+      cardsWithMenuButton: cardsWithMenuButton,
+    };
+  }`;
 }
 
 /**
