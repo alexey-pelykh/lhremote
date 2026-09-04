@@ -17,28 +17,6 @@ import { click, scrollTo, typeText, waitForElement } from "../dom-automation.js"
 /** Timeout for beforeEach operations (connect + reset) on slow CI runners. */
 const BEFORE_EACH_TIMEOUT = 15_000;
 
-/**
- * Race a promise against a timeout, throwing a descriptive error on expiry.
- */
-async function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  label: string,
-): Promise<T> {
-  const ac = new AbortController();
-  const timeout = new Promise<never>((_resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${ms}ms`));
-    }, ms);
-    ac.signal.addEventListener("abort", () => clearTimeout(timer));
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    ac.abort();
-  }
-}
-
 describe("DOM automation (integration)", () => {
   let chromium: ChromiumInstance;
   let client: CDPClient;
@@ -53,7 +31,7 @@ describe("DOM automation (integration)", () => {
 
   beforeEach(async () => {
     client = new CDPClient(chromium.port, { timeout: BEFORE_EACH_TIMEOUT });
-    await withTimeout(client.connect(), BEFORE_EACH_TIMEOUT, "client.connect()");
+    await client.connect();
     // Reset through the shared install gate rather than by draining
     // `document.body` from JS.  The drain dereferenced `document.body` before
     // the freshly-launched target had one -- null on the slowest runner in the
@@ -63,13 +41,15 @@ describe("DOM automation (integration)", () => {
     // built through DOM APIs.  The gate is what makes "installed" mean
     // "observable by the next `evaluate`" -- see `installDocument` (#888).
     //
-    // Deliberately NOT wrapped in `withTimeout`: this hook runs on vitest's
-    // default 10 s budget, so a 15 s guard could never fire ahead of the
-    // runner, and `installDocument` carries its own 3 s deadline whose message
-    // names the sentinel that never matched -- strictly more diagnostic than
-    // any label a wrapper could add.
+    // The hook declares its own budget, as the three sibling suites do.  It
+    // used to wrap each step in a `withTimeout` race instead, which could
+    // never fire: the races were armed at 15 s inside a hook running on
+    // vitest's undeclared 10 s default, so the runner's own abort always won
+    // and the labelled message was unreachable.  Declaring the budget is what
+    // the label was reaching for, and `installDocument` carries its own 3 s
+    // deadline naming the sentinel that never matched.
     await installDocument(client, EMPTY_DOCUMENT_HTML);
-  });
+  }, BEFORE_EACH_TIMEOUT);
 
   afterEach(() => {
     client.disconnect();

@@ -53,7 +53,7 @@ let installSequence = 0;
 export const DEFAULT_GATE_TIMEOUT_MS = 3_000;
 
 /** Pause between gate attempts.  Small enough to be invisible in the happy path. */
-const DEFAULT_POLL_INTERVAL_MS = 20;
+export const DEFAULT_POLL_INTERVAL_MS = 20;
 
 /**
  * Install `html` as the live document, and do not return until that document

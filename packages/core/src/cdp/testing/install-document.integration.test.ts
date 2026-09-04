@@ -69,6 +69,13 @@ describe("installDocument (integration)", () => {
     // on a slow runner.  A tight loop is not a proof either — the construction
     // is the proof — but it is the cheapest way to keep an accidental
     // regression from needing a full windows suite to surface.
+    //
+    // Scoped honestly, because the arithmetic is checkable: rounds 2..25 add
+    // nothing over round 1 against a DETERMINISTIC regression, and against the
+    // only rate measured here they add a couple of percent on windows and
+    // nothing on the runners this executes on most.  What they do cover is
+    // state leaking between installs — residue accumulating, a token colliding
+    // with its predecessor — which a single round cannot see at all.
     for (let round = 0; round < 25; round++) {
       await installDocument(client, PAGE);
       expect(await count('div[role="listitem"]')).toBe(3);
@@ -125,10 +132,17 @@ describe("installDocument (integration)", () => {
     // the marker never reaches the DOM.  Failing loudly on that is the whole
     // point — the behaviour this replaces returned a document nobody had
     // confirmed, and the assertions then read 0 from it.
-    await expect(
-      installDocument(client, "<!doctype html><html><body><p>x</p><!-- ", {
-        timeout: 500,
-      }),
-    ).rejects.toBeInstanceOf(CDPTimeoutError);
+    // Matched on the message as well as the class: `CDPClient.send` throws
+    // `CDPTimeoutError` too, so a mutant that dropped the gate loop and let a
+    // request timeout escape would satisfy a type-only assertion — and this is
+    // the one test in this tier with power over the loop existing at all.
+    const failure = await installDocument(
+      client,
+      "<!doctype html><html><body><p>x</p><!-- ",
+      { timeout: 500 },
+    ).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(CDPTimeoutError);
+    expect((failure as Error).message).toMatch(/sentinel .* never matched/);
   }, 15_000);
 });
