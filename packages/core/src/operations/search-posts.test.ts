@@ -131,9 +131,15 @@ const DETECTION_MARKER = "probes[a.variant]";
  *
  * `dataTestIdCount` is the capture probe's measured dialect discriminator and
  * appears in no other generated source, which is what the rule above asks for.
- * The obvious alternative markers all alias: the card funnel spliced into this
- * same script emits `candidateCardCount`, and matching on a bare `Count` or on
- * `bodyTextSnippet` would collide with the extraction script.
+ * The obvious alternatives are both worse, for two DIFFERENT reasons — measured,
+ * not assumed: a bare `Count` collides outright, since the extraction script
+ * emits `postCardCount` and the card funnel spliced into this same script emits
+ * `candidateCardCount`.  `bodyTextSnippet` does NOT collide with the extraction
+ * script — it appears nowhere in `dom-variant.ts` — but it is emitted by all
+ * four capture probes in this repo (post-detail, reactions-modal, profile and
+ * this one), so it identifies the capture-probe CLASS rather than this gate's
+ * script, and would start aliasing the moment a second gate's probe were
+ * answered by one double.
  */
 const CAPTURE_PROBE_MARKER = "dataTestIdCount";
 
