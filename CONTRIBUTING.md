@@ -55,6 +55,21 @@ pnpm test          # unit + integration tests
 pnpm lint          # lint checks
 ```
 
+### Memory Freshness
+
+Entries under `.claude/memory/` each declare how fast their claim rots (`volatility`) and when it
+was last checked against reality (`last-verified`). A stdlib-only Python checker grades them:
+
+```sh
+python3 tools/check-memory-freshness.py        # fails on entries past their budget
+python3 tools/check-memory-freshness.test.py   # tests for the checker itself
+```
+
+CI runs it with `--warn-only`, which reports drift without failing the build, until the corpus is
+clean (issue #912). When re-verifying an entry, set `last-verified` to the date the walk actually
+happened — the field records a check against reality, so advancing it without one is a false
+record rather than a fix.
+
 ### Project Structure
 
 The repository is a pnpm monorepo with five packages:
