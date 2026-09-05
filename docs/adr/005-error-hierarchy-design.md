@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — amended 2026-09-05 (see § Amendments)
 
 ## Context
 
@@ -24,7 +24,7 @@ Error (built-in)
 ├── DatabaseError                   (packages/core/src/db/errors.ts)
 │   ├── DatabaseNotFoundError       Database file missing for account
 │   ├── ProfileNotFoundError        Profile lookup returned no results
-│   ├── CampaignNotFoundError       Campaign lookup returned no results
+│   ├── CampaignNotFoundError       Campaign lookup returned no results (carries campaignId)
 │   ├── ChatNotFoundError           Chat lookup returned no results
 │   ├── ActionNotFoundError         Campaign action not found
 │   ├── NoNextActionError           Action is terminal in chain
@@ -40,19 +40,29 @@ Error (built-in)
     ├── LinkedHelperUnreachableError Process found but CDP not reachable (carries processes)
     ├── InstanceNotRunningError     Expected instance not running
     ├── StartInstanceError          Account instance failed to start
-    ├── WrongPortError              CDP port is instance, not launcher
+    ├── WrongPortError              CDP port is instance, not launcher (carries port)
     ├── NodeIntegrationUnavailableError Launcher lacks Node.js APIs (unsupported LH version)
     ├── ActionExecutionError        Action execution failed (carries actionType)
     ├── InvalidProfileUrlError      Profile URL validation failed
-    ├── ExtractionTimeoutError      Profile data didn't appear in DB in time
+    ├── ExtractionTimeoutError      DB profile or DOM readiness deadline expired (carries target, timeoutMs, subject)
+    ├── DOMVariantUnsupportedError  No DOM adapter matched the page, or the one that did resolved no scope (carries surface, triedVariants)
+    ├── ExtractionFailedError       Matched adapter, empty field, contradicting corroborator (carries surface, variant, field, corroborator)
+    ├── DOMVariantAmbiguousError    Two or more DOM adapters matched the page (carries surface, matchedVariants)
     ├── CollectionError             Collection operation failed during execution
     │   └── CollectionBusyError     Instance busy, cannot start collection (carries runnerState)
     ├── CampaignExecutionError      Campaign operation failed (carries campaignId)
     ├── CampaignTimeoutError        Campaign state transition timeout (carries campaignId)
     ├── BudgetExceededError         Daily action budget exhausted (carries limitType, dailyLimit, totalUsed)
     ├── UIBlockedError              UI blocked by dialog/error/popup (carries health)
-    └── AccountResolutionError      Account resolution ambiguous (carries reason: "no-accounts" | "multiple-accounts")
+    ├── AccountResolutionError      Account resolution ambiguous (carries reason: "no-accounts" | "multiple-accounts")
+    ├── MonitorCollectingSagaTimeoutError Saga never reached idle (carries waitedMs, recoveryEvents, popupsDismissed, unrecoverablePopups)
+    ├── LoggedInStateTimeoutError   ContentWindow never entered LoggedInState (carries waitedMs, lastReason)
+    └── LoggedInStatePersistedError Stuck in non-LoggedInState after the retry budget (carries waitedMs, innerError)
 ```
+
+The path beside each **base class** locates that base's own declaration file — not the
+enumeration's scope. Several subclasses above are declared elsewhere under
+`packages/core/src/`; see § Amendments (2026-09-05).
 
 **Key design choices:**
 
@@ -103,3 +113,65 @@ Throw standard `Error` with descriptive messages. Simpler but forces all error h
 **Neutral:**
 
 - The error hierarchy mirrors the package architecture (CDP, DB, Formats, Services) — changes to the layer structure would require corresponding error reorganization
+
+## Amendments
+
+### 2026-09-05 — Enumeration realigned with the code; `ExtractionTimeoutError` widened (#849)
+
+The tree in § Decision had drifted from the code: six `ServiceError` subclasses
+existed and were not listed. As of this amendment it lists every subclass of the
+four base classes — nothing in code is missing from it, and nothing in it is
+absent from code.
+
+Three of the six arrived with the DOM-variant work (#832), and they are what
+ADR-008's empty-vs-error contract names:
+
+- `DOMVariantUnsupportedError` — no registered adapter recognises the page, or the
+  one that matched could not resolve its own scope. ADR-008 § 5 treats the two
+  alike because neither read the page.
+- `ExtractionFailedError` — an adapter matched, but a field came back empty
+  while a same-observation corroborator contradicts that emptiness.
+- `DOMVariantAmbiguousError` — two or more adapters claim the same page.
+
+The other three predate that work and had simply gone unrecorded:
+`MonitorCollectingSagaTimeoutError`, `LoggedInStateTimeoutError` and
+`LoggedInStatePersistedError`.
+
+`ExtractionTimeoutError` had also outgrown its one-line description. #847 gave it
+a `subject` field and routed `waitForPostLoad` through it; `waitForReactionsModal`
+and `waitForSearchResults` followed. It is no longer "profile data didn't appear
+in the DB in time" — it is the deadline error for whichever subject was awaited,
+and `subject` is what tells them apart. The description now names that mechanism
+rather than enumerating the surfaces, which would drift again on the next one.
+The `"Profile"` default remains for the original database-extraction call shape,
+but no production call site relies on it — all three gates above pass an explicit
+subject. It is a retained constructor affordance, not a live path, and the only
+thing holding it is the unit test that pins it.
+
+Two pre-existing rows also gained the `(carries …)` annotation the other
+field-carrying rows already advertise: `WrongPortError` (`port`) and
+`CampaignNotFoundError` (`campaignId`). A reader picking a `catch` block reads
+that annotation as the class's carried context, so a silent omission sends them
+back to parsing `error.message`.
+
+**Two questions this amendment deliberately leaves open**, because both belong to
+the ADR owner rather than to the edit that surfaced them:
+
+1. **Whether the tree should stay exhaustive.** It has drifted before, silently,
+   and it will drift again on every new error class. The alternatives are a
+   mechanical check that fails when tree and code disagree, or reframing the block
+   as explicitly illustrative so that a reader stops treating it as complete.
+   Until that is settled, the tree is accurate *as of this amendment's date* and
+   the source remains the authority.
+2. **What the enumeration ranges over.** This amendment lists every subclass of
+   the four base classes wherever it is declared, extending what the tree already
+   did in part — `CampaignFormatError` (`formats/campaign-format.ts`) and
+   `AccountResolutionError` (`services/account-resolution.ts`) were both listed
+   while sitting outside their base's `errors.ts`. Those two stay inside their
+   base's own layer directory, whereas the three operations-layer errors added
+   here cross into `packages/core/src/operations/` — the layer ADR-006 introduced,
+   which § Consequences above does not name. Including them is a judgment call,
+   not a precedent that already covered them.
+
+The Decision itself — four independent base classes, one per architectural
+layer — is unchanged.
