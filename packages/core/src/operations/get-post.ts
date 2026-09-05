@@ -10,9 +10,7 @@ import type { PostComment, PostDetail } from "../types/post.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import {
-  capturePostLoadFailure,
-  diagnosticCaptureEnabled,
-  probeVariantDetection,
+  capturePostDetailExtractionFailure,
   waitForPostLoad,
 } from "../cdp/wait-for-post-load.js";
 import { assertCardinalCorroboration } from "../linkedin/corroboration.js";
@@ -27,47 +25,6 @@ import type { ConnectionOptions } from "./types.js";
 import { extractPostUrn, resolvePostDetailUrl } from "./get-post-stats.js";
 import { delay, parseTimestamp } from "./get-feed.js";
 import { navigateAwayIf } from "./navigate-away.js";
-
-/**
- * Write an extraction-failure diagnostic bundle for the post-detail page the
- * client is sitting on, then return so the caller can re-throw (#835).
- *
- * Both call sites raise a deadline-free failure: the readiness gate went
- * green, and only then did the page turn out to be unreadable.  A capture
- * bound to a deadline could never see either.
- *
- * The detect probe is skipped when capture is off.  It is a diagnostic-only
- * read whose sole consumer is the bundle, so running it on a default-off CLI
- * or MCP run would spend a `Runtime.evaluate` in the page for nobody — and
- * `capturePostLoadFailure`'s own gate fires too late to prevent that, because
- * the probe would already have been evaluated as its argument.  Asking
- * {@link diagnosticCaptureEnabled} rather than re-spelling the comparison
- * keeps one definition of the gate; the capture still re-checks it, so this
- * is a cost optimisation and never the boundary itself.
- *
- * Never throws: `probeVariantDetection` degrades to `null` and
- * `capturePostLoadFailure` swallows its own failures, so the caller's error
- * always propagates unchanged.
- */
-async function capturePostDetailExtractionFailure(
-  client: CDPClient,
-): Promise<void> {
-  if (!diagnosticCaptureEnabled()) return;
-  // Per-registered-adapter detect counts, read alongside `matched`: together
-  // they separate "LinkedIn served a dialect nobody registered" (nothing
-  // matched) from "a hybrid page needing tighter detect anchors" (two or more
-  // matched) from "our adapter matched, so this field's selectors went stale"
-  // (exactly one).  Nothing else in the bundle can make those distinctions —
-  // every other probe is a fixed selector.
-  const detection = await probeVariantDetection(
-    client,
-    adaptersFor(POST_DETAIL_SURFACE),
-  );
-  await capturePostLoadFailure(client, {
-    trigger: "extraction-failure",
-    detection,
-  });
-}
 
 /**
  * Input for the get-post operation.
