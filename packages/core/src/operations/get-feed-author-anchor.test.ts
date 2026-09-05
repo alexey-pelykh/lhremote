@@ -479,6 +479,18 @@ describe("get-feed author fields are co-located on one anchor (#837, closes #825
     // Mechanism-free statement of the invariant: the returned pair must be
     // exactly one anchor's own (href, visible name).  A two-source
     // implementation can satisfy either half, never a single anchor's both.
+    //
+    // Co-location alone is NOT the whole invariant: this fixture renders a
+    // decoy anchor, and the decoy's own (href, name) is just as co-located as
+    // the author's, so a read that selected the decoy satisfies
+    // `toContainEqual` and passes.  That is the failure this file's own
+    // docstring names -- "a pair drawn consistently from the wrong person
+    // satisfies co-location" -- so the pair is pinned to the author too.
+    expect(post?.authorName).toBe("Real Author");
+    expect(post?.authorProfileUrl).toBe(
+      "https://www.linkedin.com/in/real-author/",
+    );
+
     const pairs = anchorPairs(item);
     expect(pairs).toContainEqual({
       url: post?.authorProfileUrl,
@@ -639,11 +651,12 @@ describe("get-feed author fields are co-located on one anchor (#837, closes #825
 
     // The same anchor carries the connection degree, the headline and the
     // timestamp, each in its own aria-hidden wrapper.  None of them belongs in
-    // the name, whether appended to it or returned in its place.
+    // the name, whether appended to it or returned in its place -- which this
+    // equality already says in full: it forbids every other string, including
+    // each of those three both appended and alone.  The `not.toContain` lines
+    // that used to sit here could not fail, the anti-pattern this file removed
+    // from the reproduction block above.
     expect(name).toBe("Ada Lovelace");
-    expect(name).not.toContain("2nd");
-    expect(name).not.toContain("18h");
-    expect(name).not.toContain("Head of Widgets");
   });
 
   it("AC-3: the name is the run rendered first, whichever tag carries it", () => {
