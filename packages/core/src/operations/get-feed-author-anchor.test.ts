@@ -1469,6 +1469,360 @@ describe("get-feed: where the actor-header positional premise is load-bearing (#
 });
 
 // ---------------------------------------------------------------------------
+// #897 — what the two captured artifacts DO ground
+// ---------------------------------------------------------------------------
+
+/**
+ * The captured post-detail pages, read as ARTIFACTS rather than as pages.
+ *
+ * Everything above this line is a hand-built double, and says so.  This block
+ * is the opposite: every assertion in it is read off a file that was harvested
+ * from a live LinkedIn page, so it is the only evidence in this file that is
+ * not reasoned from the DOM notes.
+ *
+ * ## Why the read is textual, and why that is the right instrument
+ *
+ * These are 352 KB and 25 KB HTML documents; this file has no HTML parser and
+ * deliberately does not add one (see the header).  The sibling that DOES parse
+ * them —`linkedin/__tests__/fixture-oracle.integration.test.ts` — installs them
+ * into real Chromium, and that is the right home for questions about what a
+ * SELECTOR matches.  The questions here are not those.  They are questions
+ * about what the committed BYTES contain: are two hrefs identical, does one
+ * anchor precede another in document order, did the scrub rewrite this href.
+ * A byte is the correct subject for all three, and reading it directly keeps
+ * this block in Tier 1 where the rest of its reasoning lives.
+ *
+ * The cost is real and worth naming: these are regexes over HTML, which would
+ * be the wrong tool against arbitrary markup.  They are pointed at two FROZEN,
+ * committed artifacts, so the usual objection — that the shape may vary — is
+ * the very thing being pinned.  If a re-capture changes these facts, this block
+ * SHOULD go red: the reasoning in the doc comment above is built on them.
+ *
+ * ## What is grounded, and what is still not
+ *
+ * Grounded: the excluded slot is real and occupied, the author is paired inside
+ * the header, and the scrub's rewrite is a contract that bounds what the
+ * occupant's href could have been.
+ *
+ * NOT grounded, and no assertion here pretends otherwise: whether LinkedIn
+ * renders a DECOY in that slot, in the FEED dialect.  These are post-detail
+ * captures — neither carries `data-testid="expandable-text-box"`, which
+ * {@link ACTOR_HEADER_CAPTURE_HAS_NO_FEED_BODY_MARKER} asserts rather than
+ * assumes.  They bound the region on the control-menu marker alone.  That is
+ * enough to locate the slot and not enough to say what the feed puts in it.
+ */
+interface ActorHeaderCapture {
+  /** File stem under `linkedin/__fixtures__/legacy/`. */
+  readonly label: string;
+  /**
+   * Does this capture ALSO exhibit a relative `/in/` href surviving the scrub?
+   *
+   * Only the larger capture does, because only it renders the comment thread
+   * whose author links are relative.  The claim it grounds — that a relative
+   * href is never rewritten — is a property of the scrub, so one witness
+   * settles it; the flag exists so the other capture's silence is recorded as
+   * "does not exhibit" rather than read as a contradiction.
+   */
+  readonly exhibitsRelativeProfileHref: boolean;
+  /**
+   * Does this capture ALSO render `/in/` anchors carrying the two markers that
+   * LOOK like off-site discriminators?
+   *
+   * Only the larger one: the anchors in question are the reaction facepile,
+   * and the control capture has zero reactions, so it has no facepile to carry
+   * them.  Absence here is a property of that post, not a counter-example.
+   */
+  readonly exhibitsFalsifiedMarkers: boolean;
+}
+
+const ACTOR_HEADER_CAPTURE: readonly ActorHeaderCapture[] = [
+  {
+    label: "post-with-comments",
+    exhibitsRelativeProfileHref: true,
+    exhibitsFalsifiedMarkers: true,
+  },
+  {
+    label: "post-zero-comments",
+    exhibitsRelativeProfileHref: false,
+    exhibitsFalsifiedMarkers: false,
+  },
+];
+
+/** The placeholder `scripts/lib/harvest-scrub.js` rewrites a redacted URL to. */
+const REDACTED_URL = "https://example.invalid/redacted";
+
+/**
+ * The feed script's body marker, restated because `get-feed.ts` builds it into
+ * a template literal rather than exporting it.  The coupling is asserted, not
+ * assumed: {@link SCRAPE_FEED_SCRIPT} is searched for this exact string below,
+ * so a rename in the script fails here instead of silently making the
+ * "post-detail carries no feed body marker" finding unfalsifiable.
+ */
+const FEED_BODY_MARKER = 'data-testid="expandable-text-box"';
+
+/** Name of the assertion the doc comment above cites for the dialect caveat. */
+const ACTOR_HEADER_CAPTURE_HAS_NO_FEED_BODY_MARKER =
+  "the captures carry no feed body marker, so they bound on the menu alone";
+
+function captureText(label: string): string {
+  return readFileSync(
+    fileURLToPath(
+      new URL(`../linkedin/__fixtures__/legacy/${label}.html`, import.meta.url),
+    ),
+    "utf8",
+  );
+}
+
+/** Every `<a ...>` open tag in the document, with its character offset. */
+function openTags(html: string): { at: number; tag: string }[] {
+  const found: { at: number; tag: string }[] = [];
+  const re = /<a\b[^>]*>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) found.push({ at: m.index, tag: m[0] });
+  return found;
+}
+
+/** The `href` an open tag carries, or null. */
+function hrefOf(tag: string): string | null {
+  const m = /\shref="([^"]*)"/.exec(tag);
+  return m?.[1] ?? null;
+}
+
+/** Anchors the feed script's `profileLinksIn` would select, in document order. */
+function profileAnchors(html: string): { at: number; tag: string }[] {
+  return openTags(html).filter((a) => {
+    const href = hrefOf(a.tag);
+    return href !== null && (href.includes("/in/") || href.includes("/company/"));
+  });
+}
+
+/** Offset of the single occurrence of `needle`; fails loudly if not exactly one. */
+function soleOffset(html: string, needle: string): number {
+  const first = html.indexOf(needle);
+  expect(first, `expected to find: ${needle}`).toBeGreaterThanOrEqual(0);
+  expect(
+    html.indexOf(needle, first + 1),
+    `expected exactly one occurrence of: ${needle}`,
+  ).toBe(-1);
+  return first;
+}
+
+describe("#897: what the captured artifacts ground about the actor header", () => {
+  // ───────────────────────────────────────────────────────────────────────────
+  // CANARY.  Every verdict below is a comparison between offsets or strings
+  // read out of a file, and a file that failed to load reads as an empty
+  // string — against which `indexOf` returns -1 everywhere and several of
+  // these comparisons would be vacuous rather than red.  This names that case
+  // directly (CLAUDE.md § Key Cognitive Triggers → "Degenerate subject gate",
+  // broken-instrument corollary), which is the same discipline the fixture
+  // oracle's own canary applies to the same two artifacts.
+  // ───────────────────────────────────────────────────────────────────────────
+  it.each(ACTOR_HEADER_CAPTURE.map((c) => [c.label, c] as const))(
+    "canary: %s loaded and renders exactly one actor header",
+    (_label, capture) => {
+      const html = captureText(capture.label);
+
+      expect(html.length).toBeGreaterThan(10_000);
+      // Exactly one of each landmark: two actor headers in one artifact would
+      // make "the author" ambiguous and every offset comparison below
+      // meaningless, so the count is the assertion, not the presence.
+      for (const landmark of [
+        "update-components-actor__image",
+        "update-components-actor__meta-link",
+        "update-components-actor__sub-description-button-text",
+        'aria-label="Open control menu for post',
+      ]) {
+        soleOffset(html, landmark);
+      }
+    },
+  );
+
+  it.each(ACTOR_HEADER_CAPTURE.map((c) => [c.label, c] as const))(
+    "%s: the excluded slot is real — a text-bearing anchor renders after the actor and inside the region",
+    (_label, capture) => {
+      const html = captureText(capture.label);
+
+      const avatar = soleOffset(html, "update-components-actor__image");
+      const nameBlock = soleOffset(html, "update-components-actor__meta-link");
+      const afterActor = soleOffset(
+        html,
+        "update-components-actor__sub-description-button-text",
+      );
+      const menu = soleOffset(html, 'aria-label="Open control menu for post');
+
+      // Document order is the whole claim: the anchor sits AFTER the author's
+      // own name block and BEFORE the marker that closes the header region.
+      // That is the slot `pickHeaderAuthor`'s premise asserts no decoy occupies
+      // — so the premise is about the occupant, never about whether the
+      // position exists.
+      expect([avatar < nameBlock, nameBlock < afterActor, afterActor < menu]).toEqual([
+        true,
+        true,
+        true,
+      ]);
+
+      // ...and it is an ANCHOR carrying visible text, not an inert span: both
+      // are required for `pickHeaderAuthor` to consider it at all, since every
+      // one of its three signals filters on `hasVisibleText` first.
+      const slot = html.slice(html.lastIndexOf("<a", afterActor), afterActor + 200);
+      expect(slot.startsWith("<a ")).toBe(true);
+      expect(/>\s*[A-Za-z][^<]*</.test(slot.slice(slot.indexOf(">") + 1))).toBe(true);
+    },
+  );
+
+  it.each(ACTOR_HEADER_CAPTURE.map((c) => [c.label, c] as const))(
+    "%s: the author is paired inside the header, so signal 1 can fire",
+    (_label, capture) => {
+      const html = captureText(capture.label);
+      const anchors = openTags(html);
+
+      const avatarTag = anchors.find((a) =>
+        a.tag.includes("update-components-actor__image"),
+      );
+      const nameTag = anchors.find((a) =>
+        a.tag.includes("update-components-actor__meta-link"),
+      );
+
+      // Both must exist AND be DIFFERENT elements before the comparison means
+      // anything.  "Paired" is a claim about TWO anchors sharing one profile,
+      // so a read that resolved both handles to the same anchor would compare
+      // an href with itself and pass while measuring nothing — which is what a
+      // mutation of this very lookup was observed to do.  Absent tags are the
+      // same trap one step earlier: two `null` hrefs also compare equal.
+      expect([avatarTag === undefined, nameTag === undefined]).toEqual([false, false]);
+      expect((avatarTag?.at ?? -1) < (nameTag?.at ?? -1)).toBe(true);
+
+      // BYTE-identical, not merely same-profile: `linkPath` compares the href's
+      // path, so identical hrefs are sufficient and this is the stronger read.
+      // This is what makes the redacted slot MOOT for the shape these captures
+      // exhibit — signal 1 selects the last paired anchor, and only the author
+      // is paired, whatever class the after-actor anchor's href turns out to be.
+      const avatarHref = hrefOf(avatarTag?.tag ?? "");
+      const nameHref = hrefOf(nameTag?.tag ?? "");
+      expect(avatarHref).not.toBeNull();
+      expect(avatarHref).toBe(nameHref);
+      expect(nameHref).toContain("/in/");
+    },
+  );
+
+  it.each(ACTOR_HEADER_CAPTURE.map((c) => [c.label, c] as const))(
+    "%s: the after-actor href is the redaction placeholder, which excludes /in/ in both forms",
+    (_label, capture) => {
+      const html = captureText(capture.label);
+      const afterActor = soleOffset(
+        html,
+        "update-components-actor__sub-description-button-text",
+      );
+      const slotTag = html.slice(html.lastIndexOf("<a", afterActor), afterActor);
+
+      // The datum the premise turns on is exactly what the scrub destroyed.
+      expect(hrefOf(slotTag)).toBe(REDACTED_URL);
+
+      // But the destruction is a CONTRACT, so it is readable backwards.  The
+      // rewrite matches only absolute URLs, sparing `linkedin.com/in/` — so a
+      // placeholder was not an absolute `/in/` link.  Both halves of that are
+      // exhibited by the artifact rather than taken on faith: absolute `/in/`
+      // hrefs survive here, with their `/in/` path intact.
+      const survivingAbsolute = openTags(html)
+        .map((a) => hrefOf(a.tag))
+        .filter((h): h is string => h !== null && /^https?:\/\//.test(h));
+      expect(survivingAbsolute.some((h) => h.includes("linkedin.com/in/"))).toBe(true);
+      // ...and no surviving absolute URL is an un-redacted third-party host,
+      // which is what makes the placeholder's meaning unambiguous.
+      expect(
+        survivingAbsolute.filter(
+          (h) =>
+            h !== REDACTED_URL &&
+            !h.includes("linkedin.com/in/") &&
+            !h.includes("w3.org"),
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it("a relative profile href survives the scrub verbatim, which excludes the relative form too", () => {
+    // The other half of the argument above, and the half that cannot be read
+    // off a rewritten value: the rewrite needs an `https?://` scheme, so a
+    // relative href is never a candidate for it.  A capture that renders one
+    // and keeps it is the witness.  One witness settles a property of the
+    // scrub; the flag on the other capture records that it has none to offer.
+    const witnesses = ACTOR_HEADER_CAPTURE.filter(
+      (c) => c.exhibitsRelativeProfileHref,
+    );
+    expect(witnesses).toHaveLength(1);
+
+    for (const capture of witnesses) {
+      const relative = openTags(captureText(capture.label))
+        .map((a) => hrefOf(a.tag))
+        .filter((h): h is string => h !== null && h.startsWith("/in/"));
+
+      expect(relative.length).toBeGreaterThan(0);
+      // Verbatim: still a `/in/` path, never rewritten to the placeholder.
+      expect(relative.every((h) => h !== REDACTED_URL)).toBe(true);
+    }
+
+    for (const capture of ACTOR_HEADER_CAPTURE.filter(
+      (c) => !c.exhibitsRelativeProfileHref,
+    )) {
+      const relative = openTags(captureText(capture.label))
+        .map((a) => hrefOf(a.tag))
+        .filter((h): h is string => h !== null && h.startsWith("/in/"));
+      expect(relative).toEqual([]);
+    }
+  });
+
+  it("two off-site discriminators are falsified by the artifact, so neither can class the redacted anchor", () => {
+    // The redacted anchor carries `rel="noopener noreferrer" target="_blank"`
+    // and no `data-test-app-aware-link`, and both read as "this leaves the
+    // app" — which would make it a non-profile link and close the question.
+    // Neither survives contact with the capture: real `/in/` anchors carry the
+    // first and lack the second.  Pinned so a later reader who has the same
+    // idea sees it refuted here instead of re-deriving it.
+    const witnesses = ACTOR_HEADER_CAPTURE.filter((c) => c.exhibitsFalsifiedMarkers);
+    expect(witnesses).toHaveLength(1);
+
+    for (const capture of witnesses) {
+      const html = captureText(capture.label);
+      const profiles = profileAnchors(html);
+
+      const blank = profiles.filter((a) => a.tag.includes('target="_blank"'));
+      const unaware = profiles.filter(
+        (a) => !a.tag.includes("data-test-app-aware-link"),
+      );
+
+      expect(blank.length).toBeGreaterThan(0);
+      expect(unaware.length).toBeGreaterThan(0);
+      // Same anchors, and they are genuine `/in/` profile links.
+      expect(blank.every((a) => (hrefOf(a.tag) ?? "").includes("/in/"))).toBe(true);
+      expect(unaware.every((a) => (hrefOf(a.tag) ?? "").includes("/in/"))).toBe(true);
+    }
+  });
+
+  it(`${ACTOR_HEADER_CAPTURE_HAS_NO_FEED_BODY_MARKER}`, () => {
+    // The dialect caveat, asserted rather than asserted-about.  These captures
+    // are post-detail: they carry the control-menu marker but not the feed
+    // body marker, so `headerLinksIn` would bound the region on the menu alone.
+    // That is why the slot located above is evidence about the SLOT and not
+    // about what the FEED renders in it — the escalation in #897 turns on
+    // exactly this gap.
+    expect(SCRAPE_FEED_SCRIPT).toContain(FEED_BODY_MARKER);
+
+    for (const capture of ACTOR_HEADER_CAPTURE) {
+      const html = captureText(capture.label);
+      expect({
+        label: capture.label,
+        feedBodyMarker: html.includes(FEED_BODY_MARKER),
+        controlMenuMarker: html.includes('aria-label="Open control menu for post'),
+      }).toEqual({
+        label: capture.label,
+        feedBodyMarker: false,
+        controlMenuMarker: true,
+      });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // #860 / #898 fixtures — field extraction inside the already-selected anchor
 // ---------------------------------------------------------------------------
 
