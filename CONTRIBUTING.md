@@ -32,6 +32,8 @@ You can add this automatically with `git commit -s`.
 
 - **Node.js** >= 24
 - **pnpm** 9.15.4
+- **Python** >= 3.9 — only for the memory-freshness checker below. Standard library only, so
+  there is nothing to install beyond the interpreter, and nothing else in the repo needs it.
 
 ### Setup
 
@@ -65,10 +67,12 @@ python3 tools/check-memory-freshness.py        # fails on entries past their bud
 python3 tools/check-memory-freshness.test.py   # tests for the checker itself
 ```
 
-CI runs it with `--warn-only`, which reports drift without failing the build, until the corpus is
-clean (issue #912). When re-verifying an entry, set `last-verified` to the date the walk actually
-happened — the field records a check against reality, so advancing it without one is a false
-record rather than a fix.
+CI runs it with `--warn-only` until the corpus is clean (issue #912). That flag forgives *drift*
+and only drift: an entry whose frontmatter cannot be graded at all — missing field, unparseable
+or future date, unknown volatility — still fails the build, as does scanning zero entries.
+
+When re-verifying an entry, set `last-verified` to the date the walk actually happened — the field
+records a check against reality, so advancing it without one is a false record rather than a fix.
 
 ### Project Structure
 
