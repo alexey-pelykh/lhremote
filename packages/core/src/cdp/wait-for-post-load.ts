@@ -282,7 +282,9 @@ export async function waitForPostLoad(
  * @returns The detection, or `null` when the probe yielded no evidence.
  *
  * @internal Exported for unit testing and for the extraction-failure capture
- *   sites in `operations/`; not part of the public API.
+ *   sites — {@link capturePostDetailExtractionFailure} in this module since
+ *   #890, and the reactions-modal and search-results helpers in `operations/`;
+ *   not part of the public API.
  */
 export async function probeVariantDetection(
   client: CDPClient,
@@ -329,8 +331,10 @@ interface CaptureCancellationState {
  * artifacts contain LinkedIn page content, i.e. personal data, so the gate
  * opens on one spelling and nothing else.
  *
- * @internal Exported for unit testing and for the operation-layer capture
- *   sites; not part of the public API.
+ * @internal Exported for unit testing and for the capture sites that ask it
+ *   before preparing their probe inputs — {@link capturePostDetailExtractionFailure}
+ *   in this module, and the reactions-modal and search-results helpers in
+ *   `operations/`; not part of the public API.
  */
 export function diagnosticCaptureEnabled(): boolean {
   return process.env.LHREMOTE_CAPTURE_DIAGNOSTICS === "1";
@@ -546,8 +550,11 @@ export interface PostDetailCaptureContext {
  * @param context - Which failure fired the capture, plus the caller's
  *   already-read {@link probeVariantDetection} result.
  *
- * @internal Exported for unit testing and for the operation-layer
- *   extraction-failure sites; not part of the public API.
+ * @internal Exported for unit testing; not part of the public API.  It was
+ *   additionally exported for the operation-layer extraction-failure sites
+ *   until #890 moved the helper that composed it into this module, so
+ *   {@link capturePostDetailExtractionFailure} is now its only caller outside
+ *   {@link waitForPostLoad}.
  */
 export async function capturePostLoadFailure(
   client: CDPClient,
