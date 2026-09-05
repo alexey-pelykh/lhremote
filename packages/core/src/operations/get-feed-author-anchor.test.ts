@@ -1564,13 +1564,42 @@ const FEED_BODY_MARKER = 'data-testid="expandable-text-box"';
 const ACTOR_HEADER_CAPTURE_HAS_NO_FEED_BODY_MARKER =
   "the captures carry no feed body marker, so they bound on the menu alone";
 
+/**
+ * Smallest byte count a real capture can have.
+ *
+ * A floor, not a measurement: the smaller artifact is ~25 KB and the larger
+ * ~352 KB, so anything under this is a truncated or absent file rather than a
+ * capture that shrank.  It exists so a dead read is NAMED — every other
+ * assertion here compares offsets, and against an empty string those compare
+ * `-1` to `-1` and read as a pass.
+ */
+const MIN_CAPTURE_BYTES = 10_000;
+
+/**
+ * How much of the document to slice when inspecting one anchor's own markup.
+ *
+ * Generous enough to contain the open tag plus the text node after it, and
+ * nothing is asserted ABOUT the window — it is reading room, not a claim about
+ * the DOM's shape.  The assertions inside it anchor on `<a ` and on the first
+ * `>`, so a wider window would not change any verdict.
+ */
+const SLOT_CONTEXT_CHARS = 200;
+
+/** Captures read once each, since every assertion below reads the same bytes. */
+const captureCache = new Map<string, string>();
+
 function captureText(label: string): string {
-  return readFileSync(
+  const cached = captureCache.get(label);
+  if (cached !== undefined) return cached;
+
+  const html = readFileSync(
     fileURLToPath(
       new URL(`../linkedin/__fixtures__/legacy/${label}.html`, import.meta.url),
     ),
     "utf8",
   );
+  captureCache.set(label, html);
+  return html;
 }
 
 /** Every `<a ...>` open tag in the document, with its character offset. */
@@ -1622,7 +1651,7 @@ describe("#897: what the captured artifacts ground about the actor header", () =
     (_label, capture) => {
       const html = captureText(capture.label);
 
-      expect(html.length).toBeGreaterThan(10_000);
+      expect(html.length).toBeGreaterThan(MIN_CAPTURE_BYTES);
       // Exactly one of each landmark: two actor headers in one artifact would
       // make "the author" ambiguous and every offset comparison below
       // meaningless, so the count is the assertion, not the presence.
@@ -1664,7 +1693,10 @@ describe("#897: what the captured artifacts ground about the actor header", () =
       // ...and it is an ANCHOR carrying visible text, not an inert span: both
       // are required for `pickHeaderAuthor` to consider it at all, since every
       // one of its three signals filters on `hasVisibleText` first.
-      const slot = html.slice(html.lastIndexOf("<a", afterActor), afterActor + 200);
+      const slot = html.slice(
+        html.lastIndexOf("<a", afterActor),
+        afterActor + SLOT_CONTEXT_CHARS,
+      );
       expect(slot.startsWith("<a ")).toBe(true);
       expect(/>\s*[A-Za-z][^<]*</.test(slot.slice(slot.indexOf(">") + 1))).toBe(true);
     },
