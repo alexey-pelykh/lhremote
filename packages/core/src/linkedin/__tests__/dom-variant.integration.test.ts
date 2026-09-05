@@ -388,6 +388,179 @@ describe("DOM variant adapters (integration)", { timeout: INSTALL_TEST_TIMEOUT_M
       expect(result.reactionCount).toBe(0);
     });
 
+    it("reads the reposts counter off its control's aria-label (#891)", async () => {
+      // The counts row built the way the committed legacy fixture renders it:
+      // a `<ul>` of per-counter `<li>`s inside `.social-details-social-counts`,
+      // which is this adapter's own declared `counts` candidate. The reposts
+      // item goes in the slot that fixture leaves as two empty Ember
+      // placeholders beside the comments item.
+      //
+      // Each counter renders differently on purpose, and each shape is copied
+      // from that fixture rather than invented:
+      //
+      //   - reactions: a bare "2", the word only on the control's aria-label
+      //   - comments:  "41 comments" in the text, while the aria-label carries
+      //                a trailing "on <name> post" that the anchored pattern
+      //                deliberately does not match
+      //   - reposts:   the reactions shape — a bare "7" whose word lives only
+      //                on the aria-label
+      //
+      // That third shape had no oracle at any tier before this test: nothing
+      // in this repo, unit tier included, has ever read a reposts counter off
+      // an aria-label. It is also the rendering the counts read was rebuilt
+      // for — `__lhReadCount` consults `aria-label` alongside the text
+      // precisely because the whole-page text read returned `reactionCount: 0`
+      // on a post carrying two reactions, while `commentCount` on that same
+      // row came back as the two counters' digits run together (#824). So
+      // per-counter divergence on this row is demonstrated rather than
+      // hypothetical — which is why grading two counters and inferring the
+      // third is not grading the third.
+      await buildPage([LEGACY_CONTAINER]);
+      await client.evaluate(`(() => {
+        function item(label, rendered) {
+          const li = document.createElement('li');
+          const button = document.createElement('button');
+          button.setAttribute('aria-label', label);
+          const value = document.createElement('span');
+          value.setAttribute('aria-hidden', 'true');
+          value.textContent = rendered;
+          button.appendChild(value);
+          li.appendChild(button);
+          return li;
+        }
+        const container = document.querySelector('[data-urn^="urn:li:activity:"]');
+        const row = document.createElement('div');
+        row.className = 'social-details-social-counts';
+        const list = document.createElement('ul');
+        list.appendChild(item('2 reactions', '2'));
+        list.appendChild(item('41 comments on Test Person post', '41 comments'));
+        list.appendChild(item('7 reposts', '7'));
+        row.appendChild(list);
+        container.appendChild(row);
+        return true;
+      })()`);
+
+      // Guard on the premise, and it carries this case: the row's own text
+      // holds no "reposts" token anywhere, so no text read reaches 7 — not the
+      // anchored read over any element, not the loose fallback over the row.
+      // The aria-label is the only place the word exists.
+      expect(
+        await client.evaluate<string>(
+          `document.querySelector('.social-details-social-counts').textContent`,
+        ),
+      ).toBe("241 comments7");
+
+      const result = await client.evaluate<{
+        reactionCount: number;
+        commentCount: number;
+        shareCount: number;
+      }>(script);
+
+      expect(result.shareCount).toBe(7);
+      // ...and the other two still read correctly beside it, so a green
+      // shareCount is not bought by a read that stopped telling the counters
+      // apart.
+      expect(result.reactionCount).toBe(2);
+      expect(result.commentCount).toBe(41);
+    });
+
+    it("recovers a reposts count from a row rendering every counter as one node (#891)", async () => {
+      // The one-node case above, extended by the counter it never covered.
+      // Nothing inside this row renders a counter on its own, so the anchored
+      // read finds nothing and the `narrowed`-gated loose fallback over the
+      // row's own text is what has to recover the numbers. Graded here for
+      // reposts because that fallback runs once per counter against a
+      // different pattern each time: two of them landing says nothing about
+      // the third.
+      await buildPage([LEGACY_CONTAINER]);
+      await client.evaluate(`(() => {
+        const container = document.querySelector('[data-urn^="urn:li:activity:"]');
+        const row = document.createElement('div');
+        row.className = 'social-details-social-counts';
+        row.textContent = '2 41 comments 7 reposts';
+        container.appendChild(row);
+        return true;
+      })()`);
+
+      const result = await client.evaluate<{
+        reactionCount: number;
+        commentCount: number;
+        shareCount: number;
+      }>(script);
+
+      expect(result.shareCount).toBe(7);
+      expect(result.commentCount).toBe(41);
+      // 0 reactions for the same reason as the two-counter case: this
+      // rendering carries no "reactions" token for any read to find.
+      expect(result.reactionCount).toBe(0);
+    });
+
+    it("leaves a reposts control the declared counts row does not contain unread (#891)", async () => {
+      // The second shape #891 names: a reposts control rendered inside the
+      // post but OUTSIDE the adapter's own `counts` candidate. The counts root
+      // narrows to `.social-details-social-counts`, so this control is neither
+      // walked by the anchored read nor reached by the loose fallback, and
+      // `shareCount` comes back 0 beside a correct 2 and 41.
+      //
+      // This pins PRESENT behaviour, not desired behaviour. It is the
+      // narrowing contract every counter is subject to — the same scoping that
+      // keeps a number in the post's own prose from being read as a count —
+      // and 0 is not asserted as the right answer for a page that visibly
+      // renders 7 reposts. What the assertion buys is that the boundary is
+      // observable: move the narrowing, or widen `counts`, and this goes red
+      // instead of changing silently. No selector is declared to reach the
+      // control, because where a real reposts control renders has not been
+      // measured on either dialect; the only property modelled below is that
+      // it sits outside the row.
+      await buildPage([LEGACY_CONTAINER]);
+      await client.evaluate(`(() => {
+        const container = document.querySelector('[data-urn^="urn:li:activity:"]');
+        const row = document.createElement('div');
+        row.className = 'social-details-social-counts';
+        const reactions = document.createElement('button');
+        reactions.setAttribute('aria-label', '2 reactions');
+        const reactionsValue = document.createElement('span');
+        reactionsValue.textContent = '2';
+        reactions.appendChild(reactionsValue);
+        const comments = document.createElement('button');
+        comments.setAttribute('aria-label', '41 comments');
+        comments.textContent = '41 comments';
+        row.appendChild(reactions);
+        row.appendChild(comments);
+        container.appendChild(row);
+        const elsewhere = document.createElement('div');
+        const reposts = document.createElement('button');
+        reposts.setAttribute('aria-label', '7 reposts');
+        const repostsValue = document.createElement('span');
+        repostsValue.textContent = '7';
+        reposts.appendChild(repostsValue);
+        elsewhere.appendChild(reposts);
+        container.appendChild(elsewhere);
+        return true;
+      })()`);
+
+      // Guard on the premise, or the 0 below is vacuous: the control really is
+      // on the page, really is inside the post container, and really is not
+      // inside the counts row. That makes the 0 a refusal rather than an
+      // absence.
+      expect(
+        await client.evaluate<boolean>(
+          `document.querySelector('[data-urn^="urn:li:activity:"] [aria-label="7 reposts"]') !== null &&
+           document.querySelector('.social-details-social-counts [aria-label="7 reposts"]') === null`,
+        ),
+      ).toBe(true);
+
+      const result = await client.evaluate<{
+        reactionCount: number;
+        commentCount: number;
+        shareCount: number;
+      }>(script);
+
+      expect(result.shareCount).toBe(0);
+      expect(result.reactionCount).toBe(2);
+      expect(result.commentCount).toBe(41);
+    });
+
     it("ignores a counter rendered outside the selected adapter's scope", async () => {
       // The whole-page read took the first "<N> comments"-shaped run anywhere
       // in the document, chrome and sibling modules included.  A count from
