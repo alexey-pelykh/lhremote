@@ -1321,6 +1321,22 @@ const PAIRED_AUTHOR_HREF =
 /** An after-actor entity attribution — "posted in Acme Corp", a newsletter byline. */
 const ENTITY_AFTER_ACTOR = { href: "/company/acme/", name: "Acme Corp" } as const;
 
+/** An href's pathname, which is what `linkPath` compares pairing on. */
+function hrefPath(href: string): string {
+  return new URL(href, "https://www.linkedin.com").pathname;
+}
+
+/**
+ * Does the SHAPE render the author's profile twice inside the header?
+ *
+ * Read off the shape rather than off the script: this is a property of the
+ * INPUT, so deriving it from the implementation would make the check circular.
+ */
+function shapePairsAuthor(shape: ActorHeaderShape): boolean {
+  if (shape.withAvatar !== true) return false;
+  return hrefPath(shape.avatarHref ?? shape.authorHref) === hrefPath(shape.authorHref);
+}
+
 const PREMISE_BOUNDARY: readonly PremiseBoundaryCase[] = [
   {
     label:
@@ -1444,15 +1460,23 @@ describe("get-feed: where the actor-header positional premise is load-bearing (#
     },
   );
 
-  it("signal 1 is the whole rescue: every safe case pairs the author, every premise-dependent one does not", () => {
-    // The classification is not decoration — it is the finding.  A case whose
-    // `verdict` stopped tracking `authorPairedInHeader` would mean the boundary
-    // had moved and the prose above had gone stale with it.
-    //
-    // The PAIRED-entity case is the one that reads as an exception and is not:
-    // its author IS paired, and it still loses because `lastWhere` prefers the
-    // LATER pair.  So the property that actually holds is "the author is the
-    // last paired anchor in the header", which is what this asserts.
+  it("the declared pairing matches each shape, and pairing alone is not a rescue", () => {
+    // `authorPairedInHeader` was declared and never checked, which made it
+    // decoration: a shape edited to drop its avatar would leave the flag saying
+    // "paired" with nothing to contradict it (CLAUDE.md § Key Cognitive
+    // Triggers → "Ceremony status-field").  Derive it from the shape instead,
+    // so the table cannot drift away from the DOM it builds.
+    for (const testCase of PREMISE_BOUNDARY) {
+      expect({
+        label: testCase.label,
+        paired: testCase.authorPairedInHeader,
+      }).toEqual({
+        label: testCase.label,
+        paired: shapePairsAuthor(testCase.shape),
+      });
+    }
+
+    // The verdict tracks who actually won.
     for (const testCase of PREMISE_BOUNDARY) {
       const authorWon = testCase.selects.url.includes("/in/real-author");
       expect({ label: testCase.label, authorWon }).toEqual({
@@ -1460,6 +1484,25 @@ describe("get-feed: where the actor-header positional premise is load-bearing (#
         authorWon: testCase.verdict === "safe",
       });
     }
+
+    // The boundary is NOT "safe iff paired", and stating it that way was wrong.
+    // Signal 1 rescues the author only when the author is the LAST paired
+    // anchor in the region, so a paired author still loses to a paired entity
+    // rendered after it — `lastWhere` prefers the later pair.  Assert the
+    // corpus actually covers that case, since it is the one shape that
+    // separates the true boundary from the tempting one.
+    const pairedButLost = PREMISE_BOUNDARY.filter(
+      (c) => c.authorPairedInHeader && c.verdict === "premise-dependent",
+    );
+    expect(pairedButLost).toHaveLength(1);
+
+    // ...and the converse still holds: every SAFE case does pair the author,
+    // so signal 1 is what every rescue in this corpus runs through.
+    expect(
+      PREMISE_BOUNDARY.filter((c) => c.verdict === "safe").every(
+        (c) => c.authorPairedInHeader,
+      ),
+    ).toBe(true);
 
     // Stated as a count so a case silently dropped from the corpus shows up
     // here rather than as a quietly smaller run.
