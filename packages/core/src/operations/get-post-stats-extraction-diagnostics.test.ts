@@ -69,6 +69,7 @@ import {
   DOMVariantAmbiguousError,
   DOMVariantUnsupportedError,
 } from "../services/errors.js";
+import { adaptersFor } from "../linkedin/dom-variant.js";
 
 // Dynamic import after the mocks are registered, matching the convention the
 // sibling capture suites document: relying on vi.mock hoisting to cover a
@@ -99,16 +100,26 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
     hasCommentOnButton: false,
     hasTopLevelEditor: false,
     hasReactionsMenu: true,
-    // Since #853 the registry's own anchors reach the bundle here, under each
-    // dialect's name.  Kept in sync with the probe's real shape because a mock
-    // naming a field the probe no longer returns lies about the shape without
-    // ever failing.
-    variantAnchors: {
-      sdui: { ready: 1, scopes: {}, counts: {} },
-      legacy: { ready: 0, scopes: {}, counts: {} },
-    },
     commentElementCount: 41,
     bodyTextSnippet: "Hello world!\n",
+    // Since #853 the registry's own anchors reach the bundle here, under each
+    // dialect's name — and the probe emits one key per DECLARED selector, so a
+    // hand-written `scopes: {}` is a shape the page cannot return.  Derived
+    // from the registry for the same reason the probe itself is generated from
+    // it: a hand-maintained copy would keep asserting against a dialect the
+    // registry has since renamed or re-anchored.  Last in the object because
+    // that is where the real probe puts it, so the bundle this fixture yields
+    // has its keys in the real order.
+    variantAnchors: Object.fromEntries(
+      adaptersFor("post-detail").map((adapter, index) => [
+        adapter.variant,
+        {
+          ready: index === 0 ? 1 : 0,
+          scopes: Object.fromEntries(adapter.scopes.map((s) => [s, 1])),
+          counts: Object.fromEntries(adapter.counts.map((s) => [s, 0])),
+        },
+      ]),
+    ),
   };
 
   const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
@@ -250,7 +261,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
     await expect(
       getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(DOMVariantUnsupportedError);
 
     const paths = vi.mocked(writeFile).mock.calls.map((call) => String(call[0]));
     expect(paths.some((path) => path.endsWith(".json"))).toBe(true);
@@ -274,7 +285,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
     await expect(
       getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(DOMVariantUnsupportedError);
 
     // The field the fixed-selector probes structurally cannot supply: a
     // non-zero probe beside a `null` scrape says our adapter DID claim the
@@ -283,6 +294,12 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
     expect(writtenBundle()).toMatchObject({
       trigger: "extraction-failure",
       variantDetection: { matched: ["sdui"], probes: { sdui: 1, legacy: 0 } },
+      // One fixed-selector probe alongside the registry-derived field, so the
+      // assertion fails if the bundle stops carrying the page reading at all.
+      // `trigger` and `variantDetection` are assembled around that reading
+      // rather than out of it, so both survive its loss.
+      href: POST_URL,
+      hasMain: true,
     });
     warnSpy.mockRestore();
   });
@@ -314,7 +331,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
     await expect(
       getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(DOMVariantUnsupportedError);
 
     expect(warnSpy).toHaveBeenCalledTimes(1);
     const message = String(warnSpy.mock.calls[0]?.[0] ?? "");
@@ -404,6 +421,11 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
     await expect(
       getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT }),
     ).rejects.toThrow(DOMVariantAmbiguousError);
+
+    // Without this the case is vacuous: on a build that never captures at all
+    // the queued rejection is never consumed, nothing throws on the way out,
+    // and the assertion above passes while attesting to nothing.
+    expect(vi.mocked(writeFile)).toHaveBeenCalled();
   });
 
   it("captures before the client disconnects", async () => {

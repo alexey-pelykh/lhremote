@@ -270,13 +270,15 @@ as *"deliberately not done here, so a reader does not infer it"*; this closes
 it. (That date carries two ADR-008 amendments; this is the search-results one,
 #841.)
 
-> **One counterexample, found and closed on 2026-09-05.** The clause above —
+> **Two counterexamples, found on 2026-09-05; one closed.** The clause above —
 > *every other place this codebase can fail to read a LinkedIn page wrote a
-> bundle* — was already false when it was written: `getPostStats` had become a
+> bundle* — was already false when it was written. `getPostStats` had become a
 > registry-bound post-detail failure site earlier the same day (#857) and
-> captured nothing. The claim is left standing rather than rewritten, because
-> the invariant it appeals to is the right one and is what #890 restored; see
-> § 2026-09-05 Amendment. Read it as of that date, not of this one.
+> captured nothing; #890 closed that one. `getPostEngagers` refuses a hybrid
+> page at its reactions-trigger find without capturing, which is open as #911.
+> The clause is left standing rather than rewritten, because the invariant it
+> appeals to is the right one and is what both items restore; see § 2026-09-05
+> Amendment. Read it as an aspiration with a live exception, not as a survey.
 
 **Why this surface warrants it more than the others, not less.** It has the
 least offline evidence behind it: its `legacy` adapter is *reconstructed* from
@@ -539,10 +541,22 @@ timeout to hang an artifact off. An operator who hit it got the error sentence
 and nothing else, while the identical page read through `getPost` yielded the
 bundle.
 
-**What this discharges.** The standing directive at the end of this ADR —
-*inspect these artifacts before changing post-detail selectors* — was
-undischargeable at the `getPostStats` call site. It is not any longer, and the
-#870 invariant is true as stated rather than true-with-one-exception.
+**What this discharges, and what it does not.** The standing directive at the
+end of this ADR — *inspect these artifacts before changing post-detail
+selectors* — was undischargeable at the `getPostStats` call site. It is not any
+longer, and the post-detail surface now captures at every branch on which it can
+refuse.
+
+The #870 invariant is **not** thereby restored in full. Reviewing this change
+turned up a second counterexample on a different surface: `getPostEngagers`
+raises `DOMVariantAmbiguousError` at its **reactions-trigger find** — before it
+ever reaches the modal — and captures nothing there, while the two branches
+either side of it do. Recorded here rather than fixed, on the same ground #857
+gave for leaving `getPostStats` alone: a capture site on another surface is a
+behaviour change with its own acceptance. Tracked as #911. Until that closes,
+read the #870 clause as true of every surface except that one branch — and read
+this paragraph as the reason a reader should not take the clause on trust, which
+is the whole lesson of the two counterexamples it has now had.
 
 **Unchanged, and load-bearing:** activation stays gated on
 `LHREMOTE_CAPTURE_DIAGNOSTICS=1` at the new site. The detect probe is skipped
@@ -573,4 +587,6 @@ that point the DOM which would have explained the failure is gone.
   #853 (2026-09-04 amendment — the post-detail bundle's `variantAnchors`,
   derived from the adapter registry); #890 (2026-09-05 amendment — the
   `getPostStats` extraction-failure branches, the last post-detail failure site
-  that captured nothing; #857 is the change that created it)
+  that captured nothing; #857 is the change that created it); #911 (open — the
+  `getPostEngagers` reactions-trigger ambiguity branch, the remaining
+  counterexample to the § 2026-09-04 (#870) invariant)

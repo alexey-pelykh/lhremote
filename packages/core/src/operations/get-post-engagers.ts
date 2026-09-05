@@ -301,8 +301,8 @@ function createScrollModalScript(distance: number): string {
  * Write an extraction-failure diagnostic bundle for the reactions modal the
  * client is sitting on, then return so the caller can raise.
  *
- * Sibling of `get-post`'s `capturePostDetailExtractionFailure`, and gated the
- * same way: the detect probe is a diagnostic-only read whose sole consumer is
+ * Sibling of `capturePostDetailExtractionFailure` in `wait-for-post-load.ts`,
+ * and gated the same way: the detect probe is a diagnostic-only read whose sole consumer is
  * the bundle, so a default-off CLI or MCP run must not spend a
  * `Runtime.evaluate` in the page for nobody — and the capture's own gate fires
  * too late to prevent that, because the probe would already have been
