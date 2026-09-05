@@ -217,6 +217,27 @@ def test_invalid_frontmatter_fails() -> None:
             check("labelled INVALID", "INVALID" in r.stdout, r.stdout)
             check(f"explains: {expected}", expected in r.stdout, r.stdout)
 
+    # An opened-but-never-closed fence is a distinct code path from having no
+    # frontmatter at all, and its own message: the two have different fixes, so
+    # reporting both as "no frontmatter block" sends the reader looking for a
+    # block that is already there.
+    tmp, root, memory = case("Invalid frontmatter fails: unterminated fence")
+    with tmp:
+        (memory / "unterminated.md").write_text(
+            "---\nvolatility: high\nlast-verified: 2026-09-01\n"
+            "verification: empirical-walk\nBody with no closing fence.\n",
+            encoding="utf-8",
+        )
+        r = run(root)
+        check("exit code is 1", r.returncode == 1, f"got {r.returncode}: {r.stdout}")
+        check("labelled INVALID", "INVALID" in r.stdout, r.stdout)
+        check("explains: never closed", "never closed" in r.stdout, r.stdout)
+        check(
+            "does not claim the block is absent",
+            "no frontmatter block" not in r.stdout,
+            r.stdout,
+        )
+
 
 def test_annotation_level_tracks_fatality() -> None:
     """A green job must not carry red annotations, and vice versa."""
