@@ -157,12 +157,26 @@ describe("getPostStats", () => {
     return { evaluateMock, disconnect, navigate };
   }
 
+  const originalCaptureEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Both refusal branches below now reach the diagnostic capture (#890), and
+    // this file mocks no filesystem.  Under an ambient
+    // `LHREMOTE_CAPTURE_DIAGNOSTICS=1` — a plausible export while debugging
+    // diagnostics — those cases would create real temp directories and write
+    // real bundles from a Tier-1 unit run.  The capture path itself is graded
+    // in `get-post-stats-extraction-diagnostics.test.ts`, which does mock it.
+    delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    if (originalCaptureEnv === undefined) {
+      delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    } else {
+      process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalCaptureEnv;
+    }
   });
 
   it("throws on non-loopback host without allowRemote", async () => {
