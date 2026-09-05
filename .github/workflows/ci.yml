@@ -37,6 +37,32 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  memory-freshness:
+    name: Memory Freshness
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # Grade the instrument before trusting its reading: if these fail, the
+      # check below carries no information about the corpus.
+      - name: Test the freshness checker
+        run: python3 tools/check-memory-freshness.test.py
+
+      # `--warn-only` reports drift and annotates the PR without failing the
+      # build. It is here because one entry was already overdue when this job
+      # landed, and the honest alternatives were to re-walk that memory (which
+      # needs a licensed LinkedHelper install) or to bump its `last-verified`
+      # date — which would fabricate a verification that never happened.
+      # Drop the flag once the corpus is clean: see issue #912.
+      #
+      # Note this does NOT disable the whole gate. Scanning zero entries still
+      # fails under `--warn-only`, so a check that silently stops finding the
+      # corpus cannot pass as a clean bill.
+      - name: Check memory freshness frontmatter
+        run: python3 tools/check-memory-freshness.py --warn-only
+
   package:
     timeout-minutes: 10
     runs-on: ubuntu-latest
