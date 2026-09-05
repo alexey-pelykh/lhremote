@@ -2750,14 +2750,38 @@ function hiddenBareBesideEmptyRuns(value: string): FakeElement {
   ], value);
 }
 
+type CompiledScrape = (document: unknown, window: unknown) => ScrapedPost[];
+
+/**
+ * Compiled scrape sources, keyed by the source itself.
+ *
+ * Only two ever reach this map — the current script and the pinned baseline —
+ * while the corpus drives them once per shape, so without the cache the same
+ * two 43 KB sources are handed to `new Function` on every fixture.  The saving
+ * is small in absolute terms (a compile measures ~0.01 ms, V8 parsing the body
+ * lazily) and it is dead work either way.
+ *
+ * What matters more here than the time is that the cache CANNOT carry state
+ * between shapes: it stores the compiled function only, and `makeDocument` and
+ * `window` below are still built fresh per call, so each run re-enters the
+ * script with a new page and a new global.  A memo that reused either of those
+ * would let one fixture's reading leak into the next and quietly weaken every
+ * verdict in this file.
+ */
+const compiledScrapes = new Map<string, CompiledScrape>();
+
+function compileScrape(script: string): CompiledScrape {
+  const cached = compiledScrapes.get(script);
+  if (cached) return cached;
+  const fn = new Function("document", "window", `return ${script};`) as CompiledScrape;
+  compiledScrapes.set(script, fn);
+  return fn;
+}
+
 /** Run an arbitrary scrape-script source against the document double. */
 function runScrapeWith(script: string, root: FakeElement): ScrapedPost[] {
   const window: Record<string, unknown> = {};
-  const fn = new Function("document", "window", `return ${script};`) as (
-    document: unknown,
-    window: unknown,
-  ) => ScrapedPost[];
-  return fn(makeDocument(root), window);
+  return compileScrape(script)(makeDocument(root), window);
 }
 
 interface AuthorFields {
