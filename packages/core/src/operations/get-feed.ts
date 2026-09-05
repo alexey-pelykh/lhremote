@@ -280,8 +280,19 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // two queries concatenated: the callers below take the FIRST run, and two
   // queries would order every <p> ahead of every <span> rather than in document
   // order, so a headline could outrank a name an anchor renders before it.
+  const RUN_SELECTOR = 'p, span';
+
   function nameRuns(root) {
-    return Array.from(root.querySelectorAll('p, span'));
+    return Array.from(root.querySelectorAll(RUN_SELECTOR));
+  }
+
+  // Does this element render a run beneath it?  Short-circuits on the first
+  // match, where \`nameRuns(node).length === 0\` materialises every descendant
+  // run only to ask whether the list is empty.  Reads RUN_SELECTOR rather than
+  // repeating the list: extraction drifting from selection is the defect #898
+  // records, and a second copy of the selector is where that drift starts.
+  function hasRun(root) {
+    return root.querySelector(RUN_SELECTOR) !== null;
   }
 
   // Does the anchor render its name inside a run, rather than as bare link text?
@@ -409,7 +420,7 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // field beneath it concatenated, which is how neighbouring fields fuse.
   function leafRuns(root) {
     return nameRuns(root).filter(function (node) {
-      return nameRuns(node).length === 0;
+      return !hasRun(node);
     });
   }
 
