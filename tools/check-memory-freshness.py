@@ -133,6 +133,16 @@ def classify(fields: dict[str, str] | None, today: date) -> tuple[str, str]:
     return "current", detail
 
 
+def count_of(count: int, singular: str, plural: str) -> str:
+    """Render `count` with the noun and verb that agree with it.
+
+    Worth the four lines: the single-entry case is not hypothetical -- it is
+    what this repository's own corpus reports today -- so the `entrie(s)`
+    shorthand this replaces would be visible, and wrong, on every run.
+    """
+    return f"{count} {singular if count == 1 else plural}"
+
+
 def annotate(fatal: bool, path: Path, message: str) -> None:
     """Emit a GitHub Actions annotation so drift is visible on the PR itself.
 
@@ -216,7 +226,10 @@ def main(argv: list[str] | None = None) -> int:
     # Report the cardinality of what was evaluated, always. A gate that passes
     # without saying how much it looked at cannot be told apart from one that
     # looked at nothing.
-    print(f"Scanned {len(entries)} memory entrie(s) in {memory_dir} as of {today}.")
+    print(
+        f"Scanned {count_of(len(entries), 'memory entry', 'memory entries')} "
+        f"in {memory_dir} as of {today}."
+    )
 
     for label, items in (
         ("INVALID", invalid),
@@ -242,8 +255,9 @@ def main(argv: list[str] | None = None) -> int:
     # which is exactly what the drift it sits beside is not.
     if invalid:
         print(
-            f"error: {len(invalid)} entrie(s) have frontmatter that cannot be "
-            "graded; --warn-only does not forgive this.",
+            f"error: {count_of(len(invalid), 'entry has', 'entries have')} "
+            "frontmatter that cannot be graded; --warn-only does not "
+            "forgive this.",
             file=sys.stderr,
         )
         return 1
@@ -251,17 +265,21 @@ def main(argv: list[str] | None = None) -> int:
     if overdue:
         if args.warn_only:
             print(
-                f"{len(overdue)} entrie(s) need re-verification; not failing "
-                "the build (--warn-only)."
+                f"{count_of(len(overdue), 'entry needs', 'entries need')} "
+                "re-verification; not failing the build (--warn-only)."
             )
             return 0
         print(
-            f"error: {len(overdue)} entrie(s) need re-verification.",
+            f"error: {count_of(len(overdue), 'entry needs', 'entries need')} "
+            "re-verification.",
             file=sys.stderr,
         )
         return 1
 
-    print(f"All {len(entries)} memory entrie(s) within budget.")
+    print(
+        f"{count_of(len(entries), 'memory entry is', 'memory entries are')} "
+        "within budget."
+    )
     return 0
 
 
