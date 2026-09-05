@@ -109,7 +109,7 @@ npm install @lhremote/core
 | `DEFAULT_CDP_PORT` | Default CDP port used by LinkedHelper |
 | `delay` | Promise-based delay helper |
 | `errorMessage` | Extract a human-readable message from an unknown error |
-| `isCdpPort` | Check whether a value is a valid CDP port number |
+| `isCdpPort` | Probe whether a port exposes a CDP `/json/list` endpoint (async; makes a local HTTP request) |
 | `isLoopbackAddress` | Check whether a string is a loopback IP address |
 
 ### Error Types
