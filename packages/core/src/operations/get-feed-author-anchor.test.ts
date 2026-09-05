@@ -2707,6 +2707,113 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
     expect(now.url).toBe("https://www.linkedin.com/in/x7k2m9q4/");
   });
 
+
+  it("#898 (decline): a declining slug withholds the whole name region from the headline", () => {
+    // The decline path knows the name only as the ONE field `anchorName`
+    // answered from, so excluding just that field emitted the name's REMAINING
+    // fragments as the headline -- the fallback inventing a headline out of the
+    // very fragments the decline had admitted it could not delimit.
+    //
+    // Measured before the fix, on the same fixture the opaque-slug test above
+    // already uses: name "Ada", headline "Multi".  The pre-#860 baseline
+    // returned null for that headline, so it was a regression and not a cost.
+    const split = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "opaque slug, split name, nothing after the badge",
+      href: "/in/x7k2m9q4/",
+      children: () => [hiddenRun("Ada"), hiddenRun("Multi"), hiddenRun("• 1st")],
+      name: null,
+    });
+    expect(split.headline).not.toBe("Multi");
+    expect(split.headline).toBeNull();
+
+    // And the region is withheld, not the whole read: put a real headline after
+    // the badge and it is still found.  This is the assertion that fails if the
+    // withholding is ever widened past the name region.
+    const withHeadline = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "opaque slug, split name, headline after the badge",
+      href: "/in/x7k2m9q4/",
+      children: () => [
+        hiddenRun("Ada"),
+        hiddenRun("Multi"),
+        hiddenRun("• 1st"),
+        hiddenRun("Head of Widgets at Acme"),
+        hiddenRun("18h •"),
+      ],
+      name: null,
+    });
+    expect(withHeadline.headline).toBe("Head of Widgets at Acme");
+    expect(withHeadline.timestamp).toBe("18h");
+  });
+
+  it("#898 (decline): a transliterated non-Latin slug does not report the surname as the headline", () => {
+    // `squash` folds a non-Latin name to the empty string and says so in its own
+    // comment: it "routes to the fallback -- the honest answer, since LinkedIn
+    // transliterates such slugs and the two are not comparable here".  The name
+    // read did fall back; the headline read did not, and reported the person's
+    // SURNAME as their headline while displacing the real one.  Measured before
+    // the fix: name "Олексій", headline "Пелих".
+    //
+    // This is the sharpest form of the shape above because both halves are a
+    // real person's name, so nothing downstream can recognise the result as
+    // wrong -- a plausible-looking headline is worse than a missing one.
+    const got = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "transliterated slug, non-Latin name",
+      href: "/in/oleksii-pelykh/",
+      children: () => [
+        hiddenRun("Олексій"),
+        hiddenRun("Пелих"),
+        hiddenRun("• 1st"),
+        hiddenRun("Head of Widgets"),
+        hiddenRun("18h •"),
+      ],
+      name: null,
+    });
+
+    expect(got.headline).not.toBe("Пелих");
+    expect(got.headline).toBe("Head of Widgets");
+    expect(got.timestamp).toBe("18h");
+  });
+
+  it("#898 (decline): the withholding is keyed on a BADGE, so a company header keeps its headline", () => {
+    // A company actor header renders no connection degree at all, so its name
+    // region is terminated by the TIMESTAMP and legitimately spans name AND
+    // headline.  Withholding the region there drops a real headline -- measured,
+    // when the withholding was first written unconditionally, as null on the
+    // corpus shape `V8 role-slug on a company page`.
+    //
+    // This is the assertion that fails if the withholding is ever widened back
+    // to every declining read regardless of what terminates the region.
+    const company = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "company header, role slug, no badge",
+      href: "/company/head-of-widgets/",
+      children: () => bareFields("p", "Acme Corp", "Head of Widgets", "18h •"),
+      name: "Acme Corp",
+    });
+
+    expect(company.name).toBe("Acme Corp");
+    expect(company.headline).toBe("Head of Widgets");
+  });
+
+  it("#898 (decline, accepted cost): a split name with NO badge after it still reports its tail", () => {
+    // The residue the badge-keyed rule above deliberately does not reach, and
+    // the reason it cannot: this shape is field-for-field identical to the
+    // company header in the test above -- two leading non-badge fields
+    // terminated by a relative time -- so one rule cannot serve both, and #860's
+    // premise is that the anchor's text alone does not say which is which.
+    //
+    // Asserted as the OBSERVED answer, not the ideal one, so that a later change
+    // which fixes it fails here and has to say so.  Stated per this file's own
+    // convention for costs: an accepted cost that silently stops being paid is
+    // as invisible as one that silently starts.
+    const got = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "opaque slug, split name, no badge",
+      href: "/in/x7k2m9q4/",
+      children: () => [hiddenRun("Ada"), hiddenRun("Multi"), hiddenRun("18h •")],
+      name: null,
+    });
+
+    expect(got.headline).toBe("Multi");
+  });
   it("#860/#898 AC-3: no field the pre-#860 script got right is got wrong now", () => {
     const regressions: string[] = [];
     let baselineCorrect = 0;

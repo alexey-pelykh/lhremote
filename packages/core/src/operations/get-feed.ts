@@ -735,8 +735,43 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   //
   // No content test is needed, because the origin is already known.  When the
   // slug-scored read produced the name it consumed a known PREFIX of the name
-  // region, and that prefix IS the span.  When it declined and \`anchorName\`
-  // produced the name, the span is the one field that name came out of.
+  // region, and that prefix IS the span.
+  //
+  // When it DECLINED, the origin is known only for the one field \`anchorName\`
+  // answered from — and excluding just that field emits the name's REMAINING
+  // fragments as the headline.  A split name under an uncorroborating slug
+  // ([Ada, Multi, • 1st]) reported "Multi", and a non-Latin name under its
+  // transliterated slug ([Олексій, Пелих, • 1st, ...]) reported the person's
+  // SURNAME as their headline while displacing the real one.  Both are the
+  // fallback INVENTING a headline out of the very fragments the decline had
+  // just admitted it could not delimit, and the second contradicts \`squash\`'s
+  // own claim that folding to empty "routes to the fallback — the honest
+  // answer": the name read fell back, and the headline read did not.
+  //
+  // So on the decline path the leading name REGION is withheld from the
+  // headline, not merely the one field — but ONLY when a connection badge
+  // TERMINATES that region.  The badge is LinkedIn's own statement that the
+  // name ended there, and it is the sole structural evidence available once the
+  // slug has declined; \`nameRegion\` is built on the same fact.  Everything
+  // before it is therefore name-side, and withholding all of it yields null
+  // where nothing follows the badge and the field AFTER the badge otherwise,
+  // which is the real headline in every shape that renders one.
+  //
+  // Where the region is terminated by the TIMESTAMP instead — a company actor
+  // header, which carries no connection degree at all ([Acme Corp, Head of
+  // Widgets, 18h]) — no such statement exists, the region legitimately spans
+  // name AND headline, and withholding it would drop a real headline.  That
+  // shape keeps the single found field, which is what it read correctly before.
+  //
+  // \`Math.max\` keeps the found field excluded when the region does not reach it
+  // — the badge-leading shape ([• 2nd, John Smith, ...]) has an EMPTY region,
+  // because \`nameRegion\` stops at field 0, and its name sits at index 1.
+  //
+  // The residue is a split name under a declining slug with NO badge after it
+  // ([Ada, Multi, 18h]), which still reports "Multi".  That is left deliberately
+  // rather than missed: it is field-for-field identical to the company shape
+  // above, so no rule can serve both, and #860's premise is that the text alone
+  // cannot settle it.  Pinned as an accepted cost rather than left as prose.
   //
   // Accepted and pre-existing: where a leading screen-reader copy is itself the
   // field the name is read from, the excluded field is that copy and the real
@@ -746,8 +781,12 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   function nameFieldSpan(scored, name, fields) {
     if (scored !== null) return { from: 0, to: scored.fields };
     if (name === null) return { from: 0, to: 0 };
+    const regionEnd = nameRegion(fields).length;
+    const badgeEnds = regionEnd < fields.length && DEGREE_ONLY.test(fields[regionEnd]);
     for (let i = 0; i < fields.length; i++) {
-      if (phraseContains(fields[i], name)) return { from: i, to: i + 1 };
+      if (phraseContains(fields[i], name)) {
+        return { from: i, to: badgeEnds ? Math.max(i + 1, regionEnd) : i + 1 };
+      }
     }
     return { from: 0, to: 0 };
   }
