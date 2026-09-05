@@ -1552,13 +1552,32 @@ const ACTOR_HEADER_CAPTURE: readonly ActorHeaderCapture[] = [
 const REDACTED_URL = "https://example.invalid/redacted";
 
 /**
- * The feed script's body marker, restated because `get-feed.ts` builds it into
- * a template literal rather than exporting it.  The coupling is asserted, not
- * assumed: {@link SCRAPE_FEED_SCRIPT} is searched for this exact string below,
- * so a rename in the script fails here instead of silently making the
- * "post-detail carries no feed body marker" finding unfalsifiable.
+ * The feed script's body marker, as an HTML page renders it — a bare attribute.
+ * This is the form searched for in the CAPTURES.
  */
 const FEED_BODY_MARKER = 'data-testid="expandable-text-box"';
+
+/**
+ * The same marker as the SELECTOR the script matches on, derived rather than
+ * restated so the two cannot drift apart.
+ *
+ * `get-feed.ts` builds the selector into a template literal instead of
+ * exporting it, so the coupling is asserted below rather than assumed — a
+ * rename there fails here, instead of silently making the "post-detail carries
+ * no feed body marker" finding unfalsifiable.
+ *
+ * The bracketed form is what gets asserted, and the bare attribute is NOT
+ * sufficient for that: `get-feed.ts` also mentions the attribute in a prose
+ * comment, so searching for `FEED_BODY_MARKER` alone would still pass if every
+ * executable use of the selector were deleted.  Bracketing it is what makes the
+ * check track the selector rather than the vocabulary.
+ *
+ * What it still does NOT prove: that the selector is REACHED at runtime — the
+ * script's own doc comment carries the bracketed form too.  It pins the string,
+ * which is the drift this constant exists to catch; the region behaviour itself
+ * is measured by the document-double cases above.
+ */
+const FEED_BODY_SELECTOR = `[${FEED_BODY_MARKER}]`;
 
 /** Name of the assertion the doc comment above cites for the dialect caveat. */
 const ACTOR_HEADER_CAPTURE_HAS_NO_FEED_BODY_MARKER =
@@ -1837,7 +1856,7 @@ describe("#897: what the captured artifacts ground about the actor header", () =
     // That is why the slot located above is evidence about the SLOT and not
     // about what the FEED renders in it — the escalation in #897 turns on
     // exactly this gap.
-    expect(SCRAPE_FEED_SCRIPT).toContain(FEED_BODY_MARKER);
+    expect(SCRAPE_FEED_SCRIPT).toContain(FEED_BODY_SELECTOR);
 
     for (const capture of ACTOR_HEADER_CAPTURE) {
       const html = captureText(capture.label);
