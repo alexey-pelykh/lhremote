@@ -553,10 +553,15 @@ raises `DOMVariantAmbiguousError` at its **reactions-trigger find** — before i
 ever reaches the modal — and captures nothing there, while the two branches
 either side of it do. Recorded here rather than fixed, on the same ground #857
 gave for leaving `getPostStats` alone: a capture site on another surface is a
-behaviour change with its own acceptance. Tracked as #911. Until that closes,
-read the #870 clause as true of every surface except that one branch — and read
-this paragraph as the reason a reader should not take the clause on trust, which
-is the whole lesson of the two counterexamples it has now had.
+behaviour change with its own acceptance. Tracked as #911. Both counterexamples
+are *raising* refusals: `getPostEngagers`'s other zero-detect branch returns an
+empty list by the ADR-008 empty-vs-error contract rather than failing to read a
+page — a post-detail page always has a post, but does not always have reactions
+— so it sits outside this count rather than being a third exception to it.
+Until #911 closes, read the #870 clause as true of every surface except that one
+branch — and read this paragraph as the reason a reader should not take the
+clause on trust, which is the whole lesson of the two counterexamples it has now
+had.
 
 **Unchanged, and load-bearing:** activation stays gated on
 `LHREMOTE_CAPTURE_DIAGNOSTICS=1` at the new site. The detect probe is skipped
