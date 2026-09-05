@@ -3,6 +3,40 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// `search-posts.ts` imports `mkdtemp`/`writeFile` from `node:fs/promises` for
+// its two capture sites, and reuses `ensureSecureDiagnosticDir` (lstat/chmod)
+// from `wait-for-post-load.ts`.  Both sites self-gate on
+// LHREMOTE_CAPTURE_DIAGNOSTICS, so with the variable UNSET this file needed no
+// fs double and had none — which made the suite's hermeticity a property of
+// the ambient shell rather than of the suite.
+//
+// It is a normal state here: `vitest.e2e.config.ts` exports the variable as
+// "1", so any shell that has run E2E carries it.  Under it, these *unit* tests
+// perform real `mkdtemp` + `writeFile` into `os.tmpdir()` — measured at 9 real
+// directories for one run of this file — and `fakeClient` supplies only
+// `evaluate`, so the screenshot's `client.send(...)` throws a `TypeError` the
+// capture swallows.  The tests still pass, which is the problem: the I/O is
+// invisible until someone looks in the temp directory.
+//
+// Mocking it makes the outcome the same either way, which is what the two
+// sibling gate suites already do (`wait-for-post-load.test.ts`,
+// `wait-for-reactions-modal.test.ts`) and the reason they do it.
+vi.mock("node:fs/promises", () => ({
+  // mkdtemp returns the path of the freshly-created directory.  In production
+  // it has a random suffix; here a stable shape so assertions can match it.
+  mkdtemp: vi.fn(async (prefix: string) => `${prefix}TESTABCDEF`),
+  writeFile: vi.fn().mockResolvedValue(undefined),
+  // lstat/chmod back the post-mkdtemp security check that
+  // `wait-for-post-load.ts` exports as `ensureSecureDiagnosticDir` and this
+  // module reuses.  A fresh-and-secure directory shape by default.
+  lstat: vi.fn().mockResolvedValue({
+    isSymbolicLink: () => false,
+    isDirectory: () => true,
+    mode: 0o700,
+  }),
+  chmod: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../cdp/discovery.js", () => ({
   discoverTargets: vi.fn(),
 }));
@@ -51,6 +85,35 @@ import {
 const CDP_PORT = 9222;
 
 /**
+ * The ambient `LHREMOTE_CAPTURE_DIAGNOSTICS`, read ONCE at module load — before
+ * any test has had a chance to mutate it.
+ *
+ * The capture sites self-gate on this variable, so whether a *unit* test ran
+ * the capture path at all was a property of the shell the suite was launched
+ * from.  CI never sets it and `vitest.config.ts` neither sets nor unsets it,
+ * while `vitest.e2e.config.ts` exports it as "1" — so the two normal states of
+ * a developer machine here disagree.  {@link pinCaptureDiagnosticsOff} makes
+ * every environment agree with CI, and the `node:fs/promises` double above
+ * stands behind the two one-read cases below, which opt back in deliberately
+ * because the bundle is half of what they grade.
+ */
+const AMBIENT_CAPTURE_DIAGNOSTICS = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+
+/** Pin the gate OFF for a test that has not asked for the capture path. */
+function pinCaptureDiagnosticsOff(): void {
+  delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+}
+
+/** Hand the shell back exactly the value it had, including "unset". */
+function restoreAmbientCaptureDiagnostics(): void {
+  if (AMBIENT_CAPTURE_DIAGNOSTICS === undefined) {
+    delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+  } else {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = AMBIENT_CAPTURE_DIAGNOSTICS;
+  }
+}
+
+/**
  * Markers that tell the three generated scripts apart in the evaluate mock.
  *
  * Keyed on source the generators actually emit, and checked in an order that
@@ -62,6 +125,17 @@ const CDP_PORT = 9222;
 const EXTRACTION_MARKER = "postCardCount";
 const READINESS_MARKER = "selection.adapter.ready";
 const DETECTION_MARKER = "probes[a.variant]";
+/**
+ * The diagnostic capture's own page read — a FOURTH script, evaluated only on
+ * the failure path and only under LHREMOTE_CAPTURE_DIAGNOSTICS.
+ *
+ * `dataTestIdCount` is the capture probe's measured dialect discriminator and
+ * appears in no other generated source, which is what the rule above asks for.
+ * The obvious alternative markers all alias: the card funnel spliced into this
+ * same script emits `candidateCardCount`, and matching on a bare `Count` or on
+ * `bodyTextSnippet` would collide with the extraction script.
+ */
+const CAPTURE_PROBE_MARKER = "dataTestIdCount";
 
 /** One successful scrape, as the generated extraction script reports it. */
 interface SearchScrape {
@@ -91,6 +165,77 @@ function fakeClient(
   evaluate: (script: string) => Promise<unknown>,
 ): CDPClient {
   return { evaluate } as unknown as CDPClient;
+}
+
+/** A classification probe's result, as the shifting double below answers it. */
+interface DetectReading {
+  matched: readonly string[];
+  probes: Readonly<Record<string, number>>;
+}
+
+/**
+ * The reading a SECOND detect read would return — a page that re-rendered
+ * under the gate.  Production must never be holding this.
+ *
+ * This gate's production comment states that one read feeds both the error's
+ * `cause` and the diagnostic bundle, "so the two can never disagree about what
+ * was on the page".  An IDEMPOTENT detect double cannot grade that claim: it
+ * answers every read with the same object, so cause-agrees-with-bundle holds
+ * for one read and equally for five, and the invariant is unobservable through
+ * it (#896).
+ *
+ * Deliberately incompatible with every `first` reading pinned below, on all
+ * three axes a second read could corrupt: a different `matched` (so the BRANCH
+ * would move), a different arity of it (so the error's own message would
+ * move), and different counts (so the `cause` and the bundle would move
+ * independently of each other).
+ */
+const RE_RENDERED: DetectReading = {
+  matched: ["legacy"],
+  probes: { sdui: 99, legacy: 99 },
+};
+
+/** The capture probe's answer — shape only; no case below reads its fields. */
+const CAPTURE_PROBE = {
+  href: "https://www.linkedin.com/search/results/content/?keywords=test",
+  title: "test | Search | LinkedIn",
+  hasMain: true,
+  dataTestIdCount: 0,
+  bodyTextSnippet: "",
+  scopeMatchCounts: {},
+  candidateCardCount: 0,
+  cardsClearingHeightFloor: 0,
+  cardsWithAuthorLink: 0,
+  cardsWithMenuButton: 0,
+};
+
+/**
+ * An `evaluate` double for the failure path that answers the FIRST detect read
+ * with `first` and every later one with {@link RE_RENDERED}.
+ *
+ * Checked in an order that cannot alias, per the marker block above: the
+ * capture probe first (it is the only script carrying `dataTestIdCount`), then
+ * the detect probe, then readiness — which is answered `false` so the loop
+ * always reaches the deadline.
+ */
+function shiftingDetect(first: DetectReading) {
+  let reads = 0;
+  return vi.fn(async (script: string) => {
+    const text = String(script);
+    if (text.includes(CAPTURE_PROBE_MARKER)) return CAPTURE_PROBE;
+    if (text.includes(DETECTION_MARKER)) {
+      reads += 1;
+      return reads === 1 ? first : RE_RENDERED;
+    }
+    return false;
+  });
+}
+
+/** How many times a {@link shiftingDetect} double was asked to classify. */
+function detectReads(evaluate: ReturnType<typeof shiftingDetect>): number {
+  return evaluate.mock.calls.filter(([script]) =>
+    String(script).includes(DETECTION_MARKER),
+  ).length;
 }
 
 /**
@@ -164,10 +309,12 @@ function setupMocks(
 describe("searchPosts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    pinCaptureDiagnosticsOff();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    restoreAmbientCaptureDiagnostics();
   });
 
   it("parses posts from DOM-scraped data", async () => {
@@ -440,10 +587,12 @@ describe("searchPosts", () => {
 describe("searchPosts variant binding", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    pinCaptureDiagnosticsOff();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    restoreAmbientCaptureDiagnostics();
   });
 
   it("gates on the predicate generated from the search-results registry", () => {
@@ -605,6 +754,127 @@ describe("searchPosts variant binding", () => {
     );
   });
 
+  it("one read feeds both the unsupported error's cause and the bundle (#896)", async () => {
+    // This gate carries the same "one read feeds both" claim as its two
+    // siblings and, until #896, nothing here graded it: the bundle was never
+    // read by this suite at all.  The double SHIFTS after the first read (see
+    // {@link RE_RENDERED}), so what is graded is that the cause and the bundle
+    // came from the SAME reading — not merely that two reads agreed.
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const { writeFile } = await import("node:fs/promises");
+    vi.mocked(writeFile).mockClear();
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    const first: DetectReading = { matched: [], probes: { sdui: 0, legacy: 0 } };
+    const evaluate = shiftingDetect(first);
+    const client = {
+      evaluate,
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+
+    const error = await waitForSearchResults(client, 1).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+    expect(error).toBeInstanceOf(DOMVariantUnsupportedError);
+
+    // The `cause` half.  A substring pin rather than the whole message,
+    // because this branch's cause is `zeroMatchCause` — the probe counts plus
+    // the two-readings prose the case above already pins in full, built by a
+    // helper this module does not export.
+    //
+    // The negative below is the discriminating half and is safe to state HERE
+    // and only here: the positive on the line above establishes that the
+    // message exists and is non-empty, which is the cardinality an
+    // all-negative block cannot establish for itself (the rule
+    // `wait-for-post-load.test.ts` states, and the one the extraction-time
+    // case further down is written to obey).
+    const diagnosis = ((error as DOMVariantUnsupportedError).cause as Error)
+      .message;
+    expect(diagnosis).toContain(formatVariantProbes(first));
+    expect(diagnosis).not.toContain(formatVariantProbes(RE_RENDERED));
+
+    const jsonCall = vi
+      .mocked(writeFile)
+      .mock.calls.find((call) => String(call[0]).endsWith(".json"));
+    expect(jsonCall).toBeDefined();
+    const bundle = JSON.parse(String(jsonCall?.[1])) as {
+      trigger?: unknown;
+      variantDetection?: unknown;
+      cardinals?: unknown;
+    };
+    expect(bundle.trigger).toBe("readiness-timeout");
+    // The bundle half.  `toEqual` rather than `toMatchObject`: a partial match
+    // would accept a `variantDetection` that had GAINED a probe key, which is
+    // exactly what a re-read of a shifted page produces.
+    expect(bundle.variantDetection).toEqual(first);
+    // No scrape has run at this point, so there is no settled pair — stated
+    // rather than left unasserted, since `null` here is a claim.
+    expect(bundle.cardinals).toBeNull();
+
+    // And the count, which is what makes the two agreements above mean "one
+    // read" rather than "two reads that happened to agree".
+    expect(detectReads(evaluate)).toBe(1);
+
+    warnSpy.mockRestore();
+  });
+
+  it("one read feeds both the ambiguous error's cause and the bundle (#896)", async () => {
+    // The second `{ cause: … }` site on this gate, and the branch the sibling
+    // above cannot reach.  A separate case rather than a loop over both: the
+    // ambiguous branch ALSO builds the error's own message out of
+    // `detection.matched`, so a second read corrupts three things here and two
+    // there, and a shared body would have to weaken to their intersection.
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const { writeFile } = await import("node:fs/promises");
+    vi.mocked(writeFile).mockClear();
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    const first: DetectReading = {
+      matched: ["sdui", "legacy"],
+      probes: { sdui: 3, legacy: 7 },
+    };
+    const evaluate = shiftingDetect(first);
+    const client = {
+      evaluate,
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+
+    const error = await waitForSearchResults(client, 1).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+    expect(error).toBeInstanceOf(DOMVariantAmbiguousError);
+    // The message names the dialects the FIRST reading matched.  Asserted
+    // because it is the third consumer of that one read, and the one an
+    // operator sees without opening anything.
+    expect((error as Error).message).toContain("sdui, legacy");
+    expect(((error as DOMVariantAmbiguousError).cause as Error).message).toBe(
+      `detect probes — ${formatVariantProbes(first)}`,
+    );
+
+    const jsonCall = vi
+      .mocked(writeFile)
+      .mock.calls.find((call) => String(call[0]).endsWith(".json"));
+    expect(jsonCall).toBeDefined();
+    const bundle = JSON.parse(String(jsonCall?.[1])) as {
+      trigger?: unknown;
+      variantDetection?: unknown;
+      cardinals?: unknown;
+    };
+    expect(bundle.trigger).toBe("readiness-timeout");
+    expect(bundle.variantDetection).toEqual(first);
+    expect(bundle.cardinals).toBeNull();
+
+    expect(detectReads(evaluate)).toBe(1);
+
+    warnSpy.mockRestore();
+  });
+
   it("reports a plain timeout when exactly one adapter matched", async () => {
     // The dialect is known and it simply never finished rendering.  Blaming
     // LinkedIn for a markup change here would send the operator to write an
@@ -751,11 +1021,22 @@ describe("searchPosts variant binding", () => {
     // this page moments ago — a search that found nothing could never have got
     // here, and repeating "the search may have matched nothing" would offer an
     // excuse the state rules out.
-    const diagnosis = String(
-      ((error as DOMVariantUnsupportedError).cause as Error | undefined)
-        ?.message ?? "",
-    );
-    expect(diagnosis).not.toContain("legitimately matched nothing");
+    //
+    // Cardinality, not just content — the rule `wait-for-post-load.test.ts`
+    // states for its own all-negative block: "an empty source would satisfy
+    // every `not.toContain` below without a single assertion having graded
+    // anything".  This site is that empty source.  It constructs the error
+    // with NO options argument at all, so `cause` is `undefined` and a
+    // `?.message ?? ""` fallback hands the negative an empty string — green
+    // for every wording, including one that was never produced.  So the
+    // ABSENCE is what gets pinned, positively, and it is also the stronger
+    // claim: nothing that is absent can carry the qualifier.
+    //
+    // A future change that attaches a cause here therefore has to come
+    // through this assertion rather than past it, which is the point — the
+    // production comment records the absence as deliberate, so re-deciding it
+    // should be a visible edit and not a silent one.
+    expect((error as DOMVariantUnsupportedError).cause).toBeUndefined();
   });
 
   it("raises ambiguous rather than picking when two adapters claim the page", async () => {
