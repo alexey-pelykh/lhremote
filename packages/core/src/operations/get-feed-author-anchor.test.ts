@@ -1101,6 +1101,47 @@ describe("get-feed reports the actor, not a chip rendered before it (#859)", () 
       url: "https://www.linkedin.com/in/fallback-author/",
     });
   });
+
+  // The same region, on an OLD post.  #860 widened the timestamp vocabulary to
+  // `Nmo` / `Nyr` / `Ny` at three sites -- `FIELD_TIMESTAMP`, `TRAILING_BADGE`
+  // and `parseTimestamp` -- and `RELATIVE_TIME_IN_TEXT` is the fourth, feeding
+  // the fallback's FIRST signal above.  Left un-widened it reads a year-old or
+  // month-old post as carrying no time at all, the `dated` signal goes quiet,
+  // and selection falls through to "first anchor rendering a name run" -- the
+  // decoy, which comes first.  That is misattribution, the class #825 and #859
+  // exist to prevent, so it is pinned per token rather than left to the
+  // vocabulary staying in step by hand.
+  //
+  // `1mo` is the sharper of the two: `\d+[smhdw]` DOES match its `1m`, then
+  // fails the separator guard on the `o`, so the un-widened regex misses it for
+  // a different reason than it misses `1y`.
+  it.each([["1mo"], ["1y"], ["2yr"]])(
+    "#860: the dated fallback still finds the author when the post is %s old",
+    (token) => {
+      const item = el(
+        "div",
+        { role: "listitem" },
+        [
+          text("button", "", { "aria-label": `${MENU_LABEL_PREFIX}Fallback Author` }),
+          el("div", { "data-testid": "expandable-text-box" }, [
+            text("span", "Post body text that is long enough to be real."),
+          ]),
+          el("a", { href: "/in/late-decoy/" }, [nameRun("span", "Late Decoy")]),
+          el("a", { href: "/in/fallback-author/" }, [
+            nameRun("p", "Fallback Author"),
+            text("p", `${token} \u2022`),
+          ]),
+        ],
+        "",
+        400,
+      );
+
+      expect(scrapeOne(item)).toEqual({
+        name: "Fallback Author",
+        url: "https://www.linkedin.com/in/fallback-author/",
+      });
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -2402,6 +2443,31 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     name: "Ada Lovelace",
     headline: "Head of Widgets at Acme",
     timestamp: "3mo",
+  },
+  // The two shapes above render their badge as a SEPARATE field, which is the
+  // `DEGREE_ONLY` classifier's job.  The same tokens also arrive FUSED into the
+  // name's own field, which is `TRAILING_BADGE`'s job -- a different regex with
+  // a different vocabulary, and the one #860's contamination family runs
+  // through.  Every fused fixture in this file trims an ORDINAL (`V10`, `B2*`),
+  // so before these two the non-ordinal half of that vocabulary had no
+  // exerciser at all: removing BOTH `You` and `Out of network` from
+  // `TRAILING_BADGE` left the whole suite green while the name came back
+  // contaminated.  These are the fused counterparts of `B5a` and `B3g`.
+  {
+    label: "B5d own-post degree 'You' FUSED into the name field",
+    href: "/in/ada-lovelace/",
+    children: () => bareFields("span", "Ada Lovelace \u00B7 You", "Head of Widgets at Acme", "18h \u2022"),
+    name: "Ada Lovelace",
+    headline: "Head of Widgets at Acme",
+    timestamp: "18h",
+  },
+  {
+    label: "B5e out-of-network degree FUSED into the name field",
+    href: "/in/ada-lovelace/",
+    children: () => bareFields("span", "Ada Lovelace \u00B7 Out of network", "Head of Widgets at Acme", "18h \u2022"),
+    name: "Ada Lovelace",
+    headline: "Head of Widgets at Acme",
+    timestamp: "18h",
   },
   // -- FINDING 8: punctuation, diacritics, non-Latin script -----------------
   {
