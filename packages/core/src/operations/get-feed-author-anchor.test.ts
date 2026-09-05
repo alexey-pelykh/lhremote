@@ -755,6 +755,40 @@ interface ActorHeaderShape {
   readonly decoy?: DecoyAnchorShape | undefined;
   /** Link the author twice: an avatar-only anchor, then the name block. */
   readonly withAvatar?: boolean | undefined;
+  /**
+   * Href for the avatar anchor, when it must DIFFER from the name block's.
+   * Pairing is decided on `linkPath` — the href's PATHNAME — so two anchors
+   * that a reader would call the same profile stop counting as a pair the
+   * moment their paths differ by so much as a trailing slash.  Left undefined,
+   * the avatar carries the author's own href and the two pair.
+   */
+  readonly avatarHref?: string | undefined;
+  /**
+   * Profile anchors rendered AFTER the author's name block and still INSIDE
+   * the actor header — before the first of the control-menu button and the
+   * post body.
+   *
+   * This is the slot the region rule's positional premise says cannot be
+   * occupied (#897).  No other field here can express it: `decoy` renders
+   * BEFORE the author and `betweenMarkers` renders outside the region
+   * altogether, so before this existed the premise was not merely ungrounded,
+   * it was unexercised.  An entry rendering an avatar rather than a name run
+   * is how a decoy becomes PAIRED — a company that links its logo and its name
+   * separately is shaped exactly like the actor block's own avatar + name.
+   */
+  readonly afterActor?:
+    | readonly {
+        readonly href: string;
+        readonly name: string;
+        /** Render as an avatar-only anchor rather than a name run. */
+        readonly avatarOnly?: boolean | undefined;
+      }[]
+    | undefined;
+  /**
+   * Render NO post body, leaving the control-menu button as the region's only
+   * closing marker — an image-only, video-only or poll post.
+   */
+  readonly noBody?: boolean | undefined;
   /** A profile anchor rendered INSIDE the post body — a mention. */
   readonly mention?: { readonly href: string; readonly name: string } | undefined;
   /**
@@ -790,7 +824,9 @@ function actorPostItem(shape: ActorHeaderShape): FakeElement {
   }
 
   if (shape.withAvatar === true) {
-    children.push(el("a", { href: shape.authorHref }, [el("figure", {}, [])]));
+    children.push(
+      el("a", { href: shape.avatarHref ?? shape.authorHref }, [el("figure", {}, [])]),
+    );
   }
 
   children.push(
@@ -798,6 +834,14 @@ function actorPostItem(shape: ActorHeaderShape): FakeElement {
       nameRun(shape.authorRunTag, shape.authorName),
     ]),
   );
+
+  for (const after of shape.afterActor ?? []) {
+    children.push(
+      after.avatarOnly === true
+        ? el("a", { href: after.href }, [el("figure", {}, [])])
+        : el("a", { href: after.href }, [nameRun("span", after.name)]),
+    );
+  }
 
   const bodyChildren: FakeElement[] = [
     text("span", "Post body text that is long enough to be real."),
@@ -826,10 +870,16 @@ function actorPostItem(shape: ActorHeaderShape): FakeElement {
           ]),
         ];
 
+  // With no body the control-menu button is the region's ONLY closing marker,
+  // so `between` has nothing to sit between and is dropped with it — keeping it
+  // would render an anchor AFTER the sole marker, which is the region-is-empty
+  // case AC-8 and AC-9 already cover rather than the one-marker case here.
   children.push(
-    ...(shape.menuBeforeBody === true
-      ? [menu, ...between, body]
-      : [body, ...between, menu]),
+    ...(shape.noBody === true
+      ? [menu]
+      : shape.menuBeforeBody === true
+        ? [menu, ...between, body]
+        : [body, ...between, menu]),
   );
 
   return el("div", { role: "listitem" }, children, "", 400);
@@ -1155,6 +1205,236 @@ describe("get-feed reports the actor, not a chip rendered before it (#859)", () 
       });
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// #897 — where the actor-header positional premise is load-bearing
+// ---------------------------------------------------------------------------
+
+/**
+ * The region rule of #859 rests on one positional claim, asserted in a code
+ * comment in `get-feed.ts` and never graded:
+ *
+ * > every decoy the region still admits — a repost chip, an "X commented on
+ * > this" chip — renders BEFORE the actor's own block, never after it
+ *
+ * That claim is what licenses `pickHeaderAuthor` to take the LAST anchor each
+ * of its three signals admits.  #897 was raised because nothing in this
+ * repository could settle it: there is no captured feed-dialect DOM here, so
+ * the shapes it excludes were neither confirmed nor refuted, and two reviewers
+ * named this as the single bound on their confidence.
+ *
+ * **This block does not settle it, and no fixture below is a capture.**  What
+ * it does is narrower and is the part that does not need one: it MEASURES what
+ * the selection rule does when the premise is false, so the open question stops
+ * being "what would break?" and becomes "does LinkedIn render these three
+ * shapes?".  Before this block, `ActorHeaderShape` could not even express an
+ * anchor in the excluded slot — `decoy` renders before the author and
+ * `betweenMarkers` renders outside the region — so the premise was unexercised
+ * as well as ungrounded, and a green suite said nothing about it either way.
+ *
+ * ## What the tree DOES ground
+ *
+ * `linkedin/__fixtures__/legacy/post-with-comments.html` is the one real
+ * actor-header capture here.  Two things are readable off it, and they cut in
+ * opposite directions:
+ *
+ *   - The excluded slot is REAL.  Lines 113-117 render a text-bearing anchor
+ *     after the author's name anchor closes (line 112) and before the control
+ *     menu.  So the structural position exists; the premise's claim is about
+ *     what may occupy it, not about whether it exists.
+ *   - That anchor's `href` was scrubbed to `https://example.invalid/redacted`
+ *     per `__fixtures__/README.md`, so whether it was a profile anchor is
+ *     unrecoverable from the artifact.
+ *
+ * The second point reads as fatal and is not, which is the finding this block
+ * exists to record.  On that same capture the avatar anchor (line 64) and the
+ * name-block anchor (line 83) carry BYTE-IDENTICAL hrefs, so they share a
+ * `linkPath` and the author is genuinely PAIRED inside the header.  Signal 1
+ * then selects the last paired anchor, which is the author — and the anchor at
+ * line 113 is linked once whatever its href class turns out to be.  For the
+ * shape this capture exhibits the scrub is therefore MOOT: `/in/`, `/company/`
+ * and neither all give the same answer.  {@link ACTOR_HEADER_CAPTURE} asserts
+ * that pairing against the artifact rather than restating it.
+ *
+ * ## The residue, stated as three shapes rather than as a doubt
+ *
+ * Signal 1 is the whole rescue, so the premise is load-bearing exactly where
+ * signal 1 cannot fire.  The cases below measure that boundary; the three
+ * marked `premise-dependent` return the DECOY today.
+ *
+ * Whether LinkedIn renders any of them in the feed dialect is what a capture
+ * would answer and what nothing here can.  They are recorded as measurements,
+ * not as verdicts: a passing run below is evidence about this implementation's
+ * behaviour on a hand-built shape, never evidence that the shape occurs.
+ */
+interface PremiseBoundaryCase {
+  readonly label: string;
+  readonly shape: ActorHeaderShape;
+  /** Whether signal 1 can fire — the author paired INSIDE the header. */
+  readonly authorPairedInHeader: boolean;
+  /** The `(name, url)` the script returns today. */
+  readonly selects: { readonly name: string; readonly url: string };
+  /**
+   * `safe` — the author is returned, so the premise is not load-bearing here.
+   * `premise-dependent` — a decoy is returned, so this shape is a live defect
+   * if and only if LinkedIn renders it.
+   */
+  readonly verdict: "safe" | "premise-dependent";
+}
+
+/** The author's own href, carrying the `miniProfileUrn` query the capture shows. */
+const PAIRED_AUTHOR_HREF =
+  "https://www.linkedin.com/in/real-author?miniProfileUrn=urn%3Ali%3Afsd_profile%3AAAA";
+
+/** An after-actor entity attribution — "posted in Acme Corp", a newsletter byline. */
+const ENTITY_AFTER_ACTOR = { href: "/company/acme/", name: "Acme Corp" } as const;
+
+const PREMISE_BOUNDARY: readonly PremiseBoundaryCase[] = [
+  {
+    label:
+      "an entity attribution after the actor loses to an avatar-paired author",
+    shape: {
+      authorHref: PAIRED_AUTHOR_HREF,
+      authorName: "Real Author",
+      authorRunTag: "span",
+      withAvatar: true,
+      afterActor: [ENTITY_AFTER_ACTOR],
+    },
+    authorPairedInHeader: true,
+    selects: { name: "Real Author", url: "https://www.linkedin.com/in/real-author" },
+    verdict: "safe",
+  },
+  {
+    label: "a co-author anchor after the actor loses to an avatar-paired author",
+    shape: {
+      authorHref: PAIRED_AUTHOR_HREF,
+      authorName: "Real Author",
+      authorRunTag: "span",
+      withAvatar: true,
+      afterActor: [{ href: "/in/co-author/", name: "Co Author" }],
+    },
+    authorPairedInHeader: true,
+    selects: { name: "Real Author", url: "https://www.linkedin.com/in/real-author" },
+    verdict: "safe",
+  },
+  {
+    label:
+      "a post with NO body is still bounded by the control-menu button alone",
+    shape: {
+      authorHref: PAIRED_AUTHOR_HREF,
+      authorName: "Real Author",
+      authorRunTag: "span",
+      withAvatar: true,
+      afterActor: [ENTITY_AFTER_ACTOR],
+      noBody: true,
+    },
+    authorPairedInHeader: true,
+    selects: { name: "Real Author", url: "https://www.linkedin.com/in/real-author" },
+    verdict: "safe",
+  },
+  {
+    label:
+      "premise-dependent: an UNPAIRED author loses to an entity after it",
+    shape: {
+      authorHref: "/in/real-author/",
+      authorName: "Real Author",
+      authorRunTag: "span",
+      afterActor: [ENTITY_AFTER_ACTOR],
+    },
+    authorPairedInHeader: false,
+    selects: { name: "Acme Corp", url: "https://www.linkedin.com/company/acme/" },
+    verdict: "premise-dependent",
+  },
+  {
+    label:
+      "premise-dependent: a PAIRED entity after the actor outranks a paired author",
+    shape: {
+      authorHref: PAIRED_AUTHOR_HREF,
+      authorName: "Real Author",
+      authorRunTag: "span",
+      withAvatar: true,
+      afterActor: [
+        { href: "/company/acme/", name: "Acme Corp", avatarOnly: true },
+        ENTITY_AFTER_ACTOR,
+      ],
+    },
+    authorPairedInHeader: true,
+    selects: { name: "Acme Corp", url: "https://www.linkedin.com/company/acme/" },
+    verdict: "premise-dependent",
+  },
+  {
+    label:
+      "premise-dependent: an avatar href differing only by a trailing slash breaks the pair",
+    shape: {
+      authorHref: "https://www.linkedin.com/in/real-author",
+      authorName: "Real Author",
+      authorRunTag: "span",
+      withAvatar: true,
+      avatarHref: "https://www.linkedin.com/in/real-author/",
+      afterActor: [ENTITY_AFTER_ACTOR],
+    },
+    authorPairedInHeader: false,
+    selects: { name: "Acme Corp", url: "https://www.linkedin.com/company/acme/" },
+    verdict: "premise-dependent",
+  },
+];
+
+describe("get-feed: where the actor-header positional premise is load-bearing (#897)", () => {
+  it("CANARY: the excluded slot is actually rendered, so these verdicts have a subject", () => {
+    // Without this the whole block is the degenerate gate CLAUDE.md names: if
+    // `afterActor` silently rendered nothing, every `safe` case below would
+    // pass for the wrong reason and the three `premise-dependent` ones would be
+    // the only thing keeping the block honest.  Assert the slot directly.
+    const item = actorPostItem({
+      authorHref: PAIRED_AUTHOR_HREF,
+      authorName: "Real Author",
+      authorRunTag: "span",
+      withAvatar: true,
+      afterActor: [ENTITY_AFTER_ACTOR],
+    });
+
+    const hrefs = item.querySelectorAll("a").map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual([
+      PAIRED_AUTHOR_HREF,
+      PAIRED_AUTHOR_HREF,
+      "/company/acme/",
+    ]);
+
+    // And it is INSIDE the region: the body and the menu both follow it.
+    const tags = item.children.map((c) => c.tag);
+    expect(tags).toEqual(["a", "a", "a", "div", "button"]);
+  });
+
+  it.each(PREMISE_BOUNDARY.map((c) => [c.label, c] as const))(
+    "%s",
+    (_label, testCase) => {
+      expect(scrapeOne(actorPostItem(testCase.shape))).toEqual(testCase.selects);
+    },
+  );
+
+  it("signal 1 is the whole rescue: every safe case pairs the author, every premise-dependent one does not", () => {
+    // The classification is not decoration — it is the finding.  A case whose
+    // `verdict` stopped tracking `authorPairedInHeader` would mean the boundary
+    // had moved and the prose above had gone stale with it.
+    //
+    // The PAIRED-entity case is the one that reads as an exception and is not:
+    // its author IS paired, and it still loses because `lastWhere` prefers the
+    // LATER pair.  So the property that actually holds is "the author is the
+    // last paired anchor in the header", which is what this asserts.
+    for (const testCase of PREMISE_BOUNDARY) {
+      const authorWon = testCase.selects.url.includes("/in/real-author");
+      expect({ label: testCase.label, authorWon }).toEqual({
+        label: testCase.label,
+        authorWon: testCase.verdict === "safe",
+      });
+    }
+
+    // Stated as a count so a case silently dropped from the corpus shows up
+    // here rather than as a quietly smaller run.
+    expect(PREMISE_BOUNDARY.filter((c) => c.verdict === "premise-dependent")).toHaveLength(3);
+    expect(PREMISE_BOUNDARY.filter((c) => c.verdict === "safe")).toHaveLength(3);
+  });
 });
 
 // ---------------------------------------------------------------------------
