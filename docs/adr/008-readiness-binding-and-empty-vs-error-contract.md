@@ -508,8 +508,8 @@ not a measurement, and chasing it is out of this decision's scope.
   the modal has a container tier, it is registered with a `legacy` and an `sdui` adapter, and it
   now carries both tiers. What that amendment leaves open is narrower and stated there: a live
   probe of a zero-reaction post, and a measured SDUI modal wrapper.
-- **ADR-005's inline hierarchy tree** does not list the three subclasses added here. Reconcile
-  it when ADR-005 is next amended; § 5 above is the authoritative record until then.
+- ~~**ADR-005's inline hierarchy tree**~~ — **done** (#849, ADR-005 § Amendments). The tree now
+  lists all three subclasses added here, alongside the carried fields § 5 names.
 - **Probe the profile surface for the same flip**: currently an inference, not a measurement
   (§ Disposition of ADR-007).
 
