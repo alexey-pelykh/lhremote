@@ -71,8 +71,14 @@ INDEX_FILENAME = "MEMORY.md"
 MEMORY_DIR = Path(".claude") / "memory"
 
 
-def parse_frontmatter(text: str) -> dict[str, str] | None:
-    """Return the leading `---` fenced block as a dict, or None if absent.
+def parse_frontmatter(text: str) -> tuple[dict[str, str] | None, str]:
+    """Parse the leading `---` fenced block.
+
+    Returns `(fields, "")` on success, or `(None, reason)` where `reason` says
+    which way it failed. The two failures are reported separately because they
+    have different fixes -- one file is missing a frontmatter block, the other
+    is missing only its closing fence -- and collapsing them sends whoever
+    reads the error looking for a block that is already there.
 
     Deliberately not a YAML parser: the frontmatter this reads is flat
     `key: value` scalars, and a stdlib-only checker is worth more here than
@@ -81,25 +87,27 @@ def parse_frontmatter(text: str) -> dict[str, str] | None:
     """
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
-        return None
+        return None, "no frontmatter block"
     fields: dict[str, str] = {}
     for line in lines[1:]:
         if line.strip() == "---":
-            return fields
+            return fields, ""
         key, sep, value = line.partition(":")
         if sep and not key.startswith((" ", "\t")):
             fields[key.strip()] = value.strip()
-    # Unterminated fence: the file opened frontmatter and never closed it.
-    return None
+    return None, "frontmatter fence opened but never closed"
 
 
-def classify(fields: dict[str, str] | None, today: date) -> tuple[str, str]:
+def classify(
+    parsed: tuple[dict[str, str] | None, str], today: date
+) -> tuple[str, str]:
     """Grade one entry's frontmatter, returning (severity, human detail).
 
     Severity is one of `invalid`, `overdue`, `warning`, `current`.
     """
+    fields, parse_error = parsed
     if fields is None:
-        return "invalid", "no frontmatter block"
+        return "invalid", parse_error
 
     missing = [f for f in REQUIRED_FIELDS if not fields.get(f)]
     if missing:
