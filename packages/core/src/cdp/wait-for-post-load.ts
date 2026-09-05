@@ -580,6 +580,64 @@ export async function capturePostLoadFailure(
 }
 
 /**
+ * Write an extraction-failure diagnostic bundle for the post-detail page the
+ * client is sitting on, then return so the caller can re-throw (#835, #890).
+ *
+ * Every call site raises a **deadline-free** failure: {@link waitForPostLoad}
+ * went green, and only then did the page turn out to be unreadable.  A capture
+ * bound to a deadline could never see any of them, which is what left ADR-007's
+ * "inspect these artifacts before changing post-detail selectors" directive
+ * undischargeable for exactly this defect class.
+ *
+ * Shared rather than restated per operation (#890).  `getPost` and
+ * `getPostStats` fail at the *same two outcomes* of the *same generated
+ * script* on the *same surface*, so a per-operation copy would be identical
+ * line for line — and `dom-variant.ts` is explicit throughout that
+ * hand-maintained copies of a rule drift apart.  Its siblings in `operations/`
+ * stay local because theirs are not copies: `captureEngagerExtractionFailure`
+ * and `captureSearchResultsExtractionFailure` bind different surfaces, hence
+ * different adapter lists and different capture functions.  This one is the
+ * only case where two callers would have written the same body.
+ *
+ * The detect probe is skipped when capture is off.  It is a diagnostic-only
+ * read whose sole consumer is the bundle, so running it on a default-off CLI
+ * or MCP run would spend a `Runtime.evaluate` in the page for nobody — and
+ * {@link capturePostLoadFailure}'s own gate fires too late to prevent that,
+ * because the probe would already have been evaluated as its argument.  Asking
+ * {@link diagnosticCaptureEnabled} rather than re-spelling the comparison
+ * keeps one definition of the gate; the capture still re-checks it, so this
+ * is a cost optimisation and never the boundary itself.
+ *
+ * Never throws: {@link probeVariantDetection} degrades to `null` and
+ * {@link capturePostLoadFailure} swallows its own failures, so the caller's
+ * error always propagates unchanged.
+ *
+ * @param client - Connected CDP client still sitting on the failed page.
+ *
+ * @internal Exported for the operation-layer extraction-failure sites; not
+ *   part of the public API.
+ */
+export async function capturePostDetailExtractionFailure(
+  client: CDPClient,
+): Promise<void> {
+  if (!diagnosticCaptureEnabled()) return;
+  // Per-registered-adapter detect counts, read alongside `matched`: together
+  // they separate "LinkedIn served a dialect nobody registered" (nothing
+  // matched) from "a hybrid page needing tighter detect anchors" (two or more
+  // matched) from "our adapter matched, so this field's selectors went stale"
+  // (exactly one).  Nothing else in the bundle can make those distinctions —
+  // every other probe is a fixed selector.
+  const detection = await probeVariantDetection(
+    client,
+    adaptersFor(POST_DETAIL_SURFACE),
+  );
+  await capturePostLoadFailure(client, {
+    trigger: "extraction-failure",
+    detection,
+  });
+}
+
+/**
  * The per-adapter anchor probe, generated once from the surface's registry.
  *
  * At module load rather than per capture: the adapters cannot change between
