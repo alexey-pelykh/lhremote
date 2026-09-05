@@ -44,6 +44,8 @@
  * "Degenerate subject gate", broken-instrument corollary).
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SCRAPE_FEED_SCRIPT } from "./get-feed.js";
 
@@ -1235,27 +1237,56 @@ describe("get-feed reports the actor, not a chip rendered before it (#859)", () 
  *
  * ## What the tree DOES ground
  *
- * `linkedin/__fixtures__/legacy/post-with-comments.html` is the one real
- * actor-header capture here.  Two things are readable off it, and they cut in
- * opposite directions:
+ * `linkedin/__fixtures__/legacy/` carries two post-detail captures, and BOTH
+ * render the actor header — so the structural claims below are exhibited twice
+ * rather than once.  {@link ACTOR_HEADER_CAPTURE} asserts every one of them
+ * against the artifacts instead of restating them here.
  *
- *   - The excluded slot is REAL.  Lines 113-117 render a text-bearing anchor
- *     after the author's name anchor closes (line 112) and before the control
- *     menu.  So the structural position exists; the premise's claim is about
- *     what may occupy it, not about whether it exists.
- *   - That anchor's `href` was scrubbed to `https://example.invalid/redacted`
- *     per `__fixtures__/README.md`, so whether it was a profile anchor is
- *     unrecoverable from the artifact.
+ *   - The excluded slot is REAL.  In both files a text-bearing anchor renders
+ *     after the author's name anchor closes and before the control-menu
+ *     button.  So the structural position exists; the premise's claim is about
+ *     what may OCCUPY it, not about whether it exists.
+ *   - The author is genuinely PAIRED inside the header: the avatar anchor and
+ *     the name-block anchor carry BYTE-IDENTICAL hrefs, so they share a
+ *     `linkPath` and signal 1 can fire.
+ *   - That after-actor anchor's `href` is the redaction placeholder
+ *     `https://example.invalid/redacted`.
  *
- * The second point reads as fatal and is not, which is the finding this block
- * exists to record.  On that same capture the avatar anchor (line 64) and the
- * name-block anchor (line 83) carry BYTE-IDENTICAL hrefs, so they share a
- * `linkPath` and the author is genuinely PAIRED inside the header.  Signal 1
- * then selects the last paired anchor, which is the author — and the anchor at
- * line 113 is linked once whatever its href class turns out to be.  For the
- * shape this capture exhibits the scrub is therefore MOOT: `/in/`, `/company/`
- * and neither all give the same answer.  {@link ACTOR_HEADER_CAPTURE} asserts
- * that pairing against the artifact rather than restating it.
+ * The issue that raised this block reads the third point as fatal — "whether it
+ * was a profile anchor is UNRECOVERABLE from the artifact".  That is too
+ * pessimistic, and correcting it is the main thing this block contributes.
+ * The scrub is an ALLOWLIST whose code is committed at
+ * `scripts/lib/harvest-scrub.js`, so what it redacts is a CONTRACT rather than
+ * a convention, and the contract is readable backwards:
+ *
+ *   - `scrubOtherUrls` rewrites a URL to that placeholder only when the URL is
+ *     ABSOLUTE (its regex requires a `https?://` scheme) and matches neither
+ *     `w3.org` nor `linkedin.com/in/`.  So the original was not an absolute
+ *     `/in/` link.
+ *   - A RELATIVE href is never rewritten at all — no scheme, no match.  The
+ *     same capture proves this rather than assuming it: a relative
+ *     `/in/test-person-1/` survives verbatim elsewhere in the file.  So the
+ *     original was not a relative `/in/` link either.
+ *
+ * Those two together settle `/in/` in the negative, which is the whole of what
+ * the scrub contract yields.  What survives is any ABSOLUTE URL that is neither
+ * `w3.org` nor `linkedin.com/in/`, and most of that class — a hashtag link, a
+ * `lnkd.in` shortlink, an article card — `profileLinksIn` does not select at
+ * all, so the anchor is not even a candidate.  Of the classes it DOES select,
+ * exactly one survives: an ABSOLUTE `linkedin.com/company/…` URL.  A relative
+ * `/company/…` is excluded by the same argument as relative `/in/`.
+ *
+ * So the residue is narrower than "unrecoverable" by an order of magnitude, and
+ * it is also MOOT for this shape on independent grounds: the author is paired,
+ * signal 1 fires, and the after-actor anchor is linked once whatever its class.
+ *
+ * Two structural discriminators were tried against that residual class and BOTH
+ * were falsified by the artifact, which is why neither is relied on above.
+ * `target="_blank" rel="noopener noreferrer"` looks like an off-site marker and
+ * is not — the reactor-facepile `/in/` links carry it.  Absence of
+ * `data-test-app-aware-link` looks like the same thing and is not, for the same
+ * two anchors.  {@link ACTOR_HEADER_CAPTURE} pins both, so a future reader who
+ * has the same idea sees it refuted rather than re-deriving it.
  *
  * ## The residue, stated as three shapes rather than as a doubt
  *
