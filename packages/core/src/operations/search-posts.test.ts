@@ -68,7 +68,6 @@ import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
 
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
-import { searchPosts, waitForSearchResults } from "./search-posts.js";
 import type { RawDomPost } from "./get-feed.js";
 import {
   adaptersFor,
@@ -81,6 +80,19 @@ import {
   ExtractionFailedError,
   ExtractionTimeoutError,
 } from "../services/errors.js";
+
+// Dynamic import AFTER the mocks above are registered, matching the convention
+// the sibling capture suites document in prose: `search-posts.ts` reaches
+// `node:fs/promises` at module load, and relying on vi.mock hoisting to cover
+// a module that does so is brittle under ESM transforms
+// (`navigate-to-profile.test.ts`, `search-posts-diagnostics.test.ts`).  The fs
+// double above was adopted from those files; this is the other half of the
+// same convention, and without it only the hoist stands between a unit run
+// under LHREMOTE_CAPTURE_DIAGNOSTICS and real `mkdtemp`/`writeFile` into
+// `os.tmpdir()`.  Nothing else here needs it — `dom-variant.js` is fs-free.
+const { searchPosts, waitForSearchResults } = await import(
+  "./search-posts.js"
+);
 
 const CDP_PORT = 9222;
 
