@@ -27,6 +27,7 @@ CHECKER = Path(__file__).resolve().parent / "check-memory-freshness.py"
 TODAY = "2026-09-05"
 
 failures: list[str] = []
+checks_run = 0
 
 
 def write_entry(
@@ -55,14 +56,21 @@ def write_entry(
 
 
 def run(
-    root: Path, *extra: str, actions: bool = False
+    root: Path, *extra: str, actions: bool = False, today: str | None = TODAY
 ) -> subprocess.CompletedProcess[str]:
+    """Drive the checker.
+
+    `today` pins the clock so fixture ages are deterministic. Pass `None` to
+    let the checker use the real date -- correct for anything graded against
+    the live corpus, whose entries move independently of this file.
+    """
     env = dict(os.environ)
     # Annotations are keyed off this, so tests must control it explicitly rather
     # than inherit whatever the surrounding shell happens to have set.
     env["GITHUB_ACTIONS"] = "true" if actions else "false"
+    clock = ["--today", today] if today is not None else []
     return subprocess.run(
-        [sys.executable, str(CHECKER), "--root", str(root), "--today", TODAY, *extra],
+        [sys.executable, str(CHECKER), "--root", str(root), *clock, *extra],
         capture_output=True,
         text=True,
         env=env,
@@ -70,6 +78,8 @@ def run(
 
 
 def check(label: str, condition: bool, detail: str = "") -> None:
+    global checks_run
+    checks_run += 1
     if condition:
         print(f"  ok   {label}")
     else:
@@ -237,30 +247,68 @@ def test_usage_error_on_bad_today() -> None:
     tmp, root, memory = case("  (with a valid corpus, so only --today is wrong)")
     with tmp:
         write_entry(memory, "fine")
-        r = subprocess.run(
-            [sys.executable, str(CHECKER), "--root", str(root), "--today", "nonsense"],
-            capture_output=True,
-            text=True,
-        )
+        r = run(root, today="nonsense")
         check("exit code is 3", r.returncode == 3, f"got {r.returncode}")
 
 
+def test_warn_only_never_forgives_ungradeable_frontmatter() -> None:
+    print("\n--warn-only forgives drift but never ungradeable frontmatter")
+    tmp, root, memory = case("  (one overdue entry and one unparseable one)")
+    with tmp:
+        write_entry(memory, "just-drifted", last_verified="2026-01-01")
+        write_entry(memory, "ungradeable", frontmatter=False)
+        r = run(root, "--warn-only")
+        check("still exits 1", r.returncode == 1, f"got {r.returncode}")
+        check("names the ungradeable entry", "ungradeable.md" in r.stdout, r.stdout)
+        check("says the flag does not forgive it", "does not forgive" in r.stderr, r.stderr)
+
+    tmp, root, memory = case("  (drift alone is still forgiven)")
+    with tmp:
+        write_entry(memory, "just-drifted", last_verified="2026-01-01")
+        r = run(root, "--warn-only")
+        check("exits 0 on drift alone", r.returncode == 0, f"got {r.returncode}: {r.stderr}")
+
+
+def test_entries_in_subdirectories_are_scanned() -> None:
+    print("\nAn entry filed in a subdirectory is still graded")
+    tmp, root, memory = case("  (one current entry, one overdue a level down)")
+    with tmp:
+        write_entry(memory, "top-level")
+        nested = memory / "archive"
+        nested.mkdir()
+        write_entry(nested, "buried-and-overdue", last_verified="2026-01-01")
+        r = run(root)
+        check("counts both entries", "Scanned 2 " in r.stdout, r.stdout)
+        check("exit code is 1", r.returncode == 1, f"got {r.returncode}")
+        check(
+            "names the buried entry",
+            "buried-and-overdue.md" in r.stdout,
+            r.stdout,
+        )
+
+
 def test_real_corpus_is_scanned() -> None:
-    """Guards against the checker silently finding nothing in this repository."""
+    """Guards against the checker silently finding nothing in this repository.
+
+    Deliberately runs against the REAL today rather than the fixture clock.
+    `TODAY` is frozen so the synthetic fixtures below have deterministic ages;
+    pinning the live corpus to it as well would mean that re-verifying any
+    entry -- setting `last-verified` to the date a walk actually happened,
+    which is exactly what CONTRIBUTING.md instructs and what issue #912
+    requires before the CI flag can be dropped -- reports that entry as
+    having a `last-verified` in the future, and reds this suite for doing
+    the one thing this checker exists to encourage.
+    """
     print("\nThe repository's own corpus is non-empty and parseable")
     repo_root = CHECKER.resolve().parent.parent
-    r = subprocess.run(
-        [sys.executable, str(CHECKER), "--root", str(repo_root), "--today", TODAY, "--warn-only"],
-        capture_output=True,
-        text=True,
-    )
+    r = run(repo_root, "--warn-only", today=None)
     check("scans a non-empty corpus", "Scanned 0 " not in r.stdout, r.stdout)
     check("no INVALID entries in-tree", "INVALID" not in r.stdout, r.stdout)
     check("exits 0 under --warn-only", r.returncode == 0, f"got {r.returncode}: {r.stderr}")
 
 
 def main() -> int:
-    for test in (
+    tests = (
         test_overdue_fails_and_names_the_file,
         test_all_within_budget_passes,
         test_reports_scanned_count,
@@ -272,11 +320,23 @@ def main() -> int:
         test_invalid_frontmatter_fails,
         test_annotation_level_tracks_fatality,
         test_usage_error_on_bad_today,
+        test_warn_only_never_forgives_ungradeable_frontmatter,
+        test_entries_in_subdirectories_are_scanned,
         test_real_corpus_is_scanned,
-    ):
+    )
+    for test in tests:
         test()
 
+    # Hold this suite to the discipline it enforces on the corpus: report the
+    # cardinality of what ran, and treat zero as a failure rather than a clean
+    # bill. Without it, a test dropped from the tuple above -- or a `check()`
+    # that stops being reached -- leaves no trace behind `All checks passed.`
     print()
+    print(f"Ran {len(tests)} test(s), {checks_run} check(s).")
+    if not tests or not checks_run:
+        print("error: nothing was executed -- that is not a pass.", file=sys.stderr)
+        return 2
+
     if failures:
         print(f"{len(failures)} check(s) failed:")
         for f in failures:

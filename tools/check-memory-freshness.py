@@ -31,13 +31,18 @@ which the drift table in issue #843 reproduces exactly -- and requires
 Exit codes:
 
     0  every entry within budget (warnings are reported, not fatal)
-    1  at least one entry overdue or carrying invalid frontmatter
+    1  at least one entry overdue, or carrying frontmatter that cannot be graded
     2  nothing scanned -- a pass over zero files is not a clean bill
     3  usage error
 
-`--warn-only` downgrades 1 to 0 so drift is reported without breaking the build.
-It deliberately does NOT downgrade 2: an empty or missing corpus means the check
-never looked at anything, which is a broken check rather than tolerable drift.
+`--warn-only` downgrades 1 to 0 for *overdue* entries only, so measured drift is
+reported without breaking the build. It deliberately does not downgrade:
+
+  * 2 -- an empty or missing corpus means the check never looked at anything,
+    which is a broken check rather than tolerable drift; and
+  * an entry whose frontmatter cannot be graded at all, which is the same
+    failure one file down. Such an entry has no age, so it can never become
+    overdue and would never resurface once the flag is dropped.
 """
 
 from __future__ import annotations
@@ -160,8 +165,9 @@ def main(argv: list[str] | None = None) -> int:
         "--warn-only",
         action="store_true",
         help=(
-            "report overdue and invalid entries without failing; does not "
-            "suppress the zero-entries-scanned failure"
+            "report overdue entries without failing; does not suppress the "
+            "zero-entries-scanned failure, nor entries whose frontmatter "
+            "cannot be graded"
         ),
     )
     args = parser.parse_args(argv)
@@ -175,9 +181,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: --today {args.today!r} is not an ISO date", file=sys.stderr)
             return 3
 
+    # `rglob`, not `glob`: an entry filed in a subdirectory is still an entry.
+    # Under a non-recursive scan it is silently ungraded while `Scanned N`
+    # still prints a plausible number, so a partial scan reads exactly like a
+    # complete one -- the same false green the zero-entries guard exists to
+    # prevent, one notch in.
     memory_dir = args.root / MEMORY_DIR
     entries = sorted(
-        p for p in memory_dir.glob("*.md") if p.name != INDEX_FILENAME
+        p for p in memory_dir.rglob("*.md") if p.name != INDEX_FILENAME
     ) if memory_dir.is_dir() else []
 
     overdue: list[str] = []
@@ -195,7 +206,9 @@ def main(argv: list[str] | None = None) -> int:
             annotate(not args.warn_only, rel, f"memory entry overdue: {detail}")
         elif severity == "invalid":
             invalid.append(line)
-            annotate(not args.warn_only, rel, f"invalid memory frontmatter: {detail}")
+            # Always fatal: `--warn-only` does not forgive ungradeable
+            # frontmatter, so this annotation is never a soft one.
+            annotate(True, rel, f"invalid memory frontmatter: {detail}")
         elif severity == "warning":
             warnings.append(line)
             annotate(False, rel, f"memory entry nearing its budget: {detail}")
@@ -221,15 +234,31 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    failures = len(overdue) + len(invalid)
-    if failures:
+    # `--warn-only` forgives *drift* and nothing else. An entry whose
+    # frontmatter cannot be graded at all is not tolerable drift -- it is the
+    # per-file form of "the check never looked at anything", and it can never
+    # age into `overdue`, so forgiving it here would hide it from the strict
+    # mode too. Malformed frontmatter is also fixable by anyone on the spot,
+    # which is exactly what the drift it sits beside is not.
+    if invalid:
+        print(
+            f"error: {len(invalid)} entrie(s) have frontmatter that cannot be "
+            "graded; --warn-only does not forgive this.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if overdue:
         if args.warn_only:
             print(
-                f"{failures} entrie(s) need re-verification; not failing the "
-                "build (--warn-only)."
+                f"{len(overdue)} entrie(s) need re-verification; not failing "
+                "the build (--warn-only)."
             )
             return 0
-        print(f"error: {failures} entrie(s) need re-verification.", file=sys.stderr)
+        print(
+            f"error: {len(overdue)} entrie(s) need re-verification.",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"All {len(entries)} memory entrie(s) within budget.")
