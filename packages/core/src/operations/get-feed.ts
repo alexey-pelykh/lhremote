@@ -573,8 +573,16 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // matches "renee".  A name in a non-Latin script folds to the empty string,
   // which scores zero and routes to the fallback — the honest answer, since
   // LinkedIn transliterates such slugs and the two are not comparable here.
+  //
+  // The mark strip matches \\p{M}, not the U+0300-U+036F block alone, so it
+  // covers every combining mark NFD can emit rather than the basic subset.
+  // No input's result depends on that today — the trailing ASCII-alphanumeric
+  // filter drops combining marks whatever their block, and the two forms were
+  // measured byte-identical — so the strip is the step the fold is documented
+  // on, and the one that stays correct if that filter is ever widened past
+  // ASCII to admit a non-Latin slug.
   function squash(s) {
-    return s.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+    return s.normalize('NFD').replace(/\\p{M}/gu, '')
       .toLowerCase().replace(/[^a-z0-9]/g, '');
   }
 
