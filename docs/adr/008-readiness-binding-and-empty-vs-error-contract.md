@@ -1337,7 +1337,9 @@ only that a cause is attached and what it says — that it then reaches an opera
   `packages/core/src/operations/get-post.ts`,
   `packages/core/src/operations/get-post-engagers.ts`,
   `packages/core/src/operations/get-post-stats.ts` (engagement counts read through the
-  post-detail adapter's own counts root, #857; its readiness seam stays open as #852),
+  post-detail adapter's own counts root, #857; both refusal branches write a diagnostic
+  bundle through the shared post-detail helper, #890 — see ADR-007 § 2026-09-05 Amendment;
+  its readiness seam stays open as #852),
   `packages/core/src/operations/search-posts.ts` (§ 2026-09-02 Amendment, #841;
   engagement counts read anchored per § 2026-09-03 Amendment, #869)
 - ADRs: [ADR-005](005-error-hierarchy-design.md) (error hierarchy this extends),
@@ -1355,8 +1357,8 @@ only that a cause is attached and what it says — that it then reaches an opera
   § 2026-09-03 Amendment left, landed as ADR-007 § 2026-09-04 Amendment (#870)), #857 (`get-post-stats`
   engagement counts read anchored, third and last instance of the count-concatenation class on a
   post-detail page), #852 (`get-post-stats` readiness seam — OPEN, deliberately not decided by
-  #857), #890 (`get-post-stats` writes no diagnostic bundle at its extraction-failure branches —
-  the boundary #857 declared rather than crossed), #867 (`errorMessage` renders the cause chain, so
+  #857), #890 (`get-post-stats`'s extraction-failure branches now capture — CLOSED; the boundary
+  #857 declared rather than crossed, recorded in full as ADR-007 § 2026-09-05 Amendment), #867 (`errorMessage` renders the cause chain, so
   the gates' probe counts reach the CLI and MCP text surfaces, § 2026-09-04 Amendment), #883 (the
   attachment of those causes is pinned at all six sites, § 2026-09-04 Amendment), #853 (the
   post-detail diagnostic capture's per-dialect anchor readings are generated from this registry
