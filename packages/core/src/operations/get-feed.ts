@@ -449,7 +449,8 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   //
   // Neither vocabulary is invented here.  The sibling post-detail extractors
   // \`linkedin/dom-variant.ts\` and \`operations/get-post.ts\` each carry
-  // \`(?:1st|2nd|3rd|You)\` for the connection degree and \`[1-9]\\d*mo\` for the
+  // \`(?:1st|2nd|3rd|Out of network|You)\` for the connection degree and
+  // \`[1-9]\\d*mo\` for the
   // relative time, and \`parseTimestamp\` further down THIS file accepts \`Nmo\`
   // ("LinkedIn emits \`Nmo\` for posts ~30-330 days old").  Before this change the
   // feed extractor was the only one of the four that could not classify a token
@@ -463,7 +464,7 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // Without it, every post the account authored emitted "• You" as the
   // HEADLINE, because the headline is chosen by exclusion and nothing else
   // excluded it.
-  const DEGREE_ONLY = /^[\\s\\u2022\\u00B7]*(?:\\d+(?:st|nd|rd|th)\\+?|You)[\\s\\u2022\\u00B7]*$/;
+  const DEGREE_ONLY = /^[\\s\\u2022\\u00B7]*(?:\\d+(?:st|nd|rd|th)\\+?|Out of network|You)[\\s\\u2022\\u00B7]*$/;
 
   // The rest of the actor header's chrome, matched the same way: anchored at
   // both ends, so a genuine headline that merely CONTAINS one of these words
@@ -478,7 +479,12 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   //
   // The degree half widens toward the vocabulary this repository already
   // carries for the same position: \`linkedin/dom-variant.ts\` and
-  // \`operations/get-post.ts\` both spell it \`(?:1st|2nd|3rd|You)\`.  The
+  // \`operations/get-post.ts\` both spell it
+  // \`(?:1st|2nd|3rd|Out of network|You)\` -- all four of their sites carry
+  // \`Out of network\`, which this file omitted while its own comment quoted the
+  // vocabulary WITHOUT it, so the claim of parity read as met.  A field of
+  // \`"* Out of network"\` matched neither classifier and, because the headline
+  // rule chooses by exclusion, was emitted AS the headline.  The
   // unabbreviated form ("1st degree connection") is the accessible rendering of
   // that same field, which neither of those two extractors meets and this one
   // does.
@@ -498,7 +504,7 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // "Ada Lovelace, PhD" being shortened to "Ada Lovelace" when the slug is
   // /in/ada-lovelace/: ", PhD" is words, not a badge, so there is no candidate
   // that ends there.
-  const TRAILING_BADGE = /[\\s\\u2022\\u00B7]*(?:\\d+(?:st|nd|rd|th)\\+?|You|\\d+mo|\\d+yr|\\d+y|\\d+[smhdw])[\\s\\u2022\\u00B7]*$/;
+  const TRAILING_BADGE = /[\\s\\u2022\\u00B7]*(?:\\d+(?:st|nd|rd|th)\\+?|Out of network|You|\\d+mo|\\d+yr|\\d+y|\\d+[smhdw])[\\s\\u2022\\u00B7]*$/;
   const TRAILING_DECORATION = /[\\s\\u2022\\u00B7]+$/;
 
   // How many LEADING fields a name may span.  The shape this bounds is a name
@@ -706,6 +712,15 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // a short name from swallowing an unrelated headline: "Ada" occurs inside
   // "Adaptive Systems Lead", and without the guard that headline would be
   // discarded as the name's own field and the post would report none at all.
+  //
+  // That boundary is DEFENSIVE at the single call site this currently has.
+  // Replacing the whole function with a bare \`indexOf\` was measured against the
+  // suite and changed no verdict, because \`nameFieldSpan\` reaches it only on
+  // the decline path, where \`name\` came from \`anchorName\` — the FIRST name-like
+  // run — so the loop matches at that same field whether or not the ends are
+  // bounded, and no earlier field exists for a substring to hit first.  Kept,
+  // because the guard costs nothing and a second caller would reach it; stated,
+  // so nobody reads the suite's green as evidence the boundary is exercised.
   function phraseContains(haystack, needle) {
     if (needle.length === 0) return false;
     let from = 0;
@@ -779,10 +794,27 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // and the accessible shape LinkedIn actually serves puts that copy beside an
   // \`aria-hidden\` sibling, which \`hiddenWrappers\` already resolves.
   function nameFieldSpan(scored, name, fields) {
-    if (scored !== null) return { from: 0, to: scored.fields };
-    if (name === null) return { from: 0, to: 0 };
     const regionEnd = nameRegion(fields).length;
     const badgeEnds = regionEnd < fields.length && DEGREE_ONLY.test(fields[regionEnd]);
+    // The accept path needs the same widening, because ACCEPTING is not the
+    // same as consuming the whole name.  A candidate that explains the slug on
+    // a PREFIX of a split name is accepted at that prefix and stops there:
+    // "Ada Lovelace" under the short slug /in/ada/ scores 3 against a bar of
+    // \`min(4, 3)\`, so the read accepts "Ada" and consumed ONE field, leaving
+    // "Lovelace" to win the headline race.  A Latin given name beside a
+    // non-Latin surname does the same thing for a different reason — the
+    // surname folds away to nothing, so extending over it neither gains nor
+    // costs score and the shorter candidate holds the tie.
+    //
+    // Both are the accept-path form of the decline-path defect above, and they
+    // are NOT reached by its tests: a wholly non-Latin name folds to empty,
+    // scores zero and declines, so only a MIXED-script or short-slug name takes
+    // this branch.  Keying both branches on the same badge is what makes the
+    // rule one rule rather than two that can drift apart.
+    if (scored !== null) {
+      return { from: 0, to: badgeEnds ? Math.max(scored.fields, regionEnd) : scored.fields };
+    }
+    if (name === null) return { from: 0, to: 0 };
     for (let i = 0; i < fields.length; i++) {
       if (phraseContains(fields[i], name)) {
         return { from: i, to: badgeEnds ? Math.max(i + 1, regionEnd) : i + 1 };

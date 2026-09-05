@@ -645,6 +645,23 @@ describe("getFeed", () => {
     expect(disconnect).toHaveBeenCalled();
   });
 
+  it("carries a year-old post's timestamp through the whole seam", async () => {
+    // `parseTimestamp` and the extractor are asserted separately, and the JOIN
+    // between them -- `mapRawPosts` -- is what actually decides what a caller
+    // receives. Both halves can stay green while the seam drops the unit, so
+    // the year unit is driven end to end here as well. `mapRawPosts` is shared
+    // with `searchPosts` and `getProfileActivity`, so this covers their reads
+    // of the same field too.
+    const now = Date.now();
+    setupMocks([rawPost({ timestamp: "1y" })]);
+
+    const result = await getFeed({ cdpPort: CDP_PORT });
+
+    const ts = result.posts[0]?.timestamp;
+    expect(ts).toBeTypeOf("number");
+    expect(Math.abs((now - 31_536_000_000) - (ts as number))).toBeLessThan(5000);
+  });
+
   it("parses relative timestamp into epoch milliseconds", async () => {
     const now = Date.now();
     setupMocks([rawPost({ timestamp: "2h" })]);
@@ -755,6 +772,33 @@ describe("parseTimestamp", () => {
     const result = parseTimestamp("5m");
     expect(result).toBeTypeOf("number");
     expect(Math.abs((now - 5 * 60_000) - (result as number))).toBeLessThan(1000);
+  });
+
+  it("parses years", () => {
+    // The feed extractor's `FIELD_TIMESTAMP` now CLASSIFIES `1y` as a
+    // timestamp, so this parser has to accept what that classifier can emit.
+    // A token classified upstream and dropped here does not surface as an
+    // error -- it resets `publishedAt` to null, which is the same silent loss
+    // `mo` was added to fix.
+    const now = Date.now();
+    const result = parseTimestamp("1y");
+    expect(result).toBeTypeOf("number");
+    expect(Math.abs((now - 31_536_000_000) - (result as number))).toBeLessThan(1000);
+  });
+
+  it("parses multi-digit years spelled 'yr'", () => {
+    // Both spellings LinkedIn uses, because the extractor classifies both.
+    //
+    // What this does NOT pin, stated so nobody reads it as more than it is:
+    // the ORDER of `yr` and `y` in the alternation. Measured by swapping them
+    // — all 42 tests still pass, because the regex is anchored and `$` forces
+    // the engine to backtrack out of a `y` that leaves `r` unconsumed. What
+    // these three tests do catch is the year units being dropped or lost
+    // altogether, which fails all three.
+    const now = Date.now();
+    const result = parseTimestamp("11yr");
+    expect(result).toBeTypeOf("number");
+    expect(Math.abs((now - 11 * 31_536_000_000) - (result as number))).toBeLessThan(1000);
   });
 
   it("parses ISO datetime", () => {
