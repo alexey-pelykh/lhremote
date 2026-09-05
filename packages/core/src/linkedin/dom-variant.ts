@@ -2319,10 +2319,8 @@ export function buildSearchResultsCardFunnelSource(
  * may use one string in two roles — `legacy`'s `detect` IS its `scopes[0]`
  * — so that selector is read once per probe either way, and the two counts
  * can differ because the reads happen at different moments on a page that
- * is still hydrating.
- * changing — and an operator shown two disagreeing accounts of the same page
- * has to guess which one is real.  The three anchors that ARE here are exactly
- * the ones nothing else in the bundle reports.
+ * is still hydrating.  The three anchors that ARE here are exactly the ones
+ * nothing else in the bundle reports.
  *
  * **Counts rather than booleans**, on the same ground the detect probes are:
  * zero-versus-one answers the readiness question, but one-versus-eighty-five
