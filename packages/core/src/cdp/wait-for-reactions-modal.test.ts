@@ -84,6 +84,62 @@ const DIAGNOSTIC_PROBE = {
   resolvedModalAncestorTag: null,
 };
 
+/** A classification probe's result, as the shifting double below answers it. */
+interface DetectReading {
+  matched: readonly string[];
+  probes: Readonly<Record<string, number>>;
+}
+
+/**
+ * The reading a SECOND detect read would return — a modal that re-rendered
+ * under the gate.  Production must never be holding this.
+ *
+ * This gate's production comment states that one read feeds both the error's
+ * `cause` and the diagnostic bundle, "so the two can never disagree about what
+ * was on the page".  {@link evaluateBy} above cannot grade that claim: it
+ * answers every detect read with the same object, so cause-agrees-with-bundle
+ * holds for one read and equally for five, and the invariant is unobservable
+ * through it (#896).  A modal is the surface where the re-render is least
+ * hypothetical — it is mounted and torn down by the page itself.
+ *
+ * Deliberately incompatible with every `first` reading pinned below, on all
+ * three axes a second read could corrupt: a different `matched` (so the BRANCH
+ * would move), a different arity of it (so the error's own message would
+ * move), and different counts (so the `cause` and the bundle would move
+ * independently of each other).
+ */
+const RE_RENDERED: DetectReading = {
+  matched: ["legacy"],
+  probes: { sdui: 99, legacy: 99 },
+};
+
+/**
+ * {@link evaluateBy}'s non-idempotent sibling: answers the FIRST detect read
+ * with `first` and every later one with {@link RE_RENDERED}.
+ *
+ * Same script-shape dispatch and the same reason for it — the deadline path
+ * evaluates three different scripts in a row and a positional mock would
+ * silently mis-assign them.
+ */
+function shiftingDetect(first: DetectReading) {
+  let reads = 0;
+  return vi.fn(async (script: string) => {
+    if (script.includes("dialogCount")) return DIAGNOSTIC_PROBE;
+    if (script.includes("probes[a.variant]")) {
+      reads += 1;
+      return reads === 1 ? first : RE_RENDERED;
+    }
+    return false;
+  });
+}
+
+/** How many times a {@link shiftingDetect} double was asked to classify. */
+function detectReads(evaluate: ReturnType<typeof shiftingDetect>): number {
+  return evaluate.mock.calls.filter(([script]) =>
+    script.includes("probes[a.variant]"),
+  ).length;
+}
+
 describe("waitForReactionsModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -302,7 +358,7 @@ describe("waitForReactionsModal", () => {
     }
   });
 
-  it("records the detect probe it classified from in the bundle it writes", async () => {
+  it("one read feeds both the unsupported error's cause and the bundle (#896)", async () => {
     const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
     const { writeFile } = await import("node:fs/promises");
@@ -311,27 +367,108 @@ describe("waitForReactionsModal", () => {
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
 
+    // The double SHIFTS after the first read (see {@link RE_RENDERED}), so
+    // what is graded is that the cause and the bundle came from the SAME
+    // reading — not merely that two reads happened to agree.
+    const first: DetectReading = { matched: [], probes: { sdui: 0, legacy: 0 } };
+    const evaluate = shiftingDetect(first);
     const client = {
-      evaluate: evaluateBy({
-        detection: { matched: [], probes: { sdui: 0, legacy: 0 } },
-      }),
+      evaluate,
       send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
     } as unknown as CDPClient;
 
     try {
-      await expect(waitForReactionsModal(client, 1)).rejects.toThrow();
+      const error = await waitForReactionsModal(client, 1).then(
+        () => null,
+        (thrown: unknown) => thrown,
+      );
+      expect(error).toBeInstanceOf(DOMVariantUnsupportedError);
+
+      // The `cause` half of the pair, derived from the FIRST reading.  `as
+      // Error` rather than the concrete subclass for the reason the cause
+      // tests above state: this file reaches its error classes through
+      // `await import`, so they are values here and not types.
+      expect(((error as Error).cause as Error).message).toBe(
+        `detect probes — ${formatVariantProbes(first)}`,
+      );
 
       const jsonCall = vi
         .mocked(writeFile)
         .mock.calls.find((call) => String(call[0]).endsWith(".json"));
-      // One read feeds both the error's cause and the bundle, so the two can
-      // never disagree about what was on the page.
-      expect(
-        JSON.parse(String(jsonCall?.[1])) as Record<string, unknown>,
-      ).toMatchObject({
-        trigger: "readiness-timeout",
-        variantDetection: { matched: [], probes: { sdui: 0, legacy: 0 } },
-      });
+      expect(jsonCall).toBeDefined();
+      const bundle = JSON.parse(String(jsonCall?.[1])) as {
+        trigger?: unknown;
+        variantDetection?: unknown;
+      };
+      expect(bundle.trigger).toBe("readiness-timeout");
+      // The bundle half.  `toEqual` rather than `toMatchObject`: a partial
+      // match would accept a `variantDetection` that had GAINED a probe key,
+      // which is exactly what a re-read of a shifted page produces.
+      expect(bundle.variantDetection).toEqual(first);
+
+      // And the count, which is what makes the two agreements above mean "one
+      // read" rather than "two reads that happened to agree".
+      expect(detectReads(evaluate)).toBe(1);
+    } finally {
+      warnSpy.mockRestore();
+      if (originalEnv === undefined) {
+        delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+      } else {
+        process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalEnv;
+      }
+    }
+  });
+
+  it("one read feeds both the ambiguous error's cause and the bundle (#896)", async () => {
+    // The second `{ cause: … }` site on this gate, and the branch the sibling
+    // above cannot reach.  A separate case rather than a loop over both: the
+    // ambiguous branch ALSO builds the error's own message out of
+    // `detection.matched`, so a second read corrupts three things here and two
+    // there, and a shared body would have to weaken to their intersection.
+    const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const { writeFile } = await import("node:fs/promises");
+    vi.mocked(writeFile).mockClear();
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    const first: DetectReading = {
+      matched: ["sdui", "legacy"],
+      probes: { sdui: 3, legacy: 7 },
+    };
+    const evaluate = shiftingDetect(first);
+    const client = {
+      evaluate,
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+
+    try {
+      const error = await waitForReactionsModal(client, 1).then(
+        () => null,
+        (thrown: unknown) => thrown,
+      );
+      expect(error).toBeInstanceOf(DOMVariantAmbiguousError);
+      // The message names the dialects the FIRST reading matched.  Asserted
+      // because it is the third consumer of that one read, and the one an
+      // operator sees without opening anything.
+      expect((error as Error).message).toContain("sdui, legacy");
+      expect(((error as Error).cause as Error).message).toBe(
+        `detect probes — ${formatVariantProbes(first)}`,
+      );
+
+      const jsonCall = vi
+        .mocked(writeFile)
+        .mock.calls.find((call) => String(call[0]).endsWith(".json"));
+      expect(jsonCall).toBeDefined();
+      const bundle = JSON.parse(String(jsonCall?.[1])) as {
+        trigger?: unknown;
+        variantDetection?: unknown;
+      };
+      expect(bundle.trigger).toBe("readiness-timeout");
+      expect(bundle.variantDetection).toEqual(first);
+
+      expect(detectReads(evaluate)).toBe(1);
     } finally {
       warnSpy.mockRestore();
       if (originalEnv === undefined) {

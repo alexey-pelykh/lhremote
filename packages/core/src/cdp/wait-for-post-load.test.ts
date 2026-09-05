@@ -92,6 +92,64 @@ const EMPTY_ANCHOR_READINGS = {
   legacy: { ready: 0, scopes: {}, counts: {} },
 };
 
+/** A classification probe's result, as the detect doubles below answer it. */
+interface DetectReading {
+  matched: readonly string[];
+  probes: Readonly<Record<string, number>>;
+}
+
+/**
+ * The reading a SECOND detect read would return — a page that re-rendered
+ * under the gate.  Production must never be holding this.
+ *
+ * All three readiness gates carry the same claim in prose: one read feeds both
+ * the error's `cause` and the diagnostic bundle, "so the two can never
+ * disagree about what was on the page".  An IDEMPOTENT detect double cannot
+ * grade that claim — it answers every read with the same object, so
+ * cause-agrees-with-bundle holds for one read and equally for five, and the
+ * invariant is unobservable through it (#896).
+ *
+ * Deliberately incompatible with every `first` reading pinned below, on all
+ * three axes a second read could corrupt: a different `matched` (so the
+ * BRANCH would move), a different arity of it (so the error's own message
+ * would move), and different counts (so the `cause` and the bundle would move
+ * independently of each other).  A refactor that built the cause lazily —
+ * `cause: causeFrom(await probeVariantDetection(client, adapters))` — is
+ * therefore caught by whichever assertion it corrupts first, and named by it,
+ * rather than only by a call count.
+ */
+const RE_RENDERED: DetectReading = {
+  matched: ["legacy"],
+  probes: { sdui: 99, legacy: 99 },
+};
+
+/**
+ * An `evaluate` double that answers the FIRST detect read with `first` and
+ * every later one with {@link RE_RENDERED}.
+ *
+ * The diagnostic probe (keyed on `hasMainFeed`) and the readiness predicate
+ * are answered too, since the failure path evaluates all three: keyed on
+ * source the generators actually emit, in an order that cannot alias.
+ */
+function shiftingDetect(first: DetectReading) {
+  let reads = 0;
+  return vi.fn(async (script: string) => {
+    if (script.includes("probes[a.variant]")) {
+      reads += 1;
+      return reads === 1 ? first : RE_RENDERED;
+    }
+    if (script.includes("hasMainFeed")) return { href: "", title: "" };
+    return false;
+  });
+}
+
+/** How many times a {@link shiftingDetect} double was asked to classify. */
+function detectReads(evaluate: ReturnType<typeof shiftingDetect>): number {
+  return evaluate.mock.calls.filter(([script]) =>
+    script.includes("probes[a.variant]"),
+  ).length;
+}
+
 describe("waitForPostLoad", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -254,13 +312,16 @@ describe("waitForPostLoad", () => {
     // the formatter is separately pinned against literals in
     // `dom-variant.test.ts`, and the subject is only whether production
     // attaches a cause carrying it.
-    // Keyed on `probes[a.variant]` — source `buildDetectionSource` actually
-    // emits — rather than the bare `probes` the two class-only tests above
-    // use.  Both discriminate correctly today, since that generator is the
-    // only source emitting either; the tighter one cannot start aliasing onto
-    // a readiness predicate or an extraction script that later happens to
-    // carry the word, which is the rule `search-posts.test.ts` states for its
-    // own markers.  The looser neighbours are inherited, not endorsed.
+    // Keyed on `probes[a.variant]`, the source `buildDetectionSource` actually
+    // emits, and so is every other detect double in this file since #853 —
+    // the bare `probes` some of them once used is gone, which is what #896's
+    // marker-precision item asked for and the reason it is not restated here
+    // per site.  The bare form discriminates correctly TODAY, since that
+    // generator is the only source emitting either; the tighter one cannot
+    // start aliasing onto a readiness predicate or an extraction script that
+    // later happens to carry the word.  That is the rule
+    // `search-posts.test.ts` states for its own markers: keyed on source the
+    // generators actually emit, and checked in an order that cannot alias.
     const detection = { matched: [], probes: { sdui: 0, legacy: 0 } };
     const evaluate = vi.fn(async (script: string) =>
       script.includes("probes[a.variant]") ? detection : false,
@@ -462,7 +523,7 @@ describe("waitForPostLoad", () => {
     }
   });
 
-  it("on timeout, the bundle carries the same detection the error was classified from (#835)", async () => {
+  it("on timeout, one read feeds both the unsupported error's cause and the bundle (#835, #896)", async () => {
     const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
     const { writeFile } = await import("node:fs/promises");
@@ -473,43 +534,109 @@ describe("waitForPostLoad", () => {
       .mockImplementation(() => undefined);
 
     // Zero adapters claim the page: the classification probe decides
-    // DOMVariantUnsupportedError, and the SAME reading must reach the bundle.
-    const evaluate = vi.fn(async (script: string) => {
-      if (script.includes("probes[a.variant]")) {
-        return { matched: [], probes: { sdui: 0, legacy: 0 } };
-      }
-      if (script.includes("hasMainFeed")) return { href: "", title: "" };
-      return false;
-    });
+    // DOMVariantUnsupportedError, and the SAME reading must reach both the
+    // error's `cause` and the bundle.  The double SHIFTS after the first read
+    // (see {@link RE_RENDERED}), so "the same reading" is what is graded here
+    // and not merely "some reading twice".
+    const first: DetectReading = { matched: [], probes: { sdui: 0, legacy: 0 } };
+    const evaluate = shiftingDetect(first);
     const client = {
       evaluate,
       send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
     } as unknown as CDPClient;
 
     try {
-      await expect(waitForPostLoad(client, 1)).rejects.toThrow(
-        DOMVariantUnsupportedError,
+      const error = await waitForPostLoad(client, 1).then(
+        () => null,
+        (thrown: unknown) => thrown,
+      );
+      expect(error).toBeInstanceOf(DOMVariantUnsupportedError);
+
+      // The `cause` half of the pair, derived from the FIRST reading.
+      expect(((error as DOMVariantUnsupportedError).cause as Error).message).toBe(
+        `detect probes — ${formatVariantProbes(first)}`,
       );
 
       const jsonCall = writeFileMock.mock.calls.find((call) =>
         String(call[0]).endsWith(".json"),
       );
       expect(jsonCall).toBeDefined();
-      // One probe feeds both the error's `cause` and the artifact, so an
-      // operator reading the two side by side can never be shown two
-      // different accounts of the same page.
-      expect(
-        JSON.parse(String(jsonCall?.[1])) as Record<string, unknown>,
-      ).toMatchObject({
-        trigger: "readiness-timeout",
-        variantDetection: { matched: [], probes: { sdui: 0, legacy: 0 } },
-      });
-      // Exactly one detect probe: the capture reuses the classification's
-      // reading rather than taking a second, later one.
-      const detectCalls = evaluate.mock.calls.filter((call) =>
-        String(call[0]).includes("probes[a.variant]"),
+      const bundle = JSON.parse(String(jsonCall?.[1])) as {
+        trigger?: unknown;
+        variantDetection?: unknown;
+      };
+      expect(bundle.trigger).toBe("readiness-timeout");
+      // The bundle half.  `toEqual` rather than `toMatchObject`: a partial
+      // match would accept a `variantDetection` that had GAINED a probe key,
+      // which is exactly what a re-read of a shifted page produces.  One probe
+      // feeds both, so an operator reading the two side by side can never be
+      // shown two different accounts of the same page.
+      expect(bundle.variantDetection).toEqual(first);
+
+      // And the count, which is what makes the two agreements above mean "one
+      // read" rather than "two reads that happened to agree".
+      expect(detectReads(evaluate)).toBe(1);
+    } finally {
+      warnSpy.mockRestore();
+      if (originalEnv === undefined) {
+        delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+      } else {
+        process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalEnv;
+      }
+    }
+  });
+
+  it("on timeout, one read feeds both the ambiguous error's cause and the bundle (#896)", async () => {
+    // The second `{ cause: … }` site on this gate, and the branch the sibling
+    // above cannot reach.  A separate case rather than a loop over both: the
+    // ambiguous branch ALSO builds the error's own message out of
+    // `detection.matched`, so a second read corrupts three things here and two
+    // there, and a shared body would have to weaken to their intersection.
+    const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const { writeFile } = await import("node:fs/promises");
+    const writeFileMock = vi.mocked(writeFile);
+    writeFileMock.mockClear();
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    const first: DetectReading = {
+      matched: ["sdui", "legacy"],
+      probes: { sdui: 3, legacy: 7 },
+    };
+    const evaluate = shiftingDetect(first);
+    const client = {
+      evaluate,
+      send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+    } as unknown as CDPClient;
+
+    try {
+      const error = await waitForPostLoad(client, 1).then(
+        () => null,
+        (thrown: unknown) => thrown,
       );
-      expect(detectCalls).toHaveLength(1);
+      expect(error).toBeInstanceOf(DOMVariantAmbiguousError);
+      // The message names the dialects the FIRST reading matched.  Asserted
+      // because it is the third consumer of that one read, and the one an
+      // operator sees without opening anything.
+      expect((error as Error).message).toContain("sdui, legacy");
+      expect(((error as DOMVariantAmbiguousError).cause as Error).message).toBe(
+        `detect probes — ${formatVariantProbes(first)}`,
+      );
+
+      const jsonCall = writeFileMock.mock.calls.find((call) =>
+        String(call[0]).endsWith(".json"),
+      );
+      expect(jsonCall).toBeDefined();
+      const bundle = JSON.parse(String(jsonCall?.[1])) as {
+        trigger?: unknown;
+        variantDetection?: unknown;
+      };
+      expect(bundle.trigger).toBe("readiness-timeout");
+      expect(bundle.variantDetection).toEqual(first);
+
+      expect(detectReads(evaluate)).toBe(1);
     } finally {
       warnSpy.mockRestore();
       if (originalEnv === undefined) {
