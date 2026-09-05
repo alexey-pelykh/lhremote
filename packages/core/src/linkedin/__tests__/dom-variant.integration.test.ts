@@ -124,6 +124,18 @@ describe("DOM variant adapters (integration)", { timeout: INSTALL_TEST_TIMEOUT_M
     attr: "data-sdui-screen",
     value: "com.linkedin.sdui.flagshipnav.feed.UpdateDetail",
   };
+  // A `data-urn` whose URN is NOT an activity.  A comment URN is the value
+  // that makes this page realistic rather than contrived: on the captured
+  // legacy page every non-activity URN is a `urn:li:comment:` entity (#872),
+  // and a comment sits INSIDE the update carrying its own author link.  It
+  // also starts with `urn:li:` without starting with `urn:li:activity:`,
+  // which is what separates the shipped anchor from both of the widenings
+  // that would otherwise pass green.
+  const LEGACY_COMMENT_CONTAINER = {
+    attr: "data-urn",
+    value:
+      "urn:li:comment:(urn:li:activity:7436698865522851840,7436707959465730049)",
+  };
 
   describe("readiness predicate", () => {
     const predicate = buildReadinessPredicateSource(adapters);
@@ -207,6 +219,39 @@ describe("DOM variant adapters (integration)", { timeout: INSTALL_TEST_TIMEOUT_M
       const detection = await client.evaluate<{ matched: string[] }>(probe);
 
       expect(detection.matched).toEqual(["sdui", "legacy"]);
+    });
+
+    it("reports zero matches when the only data-urn is not an activity URN", async () => {
+      // The `activity:` half of the legacy detect anchor, which nothing else
+      // grades (#878).  Both committed fixtures carry exactly one `data-urn`
+      // and it is an activity URN, so widening the anchor to `[data-urn]` or
+      // to `[data-urn^="urn:li:"]` leaves the fixture oracle green -- each of
+      // the three still matches exactly 1 there.  Only a page whose `data-urn`
+      // is NOT an activity separates them, and under either widening this one
+      // is claimed by `legacy`: a COMMENT would become the post, which is the
+      // cross-entity blending the registry exists to make impossible.
+      //
+      // Graded in a real browser rather than in the unit tier because that
+      // tier's document double compares selector STRINGS and never evaluates
+      // `^=`, so it cannot tell the shipped anchor from either widening.
+      await buildPage([LEGACY_COMMENT_CONTAINER]);
+
+      // Guard on the premise: the element really is on the page carrying the
+      // attribute.  Without this, the zero below is also what a page that
+      // failed to build reports -- a green that pins nothing.
+      expect(
+        await client.evaluate<number>(
+          `document.querySelectorAll('[data-urn]').length`,
+        ),
+      ).toBe(1);
+
+      const detection = await client.evaluate<{
+        matched: string[];
+        probes: Record<string, number>;
+      }>(probe);
+
+      expect(detection.matched).toEqual([]);
+      expect(detection.probes).toEqual({ sdui: 0, legacy: 0 });
     });
   });
 
