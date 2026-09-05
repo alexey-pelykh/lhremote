@@ -241,6 +241,18 @@ def test_annotation_level_tracks_fatality() -> None:
         check("still emits ::warning", "::warning file=" in r.stdout, r.stdout)
         check("annotation still says overdue", "overdue" in r.stdout, r.stdout)
 
+    # Ungradeable frontmatter fails in both modes, so unlike the overdue
+    # annotation above this one must NOT soften under the flag -- a soft
+    # annotation on a run that fails anyway misreports which finding stopped
+    # the build.
+    tmp, root, memory = case("An ungradeable entry annotates as an error even under --warn-only")
+    with tmp:
+        write_entry(memory, "ungradeable", frontmatter=False)
+        r = run(root, "--warn-only", actions=True)
+        check("emits ::error", "::error file=" in r.stdout, r.stdout)
+        check("names the file", "ungradeable.md::" in r.stdout, r.stdout)
+        check("not downgraded to a warning", "::warning file=" not in r.stdout, r.stdout)
+
 
 def test_usage_error_on_bad_today() -> None:
     print("\nA malformed --today is a usage error, not a pass")
