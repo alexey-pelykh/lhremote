@@ -1,5 +1,7 @@
 # lhremote: LinkedHelper Automation Toolkit
 
+[![SafeSkill 50/100](https://img.shields.io/badge/SafeSkill-50%2F100_Use%20with%20Caution-orange)](https://safeskill.dev/scan/alexey-pelykh-lhremote)
+
 [![CI](https://github.com/alexey-pelykh/lhremote/actions/workflows/ci.yml/badge.svg)](https://github.com/alexey-pelykh/lhremote/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/alexey-pelykh/lhremote/graph/badge.svg)](https://codecov.io/gh/alexey-pelykh/lhremote)
 [![npm version](https://img.shields.io/npm/v/lhremote?logo=npm)](https://www.npmjs.com/package/lhremote)
