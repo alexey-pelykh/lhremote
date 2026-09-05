@@ -14,6 +14,10 @@ vi.mock("../db/index.js", () => ({
   discoverDatabase: vi.fn(),
 }));
 
+vi.mock("../utils/cdp-port.js", () => ({
+  isCdpPort: vi.fn(),
+}));
+
 vi.mock("./instance.js", () => ({
   InstanceService: vi.fn(),
 }));
@@ -24,6 +28,7 @@ vi.mock("./launcher.js", () => ({
 
 import { discoverInstancePort, findApp } from "../cdp/index.js";
 import { DatabaseClient, discoverDatabase } from "../db/index.js";
+import { isCdpPort } from "../utils/cdp-port.js";
 import { InstanceService } from "./instance.js";
 import { LauncherService } from "./launcher.js";
 import { InstanceNotRunningError, UIBlockedError } from "./errors.js";
@@ -33,6 +38,7 @@ const mockedDiscoverInstancePort = vi.mocked(discoverInstancePort);
 const mockedFindApp = vi.mocked(findApp);
 const mockedDiscoverDatabase = vi.mocked(discoverDatabase);
 const mockedDatabaseClient = vi.mocked(DatabaseClient);
+const mockedIsCdpPort = vi.mocked(isCdpPort);
 const mockedInstanceService = vi.mocked(InstanceService);
 const mockedLauncherService = vi.mocked(LauncherService);
 
@@ -87,7 +93,10 @@ function extractHealthChecker(mockInstance: InstanceService): () => Promise<void
 
 describe("withDatabase", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // reset, not clear: clearAllMocks drops call records but keeps mock
+    // implementations, which is how one test's setup used to leak into the
+    // next. Do not normalise this back to clearAllMocks (#846).
+    vi.resetAllMocks();
   });
 
   afterEach(() => {
@@ -169,8 +178,16 @@ describe("withDatabase", () => {
 
 describe("withInstanceDatabase", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // reset, not clear -- see the withDatabase block above (#846).
+    vi.resetAllMocks();
     createMockLauncher();
+    // resolveInstancePort() falls back to probing the port directly, and the
+    // real isCdpPort() issues a live fetch to http://127.0.0.1:{port}/json/list.
+    // 9222 is the conventional Chrome remote-debugging port, so leaving this
+    // unmocked made a Tier-1 unit test pass or fail on whether a browser
+    // happened to be listening on the developer's machine (#846).  Default to
+    // "nothing is listening"; the test that needs the other branch overrides it.
+    mockedIsCdpPort.mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -261,6 +278,38 @@ describe("withInstanceDatabase", () => {
     await expect(
       withInstanceDatabase(9222, 42, () => undefined),
     ).rejects.toThrow(InstanceNotRunningError);
+
+    // Assert the direct probe was actually consulted: without this, removing
+    // resolveInstancePort's whole probe branch would fall straight through to
+    // the throw, leaving this test green and the mock above silently pointless.
+    expect(mockedIsCdpPort).toHaveBeenCalledWith(9222);
+    expect(mockedInstanceService).not.toHaveBeenCalled();
+  });
+
+  it("uses the given port directly when the CDP probe confirms it", async () => {
+    const mockInstance = createMockInstance();
+    const mockDb = createMockDb();
+    mockedDiscoverInstancePort.mockResolvedValue(null);
+    mockedFindApp.mockResolvedValue([]);
+    mockedIsCdpPort.mockResolvedValue(true);
+    mockedDiscoverDatabase.mockReturnValue("/path/to/db.db");
+
+    let receivedCtx: unknown;
+    await withInstanceDatabase(9222, 42, (ctx) => {
+      receivedCtx = ctx;
+    });
+
+    expect(mockedIsCdpPort).toHaveBeenCalledWith(9222);
+    expect(mockedInstanceService).toHaveBeenCalledWith(9222, undefined);
+    expect(mockInstance.connect).toHaveBeenCalledOnce();
+    // findApp() listed nothing, so there is no launcher port and the health
+    // checker is never installed.
+    expect(mockedLauncherService).not.toHaveBeenCalled();
+    expect(receivedCtx).toEqual({
+      accountId: 42,
+      instance: mockInstance,
+      db: mockDb,
+    });
   });
 
   it("passes instanceTimeout option to InstanceService", async () => {
