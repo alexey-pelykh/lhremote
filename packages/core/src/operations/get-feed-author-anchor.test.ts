@@ -2313,6 +2313,64 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     timestamp: "18h",
   },
   {
+    // The ACCEPT path's form of the decline-path defect. "ada" scores 3 against
+    // a bar of `min(4, 3)`, so the read ACCEPTS at the one-field prefix "Ada"
+    // -- accepting is not the same as consuming the whole name -- and before
+    // the accept branch was widened, "Lovelace" won the headline race.
+    label: "B3e short slug accepts a PREFIX of a split name",
+    href: "/in/ada/",
+    children: () => bareFields("p", "Ada", "Lovelace", "• 1st", "Head of Widgets", "18h •"),
+    name: "Ada",
+    headline: "Head of Widgets",
+    timestamp: "18h",
+  },
+  {
+    // Same accept-path defect reached by a different route: the surname folds
+    // to the empty string, so extending the candidate over it neither gains nor
+    // costs score and the shorter candidate holds the tie. The wholly non-Latin
+    // shape CANNOT reach this branch -- it folds to empty, scores zero and
+    // declines -- so only a mixed-script name exercises it.
+    label: "B3f mixed-script name, Latin given name and non-Latin surname",
+    href: "/in/alex-petrenko/",
+    children: () => bareFields("p", "Alex", "Петренко", "• 1st", "Head of Widgets", "18h •"),
+    name: "Alex",
+    headline: "Head of Widgets",
+    timestamp: "18h",
+  },
+  {
+    // `Out of network` is a connection degree every sibling extractor in this
+    // repository classifies -- dom-variant.ts twice, get-post.ts twice -- and
+    // this file omitted it while its own comment quoted their vocabulary
+    // WITHOUT it, so the parity claim read as met. The headline rule chooses by
+    // exclusion and has no positive test, so an unclassified badge is emitted
+    // AS the headline; the pre-#860 script read this shape correctly, making it
+    // a regression rather than a cost.
+    label: "B3g out-of-network degree is a badge, not a headline",
+    href: "/in/ada-lovelace/",
+    children: () => bareFields("p", "Ada Lovelace", "• Out of network", "Head of Widgets at Acme", "18h •"),
+    name: "Ada Lovelace",
+    headline: "Head of Widgets at Acme",
+    timestamp: "18h",
+  },
+  {
+    // B3a and B3b are CLEAN shapes -- the name is field 0, uncontaminated -- so
+    // `anchorName` answers them identically to the scored path and neither can
+    // fail if the short-slug allowance is removed. This one contaminates the
+    // field, which is what makes the allowance observable: with the
+    // `Math.min(MIN_SLUG_MATCH, target.length)` bar, "ibm" scores 3 against a
+    // bar of 3 and the badge is trimmed; with an absolute floor of 4 no
+    // 3-character slug can ever clear it, the read declines to `anchorName`,
+    // and #860's contamination family reopens for every short slug --
+    // /company/ge/, /company/hp/, /company/sap/, /in/ada/ -- while B3a and B3b
+    // stay green. Verified by mutation, not by inspection.
+    label: "B3d three-character company slug, badge fused into the name field",
+    href: "/company/ibm/",
+    children: () => bareFields("p", "IBM · 1st", "Technology", "18h •"),
+    name: "IBM",
+    headline: "Technology",
+    timestamp: "18h",
+  },
+  {
     label: "B3c short first-name slug does not truncate the name",
     href: "/in/mike/",
     children: () => bareFields("span", "Mike Johnson", "• 1st", "Head of Widgets at Acme", "18h •"),
@@ -2941,5 +2999,38 @@ describe("#860/#898 accepted costs", () => {
 
     expect(bounded.name).toBe("John Smith");
     expect(bounded.headline).toBe("Photography & Video");
+  });
+
+  it("drops a genuine headline that OPENS with a time-like token", () => {
+    // `FIELD_TIMESTAMP` matches a field BEGINNING with a relative-time token
+    // followed by whitespace, which a real headline can do: "3d printing
+    // specialist" opens `3d` + a space. The headline loop skips every field the
+    // classifier claims, so the headline is lost and this shape reports null.
+    // The pre-#860 script read it correctly off `pEls[2]`, so this is a
+    // regression rather than a pre-existing cost.
+    //
+    // Left rather than fixed, deliberately, and this is the reasoning so a
+    // later reader can overturn it with evidence rather than re-derive it. The
+    // narrow fix -- require the token to be the WHOLE field for the headline
+    // exclusion -- trades this shape for a field like "18h • Edited", which
+    // would stop being excluded and become the headline instead. BOTH shapes
+    // are unobserved: this repository holds no captured feed markup at all
+    // (#897), and its two legacy post captures were searched and contain no
+    // relative-time field of any form. `FIELD_TIMESTAMP` also drives the
+    // timestamp READ, which `mapRawPosts` shares with `searchPosts` and
+    // `getProfileActivity`, so guessing here risks three operations' timestamps
+    // to fix one operation's headline. Tracked for a capture-backed decision.
+    const got = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "headline opening with a time-like token",
+      href: "/in/ada-lovelace/",
+      children: () => bareFields("p", "Ada Lovelace", "• 1st", "3d printing specialist", "18h •"),
+      name: "Ada Lovelace",
+    });
+
+    expect(got.name).toBe("Ada Lovelace");
+    expect(got.headline).toBeNull();
+    // The timestamp is unaffected: its loop scans backwards and reaches the
+    // real time field first, so only the headline pays this cost.
+    expect(got.timestamp).toBe("18h");
   });
 });
