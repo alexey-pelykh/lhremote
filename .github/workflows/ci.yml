@@ -57,9 +57,11 @@ jobs:
       # date — which would fabricate a verification that never happened.
       # Drop the flag once the corpus is clean: see issue #912.
       #
-      # Note this does NOT disable the whole gate. Scanning zero entries still
-      # fails under `--warn-only`, so a check that silently stops finding the
-      # corpus cannot pass as a clean bill.
+      # The flag forgives measured drift and nothing else. Scanning zero
+      # entries still fails, so a check that silently stops finding the corpus
+      # cannot pass as a clean bill; and so does an entry whose frontmatter
+      # cannot be graded at all, which has no age and so could never resurface
+      # through the overdue path once the flag is dropped.
       - name: Check memory freshness frontmatter
         run: python3 tools/check-memory-freshness.py --warn-only
 

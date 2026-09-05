@@ -69,6 +69,7 @@ Do **not** dismiss or ignore Copilot feedback. Every comment must be explicitly 
   - GH Pages docs (README + rate-limiting guide) built via pandoc on every CI run, published on push to main
   - Composite setup action: `.github/actions/setup/action.yml` (pnpm + node + playwright chromium + turbo cache)
   - Concurrency: cancel-in-progress for PRs, not for main
+  - `memory-freshness` job (ubuntu only, stdlib Python, no pnpm setup): runs `tools/check-memory-freshness.py`, which grades the `volatility` / `last-verified` frontmatter on every entry in `.claude/memory/`. Currently `--warn-only`, so drift reports without failing; ungradeable frontmatter and a zero-entry scan still fail. Flip to blocking once the corpus is clean (#912)
 - **Release**: GitHub Actions (`release.yml`) — triggered by GitHub Release publish
   - Validates (build+lint+test), stamps version from tag, publishes to npm (OIDC trusted publishing)
   - Concurrency group `release`, never cancels in-progress
