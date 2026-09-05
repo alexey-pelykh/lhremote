@@ -9,7 +9,10 @@ import {
 import type { PostStats } from "../types/post-analytics.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { waitForPostLoad } from "../cdp/wait-for-post-load.js";
+import {
+  capturePostDetailExtractionFailure,
+  waitForPostLoad,
+} from "../cdp/wait-for-post-load.js";
 import {
   adaptersFor,
   buildPostDetailExtractionSource,
@@ -172,11 +175,14 @@ const POST_DETAIL_SURFACE = "post-detail" as const;
  * read returned 41.  Unmeasured in both directions, and the net is still
  * strongly favourable: the shapes measured live are the ones this fixes.
  *
- * No diagnostic bundle is written at the two failure branches below, where
- * `get-post` writes one for the same two outcomes of the same script.  That is
- * a boundary rather than an oversight — capture sites are enumerated in
- * `CLAUDE.md` and ADR-007, and adding one is a behaviour change with its own
- * acceptance, not part of fixing a parse.  Tracked as #890.
+ * A diagnostic bundle IS written at the two failure branches below (#890).
+ * #857 deliberately left that undone — adding a capture site is a behaviour
+ * change with its own acceptance, not part of fixing a parse — and the gap it
+ * declared was closed on its own terms.  Both branches now call the same
+ * {@link capturePostDetailExtractionFailure} `get-post` calls, which is why
+ * that helper moved to `wait-for-post-load.ts`: two operations failing at the
+ * same two outcomes of the same script on the same surface would otherwise
+ * have kept two copies of one rule.  See ADR-007 § 2026-09-05 Amendment.
  */
 const SCRAPE_POST_DETAIL_SCRIPT = buildPostDetailExtractionSource(
   adaptersFor(POST_DETAIL_SURFACE),
@@ -255,15 +261,21 @@ export async function getPostStats(
     const raw = await client.evaluate<RawPostStats | AmbiguousPostStats>(
       SCRAPE_POST_DETAIL_SCRIPT,
     );
-    if (!raw) {
-      // Zero adapters claimed the page, or the claiming adapter could not
-      // resolve its own scope.  Either way nothing read the page.
-      throw new DOMVariantUnsupportedError(
-        POST_DETAIL_SURFACE,
-        variantNamesFor(POST_DETAIL_SURFACE).map(String),
-      );
-    }
-    if (isAmbiguous(raw)) {
+    if (!raw || isAmbiguous(raw)) {
+      // Both branches are deadline-free extraction failures on a page whose
+      // readiness gate went green milliseconds ago, so neither can be seen by
+      // a timeout-bound capture.  Written before the throw, while the client
+      // still holds the page: past it the `finally` disconnects and the DOM
+      // that would have explained the failure is gone (#890).
+      await capturePostDetailExtractionFailure(client);
+      if (!raw) {
+        // Zero adapters claimed the page, or the claiming adapter could not
+        // resolve its own scope.  Either way nothing read the page.
+        throw new DOMVariantUnsupportedError(
+          POST_DETAIL_SURFACE,
+          variantNamesFor(POST_DETAIL_SURFACE).map(String),
+        );
+      }
       throw new DOMVariantAmbiguousError(
         POST_DETAIL_SURFACE,
         raw.ambiguousVariants,

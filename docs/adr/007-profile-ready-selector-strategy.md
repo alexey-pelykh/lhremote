@@ -169,6 +169,11 @@ that most needs an artifact produced none.
    corroboration predicate is pure and holds no CDP client; threading one into
    it would turn a unit-testable predicate into an IO-bearing one.
 
+   > **Extended on 2026-09-05** — this list gains `getPostStats`, which raises
+   > the same two variant errors from the same generated post-detail script and
+   > captured nothing until #890. Nothing above changes. See § 2026-09-05
+   > Amendment (#890).
+
 2. **Trigger-derived artifact names.** The filename rule stated in the
    2026-04-29 amendment (`navigate-to-{profile,company}-{timestamp}-{slug}`,
    where the kind tag identifies which navigator timed out) is joined by
@@ -264,6 +269,16 @@ LinkedIn page wrote a bundle. ADR-008 § 2026-09-02 Amendment recorded that gap
 as *"deliberately not done here, so a reader does not infer it"*; this closes
 it. (That date carries two ADR-008 amendments; this is the search-results one,
 #841.)
+
+> **Two counterexamples, found on 2026-09-05; one closed.** The clause above —
+> *every other place this codebase can fail to read a LinkedIn page wrote a
+> bundle* — was already false when it was written. `getPostStats` had become a
+> registry-bound post-detail failure site earlier the same day (#857) and
+> captured nothing; #890 closed that one. `getPostEngagers` refuses a hybrid
+> page at its reactions-trigger find without capturing, which is open as #911.
+> The clause is left standing rather than rewritten, because the invariant it
+> appeals to is the right one and is what both items restore; see § 2026-09-05
+> Amendment. Read it as an aspiration with a live exception, not as a survey.
 
 **Why this surface warrants it more than the others, not less.** It has the
 least offline evidence behind it: its `legacy` adapter is *reconstructed* from
@@ -463,9 +478,111 @@ trigger classes, the artifact-name table, and the rule that a capture-side
 failure never masks the caller's error all carry over untouched. The number of
 page reads the capture takes is unchanged at one.
 
+### 2026-09-05 — `getPostStats` captures at its two extraction-failure branches (#890)
+
+The § 2026-09-01 Amendment enumerated the sites that capture on extraction
+failure: `getPost` and `getPostEngagers`. The § 2026-09-04 Amendment (#870)
+added the search-results surface and justified doing so by asserting that
+**every other place this codebase can fail to read a LinkedIn page wrote a
+bundle**. That was false at the moment it was written, in one place, and this
+closes it.
+
+**How the gap opened.** Before #857, `getPostStats` read the engagement counts
+with a regex sweep over `document.body.textContent` and raised a plain `Error`;
+it was not a registry-bound failure site at all, so no capture-site enumeration
+had reason to name it. #857 replaced that read with the **same generated
+post-detail extraction script `getPost` evaluates**, which made `getPostStats`
+raise `DOMVariantUnsupportedError` and `DOMVariantAmbiguousError` at the same
+two selection outcomes of the same script on the same surface — while capturing
+nothing. #857 declared the boundary in the operation's own doc comment rather
+than crossing it, on the ground this ADR and ADR-008 both prescribe: adding a
+capture site is a behaviour change with its own acceptance criteria, not part of
+fixing a parse. This is that acceptance.
+
+**What changes.** Both branches now write a bundle before raising, through the
+same helper `getPost` uses, with the same `extraction-failure` trigger, the same
+`post-detail-extraction-failure` stem and the same `[postDetailExtraction]` warn
+tag. No new trigger class, no new artifact name, no new bundle field — the
+artifact-name table in § 2026-09-01 is unchanged and gains no row, because this
+is a new *caller* of an existing trigger rather than a new trigger.
+
+**The helper moved, and that is the substantive design call.** It now lives in
+`packages/core/src/cdp/wait-for-post-load.ts`, exported as
+`capturePostDetailExtractionFailure`, rather than as a private function in
+`get-post.ts`. Two callers failing at the same two outcomes of the same script on
+the same surface would otherwise have kept two byte-identical copies of one
+rule, and `dom-variant.ts` argues against exactly that throughout — its two
+copies of the headline rule had already drifted apart, with neither a superset of
+the other, and #853 removed the last hand-maintained copy of a registry anchor
+from this very capture for the same reason. `wait-for-post-load.ts` is the home
+because it already owns every part the helper composes: the `extraction-failure`
+trigger vocabulary, `capturePostLoadFailure`, `probeVariantDetection` and
+`diagnosticCaptureEnabled`, all three of which it already exported *for these
+operation-layer call sites*. Consolidating the composition there narrows what
+`operations/` imports rather than widening it.
+
+The two siblings in `operations/` stay local and are **not** a precedent against
+this. `captureEngagerExtractionFailure` and `captureSearchResultsExtractionFailure`
+bind different surfaces — different adapter lists, different capture functions,
+and in the search-results case an extra cardinal argument — so they are not
+copies of anything. Post-detail is the only surface read by two operations.
+
+**Do not over-read the reachability.** These two branches are not reachable on
+an ordinary dialect flip. `waitForPostLoad` requires exactly one adapter *and*
+its ready anchor before either operation reaches its extraction, so a flip times
+out at the gate — which already captures, under the `readiness-timeout` trigger.
+On post-detail both registered adapters declare `scopes` identical to `detect`,
+so "an adapter claimed the page but could not resolve its own scope" is
+unreachable today. What remains is a page that **changes between the readiness
+poll and the extraction `evaluate`** — seconds apart on a hydrating or
+mid-rollout page. That population is small, it is real, and it is precisely the
+one no deadline-bound capture can see: the gate went green, so there is no
+timeout to hang an artifact off. An operator who hit it got the error sentence
+and nothing else, while the identical page read through `getPost` yielded the
+bundle.
+
+**What this discharges, and what it does not.** The standing directive at the
+end of this ADR — *inspect these artifacts before changing post-detail
+selectors* — was undischargeable at the `getPostStats` call site. It is not any
+longer, and the post-detail surface now captures at every branch on which it can
+refuse.
+
+The #870 invariant is **not** thereby restored in full. Reviewing this change
+turned up a second counterexample on a different surface: `getPostEngagers`
+raises `DOMVariantAmbiguousError` at its **reactions-trigger find** — before it
+ever reaches the modal — and captures nothing there, while the two branches
+either side of it do. Recorded here rather than fixed, on the same ground #857
+gave for leaving `getPostStats` alone: a capture site on another surface is a
+behaviour change with its own acceptance. Tracked as #911. Both counterexamples
+are *raising* refusals: `getPostEngagers`'s other zero-detect branch returns an
+empty list by the ADR-008 empty-vs-error contract rather than failing to read a
+page — a post-detail page always has a post, but does not always have reactions
+— so it sits outside this count rather than being a third exception to it.
+Until #911 closes, read the #870 clause as true of every surface except that one
+branch — and read this paragraph as the reason a reader should not take the
+clause on trust, which is the whole lesson of the two counterexamples it has now
+had.
+
+**Unchanged, and load-bearing:** activation stays gated on
+`LHREMOTE_CAPTURE_DIAGNOSTICS=1` at the new site. The detect probe is skipped
+outright when capture is off, for the reason § 2026-09-04 (#870) gives for the
+search-results extraction site and `get-post.ts` gives for its own: nothing on
+this path needs the probe for the *error*, so its sole consumer is the bundle
+and a default-off CLI or MCP run must not spend a page round-trip producing it
+for nobody. The per-invocation `mkdtemp` directory, the `0o700`/`0o600` modes,
+the cancellation cap, and the rule that a capture-side failure never masks the
+caller's error all carry over untouched. The capture is written before the
+`throw` and therefore before the `finally` that disconnects the client — past
+that point the DOM which would have explained the failure is gone.
+
 ## Related
 
-- Code: `packages/core/src/operations/navigate-to-profile.ts`
+- Code: `packages/core/src/operations/navigate-to-profile.ts`,
+  `packages/core/src/cdp/wait-for-post-load.ts` (owns
+  `capturePostDetailExtractionFailure`, shared by the two operations that read
+  the post-detail surface — § 2026-09-05 Amendment),
+  `packages/core/src/operations/get-post.ts`,
+  `packages/core/src/operations/get-post-stats.ts`
 - Branch: `fix/navigate-to-profile-diagnostics` (initial selector
   decision); `fix/unfollow-profile-company-urls` (2026-04-29 amendment)
 - Issues: #757 (company-page extension); #835 (2026-09-01 amendment —
@@ -473,4 +590,8 @@ page reads the capture takes is unchanged at one.
   #840 (2026-09-02 amendment — reactions-modal `variantDetection`); #870
   (2026-09-04 amendment — the search-results readiness and extraction sites);
   #853 (2026-09-04 amendment — the post-detail bundle's `variantAnchors`,
-  derived from the adapter registry)
+  derived from the adapter registry); #890 (2026-09-05 amendment — the
+  `getPostStats` extraction-failure branches, the last post-detail failure site
+  that captured nothing; #857 is the change that created it); #911 (open — the
+  `getPostEngagers` reactions-trigger ambiguity branch, the remaining
+  counterexample to the § 2026-09-04 (#870) invariant)
