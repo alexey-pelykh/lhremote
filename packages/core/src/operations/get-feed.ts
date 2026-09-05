@@ -213,11 +213,23 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     return (a.textContent || '').trim().length > 0;
   }
 
-  // A relative-time token — "18h", "3d", "45m" — followed by the separator
-  // LinkedIn renders after it, or by the end of the run.  Same token vocabulary
-  // the timestamp read below uses; this form is unanchored because it is tested
-  // against an anchor's whole concatenated text rather than one trimmed <p>.
-  const RELATIVE_TIME_IN_TEXT = /\\d+[smhdw](?:\\s|[\\u2022\\u00B7]|$)/;
+  // A relative-time token — "18h", "3d", "45m", "1mo", "1y", "2yr" — followed
+  // by the separator LinkedIn renders after it, or by the end of the run.  The
+  // same token vocabulary the timestamp read below uses, and that parity is
+  // load-bearing rather than decorative: this is the FIRST signal of the
+  // whole-post fallback, so a token it cannot see is a post whose author gets
+  // chosen by document order instead — which selects a decoy that renders a
+  // name run ahead of the real author.  Widened with \`FIELD_TIMESTAMP\`,
+  // \`TRAILING_BADGE\` and \`parseTimestamp\`; the four are one vocabulary, and
+  // three of four is how the out-of-network badge went missing.
+  //
+  // \`mo\` and the year forms precede \`[smhdw]\` for the reason
+  // \`FIELD_TIMESTAMP\` gives: \`m\` is in \`[smhdw]\`, so the shorter branch
+  // claims \`1mo\`'s \`1m\` and then fails the separator guard on the \`o\`.
+  //
+  // Unanchored because it is tested against an anchor's whole concatenated text
+  // rather than one trimmed <p>.
+  const RELATIVE_TIME_IN_TEXT = /(?:\\d+mo|\\d+yr|\\d+y|\\d+[smhdw])(?:\\s|[\\u2022\\u00B7]|$)/;
 
   // Text carrying no letter and no digit is decoration — a separator bullet, an
   // icon glyph — and is never a name.
