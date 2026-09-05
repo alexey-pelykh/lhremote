@@ -129,7 +129,7 @@ def test_reports_scanned_count() -> None:
         write_entry(memory, "one")
         write_entry(memory, "two")
         r = run(root)
-        check("reports 2 entries", "Scanned 2 memory entrie(s)" in r.stdout, r.stdout)
+        check("reports 2 entries", "Scanned 2 memory entries" in r.stdout, r.stdout)
         check("excludes the MEMORY.md index", "MEMORY.md" not in r.stdout, r.stdout)
 
 
@@ -139,7 +139,7 @@ def test_zero_entries_is_a_failure() -> None:
     with tmp:
         r = run(root)
         check("exit code is 2", r.returncode == 2, f"got {r.returncode}")
-        check("reports 0 entries", "Scanned 0 memory entrie(s)" in r.stdout, r.stdout)
+        check("reports 0 entries", "Scanned 0 memory entries" in r.stdout, r.stdout)
         check("says zero is not a clean bill", "not a clean bill" in r.stderr, r.stderr)
 
 
