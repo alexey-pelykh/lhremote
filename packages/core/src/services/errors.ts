@@ -186,7 +186,8 @@ export class ExtractionTimeoutError extends ServiceError {
 }
 
 /**
- * Thrown when no registered `VariantAdapter` recognises the page.
+ * Thrown when no registered `VariantAdapter` matched the page, or the
+ * matching adapter could not resolve its scope.
  *
  * This is the "LinkedIn changed" signal. It is deliberately distinct from
  * {@link ExtractionFailedError}: nothing is stale here, the page simply
