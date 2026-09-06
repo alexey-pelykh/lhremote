@@ -126,12 +126,39 @@ describe("getPost", () => {
     return { evaluateMock, disconnect, navigate };
   }
 
+  /**
+   * The ambient `LHREMOTE_CAPTURE_DIAGNOSTICS`, read before any test in this
+   * file has had a chance to mutate it.
+   */
+  const originalCaptureEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Several cases below reach a diagnostic capture, and this file mocks no
+    // filesystem: every `setupMocks({ postDetail: null })` case lands on
+    // `capturePostDetailExtractionFailure` at `get-post.ts:422`, and the
+    // ORACLE block's cardinal-contradiction cases land on the second call at
+    // `get-post.ts:520`.  That capture self-gates on
+    // `diagnosticCaptureEnabled()`, which reads `process.env` per call rather
+    // than at module load — so under an ambient
+    // `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a plausible export while debugging
+    // diagnostics, a Tier-1 unit run would `mkdtemp` and write real bundles
+    // into `os.tmpdir()`, contradicting CLAUDE.md section Testing's "Tier 1 —
+    // Unit ... Dependency: None".  Pinning the gate off here makes every
+    // environment agree with CI, which never sets the variable.  The capture
+    // path itself is graded in `get-post-extraction-diagnostics.test.ts`,
+    // which does mock the filesystem.
+    delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    // Hand the shell back exactly the value it had, including "unset".
+    if (originalCaptureEnv === undefined) {
+      delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    } else {
+      process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = originalCaptureEnv;
+    }
   });
 
   it("throws on non-loopback host without allowRemote", async () => {
