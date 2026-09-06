@@ -174,6 +174,12 @@ that most needs an artifact produced none.
    > captured nothing until #890. Nothing above changes. See § 2026-09-05
    > Amendment (#890).
 
+   > **Extended on 2026-09-06** — `getPostEngagers`' entry above is read as
+   > covering its reactions-TRIGGER ambiguity branch too, which raises
+   > `DOMVariantAmbiguousError` before the click and captured nothing until
+   > #911. No new site and no new trigger — an existing site's remaining
+   > branch. Nothing above changes. See § 2026-09-06 Amendment (#911).
+
 2. **Trigger-derived artifact names.** The filename rule stated in the
    2026-04-29 amendment (`navigate-to-{profile,company}-{timestamp}-{slug}`,
    where the kind tag identifies which navigator timed out) is joined by
@@ -575,6 +581,92 @@ caller's error all carry over untouched. The capture is written before the
 `throw` and therefore before the `finally` that disconnects the client — past
 that point the DOM which would have explained the failure is gone.
 
+### 2026-09-06 — `getPostEngagers` captures at its reactions-trigger ambiguity branch (#911)
+
+The § 2026-09-05 Amendment closed the `getPostStats` counterexample to the
+§ 2026-09-04 (#870) claim that **every other place this codebase can fail to
+read a LinkedIn page wrote a bundle**, and recorded — rather than fixed — a
+second one it turned up while doing so. This is that second one. With it, the
+#870 clause is restored in full: there is now no branch on any surface at which
+this codebase refuses to read a LinkedIn page and writes nothing.
+
+**Where the gap was.** `getPostEngagers` selects the reactions-modal dialect
+twice, and the two readings are seconds apart. The first is the
+reactions-TRIGGER find, before any click: `FIND_REACTIONS_TRIGGER_SCRIPT`
+selects on this surface's `detect` anchor — which for the reactions-modal
+surface *is* the trigger on the post-detail page, not the modal wrapper (ADR-008
+§ 2026-09-02 Amendment) — and a page claimed by both dialects is refused with
+`DOMVariantAmbiguousError` rather than clicked, because clicking one dialect's
+affordance on a page also speaking the other opens a modal nothing downstream is
+bound to read. The second is the modal scrape after the click, which refuses the
+same way and, since #835, captures. The branches on either side of the first one
+captured; the first did not.
+
+**Why it is a gap and not a deliberate line.** The adjacent `!found` branch on
+the same read **returns an empty list** instead of raising, and its comment
+states why that departure is deliberate: a post-detail page always has a post,
+but does not always have reactions, so a missing trigger has a third reading that
+is both common and benign. That reasoning is about zero matches and does not
+extend to two — an ambiguous trigger is a genuine hybrid-page refusal of exactly
+the kind every other site on every surface captures for. § 2026-09-05 already
+said as much when it recorded this site: both counterexamples were *raising*
+refusals, and the empty-list branch sits outside the count by the ADR-008
+empty-vs-error contract rather than being a third exception to it.
+
+**What changes.** The branch writes a bundle before raising, through
+`captureEngagerExtractionFailure` — the same private helper the two scrape sites
+in that file already use, already bound to the reactions-modal adapter list. A
+new *caller* of an existing trigger, exactly as #890 was: no new trigger class,
+no new artifact name, no new bundle field, and the artifact-name table in
+§ 2026-09-01 gains no row. What it does gain is the § 2026-09-01 site list's
+second extension note, because that list names sites and this widens one.
+
+**How the bundle reads here, which is the one thing this amendment adds that its
+predecessor did not.** The capture is shared with two post-click callers, so
+every modal-scoped probe in it — `dialogCount`, `htmlDialogCount`,
+`ariaModalCount`, `hasReactionsTab` — is read on a page that has no modal on it
+and cannot have one yet. That is precisely the fingerprint § 2026-09-01's probe
+set assigns to case 1, *"click never opened a dialog"* (#773). **At this site it
+means the opposite: no click was attempted.** The `trigger` field alone does not
+separate them, since both post-click callers share it, so the discriminator is
+the artifact plus the error the run raised — `DOMVariantAmbiguousError` naming
+this surface, with the reactions-modal readiness gate never having run. The
+comments at the call site and on the trigger-label table both say so, because a
+reader arriving at one is not guaranteed to have read the other.
+
+`variantDetection` is what actually carries the diagnosis at this branch, and it
+is not redundant with the refusal that raised it: `ambiguousVariants` names
+*which* dialects claimed the page, while the probe adds *how many* elements each
+one's anchor matched. The second is what says where to tighten them, and it is
+the reading § 2026-09-01 item 3 gives the field for.
+
+**Do not over-read the reachability.** `waitForPostLoad` runs first and requires
+exactly one **post-detail** adapter and its ready anchor, so an ordinary dialect
+flip times out at that gate — which already captures, under `readiness-timeout`.
+Reaching this branch needs a page whose post-detail dialect is unambiguous while
+its reactions-trigger anchors are claimed by *both* reactions-modal adapters: a
+partial rollout, or a page that changes between the two reads. That population is
+small and it is real — the same shape § 2026-09-05 describes for the post-detail
+extraction branches, and the same reason no deadline-bound capture can see it.
+
+**What this discharges.** The standing directive at the end of this ADR —
+*inspect these artifacts before changing reactions-modal selectors* — was
+undischargeable at this branch: an operator running with
+`LHREMOTE_CAPTURE_DIAGNOSTICS=1` who hit a hybrid page there got the error
+sentence and nothing else, no screenshot and no detect counts, on the one failure
+whose repair is *which anchor to tighten*. It is not undischargeable any longer.
+
+**Unchanged, and load-bearing:** activation stays gated on
+`LHREMOTE_CAPTURE_DIAGNOSTICS=1` at the new site. The detect probe is skipped
+outright when capture is off, for the reason § 2026-09-04 (#870) and § 2026-09-05
+(#890) both give: nothing on this path needs the probe for the *error* — the
+ambiguity report already names the dialects — so its sole consumer is the bundle,
+and a default-off CLI or MCP run must not spend a page round-trip producing it for
+nobody. The per-invocation `mkdtemp` directory, the `0o700`/`0o600` modes, the
+cancellation cap, and the rule that a capture-side failure never masks the
+caller's error all carry over untouched. The capture is written before the
+`throw`, and therefore before the `finally` that disconnects the client.
+
 ## Related
 
 - Code: `packages/core/src/operations/navigate-to-profile.ts`,
@@ -582,7 +674,9 @@ that point the DOM which would have explained the failure is gone.
   `capturePostDetailExtractionFailure`, shared by the two operations that read
   the post-detail surface — § 2026-09-05 Amendment),
   `packages/core/src/operations/get-post.ts`,
-  `packages/core/src/operations/get-post-stats.ts`
+  `packages/core/src/operations/get-post-stats.ts`,
+  `packages/core/src/cdp/wait-for-reactions-modal.ts`,
+  `packages/core/src/operations/get-post-engagers.ts`
 - Branch: `fix/navigate-to-profile-diagnostics` (initial selector
   decision); `fix/unfollow-profile-company-urls` (2026-04-29 amendment)
 - Issues: #757 (company-page extension); #835 (2026-09-01 amendment —
@@ -592,6 +686,6 @@ that point the DOM which would have explained the failure is gone.
   #853 (2026-09-04 amendment — the post-detail bundle's `variantAnchors`,
   derived from the adapter registry); #890 (2026-09-05 amendment — the
   `getPostStats` extraction-failure branches, the last post-detail failure site
-  that captured nothing; #857 is the change that created it); #911 (open — the
-  `getPostEngagers` reactions-trigger ambiguity branch, the remaining
-  counterexample to the § 2026-09-04 (#870) invariant)
+  that captured nothing; #857 is the change that created it); #911 (2026-09-06
+  amendment — the `getPostEngagers` reactions-trigger ambiguity branch, the
+  last counterexample to the § 2026-09-04 (#870) invariant)

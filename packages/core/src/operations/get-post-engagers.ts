@@ -298,8 +298,18 @@ function createScrollModalScript(distance: number): string {
 }
 
 /**
- * Write an extraction-failure diagnostic bundle for the reactions modal the
- * client is sitting on, then return so the caller can raise.
+ * Write an extraction-failure diagnostic bundle for the reactions-modal
+ * surface the client is sitting on, then return so the caller can raise.
+ *
+ * **Three callers, and one of them has no modal open.**  The two scrape sites
+ * run against a modal the readiness gate already passed.  The
+ * reactions-TRIGGER ambiguity branch (#911) runs before the click — where the
+ * surface *is* the trigger on the post-detail page, which is precisely what
+ * this surface's `detect` anchor is bound to (`dom-variant.ts`, reactions-modal
+ * adapter docs), so the same probe and the same trigger class are the right
+ * ones there.  What differs is how the bundle READS: its modal-scoped probes
+ * report an absent modal because none was ever opened, not because opening one
+ * failed.
  *
  * Sibling of `capturePostDetailExtractionFailure` in `wait-for-post-load.ts`,
  * and gated the same way: the detect probe is a diagnostic-only read whose sole consumer is
@@ -407,6 +417,25 @@ export async function getPostEngagers(
       // dialects put the trigger in different places, so clicking one dialect's
       // affordance on a page that is also speaking the other opens a modal
       // nothing downstream is bound to read.
+      //
+      // Captured before the raise (#911).  This is a registry-bound refusal on
+      // the reactions-modal surface that no deadline can ever see: the trigger
+      // script decides in a single `evaluate`, and the gate that owns a
+      // deadline here has not run yet.  That is the same argument the branches
+      // either side of this one already make, and until #911 this was the one
+      // such refusal on this surface that produced no artifact — leaving the
+      // standing "inspect these artifacts first" directive undischargeable at
+      // exactly the branch whose diagnosis needs them.
+      //
+      // **Read `dialogCount: 0` in this bundle as "no click was attempted",
+      // NOT as the #773 fingerprint of a click that opened nothing.**  The
+      // capture is shared with the two post-click sites, so every modal-scoped
+      // probe in it is read on a page that has no modal on it and cannot have
+      // one yet.  `variantDetection` is what carries the diagnosis here: the
+      // ambiguity report below names WHICH dialects claimed the page, and the
+      // probe adds HOW MANY elements each one's anchor matched — which is what
+      // says where to tighten them.
+      await captureEngagerExtractionFailure(client);
       throw new DOMVariantAmbiguousError(
         REACTIONS_MODAL_SURFACE,
         found.ambiguousVariants,

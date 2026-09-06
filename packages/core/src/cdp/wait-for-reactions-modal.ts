@@ -341,6 +341,11 @@ interface CaptureCancellationState {
  * reaches a deadline.  The trigger travels with the call so a bundle is never
  * labelled for a timeout that did not happen.
  *
+ * `extraction-failure` covers deadline-free refusals on this surface
+ * generally, not only post-click ones.  #911 added the reactions-TRIGGER
+ * ambiguity branch, which refuses before any modal exists at all; see the
+ * label table below for what that does to the bundle's modal-scoped probes.
+ *
  * The vocabulary is deliberately closed rather than a free-form string: these
  * values become filenames operators grep for.
  */
@@ -366,8 +371,15 @@ const REACTIONS_MODAL_TRIGGER_LABELS: Record<
   },
   "extraction-failure": {
     stem: "reactions-modal-extraction-failure",
-    // Not `waitForReactionsModal`: that gate went green — the modal opened
-    // and rendered engager links.  What failed is the row scrape inside it.
+    // Not `waitForReactionsModal`: no deadline expired.  At the scrape sites
+    // that gate went green — the modal opened and rendered engager links —
+    // and what failed is the row scrape inside it.  At the reactions-TRIGGER
+    // ambiguity branch (#911) the gate never ran, because the refusal precedes
+    // the click; there the bundle's modal-scoped probes read as an absent
+    // modal, which is "none was attempted" rather than the #773 fingerprint of
+    // one that failed to open.  Either way, labelling the artifact for a
+    // timeout that never happened would send the next reader hunting a slow
+    // page that was never slow.
     // Identifier-shaped like the family's other tags so a log splitter can
     // still treat the tag as one token.
     tag: "reactionsModalExtraction",
@@ -400,10 +412,14 @@ export interface ReactionsModalCaptureContext {
  * Best-effort diagnostic capture when reading the reactions modal fails.
  *
  * **Two triggers, not one** ({@link ReactionsModalFailureTrigger}, #835):
- * {@link waitForReactionsModal} timing out waiting for the modal DOM, and an
- * engager scrape that got past that gate contradicting itself
- * (`assertCardinalCorroboration`).  The second never reaches a deadline, so a
- * timeout-gated capture could not see it at all.
+ * {@link waitForReactionsModal} timing out waiting for the modal DOM, and a
+ * deadline-free refusal on this surface — an engager scrape that got past that
+ * gate contradicting itself (`assertCardinalCorroboration`), a modal no adapter
+ * can read, or, since #911, an ambiguous reactions TRIGGER read before the
+ * click.  None of that second class reaches a deadline, so a timeout-gated
+ * capture could not see any of them at all.  The trigger-find caller is the
+ * one that runs with no modal open: its bundle's dialog probes report absence
+ * because nothing was opened, not because opening failed.
  *
  * **This bundle now carries per-adapter detect counts (#840), and the sentence
  * that used to stand here saying it could not is corrected rather than

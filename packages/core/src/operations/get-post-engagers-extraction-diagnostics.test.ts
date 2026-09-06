@@ -786,6 +786,198 @@ describe("getPostEngagers extraction-failure diagnostics (#835)", () => {
     expect(evaluateMock).toHaveBeenCalledTimes(2);
   });
 
+  // -------------------------------------------------------------------------
+  // Capture at the reactions-TRIGGER refusal (#911)
+  // -------------------------------------------------------------------------
+  //
+  // The branch above refuses BEFORE the click, and until #911 it was the one
+  // registry-bound refusal on this surface that wrote no bundle — while the
+  // scrape branches either side of it did. No deadline can cover it: the
+  // trigger script decides in one `evaluate`, and the modal-readiness gate
+  // that owns a deadline here has not run yet.
+  //
+  // Not folded into the `primeUpToScrape` fixtures: that helper primes the
+  // modal-readiness and total calls too, so a run refusing before the click
+  // would consume them as the capture's two reads and assert against values
+  // that mean something else entirely.
+
+  /** The detect probe on a hybrid page: both dialects' anchors match. */
+  const HYBRID_DETECTION = {
+    matched: ["sdui", "legacy"],
+    probes: { sdui: 1, legacy: 1 },
+  };
+
+  /**
+   * The capture probe as it reads BEFORE the click — every modal-scoped field
+   * reporting absence, because no modal was ever opened.
+   *
+   * Deliberately not `CAPTURE_PROBE`: that fixture describes an OPEN modal and
+   * would hide the one thing a reader of this bundle has to get right, which
+   * is that `dialogCount: 0` here means "no click was attempted" and not the
+   * #773 fingerprint of a click that opened nothing.
+   */
+  const PRE_CLICK_PROBE = {
+    href: POST_URL,
+    dialogCount: 0,
+    dialogHasInLinks: false,
+    dialogChildElementCount: 0,
+    bodyTextSnippet: "2 reactions\n",
+    reactionsButtonAriaLabels: ["2 reactions"],
+    reactionsCountText: "2 reactions",
+    htmlDialogCount: 0,
+    ariaModalCount: 0,
+    hasReactionsTab: false,
+    reactionsTabAncestorChain: [],
+    resolvedModalAncestorTag: null,
+  };
+
+  /**
+   * Prime a refusal at the reactions-trigger find: post detail ready, trigger
+   * script reporting two claimants.
+   *
+   * @param captured - Whether to prime the two reads the capture spends.  Off
+   *   deliberately does NOT prime them, so a capture that fired anyway would
+   *   read `undefined` rather than quietly consuming a plausible value.
+   * @returns The evaluate mock and the recorded `client.send` methods.
+   */
+  function primeAmbiguousTrigger(captured: boolean) {
+    vi.mocked(discoverTargets).mockResolvedValue([
+      {
+        id: "target-1",
+        type: "page",
+        title: "LinkedIn",
+        url: "https://www.linkedin.com/feed/",
+        description: "",
+        devtoolsFrontendUrl: "",
+      },
+    ]);
+
+    const evaluateMock = vi.fn();
+    evaluateMock.mockResolvedValueOnce(true); // post readiness
+    evaluateMock.mockResolvedValueOnce({
+      ambiguousVariants: ["sdui", "legacy"],
+    });
+    if (captured) {
+      evaluateMock.mockResolvedValueOnce(HYBRID_DETECTION);
+      evaluateMock.mockResolvedValueOnce(PRE_CLICK_PROBE);
+    }
+
+    const sendCalls: string[] = [];
+    vi.mocked(CDPClient).mockImplementation(function () {
+      return {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect: vi.fn(),
+        navigate: vi.fn().mockResolvedValue(undefined),
+        evaluate: evaluateMock,
+        send: vi.fn(async (method: string) => {
+          sendCalls.push(method);
+          return { data: "aGVsbG8=" };
+        }),
+      } as unknown as CDPClient;
+    });
+
+    return { evaluateMock, sendCalls };
+  }
+
+  it("writes a diagnostic bundle when two adapters claim the reactions trigger", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const { sendCalls } = primeAmbiguousTrigger(true);
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    // By CLASS, for the reason the sibling fixtures give: the propagated error
+    // must still be the refusal this branch exists to raise, and a bare
+    // `.toThrow()` would pass for a throw manufactured by the capture itself.
+    await expect(
+      getPostEngagers({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toBeInstanceOf(DOMVariantAmbiguousError);
+
+    const paths = vi.mocked(writeFile).mock.calls.map((call) => String(call[0]));
+    expect(paths.some((path) => path.endsWith(".json"))).toBe(true);
+    // The same stem the post-click sites write: a new CALLER of an existing
+    // trigger, not a new trigger — so the artifact-name table gains no row.
+    expect(
+      paths.every((path) =>
+        path.includes("reactions-modal-extraction-failure-"),
+      ),
+    ).toBe(true);
+    // The screenshot is the half of the bundle that shows the hybrid page a
+    // reader has to look at to tighten the anchors.
+    expect(sendCalls).toContain("Page.captureScreenshot");
+    warnSpy.mockRestore();
+  });
+
+  it("stamps the hybrid detect counts the ambiguity report cannot carry", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    primeAmbiguousTrigger(true);
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    await expect(
+      getPostEngagers({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toBeInstanceOf(DOMVariantAmbiguousError);
+
+    const jsonCall = vi
+      .mocked(writeFile)
+      .mock.calls.find((call) => String(call[0]).endsWith(".json"));
+    expect(jsonCall).toBeDefined();
+    expect(
+      JSON.parse(String(jsonCall?.[1])) as Record<string, unknown>,
+    ).toMatchObject({
+      trigger: "extraction-failure",
+      // Absence, and honestly so: nothing was clicked, so there is no modal to
+      // probe.  Pinned because this is the field most open to being misread as
+      // #773, and a fixture that quietly reported an open modal here would
+      // teach the wrong reading.
+      dialogCount: 0,
+      // The whole reason the probe still runs on a branch that already knows
+      // the page is ambiguous: `ambiguousVariants` names WHICH dialects
+      // claimed it, `probes` says HOW MANY elements each anchor matched, and
+      // only the second says where to tighten them.
+      variantDetection: HYBRID_DETECTION,
+    });
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0]?.[0] ?? "")).toContain(
+      "extraction-failure diagnostics",
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("is default-off at the reactions-trigger refusal, and spends no probe there", async () => {
+    delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    const { evaluateMock, sendCalls } = primeAmbiguousTrigger(false);
+
+    await expect(
+      getPostEngagers({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toBeInstanceOf(DOMVariantAmbiguousError);
+
+    // The bundle carries page content — personal data — so a default-off CLI
+    // or MCP run must write nothing.
+    expect(vi.mocked(writeFile)).not.toHaveBeenCalled();
+    expect(sendCalls).not.toContain("Page.captureScreenshot");
+    // 1 readiness + 1 find, and nothing after it.  A COST claim, not a capture
+    // claim: `writeFile` staying untouched would also hold if the detect probe
+    // ran and only the write was skipped, and that probe is a page round-trip
+    // spent for a bundle nobody is going to get.
+    expect(evaluateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps propagating the trigger refusal when the capture itself fails", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    primeAmbiguousTrigger(true);
+    const { writeFile: wf } = await import("node:fs/promises");
+    vi.mocked(wf).mockRejectedValueOnce(new Error("disk full"));
+
+    // A capture-side failure must never replace the diagnosis it was written
+    // to explain — including at the site that added it.
+    await expect(
+      getPostEngagers({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toBeInstanceOf(DOMVariantAmbiguousError);
+  });
+
   it("refuses with DOMVariantAmbiguousError when two adapters claim the open modal", async () => {
     delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
     const evaluateMock = primeUpToScrape({
