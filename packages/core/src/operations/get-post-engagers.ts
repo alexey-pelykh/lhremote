@@ -301,8 +301,10 @@ function createScrollModalScript(distance: number): string {
  * Write an extraction-failure diagnostic bundle for the reactions-modal
  * surface the client is sitting on, then return so the caller can raise.
  *
- * **Three callers, and one of them has no modal open.**  The two scrape sites
- * run against a modal the readiness gate already passed.  The
+ * **Three callers, and one of them has no modal open.**  The other two — the
+ * engager scrape and the pagination scroll, both reaching here through
+ * `unreadableModalError` — run against a modal the readiness gate already
+ * passed.  The
  * reactions-TRIGGER ambiguity branch (#911) runs before the click — where the
  * surface *is* the trigger on the post-detail page, which is precisely what
  * this surface's `detect` anchor is bound to (`dom-variant.ts`, reactions-modal
@@ -429,12 +431,20 @@ export async function getPostEngagers(
       //
       // **Read `dialogCount: 0` in this bundle as "no click was attempted",
       // NOT as the #773 fingerprint of a click that opened nothing.**  The
-      // capture is shared with the two post-click sites, so every modal-scoped
-      // probe in it is read on a page that has no modal on it and cannot have
-      // one yet.  `variantDetection` is what carries the diagnosis here: the
-      // ambiguity report below names WHICH dialects claimed the page, and the
-      // probe adds HOW MANY elements each one's anchor matched — which is what
-      // says where to tighten them.
+      // capture is shared with the two post-click sites, so its modal-scoped
+      // probes are read on a page where no REACTIONS modal has been opened and
+      // none can have been — nothing has been clicked yet.
+      //
+      // `0` is the expected reading rather than an entailment: the probe counts
+      // every `[role="dialog"]` on the page, not the reactions modal
+      // specifically, so an unrelated overlay carrying a profile link can make
+      // it non-zero.  That would mean some OTHER dialog was already open, and
+      // still never that the reactions modal opened.
+      //
+      // `variantDetection` is what carries the diagnosis here: the ambiguity
+      // report below names WHICH dialects claimed the page, and the probe adds
+      // HOW MANY elements each one's anchor matched — which is what says where
+      // to tighten them.
       await captureEngagerExtractionFailure(client);
       throw new DOMVariantAmbiguousError(
         REACTIONS_MODAL_SURFACE,
