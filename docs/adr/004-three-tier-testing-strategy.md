@@ -122,3 +122,51 @@ mode this whole amendment exists to remove, one level up. The constant is
 exported from the helper so the two move together rather than by convention.
 
 Decision 5 is unchanged and now also governs this helper's unit tier.
+
+### 2026-09-06 — The Tier-1 dependency column is now enforced
+
+The Consequences list above records, under Negative, that *"the tier boundary
+is enforced by file naming convention, not by tooling — a misnamed file could
+run in the wrong tier."* That is no longer true of the Tier-1 row's
+external-dependency column, and the way it has stopped being true is worth
+stating precisely, because it is now asymmetric rather than simply fixed.
+
+The rule the table always stated — Tier 1 depends on nothing external — was
+enforced by nobody. `packages/core/src/services/instance-context.test.ts`
+issued a real `fetch` to `http://127.0.0.1:9222/json/list` through an unmocked
+`isCdpPort()`, so the suite passed or failed on whether LinkedHelper happened
+to be listening on the developer's machine. CI never saw it: nothing answers on
+9222 there, so the false branch was always taken. Two bug reports came out of
+that, one of which blamed the Node major version and sent the investigation
+somewhere it could not resolve.
+
+`vitest.setup.ts` at the repo root, wired in through the root
+`vitest.config.ts`, now replaces `fetch` and `WebSocket` for every `*.test.ts`
+that is not `*.integration.test.ts` or `*.e2e.test.ts`. A Tier-1 test that
+reaches the live network fails, and the failure names the call and its site.
+
+Two things follow that the original bullet does not describe.
+
+**The misnaming consequence is now one-directional.** Tier-2 work misnamed
+`*.test.ts` fails loudly at its first network call. Tier-1 work misnamed
+`*.integration.test.ts` still runs unguarded and silently — the suffix is the
+exemption, so the direction that buys silence is the one that still costs
+nothing. Nothing detects it.
+
+**The `.integration.test.ts` suffix now carries a second meaning.** Decision 1
+above defines it descriptively, by what the tier uses: real Chromium, real
+SQLite fixtures. It is now also a *selector* — the thing that switches the
+guard off. A file may legitimately carry the suffix because it needs the
+network rather than because it drives Chromium, and
+`packages/core/src/testing/tier1-network-guard.integration.test.ts` is exactly
+that case: it asserts the exemption holds and uses neither Chromium nor SQLite.
+
+The guard covers `fetch` and `WebSocket`, which are the only network primitives
+this codebase uses. It does not cover `node:http`, raw sockets, or non-network
+machine state such as the `ps-list` / `pid-port` process probes — those remain
+convention-enforced, exactly as this bullet originally described.
+
+Decisions 1 through 5 are otherwise unchanged. Decision 1's claim that Tiers 1
+and 2 share one runner invocation is what makes a single `setupFiles` entry
+able to serve both, and the guard reads the filename to tell them apart rather
+than splitting the invocation.
