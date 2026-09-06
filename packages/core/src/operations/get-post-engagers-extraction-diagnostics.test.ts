@@ -64,6 +64,7 @@ import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
 import {
   adaptersFor,
+  buildDetectionSource,
   buildReactionsModalExtractionSource,
   buildReactionsModalScrollSource,
   buildReactionsModalTotalSource,
@@ -837,10 +838,13 @@ describe("getPostEngagers extraction-failure diagnostics (#835)", () => {
    *
    * @param captured - Whether to prime the two reads the capture spends.  Off
    *   deliberately does NOT prime them, so a capture that fired anyway would
-   *   read `undefined` rather than quietly consuming a plausible value.
+   *   read `undefined` rather than quietly consuming a plausible value.  The
+   *   observable that actually catches that is the CALL COUNT, not the value.
+   * @param probeFails - Make the detect probe reject, modelling a broken
+   *   instrument: `probeVariantDetection` swallows it and answers `null`.
    * @returns The evaluate mock and the recorded `client.send` methods.
    */
-  function primeAmbiguousTrigger(captured: boolean) {
+  function primeAmbiguousTrigger(captured: boolean, probeFails = false) {
     vi.mocked(discoverTargets).mockResolvedValue([
       {
         id: "target-1",
@@ -858,7 +862,11 @@ describe("getPostEngagers extraction-failure diagnostics (#835)", () => {
       ambiguousVariants: ["sdui", "legacy"],
     });
     if (captured) {
-      evaluateMock.mockResolvedValueOnce(HYBRID_DETECTION);
+      if (probeFails) {
+        evaluateMock.mockRejectedValueOnce(new Error("probe blew up"));
+      } else {
+        evaluateMock.mockResolvedValueOnce(HYBRID_DETECTION);
+      }
       evaluateMock.mockResolvedValueOnce(PRE_CLICK_PROBE);
     }
 
@@ -881,7 +889,7 @@ describe("getPostEngagers extraction-failure diagnostics (#835)", () => {
 
   it("writes a diagnostic bundle when two adapters claim the reactions trigger", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
-    const { sendCalls } = primeAmbiguousTrigger(true);
+    const { evaluateMock, sendCalls } = primeAmbiguousTrigger(true);
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
@@ -905,6 +913,20 @@ describe("getPostEngagers extraction-failure diagnostics (#835)", () => {
     // The screenshot is the half of the bundle that shows the hybrid page a
     // reader has to look at to tighten the anchors.
     expect(sendCalls).toContain("Page.captureScreenshot");
+
+    // WHICH registry the detect probe binds to, pinned by script identity for
+    // the reason `evaluates exactly the scripts the reactions-modal registry
+    // generates` gives above: every fixture here is a POSITIONAL mock that
+    // never inspects its script argument, so swapping this site's
+    // `adaptersFor(REACTIONS_MODAL_SURFACE)` for another surface's list is a
+    // one-token edit that type-checks and leaves every other assertion in this
+    // file green — while the bundle then reports another dialect's counts for
+    // a reactions-modal refusal, in the one field the call site calls the
+    // diagnosis. That pin exists nowhere else at this site: the identity test
+    // above runs with capture OFF, so it never evaluates this script at all.
+    expect(String(evaluateMock.mock.calls[2]?.[0] ?? "")).toBe(
+      buildDetectionSource(adaptersFor("reactions-modal")),
+    );
     warnSpy.mockRestore();
   });
 
@@ -976,6 +998,39 @@ describe("getPostEngagers extraction-failure diagnostics (#835)", () => {
     await expect(
       getPostEngagers({ postUrl: POST_URL, cdpPort: CDP_PORT }),
     ).rejects.toBeInstanceOf(DOMVariantAmbiguousError);
+
+    // Without this the test is vacuous: a run that never captured at all would
+    // leave the once-rejection unconsumed and pass identically, making it a
+    // verbatim duplicate of the default-off fixture above rather than the
+    // composition claim its name makes.
+    expect(vi.mocked(wf)).toHaveBeenCalled();
+  });
+
+  it("records variantDetection as null when the detect probe itself fails", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    primeAmbiguousTrigger(true, true);
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    await expect(
+      getPostEngagers({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toBeInstanceOf(DOMVariantAmbiguousError);
+
+    const jsonCall = vi
+      .mocked(writeFile)
+      .mock.calls.find((call) => String(call[0]).endsWith(".json"));
+    expect(jsonCall).toBeDefined();
+    // PRESENT and null, never absent — the field is `null`-able rather than
+    // omittable precisely so a broken instrument is distinguishable from a
+    // probe that was never attempted.  The bundle is still written: a broken
+    // probe is the moment the screenshot and the body text matter most, so a
+    // short-circuit that dropped the artifact here would fail exactly when it
+    // is needed.
+    const bundle = JSON.parse(String(jsonCall?.[1])) as Record<string, unknown>;
+    expect("variantDetection" in bundle).toBe(true);
+    expect(bundle.variantDetection).toBeNull();
+    warnSpy.mockRestore();
   });
 
   it("refuses with DOMVariantAmbiguousError when two adapters claim the open modal", async () => {

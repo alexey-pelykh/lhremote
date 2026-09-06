@@ -375,9 +375,12 @@ const REACTIONS_MODAL_TRIGGER_LABELS: Record<
     // that gate went green — the modal opened and rendered engager links —
     // and what failed is the row scrape inside it.  At the reactions-TRIGGER
     // ambiguity branch (#911) the gate never ran, because the refusal precedes
-    // the click; there the bundle's modal-scoped probes read as an absent
-    // modal, which is "none was attempted" rather than the #773 fingerprint of
-    // one that failed to open.  Either way, labelling the artifact for a
+    // the click; there the bundle's modal-scoped probes are expected to read as
+    // an absent modal, which is "none was attempted" rather than the #773
+    // fingerprint of one that failed to open — and a NON-zero `dialogCount`
+    // there means some other overlay was already up, never that the reactions
+    // modal opened, since the probes below count every `[role="dialog"]` rather
+    // than this one.  Either way, labelling the artifact for a
     // timeout that never happened would send the next reader hunting a slow
     // page that was never slow.
     // Identifier-shaped like the family's other tags so a log splitter can
@@ -418,8 +421,10 @@ export interface ReactionsModalCaptureContext {
  * can read, or, since #911, an ambiguous reactions TRIGGER read before the
  * click.  None of that second class reaches a deadline, so a timeout-gated
  * capture could not see any of them at all.  The trigger-find caller is the
- * one that runs with no modal open: its bundle's dialog probes report absence
- * because nothing was opened, not because opening failed.
+ * one that runs with no modal open: its bundle's dialog probes are expected to
+ * report absence because nothing was opened, not because opening failed — and
+ * they count every `[role="dialog"]`, so a non-zero reading there is an
+ * unrelated overlay rather than the reactions modal.
  *
  * **This bundle now carries per-adapter detect counts (#840), and the sentence
  * that used to stand here saying it could not is corrected rather than

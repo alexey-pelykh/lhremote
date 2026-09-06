@@ -286,6 +286,12 @@ it. (That date carries two ADR-008 amendments; this is the search-results one,
 > appeals to is the right one and is what both items restore; see § 2026-09-05
 > Amendment. Read it as an aspiration with a live exception, not as a survey.
 
+> **Superseded on 2026-09-06** — the live exception only. #911 closed the
+> `getPostEngagers` reactions-trigger counterexample, so the clause above is a
+> survey again rather than an aspiration. Everything else in the note stands,
+> including its lesson: it was false when written, and a reader should still not
+> take it on trust. See § 2026-09-06 Amendment (#911).
+
 **Why this surface warrants it more than the others, not less.** It has the
 least offline evidence behind it: its `legacy` adapter is *reconstructed* from
 a 2026-03-26 selector study and the diff of commit `24052dd` rather than
@@ -569,6 +575,16 @@ branch — and read this paragraph as the reason a reader should not take the
 clause on trust, which is the whole lesson of the two counterexamples it has now
 had.
 
+> **Superseded on 2026-09-06** — the *"not restored in full"* verdict and the
+> *"until #911 closes"* instruction, which are the two sentences a reader acts
+> on. #911 landed the capture; the clause is restored in full. Nothing else here
+> changes — the diagnosis, the reachability argument and the empty-list carve-out
+> all still hold, and so does the closing lesson about not taking the clause on
+> trust. Marked rather than rewritten, on the ground § 2026-09-02 gives for its
+> own marker: a superseded passage that *instructs* has to say so where it is
+> read, or a maintainer reconciling the two authorities amends the CODE to match
+> the ADR — here, by deleting the capture #911 added. See § 2026-09-06 Amendment.
+
 **Unchanged, and load-bearing:** activation stays gated on
 `LHREMOTE_CAPTURE_DIAGNOSTICS=1` at the new site. The detect probe is skipped
 outright when capture is off, for the reason § 2026-09-04 (#870) gives for the
@@ -595,7 +611,8 @@ twice, and the two readings are seconds apart. The first is the
 reactions-TRIGGER find, before any click: `FIND_REACTIONS_TRIGGER_SCRIPT`
 selects on this surface's `detect` anchor — which for the reactions-modal
 surface *is* the trigger on the post-detail page, not the modal wrapper (ADR-008
-§ 2026-09-02 Amendment) — and a page claimed by both dialects is refused with
+§ 2026-09-02 Amendment — that date carries two ADR-008 amendments; this is the
+reactions-modal one, #840) — and a page claimed by both dialects is refused with
 `DOMVariantAmbiguousError` rather than clicked, because clicking one dialect's
 affordance on a page also speaking the other opens a modal nothing downstream is
 bound to read. The second is the modal scrape after the click, which refuses the
@@ -622,12 +639,22 @@ no new artifact name, no new bundle field, and the artifact-name table in
 second extension note, because that list names sites and this widens one.
 
 **How the bundle reads here, which is the one thing this amendment adds that its
-predecessor did not.** The capture is shared with two post-click callers, so
+predecessor did not.** The capture is shared with two post-click callers — the
+engager scrape and the pagination scroll, both reaching it through
+`unreadableModalError` — so
 every modal-scoped probe in it — `dialogCount`, `htmlDialogCount`,
 `ariaModalCount`, `hasReactionsTab` — is read on a page that has no modal on it
-and cannot have one yet. That is precisely the fingerprint § 2026-09-01's probe
-set assigns to case 1, *"click never opened a dialog"* (#773). **At this site it
-means the opposite: no click was attempted.** The `trigger` field alone does not
+and cannot have one yet — no *reactions* modal, at least. That is precisely the
+fingerprint `captureReactionsModalFailure`'s own probe-set docblock
+(`packages/core/src/cdp/wait-for-reactions-modal.ts`) assigns to its case 1,
+*"click never opened a dialog"* (#773). **At this site it means the opposite: no
+click was attempted.**
+
+Read `dialogCount: 0` as the *expected* reading here rather than as an entailment
+of it: the probe counts every `[role="dialog"]` on the page, not the reactions
+modal specifically, so an unrelated overlay carrying a profile link can make it
+non-zero. What that would mean at this branch is *some other dialog was already
+open*, never *the reactions modal opened* — nothing was clicked. The `trigger` field alone does not
 separate them, since both post-click callers share it, so the discriminator is
 the artifact plus the error the run raised — `DOMVariantAmbiguousError` naming
 this surface, with the reactions-modal readiness gate never having run. The
