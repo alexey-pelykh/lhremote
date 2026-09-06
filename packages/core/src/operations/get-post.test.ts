@@ -135,12 +135,15 @@ describe("getPost", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Several cases below reach a diagnostic capture, and this file mocks no
-    // filesystem: every `setupMocks({ postDetail: null })` case lands on
-    // `capturePostDetailExtractionFailure` at `get-post.ts:422`, and the
-    // ORACLE block's cardinal-contradiction cases land on the second call at
-    // `get-post.ts:520`.  That capture self-gates on
-    // `diagnosticCaptureEnabled()`, which reads `process.env` per call rather
-    // than at module load — so under an ambient
+    // filesystem.  `get-post.ts` calls `capturePostDetailExtractionFailure`
+    // at exactly two sites: every `setupMocks({ postDetail: null })` case
+    // lands on the first, and the ORACLE block's cardinal-contradiction cases
+    // on the second.  Both are named rather than cited by line, because a
+    // line number in a comment about ANOTHER file decays with nothing to
+    // catch it, and this repo already carries one that has.
+    //
+    // That capture self-gates on `diagnosticCaptureEnabled()`, which reads
+    // `process.env` per call rather than at module load — so under an ambient
     // `LHREMOTE_CAPTURE_DIAGNOSTICS=1`, a plausible export while debugging
     // diagnostics, a Tier-1 unit run would `mkdtemp` and write real bundles
     // into `os.tmpdir()`, contradicting CLAUDE.md section Testing's "Tier 1 —
