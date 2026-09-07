@@ -527,26 +527,48 @@ describe("CDPClient", () => {
       await client.connect();
       const ws = lastMockWs();
 
-      const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+      // Record the delays with a plain assignment rather than vi.spyOn().
+      // Fake timers are installed for this block, so a spy taken here captures
+      // the FAKE CLOCK's setTimeout as its "original" and stays in vitest's
+      // mock registry even after mockRestore().  The afterEach hooks then run
+      // vi.useRealTimers() — restoring the native setTimeout — followed by the
+      // outer vi.restoreAllMocks(), which writes that now-uninstalled clock
+      // function straight back over it.  From there on nothing ticks the
+      // clock, so every later test in the file that waits on a real timeout
+      // hangs until vitest's own 5s deadline.  In declaration order this
+      // describe runs last, which is the only reason the suite was green
+      // (#928).  Plain assignment never enters the registry, so it cannot be
+      // re-applied after the clock is gone — the same reasoning vitest.setup.ts
+      // gives for installing the Tier-1 network guard by assignment.
+      const scheduleTimeout = globalThis.setTimeout;
+      const observedDelays: number[] = [];
+      globalThis.setTimeout = ((
+        ...args: Parameters<typeof globalThis.setTimeout>
+      ) => {
+        const ms = args[1];
+        if (typeof ms === "number") {
+          observedDelays.push(ms);
+        }
+        return scheduleTimeout(...args);
+      }) as typeof globalThis.setTimeout;
 
-      // All reconnection attempts will fail, so we can observe all 5 delays
-      MockWebSocket.nextBehaviors = ["error", "error", "error", "error", "error"];
+      try {
+        // All reconnection attempts will fail, so we can observe all 5 delays
+        MockWebSocket.nextBehaviors = ["error", "error", "error", "error", "error"];
 
-      ws.emit("close", {});
+        ws.emit("close", {});
 
-      // Advance past all backoff delays to let all 5 attempts complete
-      await vi.advanceTimersByTimeAsync(15_500);
+        // Advance past all backoff delays to let all 5 attempts complete
+        await vi.advanceTimersByTimeAsync(15_500);
+      } finally {
+        globalThis.setTimeout = scheduleTimeout;
+      }
 
-      // Extract the backoff delay values passed to setTimeout by the
-      // reconnection loop.  The loop calls: await new Promise(r => setTimeout(r, delay))
+      // The reconnection loop calls: await new Promise(r => setTimeout(r, delay))
       // We look for calls with the expected exponential backoff values.
-      const backoffDelays = setTimeoutSpy.mock.calls
-        .map((call) => call[1])
-        .filter((ms): ms is number => typeof ms === "number" && ms >= 500);
+      const backoffDelays = observedDelays.filter((ms) => ms >= 500);
 
       expect(backoffDelays).toEqual([500, 1000, 2000, 4000, 8000]);
-
-      setTimeoutSpy.mockRestore();
     });
 
     it("should restore functionality after successful reconnection", async () => {

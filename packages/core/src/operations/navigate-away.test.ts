@@ -7,12 +7,19 @@ import { navigateAwayIf } from "./navigate-away.js";
 
 const mockClient = {
   evaluate: vi.fn(),
-  navigate: vi.fn().mockResolvedValue(undefined),
+  navigate: vi.fn(),
 };
 
 describe("navigateAwayIf", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // resetAllMocks, not clearAllMocks: clearing drops call records but keeps
+    // mock IMPLEMENTATIONS, so the `navigate.mockRejectedValue()` set by
+    // "propagates navigate errors" leaked into every test that ran after it —
+    // green only because declaration order happens to run that test last
+    // (#928).  Resetting also drops any default set at declaration, which is
+    // why the baseline lives here rather than on the `vi.fn()` above.
+    vi.resetAllMocks();
+    mockClient.navigate.mockResolvedValue(undefined);
   });
 
   afterEach(() => {

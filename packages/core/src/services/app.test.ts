@@ -69,6 +69,20 @@ function makeMockChild(): ChildProcess {
   return child;
 }
 
+// The file had no per-test mock lifecycle at all: `restoreAllMocks()` only
+// undoes `vi.spyOn` spies, so the `vi.mock()` module mocks below carried both
+// their CALL RECORDS and their implementations from one test into the next.
+// The two `expect(mockedSpawn).not.toHaveBeenCalled()` assertions were
+// therefore reading calls made by earlier tests, and passed only because the
+// last spawning test before them happens to run `mockedSpawn.mockClear()`
+// mid-body for its own second-launch assertions.  Shuffle the order and that
+// accident disappears.  `resetAllMocks()` drops records and implementations
+// both; the per-describe `beforeEach` hooks below re-establish what they need,
+// and they run after this one (#928).
+beforeEach(() => {
+  vi.resetAllMocks();
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   delete process.env["LINKEDHELPER_PATH"];
