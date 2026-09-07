@@ -505,9 +505,15 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // Leaf-run membership is decided by IDENTITY against \`leafRuns\`, never by
   // re-testing \`RUN_SELECTOR\` here: extraction drifting from selection is the
   // defect #898 records, and a second copy of the selector is where that drift
-  // starts.
+  // starts.  A \`Set\` carries that identity rule unchanged: \`Set.prototype.has\`
+  // compares by SameValueZero and \`Array.prototype.indexOf\` by \`===\`, and the
+  // two differ only on \`NaN\` and \`±0\` — never on the element references this
+  // holds.  \`childNodes\` is read directly for the same reason it can be: the
+  // walk only reads \`textContent\`, so a live \`NodeList\` has no mutation to
+  // observe, and the document double returns a fresh plain array.  Both are
+  // iterable and neither is indexed here, so the snapshot bought nothing.
   function rootFields(root) {
-    const leaves = leafRuns(root);
+    const leaves = new Set(leafRuns(root));
     const out = [];
     let bare = '';
 
@@ -518,13 +524,13 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     }
 
     function walk(node) {
-      for (const child of Array.from(node.childNodes)) {
+      for (const child of node.childNodes) {
         if (child.nodeType === TEXT_NODE) {
           bare += child.textContent || '';
           continue;
         }
         if (child.nodeType !== ELEMENT_NODE) continue;
-        if (leaves.indexOf(child) < 0) {
+        if (!leaves.has(child)) {
           walk(child);
           continue;
         }
