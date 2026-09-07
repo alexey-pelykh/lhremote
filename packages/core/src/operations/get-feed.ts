@@ -506,9 +506,14 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // re-testing \`RUN_SELECTOR\` here: extraction drifting from selection is the
   // defect #898 records, and a second copy of the selector is where that drift
   // starts.  A \`Set\` carries that identity rule unchanged: \`Set.prototype.has\`
-  // compares by SameValueZero and \`Array.prototype.indexOf\` by \`===\`, and the
-  // two differ only on \`NaN\` and \`±0\` — never on the element references this
-  // holds.  \`childNodes\` is read directly for the same reason it can be: the
+  // compares by SameValueZero and \`Array.prototype.indexOf\` by \`===\`, and those
+  // two diverge on exactly ONE value — \`NaN\`, which SameValueZero calls equal to
+  // itself and \`===\` does not.  \`±0\` is NOT a second difference, though it is
+  // the one usually named beside \`NaN\`: both operators already treat \`+0\` and
+  // \`-0\` as equal (\`[-0].indexOf(0)\` is 0), and it is \`Object.is\` — SameValue,
+  // which neither of these is — that separates them.  Either way this set holds
+  // element references and nothing else, so no divergence is reachable.
+  // \`childNodes\` is read directly for the same reason it can be: the
   // walk only reads \`textContent\`, so a live \`NodeList\` has no mutation to
   // observe, and the document double returns a fresh plain array.  Both are
   // iterable and neither is indexed here, so the snapshot bought nothing.
