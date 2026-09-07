@@ -3125,28 +3125,101 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     headline: null,
     timestamp: "18h",
   },
+  // -- #902: a later region field the slug can neither confirm nor deny -------
+  //
+  // The surname folds to the EMPTY string, so extending the candidate over it
+  // neither gains nor costs score: it ties the one-field candidate on both
+  // `score` and `common`, and the tie-break used to hand it to the shorter one.
+  // The wholly non-Latin shape cannot reach this branch -- it folds to empty,
+  // scores zero and declines -- so only a mixed-script name exercises it.
+  //
+  // Resolved rather than accepted, because the anchor does carry the evidence:
+  // a connection badge TERMINATES this name region, which is LinkedIn's own
+  // statement that everything before it is name-side, and the slug still has
+  // "petrenko" that the accepted prefix does not explain. Both facts are
+  // required, and M2/M3 below are the shapes that hold each of them out.
   {
-    // The ACCEPT path's form of the decline-path defect. "ada" scores 3 against
-    // a bar of `min(4, 3)`, so the read ACCEPTS at the one-field prefix "Ada"
-    // -- accepting is not the same as consuming the whole name -- and before
-    // the accept branch was widened, "Lovelace" won the headline race.
-    label: "B3e short slug accepts a PREFIX of a split name",
-    href: "/in/ada/",
-    children: () => bareFields("p", "Ada", "Lovelace", "• 1st", "Head of Widgets", "18h •"),
-    name: "Ada",
+    label: "B3f mixed-script name, Latin given name and non-Latin surname",
+    href: "/in/alex-petrenko/",
+    children: () => bareFields("p", "Alex", "Петренко", "• 1st", "Head of Widgets", "18h •"),
+    name: "Alex Петренко",
     headline: "Head of Widgets",
     timestamp: "18h",
   },
   {
-    // Same accept-path defect reached by a different route: the surname folds
-    // to the empty string, so extending the candidate over it neither gains nor
-    // costs score and the shorter candidate holds the tie. The wholly non-Latin
-    // shape CANNOT reach this branch -- it folds to empty, scores zero and
-    // declines -- so only a mixed-script name exercises it.
-    label: "B3f mixed-script name, Latin given name and non-Latin surname",
+    // The extension consumes every fold-away field the badge covers, not just
+    // the first: a patronymic beside a surname is one name, not a name plus a
+    // headline, and stopping after one field would be the same truncation one
+    // field further along.
+    label: "M1 mixed-script split name across three fields",
+    href: "/in/alex-petrenko-ivanovych/",
+    children: () => bareFields("p", "Alex", "Петренко", "Іванович", "• 1st", "Head of Widgets", "18h •"),
+    name: "Alex Петренко Іванович",
+    headline: "Head of Widgets",
+    timestamp: "18h",
+  },
+  {
+    // FALSIFIER for the badge condition, and the case #902 names as the price
+    // of getting B3f wrong in the other direction. No badge terminates this
+    // region, so it legitimately spans name AND headline -- and a non-Latin
+    // HEADLINE folds away exactly as a non-Latin surname does. A tie-break
+    // flipped unconditionally fuses it into the name; keyed on the badge, it
+    // does not.
+    label: "M2 mixed-script name beside a non-Latin headline, no badge",
     href: "/in/alex-petrenko/",
-    children: () => bareFields("p", "Alex", "Петренко", "• 1st", "Head of Widgets", "18h •"),
+    children: () => bareFields("p", "Alex Петренко", "Керівник відділу", "18h •"),
+    name: "Alex Петренко",
+    headline: "Керівник відділу",
+    timestamp: "18h",
+  },
+  {
+    // The same falsifier with the name split, so the fold-away field is field 1
+    // in BOTH this shape and B3f. The only difference left is what terminates
+    // the region, which is the whole of what the badge condition reads.
+    label: "M2b split name beside a non-Latin headline, no badge",
+    href: "/in/alex/",
+    children: () => bareFields("p", "Alex", "Керівник відділу", "18h •"),
     name: "Alex",
+    headline: "Керівник відділу",
+    timestamp: "18h",
+  },
+  {
+    // FALSIFIER for the slug-remainder condition. Field-for-field identical to
+    // B3f -- badge-terminated region, fold-away second field -- and the slug is
+    // the only thing that differs: "alex" is explained IN FULL by the first
+    // field, so nothing says the display name continues. The badge alone is the
+    // absence of evidence against extending, never evidence for it.
+    label: "M3 badge-terminated region, but the slug is explained in full",
+    href: "/in/alex/",
+    children: () => bareFields("p", "Alex", "Керівник відділу", "• 1st", "Head of Widgets", "18h •"),
+    name: "Alex",
+    headline: "Head of Widgets",
+    timestamp: "18h",
+  },
+  {
+    // FALSIFIER for the further-FIELD condition. A trailing decoration folds
+    // away just as a non-Latin surname does, so the untrimmed candidate ties
+    // its own trimmed twin -- and here the slug DOES carry a remainder ("phd")
+    // and a badge DOES terminate the region, so the other two conditions are
+    // both met. Without the field-span requirement the badge contamination
+    // `trimTrailingBadge` exists to remove comes straight back.
+    label: "M4 a trailing decoration is not a further field",
+    href: "/in/ada-lovelace-phd/",
+    children: () => bareFields("p", "Ada Lovelace •", "• 1st", "Head of Widgets", "18h •"),
+    name: "Ada Lovelace",
+    headline: "Head of Widgets",
+    timestamp: "18h",
+  },
+  {
+    // And the control that keeps the extension from being read as "a badge
+    // makes the whole region the name": the second field carries real text the
+    // slug does not corroborate, `MAX_NAME_TAIL` rejects it, and no tie is ever
+    // reached. This is the same bound that keeps "Photography & Video" out of a
+    // display name, working on a badge-terminated region.
+    label: "M5 badge-terminated region, second field UNEXPLAINED by the slug",
+    href: "/in/ada/",
+    children: () => bareFields("p", "Ada", "Photography & Video", "• 1st", "Head of Widgets", "18h •"),
+    name: "Ada",
     headline: "Head of Widgets",
     timestamp: "18h",
   },
@@ -3486,7 +3559,7 @@ const FIELD_SHAPES: readonly FieldShape[] = [
  * regression list is evidence rather than an artefact of a degenerate
  * comparison; raise it when the corpus grows.
  */
-const BASELINE_CORRECT_FIELDS = 84;
+const BASELINE_CORRECT_FIELDS = 109;
 
 /**
  * A wrapper whose runs are all EMPTY, carrying its real text as a bare text
@@ -3773,9 +3846,10 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
 });
 
 /**
- * The headline rule chooses by EXCLUSION and has no positive test of its own,
- * and the name read consumes whole fields.  Both properties have a price, and
- * the two tests below pin what that price actually IS rather than leaving it as
+ * The headline rule chooses by EXCLUSION and has no positive test of its own;
+ * the name read consumes whole fields; and it extends across a field boundary
+ * only on evidence the slug actually carries.  Each property has a price, and
+ * the tests below pin what that price actually IS rather than leaving it as
  * prose in a doc comment nobody re-runs.
  *
  * These assert behaviour this change knowingly does NOT get right.  They are
@@ -3861,6 +3935,101 @@ describe("#860/#898 accepted costs", () => {
 
     expect(bounded.name).toBe("John Smith");
     expect(bounded.headline).toBe("Photography & Video");
+  });
+
+  it("truncates a split name when a SHORT slug is explained in full by its first field", () => {
+    // Issue #902's B3e, recorded here as a cost rather than fixed, and this is
+    // the reasoning so a later reader can overturn it with evidence rather than
+    // re-derive it.
+    //
+    // `/in/ada/` squashes to "ada", which the first field explains IN FULL, so
+    // the read accepts at the one-field prefix -- accepting is not the same as
+    // consuming the whole name -- and "Lovelace" is left out of the name it
+    // belongs to. `nameFieldSpan` still withholds it from the HEADLINE, so the
+    // fragment is dropped rather than misreported, and the pre-#860 script
+    // returns the same "Ada": this is a defect neither read fixes, not a
+    // regression either introduces.
+    //
+    // Why it is not resolvable from the anchor. "Lovelace" folds to real text
+    // the slug does not corroborate at all, which is exactly what `MAX_NAME_TAIL`
+    // rejects -- and that bound is what keeps "Photography & Video" out of a
+    // display name under `/in/john-smith-photography/` (G16c). Field for field,
+    // `/in/ada/` over "Ada" / "Lovelace" IS `/in/ada/` over "Ada" /
+    // "Photography & Video" (M5 in the corpus above): same short slug explained
+    // in full, same uncorroborated second field, same terminating badge. The
+    // slug says nothing that separates them, so the two candidate fixes both
+    // fail -- weakening `MAX_NAME_TAIL` reopens the eponymous-business
+    // regression, and taking the whole badge-terminated region fuses the
+    // duplicated screen-reader copy of an a11y actor header into the name
+    // (measured, not predicted).
+    //
+    // The falsifier is a slug that reaches the second field: `/in/ada-lovelace/`
+    // over the same fields returns the whole name, which the corpus pins.
+    // Asserted as the OBSERVED answer so that a later change which fixes it
+    // fails here and has to say so.
+    const truncated = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "short slug, split name, badge after",
+      href: "/in/ada/",
+      children: () => bareFields("p", "Ada", "Lovelace", "• 1st", "Head of Widgets", "18h •"),
+      name: "Ada Lovelace",
+    });
+
+    expect(truncated.name).toBe("Ada");
+    // The fragment is withheld from the headline rather than misreported as one.
+    expect(truncated.headline).toBe("Head of Widgets");
+
+    // The falsifier, asserted rather than asserted-about: a slug that reaches
+    // the second field reads the whole name off the same fields.
+    const reached = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "same fields, slug reaching the second field",
+      href: "/in/ada-lovelace/",
+      children: () => bareFields("p", "Ada", "Lovelace", "• 1st", "Head of Widgets", "18h •"),
+      name: "Ada Lovelace",
+    });
+
+    expect(reached.name).toBe("Ada Lovelace");
+    expect(reached.headline).toBe("Head of Widgets");
+  });
+
+  it("fuses a fold-away HEADLINE into the name when a badge follows it (#902)", () => {
+    // The residue of the badge-gated extension B3f is fixed by, pinned so that
+    // the price is visible rather than argued.
+    //
+    // The extension rests on a premise this file already commits to on the
+    // decline path: a connection badge is LinkedIn's own statement that the
+    // name ended there, so everything BEFORE it is name-side. Where that
+    // premise fails -- a header rendering [name, headline, badge, ...] rather
+    // than the [name, badge, headline, ...] every shape in this corpus renders
+    // -- a non-Latin headline folds away exactly as a non-Latin surname does
+    // and is fused into the name instead.
+    //
+    // Left rather than guarded, because nothing in the anchor separates the two:
+    // this shape is field-for-field identical to B3f, and the slug -- the only
+    // extra evidence there is -- carries the same unexplained "petrenko" in
+    // both. The falsifier is a captured feed header rendering its badge after
+    // the headline; this repository holds no captured feed markup at all
+    // (#897), so the premise is taken from LinkedIn's documented ordering and
+    // from the decline path's own reading of it, not from an observation.
+    const fused = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "non-Latin headline before the badge",
+      href: "/in/alex-petrenko/",
+      children: () => bareFields("p", "Alex", "Керівник відділу", "• 1st", "Head of Widgets", "18h •"),
+      name: "Alex",
+    });
+
+    expect(fused.name).toBe("Alex Керівник відділу");
+
+    // The bound: the SAME fields under a slug the first field explains in full
+    // are not fused, because the remainder is what evidences a longer name.
+    // That is M3 in the corpus, restated here as this cost's own edge.
+    const bounded = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "same fields, slug explained in full",
+      href: "/in/alex/",
+      children: () => bareFields("p", "Alex", "Керівник відділу", "• 1st", "Head of Widgets", "18h •"),
+      name: "Alex",
+    });
+
+    expect(bounded.name).toBe("Alex");
   });
 
   it("drops a genuine headline that OPENS with a time-like token", () => {
