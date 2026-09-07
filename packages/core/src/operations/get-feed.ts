@@ -423,17 +423,26 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     return named.find(hasNameRun) || named[0] || links[0] || null;
   }
 
-  // The visible name an anchor renders: the first run carrying a name inside
-  // whichever part of the anchor holds the visible copy, or that part's own
-  // bare text when it renders no run at all.
+  // The visible name an anchor renders: the FIRST FIELD of whichever part of
+  // the anchor holds the visible copy.
+  //
+  // "Field" is \`rootFields\`' answer, the same one \`anchorFields\` is built
+  // from, and that agreement is the point.  This read used to take the first
+  // element of \`nameRuns\` — every run, not only the leaves — so a run
+  // CONTAINING runs answered with its own \`textContent\`, which is every field
+  // beneath it concatenated.  Issue #903 traced the cost: an anchor nesting the
+  // name and the badge under one wrapper returned "Ada Lovelace• 1st" as the
+  // name, and because no FIELD contains that string \`nameFieldSpan\` then
+  // withheld nothing and the name's own field won the headline race — #860's
+  // contamination, by a route its two enumerated ones did not cover.
+  //
+  // The bare-text fallback this used to carry is gone rather than dropped:
+  // \`rootFields\` contributes a root's bare text itself, so an anchor rendering
+  // its name as bare text with no run at all is already the one-field case
+  // here.
   function anchorName(a) {
-    const root = visibleRoot(a);
-    for (const node of nameRuns(root)) {
-      const txt = (node.textContent || '').trim();
-      if (txt && NAME_LIKE.test(txt)) return txt;
-    }
-    const bare = (root.textContent || '').trim();
-    return bare && NAME_LIKE.test(bare) ? bare : null;
+    const fields = rootFields(visibleRoot(a));
+    return fields.length > 0 ? fields[0] : null;
   }
 
   // The runs of \`root\` that hold no further run — the leaves of the run tree.
@@ -445,34 +454,91 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     });
   }
 
+  // \`Node.TEXT_NODE\` and \`Node.ELEMENT_NODE\`, as literals.  \`Node\` is a page
+  // global and this script runs inside the page, so naming it would work — the
+  // literals are used because every other DOM read here goes through the
+  // element handed to it, and a bare global is the one thing the document
+  // double under test cannot supply.
+  const TEXT_NODE = 3;
+  const ELEMENT_NODE = 1;
+
+  // The fields ONE root renders, in document order.
+  //
+  // Two things are a field: a leaf run, and text the root renders OUTSIDE every
+  // leaf run beneath it.  The previous rule contributed that bare text only
+  // when the root produced NO field at all, so a root yielding some field AND
+  // carrying its own bare text lost the text silently.  Issue #903 traced the
+  // cost: \`<span aria-hidden="true">Ada Lovelace<span>• 2nd</span></span>\`
+  // yielded ["• 2nd"] alone, so the badge became the NAME — and a headline in
+  // the badge's place became the name instead, which is #860's contamination
+  // family reproduced inside the fix for it.
+  //
+  // The all-runs-empty shape the previous rule DID serve still reads the same
+  // way: the one real actor-header capture in this repository,
+  // \`linkedin/__fixtures__/legacy/post-with-comments.html\`, wraps two
+  // whitespace-only \`white-space-pre\` spans and an <svg> around a bare
+  // "• Adi".  Those spans ARE leaves, and the rule below makes a leaf run
+  // carrying no field TRANSPARENT — its text joins the surrounding bare text
+  // rather than cutting it — so that capture still yields the one field
+  // "• Adi", and a name split by a whitespace-only run stays one field too.
+  //
+  // Bare text is FLUSHED at each field-bearing leaf run rather than appended
+  // once at the end, because field ORDER is what every read downstream is built
+  // on: \`nameRegion\` takes a LEADING run of fields, so a name emitted after
+  // the badge that follows it is a name outside the region.  The capture above
+  // renders its bare text AFTER its runs and #903's shape renders it BEFORE
+  // one, so neither position can be assumed.
+  //
+  // Leaf-run membership is decided by IDENTITY against \`leafRuns\`, never by
+  // re-testing \`RUN_SELECTOR\` here: extraction drifting from selection is the
+  // defect #898 records, and a second copy of the selector is where that drift
+  // starts.
+  function rootFields(root) {
+    const leaves = leafRuns(root);
+    const out = [];
+    let bare = '';
+
+    function flush() {
+      const pending = bare.trim();
+      bare = '';
+      if (pending && NAME_LIKE.test(pending)) out.push(pending);
+    }
+
+    function walk(node) {
+      for (const child of Array.from(node.childNodes)) {
+        if (child.nodeType === TEXT_NODE) {
+          bare += child.textContent || '';
+          continue;
+        }
+        if (child.nodeType !== ELEMENT_NODE) continue;
+        if (leaves.indexOf(child) < 0) {
+          walk(child);
+          continue;
+        }
+        const txt = (child.textContent || '').trim();
+        if (txt && NAME_LIKE.test(txt)) {
+          flush();
+          out.push(txt);
+        } else {
+          bare += child.textContent || '';
+        }
+      }
+    }
+
+    walk(root);
+    flush();
+    return out;
+  }
+
   // The anchor's rendered fields, in document order.  In every dialect this is
   // [name, connection degree, headline, relative time] with members optionally
   // absent: the legacy shape renders them as <span> runs, the SDUI shape as <p>
   // runs, and this reads both because \`nameRuns\` asks only WHETHER a run
   // exists, never which tag carries it.
-  //
-  // A root contributes its own bare text when it produced NO field — not merely
-  // when it renders no run.  A wrapper can render runs that are all EMPTY: the
-  // one real actor-header capture in this repository,
-  // \`linkedin/__fixtures__/legacy/post-with-comments.html\`, wraps two
-  // whitespace-only \`white-space-pre\` spans and an <svg> around a bare
-  // "• Adi", and those spans ARE leaves — so a rescue gated on "renders no
-  // run" never fires and the wrapper yields nothing at all.  Gating on
-  // "produced no field" is what lets the bare-text branch reach that shape.  On
-  // that capture the lost field is the connection degree, which is harmless;
-  // the identical construction around a name or a headline loses it silently.
   function anchorFields(a) {
     const fields = [];
     for (const root of fieldRoots(a)) {
-      const before = fields.length;
-      for (const leaf of leafRuns(root)) {
-        const txt = (leaf.textContent || '').trim();
-        if (txt && NAME_LIKE.test(txt)) fields.push(txt);
-      }
-      if (fields.length === before) {
-        const bare = (root.textContent || '').trim();
-        if (bare && NAME_LIKE.test(bare)) fields.push(bare);
-      }
+      for (const field of rootFields(root)) fields.push(field);
     }
     return fields;
   }
@@ -897,6 +963,30 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // name field becomes the headline.  The pre-#860 read behaves the same way,
   // and the accessible shape LinkedIn actually serves puts that copy beside an
   // \`aria-hidden\` sibling, which \`hiddenWrappers\` already resolves.
+  //
+  // BOTH paths withhold from field 0, and that symmetry is load-bearing rather
+  // than tidiness.  The decline path used to start its span at the field the
+  // name was FOUND in, leaving every field BEFORE the name eligible to become
+  // the headline — and the name is not always field 0: \`hiddenWrappers\` says
+  // outright that an anchor may render the avatar's initials, and the shape
+  // ["AL", "Ada Lovelace", "• 1st", "Head of Widgets at Acme", "18h •"] under
+  // \`/in/ada-lovelace/\` reported "AL" as the headline, displacing the real one
+  // (issue #903).  Nothing before the name is ever a headline: the name region
+  // is a LEADING region, so a field ahead of the name is actor-header chrome —
+  // initials, a duplicated screen-reader copy — which is exactly what the
+  // accept path has always assumed by returning \`from: 0\` unconditionally.
+  //
+  // That shape leaves a residue this does not reach, and it is a residue rather
+  // than a second defect: the leading "AL" is neither a badge nor a timestamp,
+  // so \`nameRegion\` starts the region AT it, the two-field candidate
+  // "AL Ada Lovelace" is rejected by \`MAX_NAME_TAIL\` and the one-field
+  // candidate "AL" misses \`MIN_SLUG_MATCH\` — so the slug read DECLINES even
+  // though the slug corroborates the name in full.  The name is still right,
+  // because \`anchorName\` answers it; what is lost is #860's mechanism, and
+  // recovering it would mean letting a candidate START somewhere other than the
+  // region's first field, which is the very generalisation \`slugName\` refuses
+  // (a role or brand slug then matches the HEADLINE better than the name).
+  // Pinned as an accepted cost rather than left as prose.
   function nameFieldSpan(scored, name, fields) {
     const regionEnd = nameRegion(fields).length;
     const badgeEnds = regionEnd < fields.length && DEGREE_ONLY.test(fields[regionEnd]);
@@ -921,7 +1011,7 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     if (name === null) return { from: 0, to: 0 };
     for (let i = 0; i < fields.length; i++) {
       if (phraseContains(fields[i], name)) {
-        return { from: i, to: badgeEnds ? Math.max(i + 1, regionEnd) : i + 1 };
+        return { from: 0, to: badgeEnds ? Math.max(i + 1, regionEnd) : i + 1 };
       }
     }
     return { from: 0, to: 0 };
