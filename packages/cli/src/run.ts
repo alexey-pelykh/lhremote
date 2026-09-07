@@ -6,10 +6,13 @@ import type { Command } from "commander";
 import { errorMessage } from "@lhremote/core";
 
 /**
- * Written when `errorMessage` renders nothing, so a non-zero exit is never
- * silent.  It renders `""` for an `Error` carrying an empty message and for a
- * prototype-less rejection value — both measured, and every other caller in
- * this repo hides the case behind a prefix of its own.  This one does not.
+ * Written when `errorMessage` renders nothing to say, so a non-zero exit is
+ * never silent.  It renders `""` for an `Error` carrying an empty message and
+ * for a prototype-less rejection value, and it renders the value UNTRIMMED for
+ * anything that is not an `Error` — so a rejected `"   "` comes back as three
+ * spaces, which is blank to a reader but not to `length`.  All measured.  Every
+ * other caller in this repo hides the case behind a prefix of its own; this one
+ * has none, so it tests what a reader would see rather than what was returned.
  */
 const UNREPORTABLE = "Command failed, and the error carried no message";
 
@@ -59,7 +62,10 @@ export async function runProgram(program: Command): Promise<void> {
   try {
     await program.parseAsync();
   } catch (error: unknown) {
-    const message = errorMessage(error);
+    // Trimmed before the emptiness test, not after: the `Error` path in
+    // `errorMessage` trims its own head, the non-`Error` path does not, and an
+    // all-whitespace message is exactly as silent as an empty one.
+    const message = errorMessage(error).trim();
 
     try {
       process.stderr.write(`${message.length > 0 ? message : UNREPORTABLE}\n`);

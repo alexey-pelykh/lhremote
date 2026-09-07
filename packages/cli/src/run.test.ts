@@ -114,10 +114,21 @@ describe("runProgram", () => {
   });
 
   it("still says something when the error renders no message", async () => {
-    // `errorMessage` returns "" for both of these.  Without a stand-in the
-    // operator would get a bare newline and exit 1 — a failure with no
-    // diagnosis at the one boundary that has no prefix of its own.
-    for (const empty of [new Error(""), Object.create(null) as unknown]) {
+    // Without a stand-in each of these would print a blank line and exit 1 —
+    // a failure with no diagnosis, at the one boundary that has no prefix of
+    // its own.  The first two render "" outright.  The whitespace cases are
+    // the ones a bare `length > 0` test lets through:
+    // `errorMessage` does not trim a non-`Error` value, so a rejected "   "
+    // comes back as three spaces — blank to a reader, non-empty to `length`.
+    const silent: unknown[] = [
+      new Error(""),
+      Object.create(null) as unknown,
+      "   ",
+      "\n\t",
+      { toString: () => "  " },
+    ];
+
+    for (const empty of silent) {
       write.mockClear();
 
       await runProgram(programRunning(() => Promise.reject(empty)));
