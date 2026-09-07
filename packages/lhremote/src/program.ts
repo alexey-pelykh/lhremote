@@ -4,6 +4,10 @@
 import { createProgram as createBaseProgram } from "@lhremote/cli";
 import { runStdioServer } from "@lhremote/mcp/stdio";
 
+// Re-exported so this package's bin entrypoint delegates exactly as
+// `@lhremote/cli`'s does — same import, same call, no room to diverge (#933).
+export { runProgram } from "@lhremote/cli";
+
 /**
  * Compose the meta-package CLI: the whole `@lhremote/cli` program plus the
  * `mcp` subcommand that starts the stdio MCP server.

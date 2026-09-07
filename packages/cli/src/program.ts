@@ -82,6 +82,8 @@ import {
   handleUnfollowProfile,
 } from "./handlers/index.js";
 
+export { runProgram } from "./run.js";
+
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json") as { version: string };
 
