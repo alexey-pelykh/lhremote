@@ -25,7 +25,18 @@ export default defineConfig({
       all: true,
       reporter: ["text", "lcov"],
       reportsDirectory: "coverage",
-      include: ["packages/*/src/**/*.ts"],
+      // Package-relative on purpose.  Every package runs a bare `vitest run`
+      // from its own directory, so `root` is `packages/<name>/` and this glob
+      // resolves to that package's own sources.  It deliberately does NOT use
+      // CONFIG_DIR the way `setupFiles` above does: an absolute repo-root glob
+      // would pull every package's sources into every package's report, so
+      // core's run would grade cli and mcp at 0%.  The previous
+      // `packages/*/src/**/*.ts` resolved to `packages/<name>/packages/*/src/`
+      // and matched nothing, which made `all: true` inert — only files a test
+      // imported were graded, so an untested file could not lower the
+      // thresholds, and lhremote (whose sole source file no test imports)
+      // reported an empty table that passed the gate at 0% (#930).
+      include: ["src/**/*.ts"],
       exclude: [
         "**/*.test.ts",
         "**/*.e2e.test.ts",
