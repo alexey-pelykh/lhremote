@@ -338,7 +338,10 @@ if (!isNetworkTier()) {
   afterAll(drain);
 
   // Registered last, so under `"stack"`'s reverse ordering it runs before the
-  // drain above — the worker is reused across files, and a Tier-2 file that
-  // inherited a deleted variable would silently lose an operator's opt-in.
+  // drain above and therefore still runs when that drain throws.  What this
+  // restore is for — and why it is inert under the default `isolate: true` —
+  // is capture-pin property 3 at the top of this file; deliberately not
+  // restated here, because the two copies of that reasoning had already
+  // drifted into contradicting each other once.
   afterAll(restoreAmbientCaptureDiagnostics);
 }
