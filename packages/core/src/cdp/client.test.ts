@@ -119,6 +119,13 @@ describe("CDPClient", () => {
   beforeEach(() => {
     MockWebSocket.instances = [];
     MockWebSocket.nextBehaviors = [];
+    // The afterEach below runs only `restoreAllMocks()`, which touches
+    // `vi.spyOn` spies and nothing else, so without this the `discoverTargets`
+    // CALL RECORDS accumulated across all 37 tests and
+    // `expect(discoverTargets).toHaveBeenCalledWith(...)` could be satisfied by
+    // any earlier test's call.  Reset first, then re-establish the baseline on
+    // the next line — resetting drops implementations too (#928).
+    vi.resetAllMocks();
     vi.mocked(discoverTargets).mockResolvedValue(MOCK_TARGETS);
     client = new CDPClient(9222, { timeout: 500 });
   });
@@ -540,9 +547,28 @@ describe("CDPClient", () => {
       // (#928).  Plain assignment never enters the registry, so it cannot be
       // re-applied after the clock is gone — the same reasoning vitest.setup.ts
       // gives for installing the Tier-1 network guard by assignment.
+      //
+      // Two invariants hold this together; do not move either.
+      //
+      // 1. `scheduleTimeout` IS the fake clock's setTimeout, captured while the
+      //    clock is installed.  The restore is therefore only correct inside
+      //    this test, while the clock is still up.  Moving it into the
+      //    describe's afterEach — or taking an early vi.useRealTimers() inside
+      //    the try — would write the dead clock function back over the restored
+      //    native one and reintroduce exactly the bug above, with no vi.spyOn
+      //    left in the diff to make it look suspicious.
+      //
+      // 2. The wrapper must carry the replaced function's own properties.
+      //    vitest's uninstall reads a `hadOwnProperty` marker off the current
+      //    global and, not finding it, `delete`s globalThis.setTimeout instead
+      //    of restoring the native one.  vi.spyOn copied that marker across for
+      //    free; a bare arrow does not.  It only matters when the finally never
+      //    runs — an aborted test, e.g. an advanceTimersByTimeAsync that never
+      //    settles — but that is precisely when the file should fail with one
+      //    error and not ~35 "setTimeout is not defined" ones.
       const scheduleTimeout = globalThis.setTimeout;
       const observedDelays: number[] = [];
-      globalThis.setTimeout = ((
+      const recordingTimeout = ((
         ...args: Parameters<typeof globalThis.setTimeout>
       ) => {
         const ms = args[1];
@@ -551,6 +577,11 @@ describe("CDPClient", () => {
         }
         return scheduleTimeout(...args);
       }) as typeof globalThis.setTimeout;
+      Object.defineProperties(
+        recordingTimeout,
+        Object.getOwnPropertyDescriptors(scheduleTimeout),
+      );
+      globalThis.setTimeout = recordingTimeout;
 
       try {
         // All reconnection attempts will fail, so we can observe all 5 delays
