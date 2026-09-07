@@ -90,7 +90,13 @@ class MockWebSocket {
   }
 }
 
-// Replace the global WebSocket with our mock
+// Replace the global WebSocket with our mock.  Module scope, and deliberately
+// never unstubbed: this file's whole subject is CDP over a WebSocket, so the
+// mock has to hold for every test in it.  That does mean the file runs without
+// the Tier-1 WebSocket guard `vitest.setup.ts` installs — which is the point,
+// not an oversight, and is why the rule in
+// `.github/instructions/tests.instructions.md` exempts a module-scope stub
+// while requiring an `afterEach` for one taken inside a test or hook.
 vi.stubGlobal("WebSocket", MockWebSocket);
 
 const MOCK_TARGETS = [
