@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 /**
  * The guard in `vitest.setup.ts` is what stops a Tier-1 suite depending on
@@ -96,6 +96,31 @@ function captureGuard(): Tier1CaptureDiagnosticsGuard | undefined {
   ).__tier1CaptureDiagnosticsGuard;
 }
 
+/**
+ * `LHREMOTE_CAPTURE_DIAGNOSTICS` as THIS module sees it at its own module
+ * scope, captured at column 0 before any hook in this file has run.
+ *
+ * The pin deletes the variable at setup-file evaluation time — not only in
+ * `beforeEach` — precisely so a suite reading it here sees the pinned state,
+ * and two do (`search-posts.test.ts` and `search-posts-diagnostics.test.ts`,
+ * each snapshotting it into a module-level `const`).  Nothing graded that
+ * before: every other observer in this file reads inside an `it()` body, by
+ * which time the `beforeEach` re-pin has fired and masks a missing
+ * module-scope delete completely.
+ */
+const MODULE_SCOPE_CAPTURE_DIAGNOSTICS =
+  process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+
+/**
+ * Set by the test that deliberately dirties the variable, read by the test
+ * that grades the re-pin — see the pair below.
+ *
+ * Their coupling is declaration order, which vitest neither enforces nor
+ * reports; this flag is what makes a broken coupling fail loudly instead of
+ * passing vacuously.
+ */
+let dirtiedByPreviousTest = false;
+
 describe("Tier-1 diagnostic-capture pin", () => {
   it("installs its test handle, carrying the ambient value it pinned away", () => {
     // Asserting the HANDLE — not just that the variable is unset — is the
@@ -109,7 +134,33 @@ describe("Tier-1 diagnostic-capture pin", () => {
   });
 
   it("leaves LHREMOTE_CAPTURE_DIAGNOSTICS unset whatever the shell exported", () => {
+    // Read INSIDE a test body, so the `beforeEach` re-pin has already fired:
+    // this grades the state a test body sees, which is what every opt-in site
+    // in the repo depends on. Kept alongside the module-scope assertion below
+    // rather than folded into it, because the two grade different mechanisms
+    // and only this one covers the state an ordinary test observes.
+    //
+    // Its failing condition needs a shell that exported the variable. Nobody
+    // exports it in CI, so a green here is NOT by itself evidence that the pin
+    // ran — that is what the handle assertion above is for, and the whole
+    // reason the handle carries `ambient`.
     expect(process.env.LHREMOTE_CAPTURE_DIAGNOSTICS).toBeUndefined();
+  });
+
+  it("has already unset it by the time this module is evaluated", () => {
+    // The module-scope delete is a SEPARATE mechanism from the `beforeEach`
+    // re-pin, and this is the only assertion in the repo that can tell them
+    // apart: remove `pinCaptureDiagnosticsOff()` from vitest.setup.ts's module
+    // scope, leave the `beforeEach` alone, and every other observer here still
+    // passes while this one fails.
+    //
+    // Same shell caveat as the assertion above — it can only FAIL where the
+    // launching shell exported the variable, which CI never does. The
+    // distinction it draws is between the two mechanisms, not between the two
+    // shells; grading it therefore means running with
+    // LHREMOTE_CAPTURE_DIAGNOSTICS=1 exported, which is exactly what makes the
+    // #925 defect reproducible in the first place.
+    expect(MODULE_SCOPE_CAPTURE_DIAGNOSTICS).toBeUndefined();
   });
 
   it("dirties the variable, to be caught by the test after it", () => {
@@ -117,22 +168,66 @@ describe("Tier-1 diagnostic-capture pin", () => {
     // pin's `beforeEach` is what cleans up after this, and the next test is
     // the only thing that observes it doing so. Vitest runs tests within a
     // file in declaration order by default, so "the one below" is the next to
-    // run — the coupling is real but invisible, hence this comment. Reordering
-    // or moving either test between describes breaks the assertion silently.
+    // run — the coupling is real but invisible, hence this comment and the
+    // flag. Reordering, or moving either test between describes, used to break
+    // the assertion silently.
+    //
+    // A FILTERED run is the same failure and the more likely one:
+    // `vitest run -t "re-pins"` executes the second test alone, where its
+    // `beforeEach` fires against a variable the module-scope pin already unset
+    // — so it passes while grading nothing, in precisely the situation a
+    // developer filtering by that name is investigating. The flag below turns
+    // that vacuous pass into a loud failure that says why.
+    dirtiedByPreviousTest = true;
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
     expect(process.env.LHREMOTE_CAPTURE_DIAGNOSTICS).toBe("1");
   });
 
   it("re-pins before each test, so the one above cannot leak into this one", () => {
+    expect(
+      dirtiedByPreviousTest,
+      'the test that dirties LHREMOTE_CAPTURE_DIAGNOSTICS did not run before ' +
+        'this one, so there was nothing for the re-pin to clean up and this ' +
+        'assertion grades nothing. Run the whole file rather than a `-t` ' +
+        'filter, and keep the two tests adjacent and in this order.',
+    ).toBe(true);
     expect(process.env.LHREMOTE_CAPTURE_DIAGNOSTICS).toBeUndefined();
   });
 
-  it("lets a test opt back in for its own body", () => {
-    // The pin must not defeat the ~17 sites that deliberately set the variable
-    // inside an `it()` body to grade the capture path. An in-test assignment
-    // happens after the pin's `beforeEach`, so it wins.
-    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
-    expect(process.env.LHREMOTE_CAPTURE_DIAGNOSTICS).toBe("1");
-    delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+  describe("a describe-level opt-in", () => {
+    // The pin must not defeat the sites throughout the repo that deliberately
+    // set the variable to grade the capture path, and this is the shape of
+    // those that CAN break: a `describe`-level `beforeEach`, which is how
+    // `wait-for-post-load.test.ts` and `wait-for-reactions-modal.test.ts` opt
+    // in. Its outcome depends on the runner's hook ordering rather than on
+    // statement order inside one function body.
+    //
+    // The in-test-assignment form used to be tested here instead, and could
+    // not fail: the pin's only per-test write is a `beforeEach` that has
+    // completed before any body starts, and there is no `await` between a
+    // body's `set` and its own `read` — so no implementation of this pin could
+    // make that assertion fail, on any machine. It is documented rather than
+    // asserted for that reason.
+    //
+    // What this grades instead: `@vitest/runner` recurses into the PARENT
+    // suite first for `beforeEach`, and does not reverse `beforeEach` under
+    // `sequence.hooks: "stack"`. Setup files are imported before the spec
+    // module is collected, so the pin's hook sits on the root suite and runs
+    // first, whatever the nesting depth. This fails if that ever inverts and
+    // the pin starts winning over a deliberate describe-level opt-in.
+    beforeEach(() => {
+      process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    });
+
+    afterEach(() => {
+      // Back to the state the pin holds the rest of the file in. The pin's own
+      // `beforeEach` would re-pin anyway; this keeps the opt-in from being the
+      // last thing that touched the variable in this file.
+      delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    });
+
+    it("still sees the opt-in when the test body runs", () => {
+      expect(process.env.LHREMOTE_CAPTURE_DIAGNOSTICS).toBe("1");
+    });
   });
 });
