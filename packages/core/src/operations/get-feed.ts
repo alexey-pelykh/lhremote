@@ -462,6 +462,19 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   const TEXT_NODE = 3;
   const ELEMENT_NODE = 1;
 
+  // What the two are used for, and which of the two tests is load-bearing.
+  //
+  // \`TEXT_NODE\` is: deleting the branch that reads it loses every field a root
+  // renders as bare text.  The \`ELEMENT_NODE\` test is DEFENSIVE — deleting it
+  // was measured against the corpus and changed no verdict, because the
+  // document double renders no third node kind.  A real page does:
+  // \`legacy/post-with-comments.html\` carries \`<!---->\` markers inside the very
+  // \`aria-hidden\` wrapper this walk reads.  Their \`textContent\` is empty, so
+  // even in the page the guard costs and saves nothing today; it is kept
+  // because a comment is not an element and walking into one asks it for
+  // children, and stated so nobody reads the corpus's green as evidence that
+  // this branch is exercised.
+
   // The fields ONE root renders, in document order.
   //
   // Two things are a field: a leaf run, and text the root renders OUTSIDE every
