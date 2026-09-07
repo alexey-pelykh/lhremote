@@ -2,16 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { createProgram } from "@lhremote/cli";
-import { runStdioServer } from "@lhremote/mcp/stdio";
+import { createProgram } from "./program.js";
 
-const program = createProgram();
-
-program
-  .command("mcp")
-  .description("Start MCP server on stdio (for Claude Desktop, Cursor, etc.)")
-  .action(async () => {
-    await runStdioServer();
-  });
-
-program.parse();
+createProgram().parse();
