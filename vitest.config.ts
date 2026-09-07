@@ -57,12 +57,15 @@ export default defineConfig({
         // importable module (program.ts, stdio.ts) that is measured normally.
         // Excluded uniformly rather than only where a package would otherwise
         // miss its threshold: the claim is that the measurement does not apply
-        // to them, not that a number needed help.  Written as full paths so a
-        // bare `src/index.ts` cannot also catch core's public barrel, which is
-        // not an entrypoint and stays measured.
-        "packages/cli/src/cli.ts",
-        "packages/lhremote/src/cli.ts",
-        "packages/mcp/src/index.ts",
+        // to them, not that a number needed help.  Named by full package path
+        // so a bare `src/index.ts` cannot also catch core's public barrel,
+        // which is not an entrypoint and stays measured.  These are matched
+        // against absolute paths, not against `root`; the `**/` prefix says so
+        // explicitly rather than leaning on substring matching.  Verified by
+        // removing them: cli 77->78, mcp 79->80, lhremote 4/4->4/5 files.
+        "**/packages/cli/src/cli.ts",
+        "**/packages/lhremote/src/cli.ts",
+        "**/packages/mcp/src/index.ts",
       ],
       thresholds: {
         statements: 85,
