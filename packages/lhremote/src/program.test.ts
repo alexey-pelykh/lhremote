@@ -36,6 +36,19 @@ describe("lhremote meta-package CLI", () => {
     expect(composedNames).toEqual([...baseNames, "mcp"].sort());
   });
 
+  it("preserves the base program's name and version", () => {
+    // A future createProgram() that built a fresh Command and copied the
+    // subcommands across would satisfy the command-set assertions above while
+    // silently dropping .name()/.version(), breaking `lhremote --version`.
+    const base = createBaseProgram();
+    const composed = createProgram();
+
+    expect(composed.name()).toBe("lhremote");
+    expect(composed.name()).toBe(base.name());
+    expect(composed.version()).toBe(base.version());
+    expect(composed.version()).toBeTruthy();
+  });
+
   it("does not add mcp to the base @lhremote/cli program itself", () => {
     expect(createBaseProgram().commands.map((c) => c.name())).not.toContain("mcp");
   });
