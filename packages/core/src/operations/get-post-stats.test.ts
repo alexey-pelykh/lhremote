@@ -157,6 +157,18 @@ describe("getPostStats", () => {
     return { evaluateMock, disconnect, navigate };
   }
 
+  /**
+   * The ambient `LHREMOTE_CAPTURE_DIAGNOSTICS`, read before any test in this
+   * file has had a chance to mutate it.
+   *
+   * Under the attached root config that snapshot is always the pinned-off
+   * value: since #925 `vitest.config.ts` wires `setupFiles: [vitest.setup.ts]`
+   * and the setup file deletes the variable at its own module scope, before
+   * this module is evaluated.  This guard is therefore live only when that
+   * config detaches — a package-level `vite.config.*` / `vitest.config.*`
+   * would stop it resolving for this package alone — which is the case it is
+   * now kept for.
+   */
   const originalCaptureEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
 
   beforeEach(() => {

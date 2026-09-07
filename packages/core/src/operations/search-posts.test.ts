@@ -98,16 +98,30 @@ const CDP_PORT = 9222;
 
 /**
  * The ambient `LHREMOTE_CAPTURE_DIAGNOSTICS`, read ONCE at module load — before
- * any test has had a chance to mutate it.
+ * any test in this file has had a chance to mutate it.
  *
  * The capture sites self-gate on this variable, so whether a *unit* test ran
  * the capture path at all was a property of the shell the suite was launched
- * from.  CI never sets it and `vitest.config.ts` neither sets nor unsets it,
- * while `vitest.e2e.config.ts` exports it as "1" — so the two normal states of
- * a developer machine here disagree.  {@link pinCaptureDiagnosticsOff} makes
- * every environment agree with CI, and the `node:fs/promises` double above
- * stands behind the two one-read cases below, which opt back in deliberately
- * because the bundle is half of what they grade.
+ * from.  CI never sets it, while `vitest.e2e.config.ts` exports it as "1" — so
+ * the two normal states of a developer machine here disagree.
+ * {@link pinCaptureDiagnosticsOff} makes every environment agree with CI, and
+ * the `node:fs/promises` double above stands behind the two one-read cases
+ * below, which opt back in deliberately because the bundle is half of what
+ * they grade.
+ *
+ * What this guard is FOR changed with #925, and the prose above used to say
+ * `vitest.config.ts` "neither sets nor unsets it", which is no longer true:
+ * that config now wires `setupFiles: [vitest.setup.ts]`, and the setup file
+ * deletes the variable at its own module scope — before this module is
+ * evaluated.  So under the attached root config the snapshot below is always
+ * the pinned-off value, `restoreAmbientCaptureDiagnostics` can only ever
+ * delete, and this whole guard is redundant with the central one.
+ *
+ * It stays as defence in depth for the one case the central pin cannot cover:
+ * a package-level `vite.config.*` / `vitest.config.*` would stop the root
+ * config resolving for that package alone, silently detaching the setup file
+ * and with it both Tier-1 guards.  That is the detachment the per-package
+ * canaries exist to catch, and the state this snapshot is conditional on.
  */
 const AMBIENT_CAPTURE_DIAGNOSTICS = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
 
@@ -116,7 +130,10 @@ function pinCaptureDiagnosticsOff(): void {
   delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
 }
 
-/** Hand the shell back exactly the value it had, including "unset". */
+/**
+ * Hand the shell back exactly the value it had, including "unset" — which,
+ * under the attached root config, is the only branch it can take.
+ */
 function restoreAmbientCaptureDiagnostics(): void {
   if (AMBIENT_CAPTURE_DIAGNOSTICS === undefined) {
     delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;

@@ -171,7 +171,7 @@ and 2 share one runner invocation is what makes a single `setupFiles` entry
 able to serve both, and the guard reads the filename to tell them apart rather
 than splitting the invocation.
 
-### 2026-09-07 — The same column now also covers the diagnostic capture
+### 2026-09-07 — The same column now also covers the diagnostic capture (#925)
 
 The amendment above closed the network half of the Tier-1 dependency column and
 stated its own limit explicitly: the guard *"does not cover `node:http`, raw
@@ -206,12 +206,31 @@ none is obvious: it captures the ambient value at module scope and deletes it
 *there*, because a setup file is evaluated before the test file's own module and
 two suites read that variable at their module scope; it re-deletes in
 `beforeEach`, bounding a test that dirties the variable to the test that did it;
-it restores the ambient value in `afterAll`, including the unset case, because
-the worker process is reused across files and Tier 2 is exempt; and it does not
-clobber a deliberate opt-in, because vitest's default `sequence.hooks: "stack"`
-runs `before*` hooks in registration order, so the setup file's `beforeEach`
-runs first and an assignment inside an `it()` body wins. Every deliberate opt-in
-in the repo today is of that last form.
+it restores the ambient value in `afterAll`, including the unset case, against
+the configuration where runners are shared; and it does not clobber a
+deliberate opt-in, because `@vitest/runner` recurses into the parent suite
+first for `beforeEach` and does not reverse `beforeEach` under the default
+`sequence.hooks: "stack"` — so the setup file's hook, registered on the root
+suite before the spec module is collected, runs ahead of every `describe`-level
+one at any nesting depth. Both opt-in shapes in the repo therefore win: an
+assignment inside an `it()` body, which is most of them, and a `describe`-level
+`beforeEach`, which `wait-for-post-load.test.ts` and
+`wait-for-reactions-modal.test.ts` use.
+
+Two of those four warrant a sharper reading than "load-bearing", because their
+scope is narrower than it looks. The `afterAll` restore is **inert under this
+repo's configuration**: `isolate` defaults to `true` and `vitest.config.ts` does
+not override it, so each file gets its own runner, stopped afterwards, whose
+environment was built fresh from the parent's — the delete never reaches the
+parent, and nothing can be lost across files. It is kept for `isolate: false` /
+`--no-isolate`, and its own cost is a window at file teardown in which escaped
+asynchronous work could still meet an open gate — narrower than the `afterEach`
+restores the three per-suite guards already carry, so a stated limit rather
+than a regression. And the ordering guarantee holds only for SEQUENTIAL
+execution, vitest's default and what this repo runs: under `it.concurrent` /
+`describe.concurrent`, siblings start together against one process-global
+`process.env`, and neither the opt-in guarantee nor the bounded-leak guarantee
+survives it. There are no concurrent sites today.
 
 **The fix site is the shared setup file, not the offending suite.** Three suites
 had already grown the same hand-rolled delete-and-restore guard —
@@ -238,7 +257,10 @@ What this does not cover is unchanged in kind and smaller by one: `node:http`,
 raw sockets, the `ps-list` / `pid-port` process probes, and any route to the
 filesystem other than this one variable. A suite that genuinely grades the
 capture path still mocks `node:fs/promises`, which is what the
-`*-extraction-diagnostics.test.ts` files do.
+`*-diagnostics.test.ts` files do — the narrower
+`*-extraction-diagnostics.test.ts` glob misses
+`packages/core/src/operations/search-posts-diagnostics.test.ts`, which has more
+deliberate opt-in sites than any of the ones it matches.
 
 Both guards are graded by the same canaries, one per package, and each asserts
 the guard's `globalThis` handle rather than the absence of a network call or the

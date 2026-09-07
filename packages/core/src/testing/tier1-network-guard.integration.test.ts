@@ -38,6 +38,14 @@ describe("Tier-1 diagnostic-capture pin — Tier-2 exemption", () => {
     // it, so both `undefined` and `"1"` are correct here and only the absent
     // handle distinguishes "the pin skipped this file" from "the shell
     // happened to export nothing".
+    //
+    // The limit of that, worth knowing before editing vitest.setup.ts: an
+    // absent handle proves the `if (!isNetworkTier())` block was SKIPPED, not
+    // that the variable was left untouched. Those two coincide only because
+    // `pinCaptureDiagnosticsOff()` sits INSIDE that block. Hoisting that one
+    // call above the `if` is a plausible tidy-up — it reads as unconditional
+    // cleanup — and it would take an operator's Tier-2 opt-in away while this
+    // test went on passing. Nothing here would catch it.
     expect(
       (globalThis as { __tier1CaptureDiagnosticsGuard?: unknown })
         .__tier1CaptureDiagnosticsGuard,
