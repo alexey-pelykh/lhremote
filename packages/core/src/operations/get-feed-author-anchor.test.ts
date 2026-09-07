@@ -106,6 +106,8 @@ class FakeElement {
   readonly attrs: Record<string, string>;
   readonly children: FakeElement[];
   readonly ownText: string;
+  /** Text rendered AFTER every child — the ordering the one real capture uses. */
+  readonly tailText: string;
   offsetHeight: number;
   parent: FakeElement | null = null;
   readonly nodeId: number;
@@ -116,18 +118,50 @@ class FakeElement {
     children: FakeElement[] = [],
     ownText = "",
     offsetHeight = 0,
+    tailText = "",
   ) {
     this.tag = tag.toLowerCase();
     this.attrs = { ...attrs };
     this.children = children;
     this.ownText = ownText;
+    this.tailText = tailText;
     this.offsetHeight = offsetHeight;
     this.nodeId = nextNodeId++;
     for (const child of children) child.parent = this;
   }
 
   get textContent(): string {
-    return this.ownText + this.children.map((c) => c.textContent).join("");
+    return this.ownText + this.children.map((c) => c.textContent).join("") + this.tailText;
+  }
+
+  /**
+   * `Node.nodeType` — `ELEMENT_NODE`.  Read by the scrape script's field walk
+   * to tell an element child from a text one.
+   */
+  readonly nodeType = 1;
+
+  /**
+   * `Node.childNodes` — this element's text and element children, in document
+   * order.
+   *
+   * The double models an element's own text as `ownText` (rendered BEFORE every
+   * child) plus `tailText` (rendered after), which is exactly the ordering
+   * `textContent` above already commits to; this getter is what makes that
+   * ordering readable node by node rather than only as one concatenated string.
+   * A real page interleaves text and elements freely — the two slots are the
+   * subset the shapes in this file need, and the one real capture uses both
+   * (`post-with-comments.html` renders its "• Adi" AFTER two runs).
+   *
+   * Text nodes are constructed fresh on each read, so identity is NOT stable
+   * across calls.  Nothing may key on it: the script matches leaf runs by
+   * element identity, which `children` preserves.
+   */
+  get childNodes(): { nodeType: number; textContent: string }[] {
+    const out: { nodeType: number; textContent: string }[] = [];
+    if (this.ownText !== "") out.push({ nodeType: 3, textContent: this.ownText });
+    for (const child of this.children) out.push(child);
+    if (this.tailText !== "") out.push({ nodeType: 3, textContent: this.tailText });
+    return out;
   }
 
   /** `HTMLAnchorElement.href` is the RESOLVED absolute URL, not the attribute. */
@@ -214,6 +248,7 @@ class FakeElement {
       deep ? this.children.map((c) => c.cloneNode(true)) : [],
       this.ownText,
       this.offsetHeight,
+      this.tailText,
     );
   }
 
@@ -231,8 +266,9 @@ function el(
   children: FakeElement[] = [],
   ownText = "",
   offsetHeight = 0,
+  tailText = "",
 ): FakeElement {
-  return new FakeElement(tag, attrs, children, ownText, offsetHeight);
+  return new FakeElement(tag, attrs, children, ownText, offsetHeight, tailText);
 }
 
 function text(tag: string, value: string, attrs: Record<string, string> = {}): FakeElement {
