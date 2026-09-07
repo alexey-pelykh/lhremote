@@ -106,7 +106,16 @@ export interface RawDomPost {
  *   instead, so the signal degrades rather than inventing.  A slug that merely
  *   omits part of the display name ("Ada Lovelace, PhD" under
  *   `/in/ada-lovelace/`) does NOT decline: it corroborates a prefix of the
- *   name's own field, and the whole field is returned.
+ *   name's own field, and the whole field is returned.  Across a field
+ *   boundary the same generosity needs evidence, because the boundary is
+ *   LinkedIn's own statement that the two things are separate: a further field
+ *   is taken only when it folds away to nothing, a connection badge terminates
+ *   the name region, and the slug still carries characters the accepted prefix
+ *   does not explain — the transliterated-surname shape ("Alex" / "Петренко"
+ *   under `/in/alex-petrenko/`), which returned the given name alone until
+ *   issue #902.  A further field carrying text the slug does not corroborate
+ *   at all is NOT taken; see `MAX_NAME_TAIL`, whose cost is a slug too short
+ *   to reach the rest of a split name.
  * - **Author profile URL**: `href` of that same author anchor.
  * - **Author headline**: the first field that is none of a relative time, a
  *   badge that is wholly a connection degree, the actor header's own chrome, or
@@ -607,6 +616,18 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     return i;
   }
 
+  // How many FIELDS an offset into the joined name region consumes.  The offset
+  // may land INSIDE a field rather than on its boundary — the fused
+  // "Ada Lovelace · 1st" case, where the cut falls before the badge — so the
+  // field the cut lands in counts as consumed as well.
+  function fieldSpanOf(ends, end) {
+    let consumed = 1;
+    for (let k = 0; k < ends.length; k++) {
+      if (ends[k] < end) consumed = k + 2;
+    }
+    return consumed;
+  }
+
   // The maximal LEADING run of fields that are neither a bare connection badge
   // nor a bare relative-time field: where the name is, and the only place a name
   // candidate is allowed to start.
@@ -684,6 +705,16 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
     const region = nameRegion(fields);
     if (region.length === 0) return null;
 
+    // Does a connection badge TERMINATE the name region?  The same fact
+    // \`nameFieldSpan\` keys its headline withholding on, read here for the same
+    // reason: a badge is LinkedIn's own statement that the name ended there, so
+    // everything before it is name-side.  Where a TIMESTAMP terminates the
+    // region instead — a company header, and the badge-less dialect the
+    // eponymous-slug family renders — no such statement exists and the region
+    // legitimately spans name AND headline.
+    const badgeEnds = region.length < fields.length &&
+      DEGREE_ONLY.test(fields[region.length]);
+
     // The region joined ONCE, so every candidate below is a slice of a single
     // string: "Jean-Luc Picard" must come back carrying its hyphen, which
     // rebuilding a candidate out of its words would lose.
@@ -710,9 +741,50 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
       if (ends.length > 0 && end > ends[0] && excess > MAX_NAME_TAIL) return;
 
       const score = common - excess;
+
+      // The tie-break, and the one case that inverts it (issue #902).
+      //
+      // Equal \`score\` AND equal \`common\` means the longer candidate's extra
+      // text contributed no folded characters at all — it folded away
+      // ENTIRELY.  A non-Latin surname beside a Latin given name does exactly
+      // that: "Alex" / "Петренко" under /in/alex-petrenko/ ties "Alex", and
+      // the shorter-wins rule below returned the given name alone as though it
+      // were the whole display name.
+      //
+      // The longer candidate wins instead when THREE facts hold together, and
+      // each one is load-bearing:
+      //
+      //  - it spans a further FIELD, not merely a longer slice of the same
+      //    one.  Without this the rule would also re-select an UNTRIMMED
+      //    candidate over its trimmed twin whenever the trimmed decoration
+      //    folds to nothing ("Ada Lovelace •" ties "Ada Lovelace"), which is
+      //    the badge contamination \`trimTrailingBadge\` exists to remove.
+      //  - a connection badge TERMINATES the name region.  Without one the
+      //    region legitimately spans name AND headline, and extending fuses a
+      //    non-Latin HEADLINE onto a Latin given name — "Alex" / "Керівник
+      //    відділу" under /in/alex-petrenko/ with no badge, which reads
+      //    correctly today and must keep doing so.
+      //  - the slug still carries characters this candidate does not explain.
+      //    That remainder is the POSITIVE evidence that the display name
+      //    continues past the accepted prefix; the badge alone is only the
+      //    absence of evidence against.  /in/alex/ explains itself in full on
+      //    "Alex" and says nothing about a second field, so it keeps the
+      //    shorter read.
+      //
+      // What this deliberately does NOT reach is a later field the slug leaves
+      // wholly UNEXPLAINED — one folding to real text the slug does not
+      // corroborate.  \`MAX_NAME_TAIL\` already rejects those, and that is the
+      // bound keeping "Photography & Video" out of a display name.  Its cost is
+      // a short slug that stops inside a split name (/in/ada/ over "Ada" /
+      // "Lovelace"), which the anchor cannot separate from an eponymous
+      // suffix and which this file's corpus pins as an accepted cost.
+      const preferLonger = badgeEnds && common < target.length &&
+        best !== null && fieldSpanOf(ends, end) > fieldSpanOf(ends, best.end);
+
       if (best === null || score > best.score ||
           (score === best.score && common > best.common) ||
-          (score === best.score && common === best.common && end < best.end)) {
+          (score === best.score && common === best.common &&
+           (preferLonger || end < best.end))) {
         best = { end: end, common: common, score: score };
       }
     }
@@ -727,15 +799,7 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
       return null;
     }
 
-    // How many FIELDS the accepted candidate consumed.  \`best.end\` is an offset
-    // into the joined region and may land INSIDE a field rather than on its
-    // boundary — the fused "Ada Lovelace · 1st" case, where the cut falls before
-    // the badge — so the field the cut lands in counts as consumed as well.
-    let consumed = 1;
-    for (let k = 0; k < ends.length; k++) {
-      if (ends[k] < best.end) consumed = k + 2;
-    }
-    return { name: source.slice(0, best.end), fields: consumed };
+    return { name: source.slice(0, best.end), fields: fieldSpanOf(ends, best.end) };
   }
 
   // Does \`haystack\` carry \`needle\` as a whole PHRASE — bounded at both ends by
