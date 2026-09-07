@@ -72,19 +72,31 @@ function makeMockChild(): ChildProcess {
 // The file had no per-test mock lifecycle at all: `restoreAllMocks()` only
 // undoes `vi.spyOn` spies, so the `vi.mock()` module mocks below carried both
 // their CALL RECORDS and their implementations from one test into the next.
-// The two `expect(mockedSpawn).not.toHaveBeenCalled()` assertions were
-// therefore reading calls made by earlier tests, and passed only because the
-// last spawning test before them happens to run `mockedSpawn.mockClear()`
-// mid-body for its own second-launch assertions.  Shuffle the order and that
-// accident disappears.  `resetAllMocks()` drops records and implementations
-// both; the per-describe `beforeEach` hooks below re-establish what they need,
-// and they run after this one (#928).
+// Three assertions read `expect(mockedSpawn).not.toHaveBeenCalled()`, and in
+// declaration order each was green for a different reason: the first because
+// no spawning test is declared ahead of it; the second because its own test
+// body calls `mockedSpawn.mockClear()` immediately before it, deliberately;
+// and the third only because that second test happens to be declared right
+// before it and leaves the records cleared.  Shuffle the order and the third
+// accident disappears and the first stops holding, which is both of the
+// failures this file showed.  `resetAllMocks()` drops records and
+// implementations both; the per-describe `beforeEach` hooks below re-establish
+// what they need, and they run after this one.
+//
+// `unstubAllGlobals()` is the other half, and it is not redundant: a
+// `vi.stubGlobal` is undone by neither reset nor restore, so the `process` and
+// `fetch` stubs set below otherwise stay installed for the rest of the file —
+// including over the Tier-1 network guard that `vitest.setup.ts` installs,
+// which CLAUDE.md § Testing calls enforced rather than merely documented.  No
+// test depends on inheriting one today; the per-describe hooks all re-stub
+// what they need (#928).
 beforeEach(() => {
   vi.resetAllMocks();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   delete process.env["LINKEDHELPER_PATH"];
 });
 
@@ -394,36 +406,42 @@ describe("AppService", () => {
     });
 
     it("escalates to SIGKILL when process does not exit after SIGTERM", async () => {
+      // try/finally, not a trailing useRealTimers(): an assertion failing
+      // below would otherwise leave the fake clock installed for every test
+      // that runs after this one, and `shouldAdvanceTime` keeps most of them
+      // alive — so the cascade is intermittent and lands on the wrong test
+      // (#928).
       vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const service = new AppService(9222, FAST_OPTIONS);
+        mockedDiscoverTargets.mockRejectedValue(new Error("not running"));
+        mockedAccessSync.mockReturnValue(undefined);
 
-      const service = new AppService(9222, FAST_OPTIONS);
-      mockedDiscoverTargets.mockRejectedValue(new Error("not running"));
-      mockedAccessSync.mockReturnValue(undefined);
+        const child = makeMockChild();
+        const emitExit = (child as unknown as { _emitExit: (code: number) => void })._emitExit;
 
-      const child = makeMockChild();
-      const emitExit = (child as unknown as { _emitExit: (code: number) => void })._emitExit;
+        let killCount = 0;
+        (child.kill as ReturnType<typeof vi.fn>).mockImplementation(() => {
+          killCount++;
+          // Only exit on SIGKILL (second kill call)
+          if (killCount === 2) {
+            queueMicrotask(() => emitExit(137));
+          }
+        });
+        mockedSpawn.mockReturnValue(child);
 
-      let killCount = 0;
-      (child.kill as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        killCount++;
-        // Only exit on SIGKILL (second kill call)
-        if (killCount === 2) {
-          queueMicrotask(() => emitExit(137));
-        }
-      });
-      mockedSpawn.mockReturnValue(child);
+        await service.launch();
 
-      await service.launch();
+        const quitPromise = service.quit();
+        // Advance past the graceful timeout
+        await vi.advanceTimersByTimeAsync(11_000);
+        await quitPromise;
 
-      const quitPromise = service.quit();
-      // Advance past the graceful timeout
-      await vi.advanceTimersByTimeAsync(11_000);
-      await quitPromise;
-
-      expect(child.kill).toHaveBeenCalledWith("SIGTERM");
-      expect(child.kill).toHaveBeenCalledWith("SIGKILL");
-
-      vi.useRealTimers();
+        expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+        expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("does not close an externally-detected instance", async () => {
