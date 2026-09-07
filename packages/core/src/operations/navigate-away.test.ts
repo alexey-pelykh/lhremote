@@ -16,8 +16,9 @@ describe("navigateAwayIf", () => {
     // mock IMPLEMENTATIONS, so the `navigate.mockRejectedValue()` set by
     // "propagates navigate errors" leaked into every test that ran after it —
     // green only because declaration order happens to run that test last
-    // (#928).  Resetting also drops any default set at declaration, which is
-    // why the baseline lives here rather than on the `vi.fn()` above.
+    // Resetting also drops any default set at declaration, which is why the
+    // baseline lives here rather than on the `vi.fn()` above.  Do not
+    // normalise this back to `clearAllMocks` (#846, #928).
     vi.resetAllMocks();
     mockClient.navigate.mockResolvedValue(undefined);
   });
