@@ -574,6 +574,14 @@ describe("CDPClient", () => {
       //    settles — but that is precisely when the file should fail with the
       //    one real error rather than burying it under a "setTimeout is not
       //    defined" from every test that runs afterwards.
+      //
+      //    The three skipped keys are @vitest/spy's own list
+      //    (`copyOriginalStaticProperties` → `ignoreProperties`), and skipping
+      //    them is the point rather than caution: `length` and `name` describe
+      //    the wrapper, not the clock, and `prototype` is non-configurable —
+      //    copying it grafts the clock's prototype object onto an arrow
+      //    function that has none.  None of the three is read by the uninstall
+      //    path, so a narrower copy restores strictly what vi.spyOn did.
       const scheduleTimeout = globalThis.setTimeout;
       const observedDelays: number[] = [];
       const recordingTimeout = ((
@@ -585,10 +593,15 @@ describe("CDPClient", () => {
         }
         return scheduleTimeout(...args);
       }) as typeof globalThis.setTimeout;
-      Object.defineProperties(
-        recordingTimeout,
-        Object.getOwnPropertyDescriptors(scheduleTimeout),
-      );
+      for (const key of Reflect.ownKeys(scheduleTimeout)) {
+        if (key === "length" || key === "name" || key === "prototype") {
+          continue;
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(scheduleTimeout, key);
+        if (descriptor) {
+          Object.defineProperty(recordingTimeout, key, descriptor);
+        }
+      }
       globalThis.setTimeout = recordingTimeout;
 
       try {
