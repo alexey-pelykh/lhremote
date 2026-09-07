@@ -83,19 +83,50 @@
  *    writing real bundles.  The re-pin bounds that leak to the one test that
  *    caused it.
  *
- * 3. **`afterAll` restores the ambient value, including the "unset" case.**
- *    The worker process is reused across test files and `*.integration.test.ts`
- *    is exempt from this pin, so leaving the variable deleted would silently
- *    change Tier-2 behaviour for an operator who exported it.  Restoring means
- *    restoring exactly what was there: `undefined` becomes a `delete`, not the
- *    string `"undefined"`.
+ * 3. **`afterAll` restores the ambient value, including the "unset" case** —
+ *    `undefined` becomes a `delete`, not the string `"undefined"`.  Be precise
+ *    about what this is FOR, because the obvious justification is wrong:
+ *    `isolate` defaults to `true` and `vitest.config.ts` does not override it,
+ *    so each test file gets its own runner which is stopped afterwards, and
+ *    every runner's environment is built fresh from the parent process's —
+ *    which nothing here ever mutates.  The ambient value therefore cannot be
+ *    lost across files today, and this restore is INERT.  It becomes live
+ *    under `isolate: false` / `--no-isolate`, where runners are shared and a
+ *    Tier-2 file could inherit a deleted variable from a Tier-1 one and
+ *    silently lose an operator's opt-in.  It carries one cost worth naming: it
+ *    re-opens the capture gate at file teardown, so asynchronous work escaping
+ *    the file and settling before the runner stops could still reach a capture
+ *    site.  That window is narrower than the pre-existing per-suite guards',
+ *    which restore in `afterEach` — i.e. between every test — so it is a
+ *    stated limit rather than a regression, but it is not zero.
  *
- * 4. **It does not clobber a deliberate opt-in.**  `sequence.hooks` defaults
- *    to `"stack"`, under which `before*` hooks run in registration order — so
- *    this file's `beforeEach`, registered before the test file's module is
- *    evaluated, runs FIRST and a file-level `beforeEach` or in-test assignment
- *    runs after it and wins.  Every deliberate opt-in in the repo today sets
- *    the variable inside an `it()` body, so all of them still see `"1"`.
+ * 4. **It does not clobber a deliberate opt-in.**  The reason is NOT that
+ *    `before*` hooks run in registration order under `"stack"`, which would
+ *    only settle hooks registered at the same level.  It is that
+ *    `callSuiteHook` recurses into the PARENT suite first for `beforeEach`,
+ *    and `beforeEach` is not among the hooks `"stack"` reverses.  Setup files
+ *    are imported before the spec module is collected, so this file's
+ *    `beforeEach` lands on the ROOT suite and runs before any `describe`-level
+ *    one, at any nesting depth and whatever the registration order.  That
+ *    distinction is load-bearing: three opt-ins in the repo are `describe`-level
+ *    `beforeEach` hooks rather than in-test assignments
+ *    (`wait-for-post-load.test.ts` twice, `wait-for-reactions-modal.test.ts`
+ *    once), and under the registration-order reading they would look broken.
+ *    What WOULD be clobbered is an opt-in running before this file's
+ *    `beforeEach` at all — a `beforeAll`, or a SET at the test file's own
+ *    module scope.  No Tier-1 suite in the repo registers a `beforeAll`, and
+ *    the two files that touch this variable at module scope only READ it, so
+ *    the boundary is real and currently unhit.  A future opt-in of either shape
+ *    is the case to watch.
+ *
+ * Properties 2 and 4 both presuppose that tests run SEQUENTIALLY, which is the
+ * default and which nothing here overrides.  Under `it.concurrent` /
+ * `describe.concurrent` vitest runs siblings through `Promise.all`, each with
+ * its own `beforeEach` chain, against a process-global `process.env` — so a
+ * re-pin can fire while another test's body is suspended, and neither "the
+ * opt-in wins" nor "the leak is bounded to the test that caused it" survives.
+ * There are no concurrent tests in the repo today; adding one invalidates both
+ * properties rather than merely straining them.
  *
  * Scope, stated rather than implied.  The network guard covers `fetch` and
  * `WebSocket`, which are the only network primitives this codebase uses (four
@@ -244,6 +275,15 @@ function restoreAmbientCaptureDiagnostics(): void {
  * An unavailable `testPath` installs the guard rather than skipping it: a
  * false positive is a loud failure on a Tier-2 file, while a false negative is
  * the silent hole this file exists to close.
+ *
+ * That trade is stated for the NETWORK guard and does not carry to the capture
+ * pin, which now shares this predicate.  A network guard installed on a Tier-2
+ * file throws and names the call; a pin installed there only deletes an
+ * environment variable — nothing throws, nothing asserts on it, and the Tier-2
+ * exemption two paragraphs up, which is deliberate, is revoked in silence.  So
+ * on this branch one property fails loudly and the other fails quietly.  The
+ * branch is unreachable under `vitest run`, where `testPath` is always a
+ * string; if that ever stops holding, the pin wants its own predicate.
  */
 function isNetworkTier(): boolean {
   const testPath = expect.getState().testPath;
