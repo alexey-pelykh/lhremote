@@ -119,12 +119,13 @@ describe("CDPClient", () => {
   beforeEach(() => {
     MockWebSocket.instances = [];
     MockWebSocket.nextBehaviors = [];
-    // The afterEach below runs only `restoreAllMocks()`, which touches
-    // `vi.spyOn` spies and nothing else, so without this the `discoverTargets`
-    // CALL RECORDS accumulated across all 37 tests and
+    // The afterEach below clears no mock state: `restoreAllMocks()` touches
+    // `vi.spyOn` spies and nothing else.  Without this the `discoverTargets`
+    // CALL RECORDS accumulated across every test in the file, and
     // `expect(discoverTargets).toHaveBeenCalledWith(...)` could be satisfied by
     // any earlier test's call.  Reset first, then re-establish the baseline on
-    // the next line — resetting drops implementations too (#928).
+    // the next line — resetting drops implementations too.  Do not normalise
+    // this back to `clearAllMocks` (#846, #928).
     vi.resetAllMocks();
     vi.mocked(discoverTargets).mockResolvedValue(MOCK_TARGETS);
     client = new CDPClient(9222, { timeout: 500 });
@@ -564,8 +565,9 @@ describe("CDPClient", () => {
       //    of restoring the native one.  vi.spyOn copied that marker across for
       //    free; a bare arrow does not.  It only matters when the finally never
       //    runs — an aborted test, e.g. an advanceTimersByTimeAsync that never
-      //    settles — but that is precisely when the file should fail with one
-      //    error and not ~35 "setTimeout is not defined" ones.
+      //    settles — but that is precisely when the file should fail with the
+      //    one real error rather than burying it under a "setTimeout is not
+      //    defined" from every test that runs afterwards.
       const scheduleTimeout = globalThis.setTimeout;
       const observedDelays: number[] = [];
       const recordingTimeout = ((
@@ -596,7 +598,8 @@ describe("CDPClient", () => {
       }
 
       // The reconnection loop calls: await new Promise(r => setTimeout(r, delay))
-      // We look for calls with the expected exponential backoff values.
+      // We look for the recorded delays with the expected exponential backoff
+      // values.
       const backoffDelays = observedDelays.filter((ms) => ms >= 500);
 
       expect(backoffDelays).toEqual([500, 1000, 2000, 4000, 8000]);

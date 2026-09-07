@@ -75,23 +75,38 @@ function makeMockChild(): ChildProcess {
 // Three assertions read `expect(mockedSpawn).not.toHaveBeenCalled()`, and in
 // declaration order each was green for a different reason: the first because
 // no spawning test is declared ahead of it; the second because its own test
-// body calls `mockedSpawn.mockClear()` immediately before it, deliberately;
+// body calls `mockedSpawn.mockClear()` earlier in the same body, deliberately;
 // and the third only because that second test happens to be declared right
 // before it and leaves the records cleared.  Shuffle the order and the third
 // accident disappears and the first stops holding, which is both of the
 // failures this file showed.  `resetAllMocks()` drops records and
-// implementations both; the per-describe `beforeEach` hooks below re-establish
-// what they need, and they run after this one.
+// implementations both, and the per-describe hooks below run after this one.
+// Do not normalise this back to `clearAllMocks` (#846, #928).
+//
+// `discoverTargets` gets a not-running baseline for a specific reason: reset
+// leaves it returning `undefined`, `isRunning()` is
+// `try { await discoverTargets(...); return true } catch { return false }`, and
+// `await undefined` resolves — so an unconfigured mock would default to
+// "already running", which is the very branch the
+// `expect(mockedSpawn).not.toHaveBeenCalled()` assertions above exist to test.
+// A default that leans toward the passing branch is how those assertions
+// became accidental in the first place.  Defaulting to not-running instead
+// sends an unconfigured test down the launch path, where a missing `findApp`
+// throws loudly.
 //
 // `unstubAllGlobals()` is the other half, and it is not redundant: a
 // `vi.stubGlobal` is undone by neither reset nor restore, so the `process` and
 // `fetch` stubs set below otherwise stay installed for the rest of the file —
 // including over the Tier-1 network guard that `vitest.setup.ts` installs,
-// which CLAUDE.md § Testing calls enforced rather than merely documented.  No
-// test depends on inheriting one today; the per-describe hooks all re-stub
-// what they need (#928).
+// which CLAUDE.md § Testing calls enforced rather than merely documented.  A
+// displaced guard fails open and silently: a later test that would have been
+// failed loudly instead receives whatever the leftover stub returns.  No test
+// depends on inheriting a stub today — every test that reads `process` or
+// `fetch` sets its own, whether in a per-describe hook or in its own body
+// (#928).
 beforeEach(() => {
   vi.resetAllMocks();
+  mockedDiscoverTargets.mockRejectedValue(new Error("not running"));
 });
 
 afterEach(() => {
