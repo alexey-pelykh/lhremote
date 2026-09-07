@@ -2,6 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { createProgram } from "./program.js";
+import { createProgram, runProgram } from "./program.js";
 
-createProgram().parse();
+await runProgram(createProgram());
