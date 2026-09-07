@@ -755,10 +755,19 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
       // each one is load-bearing:
       //
       //  - it spans a further FIELD, not merely a longer slice of the same
-      //    one.  Without this the rule would also re-select an UNTRIMMED
-      //    candidate over its trimmed twin whenever the trimmed decoration
-      //    folds to nothing ("Ada Lovelace •" ties "Ada Lovelace"), which is
-      //    the badge contamination \`trimTrailingBadge\` exists to remove.
+      //    one.  This conjunct is DEFENSIVE rather than load-bearing, and
+      //    saying so is the point.  The loop below considers each field end
+      //    BEFORE that end's trimmed twin, and a further field always raises
+      //    the span, so \`end < best.end\` alone already reaches the same
+      //    verdict everywhere: dropping the conjunct was measured across 3564
+      //    generated shapes and changed no answer, and no test in the corpus
+      //    fails without it.  It is kept because that equivalence is a property
+      //    of the enumeration ORDER, not of this rule -- reorder the loop and
+      //    an UNTRIMMED candidate wins ties over its trimmed twin whenever the
+      //    trimmed decoration folds to nothing ("Ada Lovelace •" ties
+      //    "Ada Lovelace"), which is the badge contamination
+      //    \`trimTrailingBadge\` exists to remove.  Do not read the suite's
+      //    green as evidence this condition ever fired.
       //  - a connection badge TERMINATES the name region.  Without one the
       //    region legitimately spans name AND headline, and extending fuses a
       //    non-Latin HEADLINE onto a Latin given name — "Alex" / "Керівник

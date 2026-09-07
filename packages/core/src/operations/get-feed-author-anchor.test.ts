@@ -3197,12 +3197,20 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     timestamp: "18h",
   },
   {
-    // FALSIFIER for the further-FIELD condition. A trailing decoration folds
-    // away just as a non-Latin surname does, so the untrimmed candidate ties
-    // its own trimmed twin -- and here the slug DOES carry a remainder ("phd")
-    // and a badge DOES terminate the region, so the other two conditions are
-    // both met. Without the field-span requirement the badge contamination
-    // `trimTrailingBadge` exists to remove comes straight back.
+    // A trailing decoration folds away just as a non-Latin surname does, so
+    // the untrimmed candidate ties its own trimmed twin -- and here the slug
+    // DOES carry a remainder ("phd") and a badge DOES terminate the region, so
+    // the other two conditions are both met.
+    //
+    // NOT a falsifier for the further-FIELD condition, though it was labelled
+    // one until the mechanism was mutation-tested. Dropping that conjunct
+    // leaves this shape's answer unchanged -- the loop considers the untrimmed
+    // end BEFORE its trimmed twin, so `end < best.end` already decides the
+    // tie -- and no other shape in this corpus fails without it either. What
+    // this pins is the OUTCOME, the trimmed name, which holds however the tie
+    // is resolved; the conjunct's own justification lives in `get-feed.ts`,
+    // where it is kept as a guard on the enumeration order rather than claimed
+    // to be exercised.
     label: "M4 a trailing decoration is not a further field",
     href: "/in/ada-lovelace-phd/",
     children: () => bareFields("p", "Ada Lovelace •", "• 1st", "Head of Widgets", "18h •"),
@@ -3220,6 +3228,28 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     href: "/in/ada/",
     children: () => bareFields("p", "Ada", "Photography & Video", "• 1st", "Head of Widgets", "18h •"),
     name: "Ada",
+    headline: "Head of Widgets",
+    timestamp: "18h",
+  },
+  {
+    // `MAX_NAME_TAIL` exercised on a BADGE-TERMINATED region: the interaction
+    // this change creates, which the corpus did not previously reach. M5 above
+    // has the same shape but a slug ("ada") its first field explains in full,
+    // so no tie is ever reached and the bound is never what refuses. Here the
+    // slug corroborates well into the second field, so score alone WOULD take
+    // it and only the bound says no.
+    //
+    // It matters because this change's premise is that a badge is LinkedIn's
+    // statement that everything before it is name-side. A later reader who
+    // carries that one step further -- letting a badge relax `MAX_NAME_TAIL`
+    // too -- fuses an eponymous business name into the display name, and every
+    // other test in this file stays green while they do it. Verified by
+    // mutation: with the bound skipped on badge-terminated regions, this shape
+    // is the one that fails, reading "John Smith Photography & Video".
+    label: "M6 badge-terminated region does NOT relax the uncorroborated-tail bound",
+    href: "/in/john-smith-photography/",
+    children: () => bareFields("p", "John Smith", "Photography & Video", "• 1st", "Head of Widgets", "18h •"),
+    name: "John Smith",
     headline: "Head of Widgets",
     timestamp: "18h",
   },
@@ -3559,7 +3589,7 @@ const FIELD_SHAPES: readonly FieldShape[] = [
  * regression list is evidence rather than an artefact of a degenerate
  * comparison; raise it when the corpus grows.
  */
-const BASELINE_CORRECT_FIELDS = 109;
+const BASELINE_CORRECT_FIELDS = 111;
 
 /**
  * A wrapper whose runs are all EMPTY, carrying its real text as a bare text
