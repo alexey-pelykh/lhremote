@@ -17,7 +17,11 @@ import { describe, expect, it } from "vitest";
  * The canary therefore has to live in each package; a copy in `packages/core`
  * cannot see this one detach.  The full behavioural suite is in
  * `packages/core/src/testing/tier1-network-guard.test.ts` — this only asserts
- * the guard reached this package, and that it bites.
+ * the guards reached this package, and that the network one bites.
+ *
+ * Two guards, not one: the same setup file also pins
+ * `LHREMOTE_CAPTURE_DIAGNOSTICS` off for Tier 1 (#925), and a detached config
+ * takes both down together.
  */
 describe("Tier-1 network guard reaches this package", () => {
   it("installs its test handle", () => {
@@ -35,5 +39,18 @@ describe("Tier-1 network guard reaches this package", () => {
     const handle = (globalThis as { __tier1NetworkGuard?: { drain: () => string[] } })
       .__tier1NetworkGuard;
     expect(handle?.drain()).toHaveLength(1);
+  });
+});
+
+
+describe("Tier-1 diagnostic-capture pin reaches this package", () => {
+  it("installs its test handle", () => {
+    // The handle, not `process.env.LHREMOTE_CAPTURE_DIAGNOSTICS` — nobody
+    // exports that in CI, so asserting it is unset would pass there with the
+    // config detached. The handle exists only if the pin ran.
+    expect(
+      (globalThis as { __tier1CaptureDiagnosticsGuard?: unknown })
+        .__tier1CaptureDiagnosticsGuard,
+    ).toBeDefined();
   });
 });

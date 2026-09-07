@@ -2,23 +2,42 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 /**
- * Tier-1 unit-test guard: no live network.
+ * Tier-1 unit-test guards: no live network, and no diagnostic capture.
  *
  * ADR-004 gives Tier 1 an external-dependency column reading `None`, but
- * nothing enforced it.  `packages/core/src/services/instance-context.test.ts`
- * consequently issued a real `fetch` to `http://127.0.0.1:9222/json/list` —
- * `DEFAULT_CDP_PORT` — through an unmocked `isCdpPort()`, so the suite passed
- * or failed on whether LinkedHelper happened to be listening on the
- * developer's machine.  CI never caught it, because nothing answers on 9222
- * there and the false branch was always taken.  PR #905 fixed the one
- * offending file; this file closes the class.
+ * nothing enforced it.  This file enforces two of the ways a unit run could
+ * reach outside itself.  Both shipped as real defects first, and they share a
+ * shape: a suite whose behaviour depended on the machine it ran on, while
+ * staying green.
+ *
+ * **No live network (#909).**
+ * `packages/core/src/services/instance-context.test.ts` issued a real `fetch`
+ * to `http://127.0.0.1:9222/json/list` — `DEFAULT_CDP_PORT` — through an
+ * unmocked `isCdpPort()`, so the suite passed or failed on whether
+ * LinkedHelper happened to be listening on the developer's machine.  CI never
+ * caught it, because nothing answers on 9222 there and the false branch was
+ * always taken.  PR #905 fixed the one offending file; the guard below closes
+ * the class.
+ *
+ * **No diagnostic capture (#925).**  The failure-diagnostic captures self-gate
+ * on `LHREMOTE_CAPTURE_DIAGNOSTICS`, and `diagnosticCaptureEnabled()` in
+ * `packages/core/src/cdp/wait-for-post-load.ts` reads it *per call* rather
+ * than at module load.  A Tier-1 suite that drives an operation into a capture
+ * while mocking neither `node:fs/promises` nor that variable therefore takes
+ * the real `mkdtemp` + `writeFile` path whenever the launching shell exported
+ * it — writing a real `lhremote-diagnostics-*` bundle out of a green unit run.
+ * `packages/core/src/operations/get-post-engagers.test.ts` did exactly that,
+ * measured.  Three suites had already grown the same delete-and-restore guard
+ * by hand; the pin below closes that class too.  The artifacts hold LinkedIn
+ * page content, i.e. personal data, which is why the capture is gated
+ * default-off to begin with.
  *
  * Wired in via `setupFiles` in `vitest.config.ts`, which every package picks
  * up — each package runs a bare `vitest run`, and vitest walks up from the
  * package directory to the workspace-root config.
  *
- * Four properties are worth stating, because none is obvious and all are
- * load-bearing:
+ * Four properties of the network guard are worth stating, because none is
+ * obvious and all are load-bearing:
  *
  * 1. **Throwing is not enough on its own.**  The call site that started this,
  *    `isCdpPort()`, wraps its `fetch` in `catch { return false; }`, and
@@ -49,29 +68,83 @@
  *    the test file's module is evaluated — run last.  A config setting
  *    `sequence: { hooks: "list" }` would invert that and drain too early.
  *
- * Scope, stated rather than implied: this guards `fetch` and `WebSocket`,
- * which are the only network primitives this codebase uses (four `fetch` call
- * sites, one `new WebSocket`).  A unit test reaching `node:http`, `node:net`
- * or a raw socket is **not** caught.  Nor is non-network machine state such as
- * the `ps-list` / `pid-port` process probes, which unit tests mock today.
+ * The capture pin has four of its own, and each closes a different leak:
  *
- * Tiers 2 and 3 are exempt: `*.integration.test.ts` genuinely needs the
- * network, since `launchChromium()` reaches real Chromium through
- * `discoverTargets()`, and `*.e2e.test.ts` drives the real application.  The
- * exemption is a requirement, not a convenience.
+ * 1. **The ambient value is captured at module scope and deleted right there**
+ *    — at setup-file evaluation time, which is before the test file's own
+ *    module is evaluated.  Deleting in a hook alone would be too late for a
+ *    file that reads the variable at ITS module scope, and two already do
+ *    (`search-posts.test.ts` and `search-posts-diagnostics.test.ts`, each
+ *    snapshotting it into a module-level `const`).  They now snapshot the
+ *    pinned-off state, which is the state they want.
+ *
+ * 2. **`beforeEach` re-pins.**  A test that sets the variable and fails to
+ *    restore it would otherwise leave every later test in the same file
+ *    writing real bundles.  The re-pin bounds that leak to the one test that
+ *    caused it.
+ *
+ * 3. **`afterAll` restores the ambient value, including the "unset" case.**
+ *    The worker process is reused across test files and `*.integration.test.ts`
+ *    is exempt from this pin, so leaving the variable deleted would silently
+ *    change Tier-2 behaviour for an operator who exported it.  Restoring means
+ *    restoring exactly what was there: `undefined` becomes a `delete`, not the
+ *    string `"undefined"`.
+ *
+ * 4. **It does not clobber a deliberate opt-in.**  `sequence.hooks` defaults
+ *    to `"stack"`, under which `before*` hooks run in registration order — so
+ *    this file's `beforeEach`, registered before the test file's module is
+ *    evaluated, runs FIRST and a file-level `beforeEach` or in-test assignment
+ *    runs after it and wins.  Every deliberate opt-in in the repo today sets
+ *    the variable inside an `it()` body, so all of them still see `"1"`.
+ *
+ * Scope, stated rather than implied.  The network guard covers `fetch` and
+ * `WebSocket`, which are the only network primitives this codebase uses (four
+ * `fetch` call sites, one `new WebSocket`).  A unit test reaching `node:http`,
+ * `node:net` or a raw socket is **not** caught.  Nor is non-network machine
+ * state such as the `ps-list` / `pid-port` process probes, which unit tests
+ * mock today.  The capture pin covers exactly one variable,
+ * `LHREMOTE_CAPTURE_DIAGNOSTICS`; a suite that reaches the filesystem by some
+ * other route is not caught either, and mocking `node:fs/promises` remains how
+ * a suite that genuinely grades the capture path does it.
+ *
+ * Tiers 2 and 3 are exempt from both, and for the pin that exemption is
+ * deliberate rather than incidental.  `*.integration.test.ts` genuinely needs
+ * the network, since `launchChromium()` reaches real Chromium through
+ * `discoverTargets()`, and `*.e2e.test.ts` drives the real application.  Tier
+ * 2 keeps whatever `LHREMOTE_CAPTURE_DIAGNOSTICS` the shell gave it — its
+ * dependency column is the Chromium binary, not `None`, and a Tier-2 run under
+ * an operator's own export is that operator's opt-in.  Tier 3 keeps it too:
+ * `vitest.e2e.config.ts` declares no `setupFiles` at all, so nothing here ever
+ * loads for E2E and its deliberate `env: { LHREMOTE_CAPTURE_DIAGNOSTICS: "1" }`
+ * is untouched by this file.
  *
  * This file sits outside every static gate — each package lints only `eslint
  * src/`, and no tsconfig includes the repo root — so it is neither linted nor
  * type-checked.  Keep it conservative.
  */
 
-import { afterAll, afterEach, expect } from "vitest";
+import { afterAll, afterEach, beforeEach, expect } from "vitest";
 
 /** Suffixes of the tiers that are allowed to reach the network. */
 const NETWORK_TIER_SUFFIXES = [".integration.test.ts", ".e2e.test.ts"];
 
 /** Global handle exposing the recorder to the guard's own tests. */
 const TEST_HANDLE = "__tier1NetworkGuard";
+
+/** Global handle exposing the capture pin to the guard's own tests. */
+const CAPTURE_TEST_HANDLE = "__tier1CaptureDiagnosticsGuard";
+
+/** The diagnostic-capture opt-in the capture sites self-gate on. */
+const CAPTURE_DIAGNOSTICS_ENV = "LHREMOTE_CAPTURE_DIAGNOSTICS";
+
+/**
+ * The ambient `LHREMOTE_CAPTURE_DIAGNOSTICS`, read ONCE here.
+ *
+ * Setup files are evaluated per test file and before that file's own module,
+ * so this is the value the launching shell gave the worker, taken before any
+ * test could touch it.  `afterAll` hands exactly this back.
+ */
+const ambientCaptureDiagnostics = process.env[CAPTURE_DIAGNOSTICS_ENV];
 
 /**
  * Network calls this file blocked, drained by the hooks below.
@@ -151,6 +224,20 @@ function drain(): void {
   );
 }
 
+/** Pin the capture gate OFF for a test that has not asked for it. */
+function pinCaptureDiagnosticsOff(): void {
+  delete process.env[CAPTURE_DIAGNOSTICS_ENV];
+}
+
+/** Hand the shell back exactly the value it had, including "unset". */
+function restoreAmbientCaptureDiagnostics(): void {
+  if (ambientCaptureDiagnostics === undefined) {
+    delete process.env[CAPTURE_DIAGNOSTICS_ENV];
+  } else {
+    process.env[CAPTURE_DIAGNOSTICS_ENV] = ambientCaptureDiagnostics;
+  }
+}
+
 /**
  * Whether this test file is allowed to reach the network.
  *
@@ -185,6 +272,33 @@ if (!isNetworkTier()) {
     drain: (): string[] => blocked.splice(0, blocked.length),
   };
 
+  // Pin the diagnostic capture OFF for the rest of this file (#925).  Done
+  // here rather than only in `beforeEach` because a test file that reads the
+  // variable at its own module scope is evaluated after this file and before
+  // any hook runs — it must already see the pinned state.
+  pinCaptureDiagnosticsOff();
+
+  // Exposed so the per-package canaries can observe that the pin reached them.
+  // It carries the ambient value rather than merely existing: in CI nobody
+  // exports the variable, so `expect(process.env.LHREMOTE_CAPTURE_DIAGNOSTICS)
+  // .toBeUndefined()` passes there whether or not this file ran at all, and a
+  // canary that cannot fail is not a canary.  Test-only; nothing in packages/
+  // reads it.
+  (globalThis as Record<string, unknown>)[CAPTURE_TEST_HANDLE] = {
+    ambient: ambientCaptureDiagnostics,
+  };
+
+  // Re-pin before every test, so a test that sets the variable and does not
+  // restore it cannot leak into the ones that follow it in this file.  Under
+  // the default `sequence.hooks: "stack"` this runs BEFORE any file-level
+  // `beforeEach`, so a deliberate opt-in still wins.
+  beforeEach(pinCaptureDiagnosticsOff);
+
   afterEach(drain);
   afterAll(drain);
+
+  // Registered last, so under `"stack"`'s reverse ordering it runs before the
+  // drain above — the worker is reused across files, and a Tier-2 file that
+  // inherited a deleted variable would silently lose an operator's opt-in.
+  afterAll(restoreAmbientCaptureDiagnostics);
 }

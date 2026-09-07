@@ -170,3 +170,82 @@ Decisions 1 through 5 are otherwise unchanged. Decision 1's claim that Tiers 1
 and 2 share one runner invocation is what makes a single `setupFiles` entry
 able to serve both, and the guard reads the filename to tell them apart rather
 than splitting the invocation.
+
+### 2026-09-07 — The same column now also covers the diagnostic capture
+
+The amendment above closed the network half of the Tier-1 dependency column and
+stated its own limit explicitly: the guard *"does not cover `node:http`, raw
+sockets, or non-network machine state such as the `ps-list` / `pid-port` process
+probes."* That sentence is now narrower by one item. Machine state in general is
+still convention-enforced, but one specific piece of it — the diagnostic-capture
+opt-in — is enforced mechanically, and it is worth recording why that one was
+promoted out of the list rather than left in it.
+
+The failure-diagnostic captures self-gate on `LHREMOTE_CAPTURE_DIAGNOSTICS`, and
+`diagnosticCaptureEnabled()` reads it *per call* rather than at module load. A
+Tier-1 suite that drives an operation into a capture while mocking neither
+`node:fs/promises` nor that variable therefore takes the real `mkdtemp` +
+`writeFile` path whenever the launching shell exported it.
+`packages/core/src/operations/get-post-engagers.test.ts` did exactly that, and
+the measurement is the point: with a private `TMPDIR`, a run of that one file
+under `LHREMOTE_CAPTURE_DIAGNOSTICS=1` went from zero entries to one — a real
+`lhremote-diagnostics-*/reactions-modal-extraction-failure-*.json` — while
+reporting 17 passed, 0 failed. A green unit run wrote LinkedIn page content to
+disk. That is the same shape as the `fetch` defect one amendment up: the suite's
+behaviour was a property of the shell it was launched from, and nothing failed.
+
+It is worse in one respect, which is what settled the promotion. The network
+defect made a suite's *verdict* depend on machine state; this one leaves the
+verdict alone and produces a side effect — personal data on disk, in a directory
+the capture is gated default-off precisely to avoid writing. A test that is
+silently right is still a test nobody re-reads.
+
+`vitest.setup.ts` now pins the variable off inside the same
+`if (!isNetworkTier())` branch. Four properties of the pin are load-bearing and
+none is obvious: it captures the ambient value at module scope and deletes it
+*there*, because a setup file is evaluated before the test file's own module and
+two suites read that variable at their module scope; it re-deletes in
+`beforeEach`, bounding a test that dirties the variable to the test that did it;
+it restores the ambient value in `afterAll`, including the unset case, because
+the worker process is reused across files and Tier 2 is exempt; and it does not
+clobber a deliberate opt-in, because vitest's default `sequence.hooks: "stack"`
+runs `before*` hooks in registration order, so the setup file's `beforeEach`
+runs first and an assignment inside an `it()` body wins. Every deliberate opt-in
+in the repo today is of that last form.
+
+**The fix site is the shared setup file, not the offending suite.** Three suites
+had already grown the same hand-rolled delete-and-restore guard —
+`get-post.test.ts`, `get-post-stats.test.ts`, `search-posts.test.ts` — and a
+fourth was about to. Those remain in place as defence in depth against the
+detachment case the per-package canaries exist for, but the class is closed
+centrally rather than one suite at a time.
+
+**The pin is Tier-1 only, and that asymmetry is deliberate.** Decision 1's table
+gives Tier 1 `Dependency: None` while Tier 2's dependency is the Chromium
+binary, so the two rows are not making the same promise. A Tier-2 run under an
+operator's own `LHREMOTE_CAPTURE_DIAGNOSTICS=1` is that operator's explicit
+opt-in and the pin must not take it away. Tier 3 is untouched for a structural
+reason rather than a chosen one: `vitest.e2e.config.ts` declares no `setupFiles`
+at all, so nothing in `vitest.setup.ts` ever loads for E2E and its deliberate
+`env: { LHREMOTE_CAPTURE_DIAGNOSTICS: "1" }` cannot be disturbed from there.
+
+The one-directional misnaming consequence recorded above now applies to both
+guards together: Tier-1 work misnamed `*.integration.test.ts` runs with the
+network open *and* the capture unpinned, silently. The suffix switches off two
+things now, not one.
+
+What this does not cover is unchanged in kind and smaller by one: `node:http`,
+raw sockets, the `ps-list` / `pid-port` process probes, and any route to the
+filesystem other than this one variable. A suite that genuinely grades the
+capture path still mocks `node:fs/promises`, which is what the
+`*-extraction-diagnostics.test.ts` files do.
+
+Both guards are graded by the same canaries, one per package, and each asserts
+the guard's `globalThis` handle rather than the absence of a network call or the
+absence of an environment variable. For the pin that distinction is what makes
+the canary a gate at all: nobody exports `LHREMOTE_CAPTURE_DIAGNOSTICS` in CI,
+so `expect(process.env.LHREMOTE_CAPTURE_DIAGNOSTICS).toBeUndefined()` passes
+there whether or not the setup file ran — a check that cannot fail on the
+machine it usually runs on. The handle exists only if the pin ran.
+
+Decisions 1 through 5 are otherwise unchanged.
