@@ -3604,6 +3604,127 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     headline: "Photography & Video",
     timestamp: "2h",
   },
+  // -- the four shapes #903 traced, and the two ordering claims behind them ---
+  {
+    // #903 shape 1.  The wrapper renders the name as BARE text and the badge as
+    // a run beside it, so the badge is the only leaf run — and the rescue this
+    // file's B4 exercises is gated on "this root produced no field", which a
+    // non-empty badge run satisfies.  Before the fix the name was dropped
+    // outright and `anchorName` returned the badge: `authorName = "• 2nd"`.
+    label: "B5 bare name beside a non-empty badge run",
+    href: "/in/ada-lovelace/",
+    children: () => [
+      hiddenBareBesideRun("Ada Lovelace", "• 2nd"),
+      hiddenRun("Head of Widgets at Acme"),
+      hiddenRun("18h •"),
+    ],
+    name: "Ada Lovelace",
+    headline: "Head of Widgets at Acme",
+    timestamp: "18h",
+  },
+  {
+    // The same construction with a HEADLINE in the badge's place, which is why
+    // the shape above is a defect and not a curiosity: it is #860's
+    // contamination family — a neighbouring field returned AS the name —
+    // reached through the fix for it.  Before, `authorName` was
+    // "Head of Widgets at Acme".
+    label: "B6 bare name beside a non-empty headline run",
+    href: "/in/ada-lovelace/",
+    children: () => [
+      hiddenBareBesideRun("Ada Lovelace", "Head of Widgets at Acme"),
+      hiddenRun("18h •"),
+    ],
+    name: "Ada Lovelace",
+    headline: "Head of Widgets at Acme",
+    timestamp: "18h",
+  },
+  {
+    // #903 shape 2.  `anchorName` used to take the first of EVERY run rather
+    // than the first FIELD, so the container wrapping the name and the badge
+    // answered with both concatenated: `authorName = "Ada Lovelace• 1st"`.  No
+    // field contains that string, so `nameFieldSpan` then withheld nothing and
+    // the name's own field won the headline race: `authorHeadline` was
+    // "Ada Lovelace".
+    //
+    // The slug is OPAQUE deliberately — this is the decline path, and a
+    // corroborating slug would hide the defect behind `slugName`.
+    label: "B7 name and badge nested under one container run, opaque slug",
+    href: "/in/x7k2m9q4/",
+    children: () => [
+      el("span", {}, [
+        el("span", {}, [nameRun("span", "Ada Lovelace")]),
+        el("span", {}, [nameRun("span", "• 1st")]),
+      ]),
+      el("span", {}, [nameRun("span", "Head of Widgets at Acme")]),
+      el("span", {}, [nameRun("span", "18h •")]),
+    ],
+    name: "Ada Lovelace",
+    headline: "Head of Widgets at Acme",
+    timestamp: "18h",
+  },
+  {
+    // #903 shape 3.  The avatar initials `hiddenWrappers` says may appear render
+    // as a field BEFORE the name, and the decline path used to start its
+    // withholding at the field the name was found in — so "AL" was eligible and
+    // won: `authorHeadline` was "AL", displacing the real headline.
+    label: "B8 leading avatar initials ahead of the name",
+    href: "/in/ada-lovelace/",
+    children: () => [
+      hiddenBare("AL"),
+      hiddenRun("Ada Lovelace"),
+      hiddenRun("• 1st"),
+      hiddenRun("Head of Widgets at Acme"),
+      hiddenRun("18h •"),
+    ],
+    name: "Ada Lovelace",
+    headline: "Head of Widgets at Acme",
+    timestamp: "18h",
+  },
+  {
+    // The ORDER claim, which nothing else here can fail.  A root's bare text is
+    // flushed at each field-bearing run rather than appended after them, so text
+    // rendered AFTER a run stays after it.  Reverse the two and this anchor's
+    // fields become ["• Head of Widgets", "Ada Lovelace", "18h •"], whose region
+    // no longer starts at the name: the slug read declines and `anchorName`
+    // answers "• Head of Widgets".
+    //
+    // Trailing bare text is the ordering the one real capture uses — it renders
+    // "• Adi" AFTER two runs, not before them.
+    label: "B9 bare text rendered AFTER the run beside it",
+    href: "/in/ada-lovelace/",
+    children: () => [
+      hiddenRunThenBare("Ada Lovelace", " • Head of Widgets"),
+      hiddenRun("18h •"),
+    ],
+    name: "Ada Lovelace",
+    headline: "• Head of Widgets",
+    timestamp: "18h",
+  },
+  {
+    // And the other half of that rule: a leaf run carrying NO field is
+    // TRANSPARENT — its text joins the bare text around it instead of cutting
+    // it in two.  That is what keeps the real capture's construction reading as
+    // one field.
+    //
+    // Asserted on the HEADLINE rather than on the name, because the name is
+    // where this claim cannot be measured: `slugName` re-fuses a split name
+    // whenever the slug corroborates it, so a walk that cut the text in two
+    // would return the same name anyway and the assertion would pass for the
+    // wrong reason.  Nothing re-fuses a headline — the rule that picks it takes
+    // ONE field — so a cut shows up as "Head of" and dropping the run's own
+    // text shows up as "Head ofWidgets at Acme".
+    label: "B10 headline split by a whitespace-only run",
+    href: "/in/ada-lovelace/",
+    children: () => [
+      hiddenRun("Ada Lovelace"),
+      hiddenRun("• 1st"),
+      hiddenBareSplitByEmptyRun("Head of", "Widgets at Acme"),
+      hiddenRun("18h •"),
+    ],
+    name: "Ada Lovelace",
+    headline: "Head of Widgets at Acme",
+    timestamp: "18h",
+  },
   {
     label: "B4 name in a wrapper whose only runs are empty",
     href: "/in/ada-lovelace/",
@@ -3625,7 +3746,7 @@ const FIELD_SHAPES: readonly FieldShape[] = [
  * regression list is evidence rather than an artefact of a degenerate
  * comparison; raise it when the corpus grows.
  */
-const BASELINE_CORRECT_FIELDS = 111;
+const BASELINE_CORRECT_FIELDS = 114;
 
 /**
  * A wrapper whose runs are all EMPTY, carrying its real text as a bare text
@@ -3641,6 +3762,44 @@ const BASELINE_CORRECT_FIELDS = 111;
  * degree, which costs nothing; the same construction around the NAME loses the
  * name, which is what the fixture below renders.
  */
+/**
+ * A wrapper rendering `value` as BARE text with a NON-EMPTY run beside it.
+ *
+ * The `hiddenBareBesideEmptyRuns` shape above one field over, and the
+ * difference is the whole of issue #903's first shape: that wrapper's runs are
+ * all empty, so it produces no field and the bare-text rescue fires; this one
+ * produces a field, so the rescue was gated off and the bare text — the name —
+ * was dropped without trace.
+ */
+function hiddenBareBesideRun(bare: string, run: string): FakeElement {
+  return el("span", { "aria-hidden": "true" }, [text("span", run)], bare);
+}
+
+/**
+ * A wrapper rendering a run FIRST and its bare text after it.
+ *
+ * `linkedin/__fixtures__/legacy/post-with-comments.html` renders its bare
+ * "• Adi" after two runs and an `<svg>`, so trailing bare text is the ordering
+ * the one real capture actually uses — and the shape `hiddenBareBesideRun`
+ * builds is the opposite one.  A read that appended bare text after every run,
+ * or prepended it before them, would satisfy one and corrupt the other.
+ */
+function hiddenRunThenBare(run: string, tail: string): FakeElement {
+  return el("span", { "aria-hidden": "true" }, [text("span", run)], "", 0, tail);
+}
+
+/**
+ * A wrapper whose bare text is INTERRUPTED by a whitespace-only run.
+ *
+ * Also modelled on the capture above, whose `white-space-pre` spans sit between
+ * the `<svg>` and the bare text.  Those spans are leaf runs that carry no
+ * field, and a walk that treated every run as a field boundary would cut the
+ * text around them into two.
+ */
+function hiddenBareSplitByEmptyRun(head: string, tail: string): FakeElement {
+  return el("span", { "aria-hidden": "true" }, [text("span", " ")], head, 0, tail);
+}
+
 function hiddenBareBesideEmptyRuns(value: string): FakeElement {
   return el("span", { "aria-hidden": "true" }, [
     text("span", "", { class: "white-space-pre" }),
@@ -3920,11 +4079,11 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
  *
  * These assert behaviour this change knowingly does NOT get right.  They are
  * written as the OBSERVED answer, not the ideal one, so that a later change
- * which fixes either case fails here and has to say so — an accepted cost that
+ * which fixes any of them fails here and has to say so — an accepted cost that
  * silently stops being paid is as invisible as one that silently starts.
  *
  * Every shape here is HAND-BUILT.  Issue #897 records that this repository
- * holds no captured feed-dialect DOM fixture, so neither of these is evidence
+ * holds no captured feed-dialect DOM fixture, so none of these is evidence
  * about real markup; they bound the mechanism, not the page.
  */
 describe("#860/#898 accepted costs", () => {
@@ -4129,5 +4288,98 @@ describe("#860/#898 accepted costs", () => {
     // The timestamp is unaffected: its loop scans backwards and reaches the
     // real time field first, so only the headline pays this cost.
     expect(got.timestamp).toBe("18h");
+  });
+  it("#903 (accepted cost): leading initials make the slug read decline, corroborating slug or not", () => {
+    // The residue of #903's third shape, which the span fix does not reach.
+    //
+    // `nameRegion` starts the name region at field 0, and avatar initials are
+    // neither a badge nor a timestamp — so the region STARTS at "AL", the
+    // two-field candidate "AL Ada Multi" is rejected by `MAX_NAME_TAIL` and the
+    // one-field candidate "AL" misses `MIN_SLUG_MATCH`.  The slug read declines
+    // even though `/in/ada-multi/` corroborates the name in full, so #860's
+    // mechanism is switched off for the whole shape and the split name is
+    // reported truncated by the fallback.
+    //
+    // Why it is a cost and not a defect to fix here: recovering the read means
+    // letting a candidate START somewhere other than the region's first field,
+    // and that is the generalisation `slugName` refuses by construction — a
+    // role, brand or nickname slug then matches the HEADLINE better than the
+    // name and the two swap places, which is the regression #860 itself
+    // records.  The fix is a rule for recognising an initials field, which is a
+    // vocabulary change with its own cost and its own issue.
+    //
+    // The falsifier, asserted rather than asserted-about: drop the initials and
+    // the SAME slug over the SAME name reads it whole (corpus shape S1).
+    const withInitials = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "leading initials, corroborating slug",
+      href: "/in/ada-multi/",
+      children: () => [
+        hiddenBare("AL"),
+        hiddenRun("Ada"),
+        hiddenRun("Multi"),
+        hiddenRun("• 1st"),
+      ],
+      name: "Ada Multi",
+    });
+
+    expect(withInitials.name).toBe("Ada");
+
+    const withoutInitials = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "same slug, same name, no initials",
+      href: "/in/ada-multi/",
+      children: () => [hiddenRun("Ada"), hiddenRun("Multi"), hiddenRun("• 1st")],
+      name: "Ada Multi",
+    });
+
+    expect(withoutInitials.name).toBe("Ada Multi");
+  });
+
+  it("#903 (accepted cost, pre-existing): `visibleRoot` skips a wrapper whose only run is blank", () => {
+    // Found while fixing #903 and left alone deliberately: it is a third answer
+    // to "what is a field", and it lives in the one place this change did not
+    // touch.
+    //
+    // `anchorName` now reads the fields `anchorFields` reads — but WHICH root it
+    // reads them from is still `visibleRoot`'s answer, and that prefers the
+    // first wrapper rendering a name-bearing RUN.  A wrapper carrying its name
+    // as bare text around a whitespace-only run renders no such run, so it is
+    // skipped and the next wrapper — the connection badge — answers instead.
+    //
+    // Why it is not fixed here: from `visibleRoot`'s side this wrapper is
+    // structurally identical to the avatar-initials wrapper of the test above,
+    // which it must skip.  Both are "a wrapper with no name-bearing run that
+    // still produces a bare-text field", so one predicate cannot serve both —
+    // #860's own premise, one level up — and separating them needs evidence
+    // from outside the wrapper, which on this path the slug has already
+    // declined to give.
+    //
+    // The baseline answers the same way, so this is a defect neither read
+    // fixes, not a regression this one introduces; the second assertion is that
+    // claim, measured rather than asserted about.  The falsifier is a
+    // corroborating slug: `slugName` then answers and `visibleRoot` is never
+    // consulted.
+    const shape: FieldShape = {
+      label: "name split by a blank run, opaque slug",
+      href: "/in/x7k2m9q4/",
+      children: () => [
+        hiddenBareSplitByEmptyRun("Ada", "Lovelace"),
+        hiddenRun("• 1st"),
+        hiddenRun("Head of Widgets at Acme"),
+        hiddenRun("18h •"),
+      ],
+      name: null,
+    };
+
+    expect(fieldsOf(SCRAPE_FEED_SCRIPT, shape).name).toBe("• 1st");
+    expect(fieldsOf(BASELINE_FEED_SCRIPT, shape).name).toBe("• 1st");
+
+    const corroborated = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      ...shape,
+      label: "same shape, corroborating slug",
+      href: "/in/ada-lovelace/",
+    });
+
+    expect(corroborated.name).toBe("Ada Lovelace");
+    expect(corroborated.headline).toBe("Head of Widgets at Acme");
   });
 });
