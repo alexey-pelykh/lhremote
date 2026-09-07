@@ -50,8 +50,10 @@ export default defineConfig({
         "**/*.e2e.test.ts",
         "**/*.d.ts",
         "**/testing/**",
-        // Bin entrypoints — exactly the files each package names in its
-        // `bin` field.  Each parses argv or starts a server at module scope,
+        // Bin entrypoints — the sources that compile to the `dist/*.js` files
+        // each package names in its `bin` field (the field names the built
+        // artifact; these are the three sources behind those three artifacts).
+        // Each parses argv or starts a server at module scope,
         // so importing one runs the program instead of testing it and none can
         // be exercised in-process; each delegates in a single statement to an
         // importable module (program.ts, stdio.ts) that is measured normally.
