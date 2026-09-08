@@ -56,7 +56,11 @@ export default defineConfig({
         // Each parses argv or starts a server at module scope,
         // so importing one runs the program instead of testing it and none can
         // be exercised in-process; each delegates in a single statement to an
-        // importable module (program.ts, stdio.ts) that is measured normally.
+        // importable module that is measured normally — the two CLI bins to
+        // their package's own program.ts, the mcp bin to packages/mcp/src/run.ts
+        // (it delegated to stdio.ts until #945 put the rejection path in front
+        // of it).  That delegate being measured is the whole justification for
+        // excluding these three, so it is worth re-checking when one changes.
         // Excluded uniformly rather than only where a package would otherwise
         // miss its threshold: the claim is that the measurement does not apply
         // to them, not that a number needed help.  Named by full package path
@@ -64,7 +68,11 @@ export default defineConfig({
         // which is not an entrypoint and stays measured.  These are matched
         // against absolute paths, not against `root`; the `**/` prefix says so
         // explicitly rather than leaning on substring matching.  Verified by
-        // removing them: cli 77->78, mcp 79->80, lhremote 4/4->4/5 files.
+        // removing them: cli 77->78, mcp 79->80, lhremote 4/4->4/5 files —
+        // a reading taken when these exclusions landed, not a live invariant.
+        // Both sides move with each package's measured file count (mcp's rose
+        // by one in #945), so re-measure rather than trusting these figures;
+        // what does not go stale is that each exclusion removes exactly one.
         "**/packages/cli/src/cli.ts",
         "**/packages/lhremote/src/cli.ts",
         "**/packages/mcp/src/index.ts",

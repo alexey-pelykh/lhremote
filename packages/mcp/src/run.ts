@@ -10,10 +10,10 @@ import { runStdioServer } from "./stdio.js";
  * never silent.  It renders `""` for an `Error` carrying an empty message and
  * for a prototype-less rejection value, and it renders the value UNTRIMMED for
  * anything that is not an `Error` — so a rejected `"   "` comes back as three
- * spaces, which is blank to a reader but not to `length`.  All measured.  The
- * two `process.stderr.write` calls in `runStdioServer` hide that case behind a
- * prefix of their own; this one has none, so it tests what a reader would see
- * rather than what was returned.
+ * spaces, which is blank to a reader but not to `length`.  All measured.  Every
+ * other write in `runStdioServer` that renders one of these hides the case
+ * behind a prefix of its own; this one has none, so it tests what a reader
+ * would see rather than what was returned.
  */
 const UNREPORTABLE =
   "MCP server failed to start, and the error carried no message";
@@ -44,8 +44,12 @@ const UNREPORTABLE =
  * `createServer()` throwing, `new StdioServerTransport()` throwing, and the
  * `process.stderr.write` that announces the server — which sits after a
  * successful `connect()` and outside its `try` — failing with EPIPE.  A
- * `connect()` failure is already caught and reported inside that function; it
- * never reaches here.
+ * `connect()` failure is caught and reported inside that function, so it does
+ * not reach here — unless that report is itself what fails: the write in its
+ * catch is unguarded, so an EPIPE there escapes before the `process.exit(1)`
+ * beneath it runs, and arrives as the fourth thing this catch has to absorb.
+ * (Absorbed correctly, but the connect diagnosis is lost with the stderr that
+ * would have carried it, which is the degraded case the next bullet describes.)
  *
  * The decision, in four parts:
  *
@@ -72,8 +76,12 @@ const UNREPORTABLE =
  *   failure paths.
  * - **Kept in this package rather than shared.**  The only home both packages
  *   already reach is `@lhremote/core`, and no non-test source under
- *   `packages/core/src/` touches `process` at all — not `process.exit`, not
- *   `process.stderr`.  Putting a process-terminating function on a library's
+ *   `packages/core/src/` calls `process.exit` or writes to `process.stderr` —
+ *   measured, and the narrow claim is the one that matters: core does touch
+ *   `process` elsewhere (`process.env`, `process.platform`, and
+ *   `process.kill` against a foreign pid), so the property is not that it
+ *   never touches it but that it never terminates its caller and never owns
+ *   its caller's stderr.  Putting a process-terminating function on a library's
  *   public API to save a handful of lines trades that property away for a
  *   bounded duplication, and `@lhremote/mcp` must not depend on
  *   `@lhremote/cli` to borrow one either.
