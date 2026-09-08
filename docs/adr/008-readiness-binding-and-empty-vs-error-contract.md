@@ -512,6 +512,13 @@ not a measurement, and chasing it is out of this decision's scope.
   lists all three subclasses added here, alongside the carried fields § 5 names.
 - **Probe the profile surface for the same flip**: currently an inference, not a measurement
   (§ Disposition of ADR-007).
+- **Measure an SDUI engagement-counts row** (§ 2026-09-08 Amendment). While
+  `PostDetailVariantAdapter.counts` is `[]` for that dialect, `getPostStats`'s container-tier
+  corroboration is unreachable on the dialect LinkedIn serves more often, and the loose fallback
+  `__lhReadCount` gates on the same flag is unreachable with it.
+- **Carry the container tier to `get-post`'s counters**: it consumes the same record and treats an
+  unrendered counts row as `commentCount: 0`, which its cardinal tier then reads as a legal empty
+  (§ 2026-09-08 Amendment). Left out of #852 because it changes a different operation's behaviour.
 
 ## Amendments
 
@@ -1322,6 +1329,84 @@ raises in `search-posts.ts` likewise carry no cause; `ExtractionTimeoutError`'s 
 `ErrorOptions` at all, so that one is structural rather than chosen. And the claim pinned here is
 only that a cause is attached and what it says — that it then reaches an operator is
 `errorMessage`'s own contract, pinned separately by #882.
+
+### 2026-09-08 — `get-post-stats` gets the container tier for its counts row (#852)
+
+#852 asked whether `getPostStats` is gated on a readiness anchor it never extracts with, and
+listed three candidate remedies without choosing one. The answer turns on evidence that did not
+exist when it was filed, so both halves are recorded here: what the invariant actually says about
+this operation, and what the captured fixtures rule out.
+
+**The binding half was already closed, by a change that did not set out to close it.** #857
+replaced this operation's hand-written whole-page regex sweep with the same registry-generated
+script `get-post` evaluates. From that commit on, the gate and the extraction resolve the same
+adapter out of the same table, which is exactly what § Decision 1 requires — at the granularity
+§ Decision 1 states it, the adapter. Its three normative consequences hold too: the anchor is not
+shared across dialects, the predicate is satisfied only on an unambiguous claim plus that
+adapter's own `ready`, and the `<main>`-scoped author link is diagnostic-only. The issue's central
+citation — `get-post-stats.ts:85-96 extracts by regex over document.body.textContent` — describes
+code that no longer exists.
+
+**What was left is one level down, and § Decision 1 does not reach it.** `ready` is the author
+link inside the adapter's roots; this operation reads only the engagement-counts row. A green gate
+therefore attests a DIFFERENT REGION of the page from the one being read, and where the counts
+region has not rendered the read returns `{0, 0, 0}` rather than refusing — indistinguishable from
+a post with no engagement.
+
+**Strengthening the gate is refuted, not merely untried, and this is the finding that decided the
+issue.** The obvious remedy — a readiness parameter requiring the selected adapter's own `counts`
+anchor before reporting ready — fails against a page already committed to this repository.
+`__fixtures__/legacy/post-zero-comments` is a captured legacy post-detail page whose body rendered
+(`feed-shared-update-v2`: 1, `.update-components-text`: 1) and whose counts row is ABSENT
+(`socialCounts: 0`, `socialCountsText: ""`, `reactionsTriggerAria: null`); the fixture oracle
+asserts the readiness predicate returns `true` on it and the extraction returns
+`commentCount: 0, reactionCount: 0`. The row's absence is a LEGITIMATE page state, so a gate
+demanding it would poll to the deadline on every post with no engagement and then either raise —
+reintroducing the false-refusal direction #852 names as the other half of its own seam — or return
+the same zeroes it started with, having spent the deadline.
+
+That is a general point about this kind of gate, and it is why the remedy moved: **a readiness
+predicate can only be strengthened on a signal whose absence is itself an error.** The counts row
+is not one.
+
+**The remedy taken is the CONTAINER tier, applied to a region the scope check cannot speak for.**
+§ Decision 4 already names it — *"did the region's own anchor match at all?"* — and
+`corroboration.ts` already recorded it as enforced upstream on this surface. That was true for the
+post CONTAINER, whose absence yields no record at all, and false for every region inside it. The
+counts row was the one region left unenforced, and `getPostStats` was the one extraction surface
+with no corroboration branch of any kind.
+
+The corroborator was already being computed and thrown away: `__lhCountsRoot`'s `narrowed` flag,
+which exists because `__lhReadCount` gates its loose fallback on it. The extraction record now
+carries it out as `countsRootNarrowed`, and `assertRegionCorroboration` reads it:
+
+| counts root | counters read | outcome |
+|---|---|---|
+| resolved | any non-zero | complete — return |
+| resolved | all zero | **failed** — `ExtractionFailedError`, with a diagnostic bundle |
+| not resolved | all zero | legitimately empty — return |
+
+**What the middle row rests on.** On the only pages anyone has captured, the legacy counts row
+renders when and only when there is something to render: `socialCounts: 1` carrying
+`"2 41 comments"` on `post-with-comments`, `socialCounts: 0` carrying `""` on
+`post-zero-comments`. Two pages is not a law, and a dialect rendering an empty counts row would
+falsify it — which is what the raise would report, pointing at the counter patterns rather than at
+this premise. The fixture oracle grades the rule against both captured pages directly: it must be
+silent on each, and it is.
+
+**The residual, stated so it is not read as closed.** The `sdui` adapter declares `counts: []` —
+its counts row has never been measured — so `countsRootNarrowed` is unconditionally false there
+and this tier can never fire on that dialect. That is the same recorded absence of evidence the
+empty list already carried, now with something to gain by closing it: measuring an SDUI counts row
+would extend the check to the dialect LinkedIn serves more often. Nothing here guesses one, for
+the reason § Decision 2's table gives about `detect` — an anchor asserted rather than measured is
+the failure this design exists to remove.
+
+**`get-post` reads the same record and is deliberately untouched.** Its counters feed
+`assertCardinalCorroboration` as the CARDINAL, so a counts region that never rendered gives it
+`commentCount: 0` beside `comments: []` and it reports a legal empty — the same false negative one
+level up. Adding this tier there would change `get-post`'s behaviour on its own acceptance
+criteria and is tracked separately rather than absorbed here.
 
 ## Related
 
