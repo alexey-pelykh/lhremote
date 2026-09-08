@@ -68,8 +68,8 @@ gets full access to every registered tool.
 #### Tool Surface
 
 Tools are registered via `registerAllTools()` in
-`packages/mcp/src/tools/index.ts`. They fall into three risk tiers, and
-every tool it registers appears in exactly one of them:
+`packages/mcp/src/tools/index.ts`. Every registered tool appears in
+exactly one of the three risk tiers below:
 
 | Tier | Tools |
 |------|-------|
