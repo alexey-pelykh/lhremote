@@ -32,7 +32,10 @@ vi.mock("./get-feed.js", () => ({
 
 import { discoverTargets } from "../cdp/discovery.js";
 import { CDPClient } from "../cdp/client.js";
-import { DOMVariantUnsupportedError } from "../services/errors.js";
+import {
+  DOMVariantUnsupportedError,
+  ExtractionFailedError,
+} from "../services/errors.js";
 import { getPost } from "./get-post.js";
 
 describe("getPost", () => {
@@ -49,6 +52,13 @@ describe("getPost", () => {
     commentCount: 5,
     shareCount: 3,
     timestamp: "2024-11-15T10:00:00.000Z",
+    // A post with fifty engagement events renders the row it counts them in,
+    // so `true` is the realistic reading for this record — and it is inert
+    // for every case built on it, because the container tier only speaks when
+    // all three counters are zero (#951).  Stated rather than left absent so
+    // the default says what it means instead of passing on `undefined` being
+    // falsy.
+    countsRootNarrowed: true,
   };
 
   const DEFAULT_COMMENTS = [
@@ -264,6 +274,12 @@ describe("getPost", () => {
         commentCount: 0,
         shareCount: 0,
         timestamp: null,
+        // The counts row did not resolve, which is what makes an all-zero
+        // record legal rather than a contradicted read (#951).  Pinned
+        // explicitly: with the field absent this case would still pass, on
+        // `undefined` being falsy rather than on the state it means to
+        // describe.
+        countsRootNarrowed: false,
       },
       comments: [],
     });
@@ -404,6 +420,145 @@ describe("getPost", () => {
       await expect(
         getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
       ).rejects.toThrow();
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // CONTAINER tier — engagement-counts corroboration (#951).
+  //
+  // Outside the #827 oracle deliberately.  That block is executor-uneditable
+  // and grades the CARDINAL tier: an empty comment list against a count the
+  // page rendered.  These grade the tier underneath it — whether that count
+  // was read at all — on a record shape none of the oracle's cases construct.
+  //
+  // The defect: `getPost` publishes the same three counters `getPostStats`
+  // does, off the same record, and feeds `commentCount` to the cardinal check
+  // as the corroborator.  A counts row that resolved and read nothing does not
+  // merely return a wrong count — it returns a corroborator that agrees with
+  // an empty comment list, so the operation reported a legal empty for a post
+  // whose count it could not read.
+  describe("counts-row corroboration (#951)", () => {
+    /** Every counter zero — the reading the two branches below disagree about. */
+    const ZERO_COUNTERS = {
+      ...DEFAULT_POST_DETAIL,
+      reactionCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+    };
+
+    it("throws when the counts row resolved and every counter read zero", async () => {
+      setupMocks({
+        postDetail: { ...ZERO_COUNTERS, countsRootNarrowed: true },
+        comments: [],
+      });
+
+      // One invocation, asserted against three times: re-invoking would re-run
+      // the mocked sequence, and the queued values are consumed.
+      const rejection = getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+      await expect(rejection).rejects.toThrow(ExtractionFailedError);
+      // The diagnosis must name the ROW, because that is where the repair is.
+      // Reported against `comments` instead, it would send the next reader to
+      // selectors that are working fine.
+      await expect(rejection).rejects.toThrow(/field "engagementCounts"/);
+      await expect(rejection).rejects.toThrow(/countsRoot=rendered/);
+    });
+
+    it("does NOT throw when the counts row did not resolve and every counter is zero", async () => {
+      setupMocks({
+        postDetail: { ...ZERO_COUNTERS, countsRootNarrowed: false },
+        comments: [],
+      });
+
+      // The ordinary shape of a post with no engagement, and the case that
+      // keeps this check off every one of them.  Without it the tier would be
+      // a blanket "empty means broken" rather than corroboration.
+      const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+      expect(result.post.commentCount).toBe(0);
+      expect(result.post.reactionCount).toBe(0);
+      expect(result.comments).toEqual([]);
+    });
+
+    it("does NOT throw when the counts row resolved and one counter is non-zero", async () => {
+      setupMocks({
+        postDetail: {
+          ...ZERO_COUNTERS,
+          reactionCount: 7,
+          countsRootNarrowed: true,
+        },
+        comments: [],
+      });
+
+      // The corroborator is ROW-level, not per-counter: a post carrying
+      // reactions and no comments is the ordinary shape of most posts, and a
+      // per-counter raise would fire on all of them.
+      const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+      expect(result.post.reactionCount).toBe(7);
+      expect(result.post.commentCount).toBe(0);
+      expect(result.comments).toEqual([]);
+    });
+
+    it("throws even when comment loading was skipped", async () => {
+      setupMocks({
+        postDetail: { ...ZERO_COUNTERS, countsRootNarrowed: true },
+        comments: [],
+      });
+
+      // The check is unconditional, unlike the cardinal one it precedes.
+      // `commentCount: 0` skips comment LOADING, not counter reading, and the
+      // returned `post` carries the same three counters `getPostStats` grades
+      // off the identical record — so gating this on the input would leave
+      // this call a way to obtain counters that operation would have refused.
+      await expect(
+        getPost({ postUrl: POST_URL, cdpPort: CDP_PORT, commentCount: 0 }),
+      ).rejects.toThrow(ExtractionFailedError);
+    });
+
+    it("throws when the counts row resolved and read zero beside a non-empty comment list", async () => {
+      setupMocks({
+        postDetail: { ...ZERO_COUNTERS, countsRootNarrowed: true },
+        comments: DEFAULT_COMMENTS,
+      });
+
+      // Structurally out of the cardinal tier's reach: it returns early on any
+      // non-empty extraction, so a row reading zero next to a comment that was
+      // actually scraped is a contradiction only this tier can see.
+      await expect(
+        getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+      ).rejects.toThrow(ExtractionFailedError);
+    });
+
+    it("reports the region, not the cardinal, when a record satisfies both tiers", async () => {
+      setupMocks({
+        postDetail: {
+          ...DEFAULT_POST_DETAIL,
+          reactionCount: -5,
+          commentCount: 5,
+          shareCount: 0,
+          countsRootNarrowed: true,
+        },
+        comments: [],
+      });
+
+      // This record is NOT reachable from the live parse — the counter
+      // patterns capture `\d[\d,]*` and coerce a failed parse to 0, so no
+      // page produces a negative — and that is exactly why the case exists.
+      // On the real domain the two tiers are disjoint (`commentCount > 0`
+      // implies a non-zero sum), so ordering them is unobservable there and
+      // the precedence would be untestable.  A negative counter is the only
+      // construction that makes both predicates true at once, which is what
+      // turns the ordering into something a test can hold.
+      //
+      // Region first: the cardinal is a number read OUT OF the row, so it is
+      // worth consulting only once the row has been vouched for.  Were the
+      // order flipped this would report `field "comments"` against
+      // `commentCount=5`.
+      const rejection = getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+      await expect(rejection).rejects.toThrow(/field "engagementCounts"/);
+      await expect(rejection).rejects.toThrow(/countsRoot=rendered/);
     });
   });
 

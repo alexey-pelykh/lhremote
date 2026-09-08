@@ -91,6 +91,11 @@ describe("getPost extraction-failure diagnostics (#835)", () => {
     commentCount: 5,
     shareCount: 3,
     timestamp: "2024-11-15T10:00:00.000Z",
+    // Read since #951 and inert for every case built on this record: the
+    // container tier only speaks when all three counters are zero, and these
+    // sum to fifty.  Stated so the fixture describes a page rather than
+    // relying on an absent field being falsy.
+    countsRootNarrowed: true,
   };
 
   const DETECTION = { matched: ["sdui"], probes: { sdui: 1, legacy: 0 } };
@@ -372,6 +377,100 @@ describe("getPost extraction-failure diagnostics (#835)", () => {
     await expect(
       getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
     ).rejects.toThrow(ExtractionFailedError);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // The counts row's own failure (#951).  A third deadline-free shape, and the
+  // one that fires EARLIEST: `waitForPostLoad` returned green, an adapter
+  // matched, and the record came back well-formed — with a counts row that
+  // resolved and read nothing.  It refuses before the comment loop runs, so
+  // unlike the cases above there is no comment scrape in its evaluate
+  // sequence at all.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Drive `getPost` to the counts-row corroboration failure.
+   *
+   * Four evaluates, not five: readiness, the post-detail scrape, then — only
+   * on the failure path — the variant-detection probe and the capture's own
+   * DOM probe.  The comment loop is downstream of the raise and never runs.
+   */
+  function setupContradictedCountsRow() {
+    vi.mocked(discoverTargets).mockResolvedValue([
+      {
+        id: "target-1",
+        type: "page",
+        title: "LinkedIn",
+        url: "https://www.linkedin.com/feed/",
+        description: "",
+        devtoolsFrontendUrl: "",
+      },
+    ]);
+
+    const evaluateMock = vi.fn();
+    evaluateMock.mockResolvedValueOnce(true); // readiness
+    evaluateMock.mockResolvedValueOnce({
+      ...CONTRADICTED_POST_DETAIL,
+      reactionCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      countsRootNarrowed: true,
+    });
+    evaluateMock.mockResolvedValueOnce(DETECTION);
+    evaluateMock.mockResolvedValueOnce(CAPTURE_PROBE);
+
+    const disconnect = vi.fn();
+    vi.mocked(CDPClient).mockImplementation(function () {
+      return {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect,
+        navigate: vi.fn().mockResolvedValue(undefined),
+        evaluate: evaluateMock,
+        send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+      } as unknown as CDPClient;
+    });
+
+    return { evaluateMock, disconnect };
+  }
+
+  it("writes a diagnostic bundle when the counts row contradicts its own read", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const { evaluateMock } = setupContradictedCountsRow();
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    await expect(
+      getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toThrow(ExtractionFailedError);
+
+    // Same trigger as its siblings — the bundle is named for the failure that
+    // happened, and this one is no more a timeout than they are.
+    expect(writtenBundle()).toMatchObject({ trigger: "extraction-failure" });
+    const paths = vi.mocked(writeFile).mock.calls.map((call) => String(call[0]));
+    expect(paths.some((path) => path.endsWith(".json"))).toBe(true);
+    expect(paths.some((path) => path.includes("wait-for-post-load-"))).toBe(
+      false,
+    );
+    // Four, pinning WHERE the refusal lands: had it been placed after the
+    // cardinal check the comment loop would have run first, and this would be
+    // seven.  The page is refused before anything reads a counter off it.
+    expect(evaluateMock).toHaveBeenCalledTimes(4);
+    warnSpy.mockRestore();
+  });
+
+  it("is default-off for the counts row too", async () => {
+    delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    setupContradictedCountsRow();
+
+    // The refusal is the extraction contract's and stands whether or not
+    // diagnostics are being collected; the bundle carries page content, so a
+    // default-on capture here would leak personal data from CLI and MCP runs.
+    await expect(
+      getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toThrow(ExtractionFailedError);
+
+    expect(vi.mocked(writeFile)).not.toHaveBeenCalled();
   });
 
   // ─────────────────────────────────────────────────────────────────────────
