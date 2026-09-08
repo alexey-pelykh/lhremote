@@ -127,8 +127,9 @@ Three of the six arrived with the DOM-variant work (#832), and they are what
 ADR-008's empty-vs-error contract names:
 
 - `DOMVariantUnsupportedError` — no registered adapter recognises the page, or the
-  one that matched could not resolve its own scope. ADR-008 § 5 treats the two
-  alike because neither read the page.
+  one that matched resolved no scope. ADR-008 § 5 treats the two alike because
+  neither read the page, and states the stages a matched adapter has to try —
+  a count that is per-surface, not one.
 - `ExtractionFailedError` — an adapter matched, but a field came back empty
   while a same-observation corroborator contradicts that emptiness.
 - `DOMVariantAmbiguousError` — two or more adapters claim the same page.

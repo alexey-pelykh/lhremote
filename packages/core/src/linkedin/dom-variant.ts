@@ -153,8 +153,11 @@ export interface VariantAdapter {
   readonly ready: string;
   /**
    * Extraction root candidates, in order of decreasing precision.  All
-   * belong to this dialect.  If none matches, this adapter yields nothing;
-   * it does not widen to `<main>` or `document`.
+   * belong to this dialect.  What happens when none matches is per surface:
+   * post detail and search results yield nothing, while the reactions modal
+   * consults this adapter's own resolver next — see the sub-interfaces, and
+   * ADR-008 § 5 for why that count is a property of the surface.  What does
+   * NOT vary is the refusal: no adapter widens to `<main>` or `document`.
    */
   readonly scopes: readonly string[];
   /**

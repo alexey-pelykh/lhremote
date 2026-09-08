@@ -345,9 +345,10 @@ the three are not severities of one condition, they are three different repairs.
 > reactions modal, bound later by the § 2026-09-02 Amendment (#840), has **two**: the `scopes`
 > candidates, each accepted only if it holds that adapter's `rootSignal`, and then the adapter's
 > own resolver, which `extract` is reinterpreted as on that surface. BOTH must miss before this
-> class is raised — the generated source states the disjunction in those terms, *"the claiming
-> adapter resolved neither its own `scopes` candidates nor its own resolver"* — so on that
-> surface a reader who repairs `scopes` alone has not covered the condition.
+> class is raised — `reactionsModalRootSource`'s own contract states the disjunction in those
+> terms, *"the claiming adapter resolved neither its own `scopes` candidates nor its own
+> resolver"*, and the script it emits implements it — so on that surface a reader who repairs
+> `scopes` alone has not covered the condition.
 >
 > **Which stage is load-bearing is per-dialect, and one of them is deliberately empty.** SDUI's
 > `scopes` are recorded as known-insufficient and `SDUI_REACTIONS_MODAL_RESOLVE` is what actually
