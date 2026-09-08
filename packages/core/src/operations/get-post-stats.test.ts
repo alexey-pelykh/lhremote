@@ -297,7 +297,7 @@ describe("getPostStats", () => {
     );
   });
 
-  it("attaches the disjunction its own message cannot state (#923)", async () => {
+  it("attaches the reading its own message cannot give (#923)", async () => {
     // Same criterion, same surface, second site.  Pinned here as well as on
     // `get-post` because the falsifier is per site: deleting `{ cause: … }`
     // from either one must turn exactly its own test red, which one shared

@@ -433,14 +433,19 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
       // and the issue names all three error classes, not just the third.
       await capturePostDetailExtractionFailure(client);
       if (!rawPost) {
-        // Zero adapters claimed the page, or the claiming adapter could not
-        // resolve its own scope.  Either way nothing read the page, and there
+        // ADR-008 § 5's criterion has two halves — zero adapters claimed the
+        // page, or the claiming adapter could not resolve its own scope — and
+        // on THIS surface only the first is reachable: the generated script
+        // selects and resolves in one page read, and every post-detail
+        // adapter's `scopes` are the members of its own `detect` list, so a
+        // matched detect entails a resolved scope (#923; pinned in
+        // `dom-variant.test.ts`).  Either way nothing read the page, and there
         // is no `<main>` left to pretend otherwise with.
         //
-        // The `cause` carries the half of that disjunction the shared message
-        // cannot state, and this is a site where it is the REACHABLE half:
-        // `waitForPostLoad` above went green, so one adapter's detect anchor
-        // matched moments ago (#923).
+        // The `cause` says that outright rather than repeating the disjunction,
+        // and turns it into the sharper reading the message cannot give:
+        // `waitForPostLoad` above went green, so a dialect DID match moments
+        // ago, and the page stopped matching between the two reads.
         throw new DOMVariantUnsupportedError(
           POST_DETAIL_SURFACE,
           variantNamesFor(POST_DETAIL_SURFACE).map(String),

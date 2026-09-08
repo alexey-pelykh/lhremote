@@ -293,13 +293,15 @@ export async function getPostStats(
       // that would have explained the failure is gone (#890).
       await capturePostDetailExtractionFailure(client);
       if (!raw) {
-        // Zero adapters claimed the page, or the claiming adapter could not
-        // resolve its own scope.  Either way nothing read the page.
+        // ADR-008 § 5's criterion has two halves — zero adapters claimed the
+        // page, or the claiming adapter could not resolve its own scope — and
+        // on THIS surface only the first is reachable, for the registry reason
+        // `get-post.ts` states at the same raise and `dom-variant.test.ts`
+        // pins (#923).  Either way nothing read the page.
         //
-        // The `cause` carries the half of that disjunction the shared message
-        // cannot state, and this is a site where it is the REACHABLE half:
-        // `waitForPostLoad` above went green, so one adapter's detect anchor
-        // matched moments ago (#923).
+        // The `cause` says that outright rather than repeating the disjunction:
+        // `waitForPostLoad` above went green, so a dialect DID match moments
+        // ago, and the page stopped matching between the two reads.
         throw new DOMVariantUnsupportedError(
           POST_DETAIL_SURFACE,
           variantNamesFor(POST_DETAIL_SURFACE).map(String),

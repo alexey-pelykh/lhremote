@@ -538,10 +538,12 @@ export async function getPostEngagers(
         );
       }
       // The `cause` carries the half of ADR-008 § 5's disjunction the shared
-      // message cannot state, and here it is the REACHABLE half twice over:
-      // `waitForReactionsModal` above went green, so one adapter's detect
-      // anchor matched; and this surface has TWO resolution stages, so a
-      // reader repairing `scopes` alone has not covered the condition (#923).
+      // message cannot state, and this surface is where it genuinely bites
+      // (#923).  Unlike post detail, a matched `detect` here promises nothing
+      // about a resolvable root — the anchor is the reactions TRIGGER on the
+      // post page, the scopes are the MODAL — so both halves stay live after
+      // `waitForReactionsModal` went green.  And the second half is two stages,
+      // so a reader repairing `scopes` alone has not covered the condition.
       return new DOMVariantUnsupportedError(
         REACTIONS_MODAL_SURFACE,
         variantNamesFor(REACTIONS_MODAL_SURFACE).map(String),
