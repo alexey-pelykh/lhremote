@@ -44,6 +44,23 @@ import { withDatabase } from "./instance-context.js";
  * sibling operations already do: a dry run answers "what would happen", and
  * with the budget exhausted what would happen is this refusal.
  *
+ * **Two bounds this does not close**, both inherited from the collaborators it
+ * calls rather than introduced here, and both stated so a caller does not read
+ * a clean return as more than it is:
+ *
+ * - **The verdict is local even when the target is not.** `resolveAccount`
+ *   takes a host; `withDatabase` does not — `discoverDatabase` builds its path
+ *   from `homedir()`. Against a remote instance (`--allow-remote` with a
+ *   non-loopback host) the reaction happens there and the budget is read here,
+ *   so the answer can be confidently wrong in both directions. `comment-on-post`
+ *   has consulted the budget this way since it landed; this helper inherits the
+ *   behaviour unchanged rather than diverging from it silently.
+ * - **`max_limit = 0` is read as exhausted.** Nothing in this repository
+ *   establishes whether LinkedHelper writes `0` to mean *disabled* — in which
+ *   case refusing is right — or *no limit*, in which case it is a permanent
+ *   lockout. Same class of unknown as the limit type ids above, same remedy: a
+ *   read from a licensed install.
+ *
  * @param limitTypeId - LinkedHelper `limit_types.id` this operation spends.
  * @param cdpPort - CDP port to resolve the account through; `undefined`
  *   auto-discovers it.

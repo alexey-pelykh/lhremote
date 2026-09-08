@@ -112,6 +112,31 @@ describe("createProgram", () => {
     expect(commandNames).toHaveLength(74);
   });
 
+  describe("--account-id", () => {
+    // Registered on exactly the commands that consult the action budget: the
+    // budget read resolves an account, and where several partitions exist it
+    // refuses rather than guessing. Without the flag that refusal has no
+    // remedy from the CLI.
+    it.each(["react-to-post", "comment-on-post"])(
+      "%s accepts --account-id",
+      (name) => {
+        const program = createProgram();
+        const cmd = program.commands.find((c) => c.name() === name);
+
+        expect(cmd?.options.find((o) => o.long === "--account-id")).toBeDefined();
+      },
+    );
+
+    it("react-to-comment does not, since it consults no budget", () => {
+      // Guards the pair above against being read as "reaction commands get
+      // one": the discriminator is the budget read, not the verb.
+      const program = createProgram();
+      const cmd = program.commands.find((c) => c.name() === "react-to-comment");
+
+      expect(cmd?.options.find((o) => o.long === "--account-id")).toBeUndefined();
+    });
+  });
+
   describe("launch-app", () => {
     it("does not have --cdp-port option", () => {
       const program = createProgram();

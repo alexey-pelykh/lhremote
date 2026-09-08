@@ -720,6 +720,7 @@ export function createProgram(): Command {
     .option("--mentions <json>", 'JSON array of {name} objects for @mentions (e.g. \'[{"name":"John Doe"}]\')')
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--account-id <id>", "LinkedHelper account whose action budget to check (required when several accounts exist)", parsePositiveInt)
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
     .option("--dry-run", "Validate the comment flow but skip typing and submitting")
     .option("--json", "Output as JSON")
@@ -779,8 +780,9 @@ export function createProgram(): Command {
     )
     .option("--cdp-port <port>", "CDP debugging port (auto-discovered when omitted)", parsePositiveInt)
     .option("--cdp-host <host>", "CDP host (default: 127.0.0.1)")
+    .option("--account-id <id>", "LinkedHelper account whose action budget to check (required when several accounts exist)", parsePositiveInt)
     .option("--allow-remote", "SECURITY: allow non-loopback CDP connections (enables remote code execution on target)")
-    .option("--dry-run", "Detect current reaction state without clicking")
+    .option("--dry-run", "Detect current reaction state without clicking (still refused when the action budget is exhausted)")
     .option("--json", "Output as JSON")
     .action(handleReactToPost);
 

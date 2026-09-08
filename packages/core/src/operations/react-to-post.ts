@@ -186,9 +186,12 @@ export async function reactToPost(
     );
   }
 
-  // Check the action budget before reacting.  Placed here, ahead of every
-  // network and DOM step, so an exhausted budget costs nothing but the read
-  // — and so it refuses on the same terms `comment-on-post` already does.
+  // Check the action budget before reacting, on the same terms and at the same
+  // point in the sequence as `comment-on-post`.  Placed ahead of the logged-in
+  // gate, target discovery, the CDP connection and every DOM step — but not
+  // free: reading the budget itself resolves an account, which probes the
+  // launcher over CDP, and opens the account's database.  What it saves is the
+  // page work, not all work.
   await assertActionBudget(
     POST_LIKE_LIMIT_TYPE_ID,
     cdpPort,

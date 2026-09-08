@@ -14,7 +14,7 @@ import { cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 export function registerReactToPost(server: McpServer): void {
   server.tool(
     "react-to-post",
-    "React to a LinkedIn post with a specific reaction type (like, celebrate, support, love, insightful, funny). Navigates to the post and clicks the reaction button. With dryRun, validates the popup opens but skips the click.",
+    "React to a LinkedIn post with a specific reaction type (like, celebrate, support, love, insightful, funny). Navigates to the post and clicks the reaction button. With dryRun, validates the popup opens but skips the click. Checks action budget before attempting — fails if the PostLike limit is reached, including under dryRun.",
     {
       postUrl: z
         .string()

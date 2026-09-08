@@ -55,6 +55,23 @@ describe("handleReactToPost", () => {
     expect(output.reactionType).toBe("like");
   });
 
+  it("forwards accountId to reactToPost", async () => {
+    // The budget pre-flight resolves an account, and on an install with more
+    // than one partition that resolution cannot pick for itself. This is the
+    // only route by which a CLI user can pin it, so the forwarding is the
+    // whole of the escape hatch.
+    vi.mocked(reactToPost).mockResolvedValue(MOCK_RESULT);
+
+    await handleReactToPost(
+      "https://www.linkedin.com/feed/update/urn:li:activity:123/",
+      { accountId: 42 },
+    );
+
+    expect(reactToPost).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 42 }),
+    );
+  });
+
   it("prints human-readable output", async () => {
     vi.mocked(reactToPost).mockResolvedValue(MOCK_RESULT);
 
