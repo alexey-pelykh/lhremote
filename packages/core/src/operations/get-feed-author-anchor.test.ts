@@ -2215,27 +2215,6 @@ describe("get-feed reads headline and timestamp from that same sequence (#898)",
     expect(runScrape(feedOf(sdui))).toHaveLength(1);
   });
 
-  it("#898 AC-6: a legacy <span>-run anchor yields BOTH headline and timestamp", () => {
-    const scraped = scrapeAuthor(
-      anchorItem("/in/legacy-author/", dialectFields("span", "Legacy Author")),
-    );
-
-    expect(scraped.headline).toBe("Head of Widgets at Acme");
-    expect(scraped.timestamp).toBe("18h");
-    expect(scraped.name).toBe("Legacy Author");
-    expect(scraped.url).toBe("https://www.linkedin.com/in/legacy-author/");
-  });
-
-  it("#898 AC-7: an SDUI <p>-run anchor keeps the answers it already gave", () => {
-    const scraped = scrapeAuthor(
-      anchorItem("/in/sdui-author/", dialectFields("p", "Sdui Author")),
-    );
-
-    expect(scraped.headline).toBe("Head of Widgets at Acme");
-    expect(scraped.timestamp).toBe("18h");
-    expect(scraped.name).toBe("Sdui Author");
-  });
-
   it("#898 AC-8: an anchor carrying only a name run yields null for both — honestly", () => {
     // The #859 class: LinkedIn renders the timestamp outside the anchor on
     // these posts, so there is no headline and no time field to find.  Null is
@@ -2291,6 +2270,14 @@ describe("get-feed reads headline and timestamp from that same sequence (#898)",
     // returned `pEls[2]` whatever it contained, so it DID return these
     // headlines, and shapes R1/R2 in the corpus at the end of this file now
     // measure exactly that against the pinned baseline.
+    //
+    // KEPT DELIBERATELY, though `F6 company field containing the actor's own
+    // name` drives this exact fixture and asserts `url` besides, so every
+    // assertion below is redundant against it.  What is not redundant is the
+    // reasoning above -- why the three-field shape is where this cost was
+    // cheapest to accept, and why R1/R2 carry the four-field case that failed.
+    // A corpus row is a fixture and its expected answers; it has nowhere to
+    // put that, and deleting this block would delete it.
     const scraped = scrapeAuthor(
       anchorItem("/company/acme-corp/", [
         nameRun("p", "Acme Corp"),
@@ -2307,6 +2294,11 @@ describe("get-feed reads headline and timestamp from that same sequence (#898)",
   it("#898: an anchor rendering only a name and a time keeps a null headline", () => {
     // A company actor block, which renders no headline.  The name's own field
     // must not become the headline just because it is the first one left.
+    //
+    // KEPT DELIBERATELY, though `S12 company` drives this exact fixture and
+    // asserts the same four answers.  The rule in the sentence above is what
+    // this block exists to state; the corpus row records the answers without
+    // it.
     const scraped = scrapeAuthor(
       anchorItem("/company/acme-corp/", [
         nameRun("p", "Acme Corp"),
@@ -2391,6 +2383,11 @@ describe("get-feed keeps a genuine headline that contains the actor's name", () 
   it("the name's own field is still not the headline when it carries a badge", () => {
     // The suppression must survive being narrowed to the name's origin: the
     // contaminated single field is index 0, so it is still excluded.
+    //
+    // KEPT DELIBERATELY, though `S2 fused-degree-in-name-wrapper` drives this
+    // exact fixture and asserts `timestamp` and `url` besides.  What is
+    // recorded here is the narrowing's survival condition -- the reason this
+    // shape must keep answering as it does -- not the answers themselves.
     const scraped = scrapeAuthor(
       anchorItem("/in/ada-lovelace/", [
         hiddenRun("Ada Lovelace · 1st"),
@@ -2456,6 +2453,11 @@ describe("get-feed skips actor-header chrome in the badge position", () => {
   it("a company actor header's follow state does not displace its headline", () => {
     // The whole reason this is a class rather than a corner: "• Following" is
     // the ordinary follow-state token in a company actor header.
+    //
+    // KEPT DELIBERATELY, though `R3 company follow-state in the badge
+    // position` drives this exact fixture and asserts the same four answers.
+    // The sentence above is why the shape is in the suite at all, and a
+    // corpus row cannot carry it.
     const scraped = scrapeAuthor(
       anchorItem("/company/acme-corp/", [
         nameRun("p", "Acme Corp"),
@@ -2937,7 +2939,11 @@ interface FieldShape {
   readonly label: string;
   readonly href: string;
   readonly children: () => FakeElement[];
-  /** The truth for this shape, independent of what either script returns. */
+  /**
+   * The truth for this shape, independent of what either script returns.
+   * Graded by the corpus loop below.  `fieldsOf` never reads it, so this row
+   * is the only place it means anything -- see `ScrapeInput`.
+   */
   readonly name: string | null;
   readonly headline?: string | null;
   readonly timestamp?: string | null;
@@ -3848,8 +3854,24 @@ interface AuthorFields {
   readonly url: string | null;
 }
 
+/**
+ * What `fieldsOf` actually READS -- deliberately narrower than `FieldShape`.
+ *
+ * The truth fields (`name`, `headline`, `timestamp`) are graded by the corpus
+ * loop against what the scripts return, so they are live on a `FIELD_SHAPES`
+ * row and dead on an ad-hoc call.  Leaving them out here turns that invariant
+ * into a type error rather than a convention: an ad-hoc caller CANNOT declare
+ * a `name` nothing checks.  `label` stays -- it describes the shape under test
+ * and claims nothing about the answer, so it cannot contradict one.
+ */
+interface ScrapeInput {
+  readonly label?: string;
+  readonly href: string;
+  readonly children: () => FakeElement[];
+}
+
 /** The four author fields `script` reports for one shape. */
-function fieldsOf(script: string, shape: FieldShape): AuthorFields {
+function fieldsOf(script: string, shape: ScrapeInput): AuthorFields {
   const post = runScrapeWith(script, feedOf(anchorItem(shape.href, shape.children())))[0];
   return {
     name: post?.authorName ?? null,
@@ -3909,11 +3931,10 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
     // this file's own header forbids.  What is actually claimed is that when
     // the href carries no signal the behaviour is the behaviour that shipped
     // before, and that is what is measured.
-    const shape: FieldShape = {
+    const shape: ScrapeInput = {
       label: "opaque slug",
       href: "/in/x7k2m9q4/",
       children: () => [hiddenRun("Ada"), hiddenRun("Multi"), hiddenRun("• 1st")],
-      name: null,
     };
     const before = fieldsOf(BASELINE_FEED_SCRIPT, shape);
     const now = fieldsOf(SCRAPE_FEED_SCRIPT, shape);
@@ -3939,7 +3960,6 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
       label: "opaque slug, split name, nothing after the badge",
       href: "/in/x7k2m9q4/",
       children: () => [hiddenRun("Ada"), hiddenRun("Multi"), hiddenRun("• 1st")],
-      name: null,
     });
     expect(split.headline).not.toBe("Multi");
     expect(split.headline).toBeNull();
@@ -3957,7 +3977,6 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
         hiddenRun("Head of Widgets at Acme"),
         hiddenRun("18h •"),
       ],
-      name: null,
     });
     expect(withHeadline.headline).toBe("Head of Widgets at Acme");
     expect(withHeadline.timestamp).toBe("18h");
@@ -3984,7 +4003,6 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
         hiddenRun("Head of Widgets"),
         hiddenRun("18h •"),
       ],
-      name: null,
     });
 
     expect(got.headline).not.toBe("Пелих");
@@ -4001,11 +4019,15 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
     //
     // This is the assertion that fails if the withholding is ever widened back
     // to every declining read regardless of what terminates the region.
+    //
+    // KEPT DELIBERATELY, though `V8 role-slug on a company page` drives this
+    // exact fixture and asserts `timestamp` and `url` on top of the two below.
+    // A corpus row records what a shape yields; it cannot record which rule
+    // breaks if that changes, which is the whole point of this block.
     const company = fieldsOf(SCRAPE_FEED_SCRIPT, {
       label: "company header, role slug, no badge",
       href: "/company/head-of-widgets/",
       children: () => bareFields("p", "Acme Corp", "Head of Widgets", "18h •"),
-      name: "Acme Corp",
     });
 
     expect(company.name).toBe("Acme Corp");
@@ -4027,7 +4049,6 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
       label: "opaque slug, split name, no badge",
       href: "/in/x7k2m9q4/",
       children: () => [hiddenRun("Ada"), hiddenRun("Multi"), hiddenRun("18h •")],
-      name: null,
     });
 
     expect(got.headline).toBe("Multi");
@@ -4101,7 +4122,6 @@ describe("#860/#898 accepted costs", () => {
       label: "unrecognised badge token",
       href: "/in/ada-lovelace/",
       children: () => bareFields("p", "Ada Lovelace", "• Open to work", "Head of Widgets at Acme", "18h •"),
-      name: "Ada Lovelace",
     });
 
     expect(got.name).toBe("Ada Lovelace");
@@ -4128,7 +4148,6 @@ describe("#860/#898 accepted costs", () => {
       label: "slug spans name and headline, no badge between",
       href: "/in/ada-lovelace-consulting/",
       children: () => bareFields("p", "Ada Lovelace", "Consulting", "18h •"),
-      name: "Ada Lovelace Consulting",
     });
 
     expect(fused.name).toBe("Ada Lovelace Consulting");
@@ -4142,7 +4161,6 @@ describe("#860/#898 accepted costs", () => {
       label: "same slug, badge between name and headline",
       href: "/in/ada-lovelace-consulting/",
       children: () => bareFields("p", "Ada Lovelace", "• 1st", "Consulting", "18h •"),
-      name: "Ada Lovelace",
     });
 
     expect(separated.name).toBe("Ada Lovelace");
@@ -4155,7 +4173,6 @@ describe("#860/#898 accepted costs", () => {
       label: "eponymous slug, second field only partly corroborated",
       href: "/in/john-smith-photography/",
       children: () => bareFields("p", "John Smith", "Photography & Video", "2h •"),
-      name: "John Smith",
     });
 
     expect(bounded.name).toBe("John Smith");
@@ -4196,7 +4213,6 @@ describe("#860/#898 accepted costs", () => {
       label: "short slug, split name, badge after",
       href: "/in/ada/",
       children: () => bareFields("p", "Ada", "Lovelace", "• 1st", "Head of Widgets", "18h •"),
-      name: "Ada Lovelace",
     });
 
     expect(truncated.name).toBe("Ada");
@@ -4209,7 +4225,6 @@ describe("#860/#898 accepted costs", () => {
       label: "same fields, slug reaching the second field",
       href: "/in/ada-lovelace/",
       children: () => bareFields("p", "Ada", "Lovelace", "• 1st", "Head of Widgets", "18h •"),
-      name: "Ada Lovelace",
     });
 
     expect(reached.name).toBe("Ada Lovelace");
@@ -4239,7 +4254,6 @@ describe("#860/#898 accepted costs", () => {
       label: "non-Latin headline before the badge",
       href: "/in/alex-petrenko/",
       children: () => bareFields("p", "Alex", "Керівник відділу", "• 1st", "Head of Widgets", "18h •"),
-      name: "Alex",
     });
 
     expect(fused.name).toBe("Alex Керівник відділу");
@@ -4251,7 +4265,6 @@ describe("#860/#898 accepted costs", () => {
       label: "same fields, slug explained in full",
       href: "/in/alex/",
       children: () => bareFields("p", "Alex", "Керівник відділу", "• 1st", "Head of Widgets", "18h •"),
-      name: "Alex",
     });
 
     expect(bounded.name).toBe("Alex");
@@ -4280,7 +4293,6 @@ describe("#860/#898 accepted costs", () => {
       label: "headline opening with a time-like token",
       href: "/in/ada-lovelace/",
       children: () => bareFields("p", "Ada Lovelace", "• 1st", "3d printing specialist", "18h •"),
-      name: "Ada Lovelace",
     });
 
     expect(got.name).toBe("Ada Lovelace");
@@ -4319,7 +4331,6 @@ describe("#860/#898 accepted costs", () => {
         hiddenRun("Multi"),
         hiddenRun("• 1st"),
       ],
-      name: "Ada Multi",
     });
 
     expect(withInitials.name).toBe("Ada");
@@ -4328,7 +4339,6 @@ describe("#860/#898 accepted costs", () => {
       label: "same slug, same name, no initials",
       href: "/in/ada-multi/",
       children: () => [hiddenRun("Ada"), hiddenRun("Multi"), hiddenRun("• 1st")],
-      name: "Ada Multi",
     });
 
     expect(withoutInitials.name).toBe("Ada Multi");
@@ -4358,7 +4368,7 @@ describe("#860/#898 accepted costs", () => {
     // claim, measured rather than asserted about.  The falsifier is a
     // corroborating slug: `slugName` then answers and `visibleRoot` is never
     // consulted.
-    const shape: FieldShape = {
+    const shape: ScrapeInput = {
       label: "name split by a blank run, opaque slug",
       href: "/in/x7k2m9q4/",
       children: () => [
@@ -4367,7 +4377,6 @@ describe("#860/#898 accepted costs", () => {
         hiddenRun("Head of Widgets at Acme"),
         hiddenRun("18h •"),
       ],
-      name: null,
     };
 
     expect(fieldsOf(SCRAPE_FEED_SCRIPT, shape).name).toBe("• 1st");
