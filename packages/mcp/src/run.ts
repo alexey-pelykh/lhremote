@@ -39,14 +39,24 @@ const UNREPORTABLE =
 /**
  * Render `error` using nothing this module could have failed to load.
  *
- * Reachable, not defensive padding.  `@lhremote/core` is inside the graph the
- * catch in {@link runStdioBin} now covers — `./stdio.js` imports it directly,
- * and so does all but a handful of the modules under `./tools/` — so a throw
- * while that graph evaluates is caught with the formatter unavailable, and the
- * re-import in {@link render} fails identically: a module that threw while
- * evaluating keeps its evaluation error and re-throws it rather than re-running
- * (and the sub-cases that are not evaluation errors — a resolution failure, a
- * parse error — fail again on the same inputs).
+ * Reachable, not defensive padding — and reachable on a narrower condition
+ * than "the graph threw".  `@lhremote/core` is inside the graph the catch in
+ * {@link runStdioBin} now covers — `./stdio.js` imports it directly, and so
+ * does all but a handful of the modules under `./tools/` — so the formatter is
+ * unloadable when the module that failed is `@lhremote/core` itself, or one in
+ * its own graph, and the re-import in {@link render} then fails identically: a
+ * module that threw while evaluating keeps its evaluation error and re-throws
+ * it rather than re-running (and the sub-cases that are not evaluation errors —
+ * a resolution failure, a parse error — fail again on the same inputs).
+ *
+ * A throw anywhere ELSE under `./stdio.js` leaves core evaluated and cached,
+ * and {@link render} formats normally.  That is the ordinary case rather than a
+ * corner: `./stdio.js` imports core ahead of `./server.js`, so the very fault
+ * #959 was measured against — the module-scope `require("../package.json")` in
+ * `./server.js` — is on the undegraded side.  Both halves measured on the built
+ * bin with the forced throw carrying a `cause`: the `./server.js` fault
+ * reported the `Caused by:` line only `errorMessage` writes, the
+ * `@lhremote/core` fault reported the head alone.
  *
  * It renders less than `errorMessage` does and that is the whole cost of this
  * path: no `Caused by:` chain, no elision note.  Duplicating that logic here
@@ -170,7 +180,7 @@ async function render(error: unknown): Promise<string> {
  *   `import` will see it.
  * - **Reported on stderr** through `errorMessage`, the stream and formatter
  *   `runStdioServer` already uses for both of its own failure paths — degraded
- *   to {@link lastResortMessage} on the one path that cannot load it.
+ *   to {@link lastResortMessage} on the sub-case of (1) that cannot load it.
  * - **The report itself is guarded**, on both axes.  A failing
  *   `process.stderr.write` is one of the paths above, and letting it throw
  *   would reject out of the one function whose job is to report — the bug,
