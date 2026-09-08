@@ -609,6 +609,61 @@ describe("DOM variant adapters (integration)", { timeout: INSTALL_TEST_TIMEOUT_M
       expect(result.countsRootNarrowed).toBe(false);
     });
 
+    // The property the flag's whole warrant rests on, and the one arm no
+    // other test reaches.  `countsRootNarrowed` is SCOPE-RELATIVE — it means
+    // "this adapter's declared counts anchor resolved INSIDE the resolved
+    // scope", never "such a row exists on the page".  Since #852 that
+    // distinction gates a REFUSAL rather than a private fallback, so a row
+    // belonging to some other module (a related-post rail, a recommendation
+    // unit) must not narrow this post's root: it would raise
+    // `ExtractionFailedError` on an ordinary zero-engagement post.
+    //
+    // The sibling "ignores a counter rendered outside the selected adapter's
+    // scope" grades the counter VALUE across that boundary and appends a bare
+    // span, so it never exercises the candidate resolution this asserts.  The
+    // discriminating mutation is `scope.querySelector` -> `document
+    // .querySelector` in `__lhCountsRoot`; it is currently caught only
+    // incidentally, by tests grading counter values, and only because the flag
+    // and the value happen to come from one call.
+    it("does not narrow the counts root to a row outside the selected scope", async () => {
+      await buildPage([LEGACY_CONTAINER]);
+      await client.evaluate(`(() => {
+        const stray = document.createElement('div');
+        stray.className = 'social-details-social-counts';
+        const comments = document.createElement('button');
+        comments.textContent = '999 comments';
+        stray.appendChild(comments);
+        // Appended to <body>, deliberately OUTSIDE the post container the
+        // legacy adapter scopes to.
+        document.body.appendChild(stray);
+        return true;
+      })()`);
+
+      // Guard the premise, or the assertions below are vacuous: the row is
+      // really on the page, and really NOT inside the selected scope.
+      expect(
+        await client.evaluate<boolean>(
+          `document.querySelectorAll('.social-details-social-counts').length === 1`,
+        ),
+      ).toBe(true);
+      expect(
+        await client.evaluate<boolean>(
+          `document.querySelector('[data-urn^="urn:li:activity:"] .social-details-social-counts') === null`,
+        ),
+      ).toBe(true);
+
+      const result = await client.evaluate<{
+        countsRootNarrowed: boolean;
+        commentCount: number;
+      }>(script);
+
+      expect(result.countsRootNarrowed).toBe(false);
+      // And the stray count is not read either — the pair together is what
+      // makes this the legal empty rather than a contradiction: an unnarrowed
+      // root beside three zeroes is a post with no engagement.
+      expect(result.commentCount).toBe(0);
+    });
+
     it("reports an sdui counts root as unnarrowed even beside a rendered row", async () => {
       // `counts: []` is a recorded absence of measurement, not a decision that
       // no row exists — so the flag stays false however the page renders, and

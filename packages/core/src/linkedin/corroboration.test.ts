@@ -296,10 +296,11 @@ describe("assertRegionCorroboration", () => {
     ).not.toThrow();
   });
 
-  // The lower boundary, pinned explicitly: one counter reading 1 proves the
-  // patterns still match this row. Without it an `extractedCount > 1` mutant
-  // survives, and it would report a post carrying exactly one comment as a
-  // stale-counter failure.
+  // The lower boundary, pinned explicitly: a sum of 1 is a read, not an empty
+  // one — this predicate sees only the sum, so that is the whole of what it can
+  // conclude. Without this case an `extractedCount > 1` mutant survives, and it
+  // would report a post carrying exactly one comment as a stale-counter
+  // failure.
   it("returns at the lower boundary of a non-empty read", () => {
     expect(() =>
       assertRegionCorroboration({

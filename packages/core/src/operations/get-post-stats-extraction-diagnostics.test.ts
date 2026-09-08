@@ -487,6 +487,43 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
     expect(vi.mocked(writeFile)).toHaveBeenCalled();
   });
 
+  // F3 — the same ordering claim, on the branch that actually needed a NEW
+  // capture site.  The test below covers the SELECTION branch, whose capture
+  // sits at a different call site: the corroboration raise (#852) captures
+  // from its own `catch`, so moving that call after the `finally` would leave
+  // this branch writing its bundle against a disconnected client while the
+  // selection test stayed green.
+  it("captures before the client disconnects on the corroboration branch", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const { disconnect } = setupExtractionFailure({
+      variant: "legacy",
+      reactionCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      countsRootNarrowed: true,
+    });
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    let disconnectedBeforeWrite = false;
+    vi.mocked(writeFile).mockImplementation(async () => {
+      if (disconnect.mock.calls.length > 0) disconnectedBeforeWrite = true;
+    });
+
+    await expect(
+      getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toThrow(ExtractionFailedError);
+
+    // Asserting the write HAPPENED is what keeps the ordering claim
+    // falsifiable, exactly as in the sibling below: with no capture at all
+    // `disconnectedBeforeWrite` stays `false` vacuously.
+    expect(vi.mocked(writeFile)).toHaveBeenCalled();
+    expect(disconnect).toHaveBeenCalled();
+    expect(disconnectedBeforeWrite).toBe(false);
+    warnSpy.mockRestore();
+  });
+
   it("captures before the client disconnects", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
     const { disconnect } = setupExtractionFailure(null);
