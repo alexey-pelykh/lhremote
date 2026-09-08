@@ -192,7 +192,7 @@ describeE2E("LinkedIn selectors registry", () => {
       // flat sleep a zero here would mean "not hydrated yet" as readily as
       // "selector is stale" -- and a gate that cannot tell its own failure
       // modes apart is worse than none, which is the same standard applied
-      // to the it.todo entries below.
+      // to the five entries recorded below.
       const count = await retryAsync(
         async () => {
           const n = await queryCount(linkedInClient, selector);
@@ -215,16 +215,19 @@ describeE2E("LinkedIn selectors registry", () => {
   // deliberately unasserted here rather than bolted on, because this suite
   // loads /feed/ and never leaves it.  Against that page state a red would
   // mean "wrong page", not "stale selector" -- a gate that cannot tell its
-  // own failure modes apart is worse than none.  Each needs the page state
-  // named below; all five are covered structurally in Tier 1.
-
-  describe("selectors needing a page state this suite does not reach", () => {
-    it.todo("COMMENT_REPLY_BUTTON — needs a post-detail page with comments");
-    it.todo("COMMENT_REACTION_TRIGGER — needs a post-detail page with comments");
-    it.todo("COMMENT_REACTIONS_MENU — needs a post-detail page with comments");
-    it.todo("MENTION_TYPEAHEAD — needs `@` typed into the comment editor");
-    it.todo("MENTION_OPTION — needs a typeahead that returned results");
-  });
+  // own failure modes apart is worse than none.  All five are covered
+  // structurally in Tier 1; what each would need here is:
+  //
+  //   COMMENT_REPLY_BUTTON      a post-detail page with comments
+  //   COMMENT_REACTION_TRIGGER  a post-detail page with comments
+  //   COMMENT_REACTIONS_MENU    a post-detail page with comments
+  //   MENTION_TYPEAHEAD         `@` typed into the comment editor
+  //   MENTION_OPTION            a typeahead that returned results
+  //
+  // Recorded as a comment rather than `it.todo`: nothing else under
+  // `packages/` uses `it.todo`, `.skip` or `.only`, and the reporter line a
+  // todo would buy is worth little in a suite that is `describe.skipIf`-gated
+  // and never runs in CI.
 
   // -- Reactions popup selectors (hover-triggered) -------------------------
 
