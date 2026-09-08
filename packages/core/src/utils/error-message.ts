@@ -99,14 +99,13 @@ function isError(value: unknown): value is Error {
  * the result rather than anywhere in here.  That throw is history — measured
  * before #965 and closed by it — so `render` in `packages/mcp/src/run.ts` no
  * longer has this path to catch; its guard stays warranted by the dynamic
- * `import` it wraps, which no amount of totality here can help with, and its
- * own comment still cites the closed path as live (#977).  Such a `message`
- * *can* arrive from a subclass assigning `this.message`, an error rehydrated
- * across a worker or IPC boundary, or a `Proxy` — no producer in this repo
- * builds one today, so treat that as the contract `unknown` promises to
- * accept rather than as an observed source.  Coercing rather than
- * discarding is deliberate: `""` would be total too, and would throw away a
- * message that renders perfectly well.
+ * `import` it wraps, which no amount of totality here can help with.  Such
+ * a `message` *can* arrive from a subclass assigning `this.message`, an
+ * error rehydrated across a worker or IPC boundary, or a `Proxy` — no
+ * producer in this repo builds one today, so treat that as the contract
+ * `unknown` promises to accept rather than as an observed source.
+ * Coercing rather than discarding is deliberate: `""` would be total too,
+ * and would throw away a message that renders perfectly well.
  *
  * `error-message.test.ts` § `errorMessage totality` pins this over a corpus
  * of shapes crossed with positions.  Enumerating shapes one at a time is
