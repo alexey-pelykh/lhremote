@@ -8,7 +8,11 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   return { ...actual, getPostStats: vi.fn() };
 });
 
-import { getPostStats, type GetPostStatsOutput } from "@lhremote/core";
+import {
+  DOMVariantUnsupportedError,
+  getPostStats,
+  type GetPostStatsOutput,
+} from "@lhremote/core";
 import { handleGetPostStats } from "./get-post-stats.js";
 import { getStderr, getStdout } from "./testing/mock-helpers.js";
 
@@ -107,5 +111,35 @@ describe("handleGetPostStats", () => {
 
     expect(process.exitCode).toBe(1);
     expect(getStderr(stderrSpy)).toContain("connection refused");
+  });
+
+  /**
+   * The second post-detail CLI surface, pinned for the same reason as the
+   * first (`get-post.test.ts`) and separately from it.
+   *
+   * `DOMVariantUnsupportedError`'s own message asserts that no adapter
+   * matched; what says which half of ADR-008 § 5's criterion actually fired
+   * — and what an operator should do next — is only in the `cause` (#923).
+   * A CLI user reads stderr and nothing else, so asserting the cause on the
+   * error object would not prove it arrives: this handler could read
+   * `.message` directly, as `error-message.ts` warns some branches do, and
+   * drop the whole diagnosis while every core-package test stayed green.
+   */
+  it("writes the cause chain's diagnosis to stderr", async () => {
+    vi.mocked(getPostStats).mockRejectedValue(
+      new DOMVariantUnsupportedError("post-detail", ["sdui", "legacy"], {
+        cause: new Error("detect probes — sdui: 0, legacy: 0"),
+      }),
+    );
+
+    await handleGetPostStats(
+      "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678/",
+      {},
+    );
+
+    expect(process.exitCode).toBe(1);
+    const stderr = getStderr(stderrSpy);
+    expect(stderr).toContain("register an adapter");
+    expect(stderr).toContain("Caused by: detect probes — sdui: 0, legacy: 0");
   });
 });
