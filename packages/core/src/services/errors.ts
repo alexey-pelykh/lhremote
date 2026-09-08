@@ -198,12 +198,16 @@ export class ExtractionTimeoutError extends ServiceError {
  * "No usable adapter" is ADR-008 § Decision 3's own framing, and it is
  * deliberately not a claim about the page's dialect. Under the second
  * condition an adapter's `detect` DID match, so a diagnostic bundle's
- * `variantDetection` reports exactly one — which this repo reads as *our
- * adapter matched and that field's selectors went stale*. Saying instead that
- * the page speaks a dialect no adapter knows sends an operator to register a
- * redundant adapter whose `detect` overlaps the existing one, and that is the
- * {@link DOMVariantAmbiguousError} precondition: one diagnosable failure
- * traded for a different failure on every page of that dialect.
+ * `variantDetection` reports exactly one: a dialect this repo already has an
+ * adapter for, whose scope resolution is the part that stopped working.
+ *
+ * What that changes is WHICH adapter gets written, never whether one does.
+ * *Register an adapter* is ADR-008 § 5's operator action for both conditions
+ * and the message below is right to assert it. But a reader told the page
+ * speaks a dialect no adapter knows writes a SECOND adapter for a dialect
+ * already covered, and its `detect` then overlaps the first — the
+ * {@link DOMVariantAmbiguousError} precondition, trading one diagnosable
+ * failure for a different failure on every page of that dialect.
  *
  * It is also deliberately NOT {@link ExtractionTimeoutError} — nothing timed
  * out. The whole defect class this models is a gate going green promptly on
