@@ -15,6 +15,7 @@ import {
   type VariantDetection,
   variantNamesFor,
 } from "../linkedin/dom-variant.js";
+import { assertRegionCorroboration } from "../linkedin/corroboration.js";
 import {
   DOMVariantAmbiguousError,
   DOMVariantUnsupportedError,
@@ -642,6 +643,86 @@ export async function capturePostDetailExtractionFailure(
     trigger: "extraction-failure",
     detection,
   });
+}
+
+/**
+ * The terms of the engagement-counts corroboration, as they arrive in the
+ * post-detail extraction record.
+ *
+ * A structural type over the record rather than the record itself: `get-post`
+ * and `getPostStats` declare different subsets of the same generated script's
+ * output — one reads the author and body too, the other only the counters —
+ * and neither should have to widen its own interface to be graded here.
+ *
+ * `variant` is optional because `get-post` declares it so; the record has
+ * carried it on every live path since the registry landed.
+ */
+export interface PostDetailCountsRecord {
+  /** Which adapter produced the record, as it appears in the diagnosis. */
+  readonly variant?: string | undefined;
+  readonly reactionCount: number;
+  readonly commentCount: number;
+  readonly shareCount: number;
+  /** Did the selected adapter's own counts anchor resolve? */
+  readonly countsRootNarrowed: boolean;
+}
+
+/**
+ * CONTAINER-tier corroboration of a post-detail engagement-counts read, plus
+ * the diagnostic capture the raise warrants.
+ *
+ * Shared for the reason {@link capturePostDetailExtractionFailure} above it is
+ * shared, and it is the same two callers: `getPostStats` (#852) and `get-post`
+ * (#951) run this check over the *same three counters* of the *same record*
+ * produced by the *same generated script* on the *same surface*, so a
+ * per-operation copy would be identical line for line — down to which counters
+ * are summed and which name the diagnosis prints. The RULE lives one level
+ * further down on {@link assertRegionCorroboration}; what is shared here is its
+ * BINDING to this surface, which is the half that would drift.
+ *
+ * **Summed rather than checked per counter**, because the corroborator is
+ * ROW-level: `countsRootNarrowed` says the row resolved, and there is no
+ * per-counter signal to pair a per-counter check against. A per-counter raise
+ * would fire on a post carrying comments but no reactions — the ordinary shape
+ * of most posts. The cost is stated rather than implied away: a non-zero
+ * counter proves only its OWN pattern matched, so PARTIAL staleness — one
+ * counter's pattern dead while another still reads — passes this check and
+ * returns a zero for the dead one. Closing that needs a per-counter
+ * corroborator this row does not offer, and none is invented here.
+ *
+ * The capture is written on the way out for the reason both call sites already
+ * capture at their own raises: this failure never reaches a deadline. The
+ * readiness gate went green milliseconds ago and the scrape returned a
+ * well-formed record, so no timeout-bound capture can see it — and past the
+ * re-throw the caller's `finally` disconnects the client and the DOM that
+ * would have explained it is gone. It swallows its own errors, so the
+ * corroboration error propagates unchanged either way.
+ *
+ * @param client - Connected CDP client still sitting on the read page.
+ * @param raw - The counts terms of the record just extracted.
+ * @throws {ExtractionFailedError} When the counts row resolved and every
+ *   counter read zero.
+ *
+ * @internal Exported for the operation-layer post-detail sites; not part of
+ *   the public API.
+ */
+export async function assertPostDetailCountsCorroboration(
+  client: CDPClient,
+  raw: PostDetailCountsRecord,
+): Promise<void> {
+  try {
+    assertRegionCorroboration({
+      surface: POST_DETAIL_SURFACE,
+      variant: raw.variant || "unknown",
+      field: "engagementCounts",
+      regionName: "countsRoot",
+      regionResolved: raw.countsRootNarrowed,
+      extractedCount: raw.reactionCount + raw.commentCount + raw.shareCount,
+    });
+  } catch (error) {
+    await capturePostDetailExtractionFailure(client);
+    throw error;
+  }
 }
 
 /**

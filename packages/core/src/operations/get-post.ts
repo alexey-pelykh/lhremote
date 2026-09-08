@@ -10,6 +10,7 @@ import type { PostComment, PostDetail } from "../types/post.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import {
+  assertPostDetailCountsCorroboration,
   capturePostDetailExtractionFailure,
   waitForPostLoad,
 } from "../cdp/wait-for-post-load.js";
@@ -90,6 +91,16 @@ interface RawPostDetail {
    * predates the registry (no live path does).
    */
   variant?: string;
+  /**
+   * Did the selected adapter's own engagement-counts anchor resolve?
+   *
+   * Read since #951, and it is not an output.  It is the corroborator for the
+   * three counters above: they are the only fields here with no second reading
+   * beside them, so whether the row they were read out of was there at all is
+   * the one thing that can contradict a zero.  See
+   * {@link assertPostDetailCountsCorroboration}.
+   */
+  countsRootNarrowed: boolean;
 }
 
 /**
@@ -437,6 +448,43 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
         rawPost.ambiguousVariants,
       );
     }
+
+    // Corroborate the counters BEFORE anything reads one (#951).  `getPost`
+    // publishes the same three counters `getPostStats` does, off the same
+    // record, so it inherits the same seam #852 closed there: a counts row
+    // that resolved and yielded nothing is one observation contradicting
+    // itself, and returning zeroes off it reports "no engagement" for a row
+    // this parse simply could not read.
+    //
+    // **Ordering is the substance of #951, and this is deliberately first.**
+    // `commentCount` is read out of that row, and the cardinal check below
+    // consults it to decide whether an empty `comments: []` is legitimate — so
+    // an unread row does not merely produce a wrong count, it produces a
+    // corroborator that agrees with anything.  A cardinal is only worth
+    // consulting once the region it came from has been vouched for, and the
+    // diagnosis follows the same order: `countsRoot=rendered` sends the reader
+    // to the counter patterns, where the repair is, rather than to the comment
+    // selectors, which are fine.
+    //
+    // On today's counter domain the two tiers cannot both fire — every counter
+    // is a non-negative integer, so `commentCount > 0` implies a non-zero sum
+    // and the region tier returns before the cardinal tier could — which makes
+    // this ordering unobservable rather than inert.  That disjointness is
+    // derived from the domain, not designed into either predicate, so writing
+    // the precedence down is what keeps a later per-counter corroborator from
+    // silently changing which diagnosis a page produces.
+    //
+    // Unconditional, unlike the cardinal check below.  `post` carries the
+    // counters whatever `commentCount` was asked for — `commentCount: 0` skips
+    // comment loading, not counter reading — so gating this on `maxComments`
+    // would leave `getPost({ commentCount: 0 })` a way to obtain counters
+    // `getPostStats` would have refused to return, off the identical record.
+    //
+    // `sdui` is out of reach here for the reason it is out of reach there: that
+    // adapter declares `counts: []`, so `countsRootNarrowed` is unconditionally
+    // false and this tier is legacy-only until an SDUI counts row is measured
+    // (#950).  Nothing is guessed to widen it.
+    await assertPostDetailCountsCorroboration(client, rawPost);
 
     const post: PostDetail = {
       postUrn,
