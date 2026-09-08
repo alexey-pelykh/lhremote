@@ -885,6 +885,7 @@ React to a LinkedIn post with a specific reaction type. Checks action budget bef
 |-----------|------|----------|---------|-------------|
 | `postUrl` | string | Yes | — | LinkedIn post URL |
 | `reactionType` | string | No | `like` | `like`, `celebrate`, `support`, `love`, `insightful`, or `funny` |
+| `dryRun` | boolean | No | `false` | When true, detects current reaction state without clicking |
 | `cdpPort` | number | No | 9222 | CDP port |
 
 #### `react-to-comment`
