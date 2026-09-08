@@ -15,9 +15,19 @@ import {
   REACTION_SUPPORT,
   REACTION_TRIGGER,
 } from "../linkedin/selectors.js";
+import { assertActionBudget } from "../services/action-budget-guard.js";
 import { gaussianDelay } from "../utils/delay.js";
-import type { ConnectionOptions } from "./types.js";
+import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
+
+/**
+ * Limit type ID for PostLike in the LinkedHelper budget system.
+ *
+ * Corroborated in-repo rather than asserted: `ActionBudgetRepository`'s
+ * `ACTION_TYPE_TO_LIMIT_TYPE` maps the `LikePost` action config type to `18`,
+ * and the budget suite's `limit_types` fixture seeds `(18, 'PostLike')`.
+ */
+const POST_LIKE_LIMIT_TYPE_ID = 18;
 
 /**
  * Supported LinkedIn reaction types.
@@ -142,6 +152,12 @@ export interface ReactToPostOutput {
  * the current reaction state, and validates that the reaction popup opens,
  * but skips the final reaction click.
  *
+ * Checks the action budget before attempting the reaction and fails with a
+ * {@link BudgetExceededError} if the PostLike limit has been reached.  The
+ * check runs before the dry-run branch and before the already-reacted no-op,
+ * so an exhausted budget refuses either of those too — see
+ * {@link assertActionBudget} for why.
+ *
  * @param input - Post URL, reaction type, and CDP connection parameters.
  * @returns Confirmation of the reaction applied, including whether the
  *   post was already reacted with the requested type.
@@ -169,6 +185,15 @@ export async function reactToPost(
         "This is a security measure to prevent remote code execution.",
     );
   }
+
+  // Check the action budget before reacting.  Placed here, ahead of every
+  // network and DOM step, so an exhausted budget costs nothing but the read
+  // — and so it refuses on the same terms `comment-on-post` already does.
+  await assertActionBudget(
+    POST_LIKE_LIMIT_TYPE_ID,
+    cdpPort,
+    buildCdpOptions(input),
+  );
 
   await gateOnLoggedInState(cdpPort, cdpHost, allowRemote, { timeout: 60_000 });
 

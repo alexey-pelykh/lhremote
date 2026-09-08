@@ -25,6 +25,7 @@ export {
   AccountResolutionError,
   resolveAccount,
 } from "./account-resolution.js";
+export { assertActionBudget } from "./action-budget-guard.js";
 export {
   withDatabase,
   withInstanceDatabase,
