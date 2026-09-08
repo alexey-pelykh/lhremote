@@ -200,6 +200,15 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // A `vi.mock(...)` factory mock is not a module spy, and neither reset
+    // hook this file already runs reaches its implementation: `clearAllMocks`
+    // drops call history only, and `restoreAllMocks` restores `vi.spyOn`
+    // spies.  Measured: an implementation installed in one test survives both
+    // and is still live in the next.  Two tests below install one — and one
+    // queues a `mockRejectedValueOnce`, which leaks the same way if its
+    // branch ever stops consuming it — so re-establish the factory's baseline
+    // here rather than asking each of them to remember to undo itself.
+    vi.mocked(writeFile).mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
