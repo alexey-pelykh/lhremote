@@ -136,7 +136,7 @@ Four layer base classes — `CDPError`, `DatabaseError`, `FormatError` and `Serv
 | `LoggedInStatePersistedError` | LinkedIn ContentWindow still not in `LoggedInState` after the retry budget |
 | `LoggedInStateTimeoutError` | LinkedIn ContentWindow did not enter `LoggedInState` before the deadline |
 | `MonitorCollectingSagaTimeoutError` | Collecting saga did not reach idle before the deadline |
-| `NodeIntegrationUnavailableError` | LinkedHelper launcher does not expose Node.js APIs (unsupported LinkedHelper version) |
+| `NodeIntegrationUnavailableError` | LinkedHelper launcher does not expose Node.js APIs (`require` unavailable); may indicate an unsupported LinkedHelper version |
 | `StartInstanceError` | Instance failed to start |
 | `WrongPortError` | Connected to wrong port / unexpected endpoint |
 | `CampaignNotFoundError` | Campaign not found in the database |
@@ -154,7 +154,7 @@ Four layer base classes — `CDPError`, `DatabaseError`, `FormatError` and `Serv
 | `LinkedHelperUnreachableError` | LinkedHelper processes detected but CDP endpoint unreachable |
 | `CollectionError` | General collection operation error |
 | `CollectionBusyError` | Collection operation blocked (LinkedHelper busy) |
-| `UIBlockedError` | LinkedHelper UI blocked by dialog or popup |
+| `UIBlockedError` | LinkedHelper UI blocked by a dialog, a critical error, or a popup |
 | `FormatError` | Base class for format/validation errors; `CampaignFormatError` under [Campaign Formats](#campaign-formats) extends it |
 
 ## Usage
