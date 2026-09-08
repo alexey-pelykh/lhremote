@@ -103,6 +103,23 @@ const MAX_LOAD_MORE_ATTEMPTS = 20;
  *
  * Verified live via `comment-dom-spike.e2e.test.ts` reactions-popup probe
  * (lhremote#776).
+ *
+ * **Deliberately NOT sourced from the selector registry — do not swap these
+ * for `REACTION_LIKE` / `REACTION_CELEBRATE` / `REACTION_SUPPORT` /
+ * `REACTION_LOVE` / `REACTION_INSIGHTFUL` / `REACTION_FUNNY`.**  Each value
+ * here is exactly the FIRST branch of its registry counterpart: the registry
+ * pairs the SDUI label with the legacy Ember one
+ * (`'button[aria-label="Like"], button[aria-label="React Like"]'`) because
+ * post-level code must still match the Ember post page.  The comment-level
+ * popup is SDUI-only, so the bare label is the whole of what is correct here
+ * and the narrowing is the point.  Harmonizing onto the registry constants
+ * would not fail loudly: `document.querySelector` resolves a selector list in
+ * **document order, not selector order**, so the `click()` at the call site
+ * would land on whichever branch appears first in the DOM while the preceding
+ * `waitForElement` passes either way — an invisible wrong-element click.
+ *
+ * The same-shaped map in `react-to-post.ts` IS registry-sourced (lhremote#833);
+ * that asymmetry is intended, not an oversight (lhremote#856).
  */
 const COMMENT_POPUP_REACTION_SELECTORS: Readonly<Record<ReactionType, string>> = {
   like: 'button[aria-label="Like"]',
