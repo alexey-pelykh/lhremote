@@ -84,9 +84,10 @@ function isError(value: unknown): value is Error {
  * was one the caller already held, so a throw here was the caller's own; now
  * it would be raised from *inside a catch block at the process boundary* —
  * `runProgram` and `mcpCatchAll` both reach this while handling a failure,
- * and a formatter that throws there destroys the report instead of writing
- * it.  An unreadable link therefore renders as no text, which the caller
- * already treats as nothing to show.
+ * and a formatter that throws there destroys the report instead of
+ * delivering it — written to stderr in the one case, returned as an
+ * `McpResult` in the other.  An unreadable link therefore renders as no
+ * text, which the caller already treats as nothing to show.
  *
  * `String()` wraps the whole ternary rather than sitting in one branch,
  * which is the half the `try` cannot do, and the arrangement is load-bearing
@@ -95,15 +96,17 @@ function isError(value: unknown): value is Error {
  * coercion sat in the non-`Error` branch alone, an `Error` returned its
  * `message` unchanged, in violation of this function's own `: string`, and
  * the `TypeError` was raised where {@link errorMessage} applies `.trim()` to
- * the result rather than anywhere in here.  Measured, and the reason
- * `render`'s catch in `packages/mcp/src/run.ts` covers the formatter
- * throwing and not only failing to load.  Such a `message` *can* arrive from
- * a subclass assigning `this.message`, an error rehydrated across a worker
- * or IPC boundary, or a `Proxy` — no producer in this repo builds one today,
- * so treat that as the contract `unknown` promises to accept rather than as
- * an observed source.  Coercing rather than discarding is deliberate: `""`
- * would be total too, and would throw away a message that renders perfectly
- * well.
+ * the result rather than anywhere in here.  That throw is history — measured
+ * before #965 and closed by it — so `render` in `packages/mcp/src/run.ts` no
+ * longer has this path to catch; its guard stays warranted by the dynamic
+ * `import` it wraps, which no amount of totality here can help with, and its
+ * own comment still cites the closed path as live (#977).  Such a `message`
+ * *can* arrive from a subclass assigning `this.message`, an error rehydrated
+ * across a worker or IPC boundary, or a `Proxy` — no producer in this repo
+ * builds one today, so treat that as the contract `unknown` promises to
+ * accept rather than as an observed source.  Coercing rather than
+ * discarding is deliberate: `""` would be total too, and would throw away a
+ * message that renders perfectly well.
  *
  * `error-message.test.ts` § `errorMessage totality` pins this over a corpus
  * of shapes crossed with positions.  Enumerating shapes one at a time is
