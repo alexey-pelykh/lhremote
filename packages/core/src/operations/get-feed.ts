@@ -103,9 +103,10 @@ export interface RawDomPost {
  *   so a role or brand slug (`/in/head-of-widgets/`) cannot promote the
  *   headline into the name slot.  Falsified by a slug the fields do not
  *   corroborate at all — an opaque one, or a transliterated non-Latin name —
- *   and there this read declines and the first name-bearing run is used
- *   instead, so the signal degrades rather than inventing.  A slug that merely
- *   omits part of the display name ("Ada Lovelace, PhD" under
+ *   and there this read declines and the anchor's own FIRST FIELD is used
+ *   instead — since #903 that is `rootFields(visibleRoot(a))[0]`, which may be
+ *   bare text rather than a run — so the signal degrades rather than inventing.
+ *   A slug that merely omits part of the display name ("Ada Lovelace, PhD" under
  *   `/in/ada-lovelace/`) does NOT decline: it corroborates a prefix of the
  *   name's own field, and the whole field is returned.  Across a field
  *   boundary the same generosity needs evidence, because the boundary is
@@ -116,7 +117,14 @@ export interface RawDomPost {
  *   under `/in/alex-petrenko/`), which returned the given name alone until
  *   issue #902.  A further field carrying text the slug does not corroborate
  *   at all is NOT taken; see `MAX_NAME_TAIL`, whose cost is a slug too short
- *   to reach the rest of a split name.
+ *   to reach the rest of a split name.  Its accepted cost, measured rather than
+ *   predicted: on the decline path that first field is whatever the wrapper
+ *   renders FIRST, so leading chrome inside the name's OWN wrapper — "Dr. ", or
+ *   avatar initials, before the name run — is returned AS the name, and where no
+ *   badge terminates the region the real name is emitted as the HEADLINE.  A
+ *   regression against the pre-#860 read, pinned rather than repaired: the
+ *   opposite polarity — bare text that IS the name, beside a badge run — is the
+ *   same markup, so one predicate cannot serve both (#940).
  * - **Author profile URL**: `href` of that same author anchor.
  * - **Author headline**: the first field that is none of a relative time, a
  *   badge that is wholly a connection degree, the actor header's own chrome, or
@@ -908,14 +916,28 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
   // "Adaptive Systems Lead", and without the guard that headline would be
   // discarded as the name's own field and the post would report none at all.
   //
-  // That boundary is DEFENSIVE at the single call site this currently has.
-  // Replacing the whole function with a bare \`indexOf\` was measured against the
-  // suite and changed no verdict, because \`nameFieldSpan\` reaches it only on
-  // the decline path, where \`name\` came from \`anchorName\` — the FIRST name-like
-  // run — so the loop matches at that same field whether or not the ends are
-  // bounded, and no earlier field exists for a substring to hit first.  Kept,
-  // because the guard costs nothing and a second caller would reach it; stated,
-  // so nobody reads the suite's green as evidence the boundary is exercised.
+  // That boundary is LOAD-BEARING, and until issue #940 nothing in the corpus
+  // exercised it — which is why an earlier reading of this comment called it
+  // DEFENSIVE and offered the suite's green as the evidence.  The green was
+  // real and the inference was not: replacing this function with a bare
+  // \`indexOf\` did change no verdict across the corpus as it then stood.
+  //
+  // \`nameFieldSpan\` reaches this only on the DECLINE path — the accept path
+  // returns before the loop — and there \`name\` is \`anchorName\`'s answer, which
+  // since #903 is the FIRST FIELD of the anchor's VISIBLE root and may be bare
+  // text rather than a run.  The loop, though, scans the fields of EVERY root,
+  // so a field can PRECEDE the one the name was read from: \`B8\` renders avatar
+  // initials in their own wrapper ahead of it.  Where such an earlier field
+  // also carries the name as an unbounded substring, this boundary is what
+  // keeps the loop off it and the real headline out of the name's span.
+  //
+  // \`F8g\` pairs the same two strings and cannot show that: its slug
+  // corroborates, so the read accepts and the loop is never reached — and even
+  // on the decline path its containing field FOLLOWS the name rather than
+  // preceding it, so the loop stops at the name's own field either way.  \`B11\`
+  // is the ordering that discriminates, and it is asserted on the HEADLINE
+  // because that is where the difference surfaces: with a bare \`indexOf\` its
+  // headline becomes "Ada" — the name itself — in place of the real one.
   function phraseContains(haystack, needle) {
     if (needle.length === 0) return false;
     let from = 0;
