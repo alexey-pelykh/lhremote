@@ -413,11 +413,35 @@ describe("getPostStats", () => {
     const rejection = getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT });
 
     await expect(rejection).rejects.toThrow(ExtractionFailedError);
-    // The dialect the SCRIPT reported, and the terms an operator needs to act:
-    // which field to repair, and what contradicted its emptiness.
+    // Anchored at BOTH ends, not just through the middle.  A regex starting at
+    // `adapter "legacy"` leaves the surface unpinned — `surface:` could be
+    // passed anything at the call site and still match — and one ending at the
+    // corroborator leaves the remediation clause unpinned, which is the only
+    // sentence telling an operator what to DO and which has no other home in
+    // the corpus.
     await expect(rejection).rejects.toThrow(
-      /adapter "legacy" .*field "engagementCounts" came back empty while countsRoot=rendered/,
+      /^Extraction failed on the post-detail page: adapter "legacy" matched, but field "engagementCounts" came back empty while countsRoot=rendered contradicts it\. Adapter "legacy" is partially stale — repair the selectors for "engagementCounts"\.$/,
     );
+  });
+
+  // The `raw.variant || "unknown"` fallback.  Reachable only if the script
+  // returns a record without a variant, which the committed script does not
+  // do — so this pins the FALLBACK's own behaviour, not a live path.  Without
+  // it, deleting `|| "unknown"` leaves the message reading `adapter ""` and
+  // every other test still green.
+  it("names the adapter as unknown when the record carries no variant", async () => {
+    setupMocks({
+      postStats: {
+        reactionCount: 0,
+        commentCount: 0,
+        shareCount: 0,
+        countsRootNarrowed: true,
+      },
+    });
+
+    await expect(
+      getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toThrow(/adapter "unknown" matched/);
   });
 
   it.each([
@@ -427,10 +451,13 @@ describe("getPostStats", () => {
   ])(
     "returns a read the row corroborates through %s alone",
     async (_label, counts) => {
-      // Any one counter reading non-zero proves the patterns still match this
-      // row, so the check is on the SUM.  Per-counter it would report a post
-      // carrying comments but no reactions as a stale-counter failure — the
-      // ordinary shape of most posts.
+      // The check is on the SUM because the corroborator is row-level: a
+      // per-counter raise would report a post carrying comments but no
+      // reactions as a stale-counter failure, which is the ordinary shape of
+      // most posts.  What these three cases pin is that arm ONLY — they do not
+      // establish that a non-zero counter vouches for the other two, which it
+      // does not.  See `get-post-stats.ts` for the partial-staleness residual
+      // that leaves open.
       setupMocks({
         postStats: { variant: "legacy", ...counts, countsRootNarrowed: true },
       });

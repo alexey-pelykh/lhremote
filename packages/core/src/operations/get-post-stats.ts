@@ -311,9 +311,18 @@ export async function getPostStats(
     // and for why a row that did NOT resolve is the ordinary shape of a post
     // with no engagement rather than a failure.
     //
-    // Summed rather than checked per counter deliberately: any one counter
-    // reading non-zero proves the patterns still match this row, so a post
-    // carrying comments but no reactions must not be reported as stale.
+    // Summed rather than checked per counter, because the corroborator is
+    // ROW-level: `regionResolved` says the row resolved, and there is no
+    // per-counter signal to pair a per-counter check against.  A per-counter
+    // raise would fire on a post carrying comments but no reactions — the
+    // ordinary shape of most posts.
+    //
+    // The cost of that is stated rather than implied away.  A non-zero counter
+    // proves only its OWN pattern matched; it vouches for nothing about the
+    // other two.  So PARTIAL staleness — one counter's pattern dead while
+    // another still reads — passes this check and returns a zero for the dead
+    // one, exactly as before.  Closing it needs a per-counter corroborator
+    // this row does not offer, and none is invented here.
     try {
       assertRegionCorroboration({
         surface: POST_DETAIL_SURFACE,
