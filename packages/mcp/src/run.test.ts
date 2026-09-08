@@ -1,12 +1,48 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 import { runStdioBin } from "./run.js";
 
 const { runStdioServer } = vi.hoisted(() => ({ runStdioServer: vi.fn() }));
 vi.mock("./stdio.js", () => ({ runStdioServer }));
+
+/**
+ * Warm the formatter's module graph outside any test's own budget.
+ *
+ * `./stdio.js` is mocked just above, so nothing in this file loads
+ * `@lhremote/core` the way the real bin does.  `runStdioBin`'s catch is
+ * therefore the first thing to import it, and the whole cold load lands inside
+ * whichever test reaches the catch first — a cost the bin itself never pays,
+ * because there `./stdio.js` has already pulled core in and the import in
+ * `render` is a cache hit.
+ *
+ * The cost is not small: it is the same ~274-module graph this change exists to
+ * put behind the catch.  Measured cold at ~330ms here and at over five seconds
+ * on the Windows CI runner, where it timed out `reports a rejecting startup on
+ * stderr and exits non-zero` against vitest's 5s default while every other test
+ * in the file ran in milliseconds.  Whichever test reaches the catch first pays
+ * it, so `--sequence.shuffle` moves the failure rather than removing it.
+ *
+ * Warming charges it to a hook instead, and nothing is mocked away to get
+ * there — these tests assert what the real `errorMessage` renders, so the load
+ * is necessary and only its accounting was wrong.  `beforeAll` rather than
+ * `beforeEach` because it survives the `vi.resetModules()` the second block
+ * runs in teardown: measured, a post-reset re-import costs ~6ms against ~330ms
+ * cold, so the reset re-wires the registry rather than re-executing the graph.
+ */
+beforeAll(async () => {
+  await import("@lhremote/core");
+}, 120_000);
 
 /**
  * The coverage the bin entrypoint itself cannot carry.
