@@ -4,7 +4,6 @@
 import { resolveInstancePort } from "../cdp/index.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
-import { ActionBudgetRepository } from "../db/index.js";
 import { waitForElement, humanizedScrollTo, humanizedClick, typeText, typeTextWithMentions } from "../linkedin/dom-automation.js";
 import type { MentionEntry } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
@@ -15,9 +14,7 @@ import {
   COMMENT_SUBMIT_BUTTON,
   normalizeCommentUrnForReactStack,
 } from "../linkedin/selectors.js";
-import { resolveAccount } from "../services/account-resolution.js";
-import { BudgetExceededError } from "../services/errors.js";
-import { withDatabase } from "../services/instance-context.js";
+import { assertActionBudget } from "../services/action-budget-guard.js";
 import { gaussianDelay } from "../utils/delay.js";
 import { buildCdpOptions, type ConnectionOptions } from "./types.js";
 import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
@@ -39,7 +36,18 @@ const LINKEDIN_POST_URL_RE =
  */
 const COMMENT_URN_RE = /^urn:li:comment:\((?:urn:li:)?\w+:\d+,\d+\)$/;
 
-/** Limit type ID for PostComment in the LinkedHelper budget system. */
+/**
+ * Limit type ID for PostComment in the LinkedHelper budget system.
+ *
+ * Unlike its `PostLike` sibling, this value is corroborated **nowhere in this
+ * repository**: `19` appears in no `limit_types` fixture and in no entry of
+ * `ActionBudgetRepository`'s `ACTION_TYPE_TO_LIMIT_TYPE`.  It traces only to
+ * an investigation document that was never committed here (#569).  Confirming
+ * it needs a read of `limit_types` from a real LinkedHelper install; until
+ * then, treat a `PostComment` budget verdict as resting on an unverified id.
+ * Being wrong is quiet rather than loud — the check would consult a budget the
+ * operator is not spending while the real one goes unconsulted.
+ */
 const POST_COMMENT_LIMIT_TYPE_ID = 19;
 
 /**
@@ -137,22 +145,11 @@ export async function commentOnPost(
   }
 
   // Check action budget before attempting the comment
-  const accountId = await resolveAccount(cdpPort, buildCdpOptions(input));
-
-  await withDatabase(accountId, ({ db }) => {
-    const repo = new ActionBudgetRepository(db);
-    const entries = repo.getActionBudget();
-    const entry = entries.find(
-      (e) => e.limitTypeId === POST_COMMENT_LIMIT_TYPE_ID,
-    );
-    if (entry && entry.remaining !== null && entry.remaining <= 0) {
-      throw new BudgetExceededError(
-        entry.limitType,
-        entry.dailyLimit ?? 0,
-        entry.totalUsed,
-      );
-    }
-  });
+  await assertActionBudget(
+    POST_COMMENT_LIMIT_TYPE_ID,
+    cdpPort,
+    buildCdpOptions(input),
+  );
 
   await gateOnLoggedInState(cdpPort, cdpHost, allowRemote, { timeout: 60_000 });
 
