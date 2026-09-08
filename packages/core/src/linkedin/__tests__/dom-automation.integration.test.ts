@@ -18,6 +18,13 @@ import { click, scrollTo, typeText, waitForElement } from "../dom-automation.js"
 /** Timeout for beforeEach operations (connect + reset) on slow CI runners. */
 const BEFORE_EACH_TIMEOUT = 15_000;
 
+/**
+ * Budget for the delayed-element wait, and -- doubled -- for the test that
+ * performs it.  Declared as one value so the two cannot invert; see the use
+ * site for why the order of the pair is what matters.
+ */
+const DELAYED_ELEMENT_TIMEOUT = 30_000;
+
 describe("DOM automation (integration)", { timeout: INSTALL_TEST_TIMEOUT_MS }, () => {
   let chromium: ChromiumInstance;
   let client: CDPClient;
@@ -70,17 +77,49 @@ describe("DOM automation (integration)", { timeout: INSTALL_TEST_TIMEOUT_MS }, (
       await waitForElement(client, "#existing", { timeout: 2000 });
     });
 
-    it("should resolve when element appears after a delay", { timeout: 15_000 }, async () => {
-      await client.evaluate(`
-        setTimeout(() => {
-          const el = document.createElement('div');
-          el.id = 'delayed';
-          document.body.appendChild(el);
-        }, 200);
-      `);
+    // 30 s is `waitForElement`'s own `DEFAULT_TIMEOUT`, so this test now holds
+    // the helper to the budget the product holds it to.  It used to pass 5 s
+    // inside a 15 s outer budget, and that 5 s expired three times on
+    // windows-latest in four days (#936) -- a floor rather than a count, since a
+    // windows failure nobody re-ran leaves nothing an attempts query can see.
+    // 5 s was also below every call site in the product -- the lowest budget any
+    // of them allows is 10 s -- so the test was failing the helper on a deadline
+    // nothing actually asks of it.
+    //
+    // The ORDER of the two budgets is load-bearing, not just their size.  The
+    // inner one expires first, so a genuine hang still fails as `CDPTimeoutError:
+    // Timed out waiting for element "#delayed" after 30000ms`, naming both the
+    // selector and the budget -- which is what makes a recurrence readable rather
+    // than re-diagnosed.  Raising the inner budget PAST the outer would hand the
+    // deadline to vitest, whose abort names only the test; setting the two equal
+    // would race them, which is the failure the `beforeEach` above already
+    // records.  Deriving the outer from the inner keeps that ordering mechanical
+    // across future edits, and the doubled value lands on exactly the 60 s the
+    // `describe` above already declares, so nothing widens.
+    //
+    // It also discriminates on the next occurrence.  Under a contended runner a
+    // larger budget passes -- the element does appear, just late.  A 200 ms
+    // in-page timer that cannot be observed in 30 s is not a contention story at
+    // all, and would point instead at the mechanism #908 is about, where the
+    // document the install gate observed is not the one later evaluations land
+    // on.
+    it(
+      "should resolve when element appears after a delay",
+      { timeout: DELAYED_ELEMENT_TIMEOUT * 2 },
+      async () => {
+        await client.evaluate(`
+          setTimeout(() => {
+            const el = document.createElement('div');
+            el.id = 'delayed';
+            document.body.appendChild(el);
+          }, 200);
+        `);
 
-      await waitForElement(client, "#delayed", { timeout: 5000 });
-    });
+        await waitForElement(client, "#delayed", {
+          timeout: DELAYED_ELEMENT_TIMEOUT,
+        });
+      },
+    );
 
     it("should reject with CDPTimeoutError when element never appears", async () => {
       await expect(
