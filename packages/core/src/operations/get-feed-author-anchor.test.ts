@@ -2608,6 +2608,18 @@ describe("get-feed classifies a year-old relative time as a timestamp", () => {
  * is EMPTY.  Adding a shape to `FIELD_SHAPES` therefore costs nothing: both
  * readings are computed, so no one has to remember to measure the old one.
  *
+ * ## What the guard's green does NOT say
+ *
+ * The emptiness is over `FIELD_SHAPES`, not over all markup, so the guard's
+ * title states a corpus-scoped result in universal words.  Read it as the
+ * weaker claim, because baseline-right/current-wrong pairs DO exist and this
+ * file pins four of them by hand: the three chrome shapes and the `<title>`
+ * shape in the `#940` block, each asserting `BASELINE_FEED_SCRIPT` right where
+ * `SCRAPE_FEED_SCRIPT` is wrong.  They are recorded as accepted costs there
+ * rather than added to `FIELD_SHAPES`, which would turn this guard red — so
+ * the two surfaces have to be read together, and a green here is evidence
+ * about the corpus alone.
+ *
  * ## Why the baseline is frozen here rather than read from git
  *
  * The alternative was `git show <sha>:…` at test time.  It was rejected: the
@@ -3819,12 +3831,24 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     // whole of issue #940's second finding: the guard was reachable and the
     // corpus was blind to it, so its comment offered a green as evidence.
     //
-    // The declared truth is INHERITED, not invented: `B8` already commits this
-    // corpus to reading the RUN as the name when a bare-chrome wrapper precedes
-    // it, and this row changes only what that chrome says.  Hand-built like
-    // every shape here (#897 — no captured feed markup exists), and built
-    // deliberately out of the two strings `phraseContains`' own comment names,
-    // so the fixture and the claim cannot drift apart.
+    // The declared truth is INHERITED, not invented — but each half from a
+    // different place, and the delta from `B8` is wider than "different
+    // chrome".  Four things differ and all four are load-bearing: the leading
+    // field's text, the name's LENGTH (containment needs a short name), the
+    // ABSENT badge, and the OPAQUE slug (without which the read accepts and the
+    // loop is never entered).  `name` inherits from `B8`, which already commits
+    // this corpus to reading the RUN as the name when a run-less wrapper
+    // precedes it.  `headline` inherits from `F8g`'s committed rule rather than
+    // from any row's value — "A field containing the actor's own name is a
+    // headline; only the field the name was READ FROM is not" — which is what
+    // makes "Head of Widgets at Acme" the answer once the span stops at the
+    // name's own field.  Reading the leading field as CHROME rests on
+    // `nameFieldSpan`'s rule that nothing before the name is ever a headline,
+    // NOT on analogy with `B8`'s "AL"; that distinction is load-bearing here,
+    // because `F8g` declares this very string a HEADLINE when it FOLLOWS the
+    // name.  Hand-built like every shape here (#897 — no captured feed markup
+    // exists), and built deliberately out of the two strings `phraseContains`'
+    // own comment names, so the fixture and the claim cannot drift apart.
     label: "B11 short name contained in an EARLIER field than the one it is read from",
     href: "/in/x7k2m9q4/",
     children: () => [
@@ -4515,15 +4539,27 @@ describe("#860/#898 accepted costs", () => {
     // letting a candidate start elsewhere is the generalisation it refuses by
     // construction — a role, brand or nickname slug then matches the HEADLINE
     // better than the name and the two swap places, which is the regression
-    // #860 records.  Candidate fixes were enumerated, applied to the script and
-    // driven through this corpus.  Some regress committed rows — `B5` and `B6`
-    // among them, which are #903's own shapes.  Those that keep every row green
-    // are each falsified by a constructed shape whose truth is INHERITED from
-    // committed rows: they return the HEADLINE as the name under a role, brand
-    // or nickname slug, or the connection BADGE as the name under an opaque
-    // slug with a short name.  What makes those greens uninformative is that
-    // this corpus holds no role-, brand- or nickname-slugged shape in the
-    // `hiddenBareBesideRun` construction at all.
+    // #860 records.  Two candidate fixes were applied to the script and driven
+    // through this corpus, and both are NAMED here so a later reader can
+    // re-apply them rather than re-derive them — this file's own standard for
+    // an accepted cost, so that it can be overturned with evidence.
+    //
+    // (a) In `rootFields`, discard the bare text accumulated BEFORE the first
+    //     name-bearing run instead of flushing it as a field.  Measured: two
+    //     committed rows regress, `B5` and `B6`, which are #903's own shapes —
+    //     it is #903 shape 1 undone.
+    //
+    // (b) In `anchorName`, prefer the first name-like RUN of the visible root
+    //     over its first FIELD.  Measured: every row in this corpus stays
+    //     green, so the corpus cannot reject it.  It is falsified from OUTSIDE
+    //     the corpus, and the `#940 (b) falsifier` test below is that shape,
+    //     asserted rather than described: `B5`'s own construction under an
+    //     OPAQUE slug, where (b) returns the connection badge "• 1st" as the
+    //     name while the script as it stands reads "Ada Lovelace".
+    //
+    // What makes (b)'s green uninformative is that this corpus holds no
+    // opaque-slugged shape in the `hiddenBareBesideRun` construction at all —
+    // any more than it holds a role-, brand- or nickname-slugged one.
     //
     // Cost vs regression: the pinned pre-#860 baseline reads this shape
     // CORRECTLY, so this is a REGRESSION rather than a pre-existing cost.  The
@@ -4613,5 +4649,68 @@ describe("#860/#898 accepted costs", () => {
 
     expect(reversed.name).toBe("Ada Lovelace");
     expect(reversed.headline).toBe("Head of Widgets at Acme");
+
+    // The same wrapper reached by the OTHER path.  "Dr. " and "AL" arrive at
+    // the field walk as a TEXT NODE; an icon's `<title>` arrives by RECURSIVE
+    // DESCENT — `rootFields`' walk recurses into any non-leaf element and
+    // accumulates its text the same way — so this is a second mechanism, not a
+    // restatement of the three shapes above.  Issue #940 raised it and could
+    // not settle it: "the capture is silent on whether an icon carrying a
+    // `<title>`/`<desc>` would inject a field".  Measured here: it does.
+    //
+    // It is also STRICTLY WIDER than the honorific, and that is the reason to
+    // pin it separately.  The three shapes above need an OPAQUE slug to reach
+    // the decline path at all; this one regresses under a slug that
+    // corroborates the name in full, because `slugName`'s candidates must be
+    // prefixes of a region that now starts at "Verified".  The real capture
+    // `linkedin/__fixtures__/legacy/post-with-comments.html` already puts an
+    // `<svg>` inside this very `aria-hidden` wrapper, contributing whitespace
+    // only — so what stands between this and production is the icon carrying
+    // accessible text, not the markup shape.
+    const svgTitled: ScrapeInput = {
+      label: "icon <title> before the name run, same wrapper, corroborating slug",
+      href: "/in/ada-lovelace/",
+      children: () => [
+        el("span", { "aria-hidden": "true" }, [
+          el("svg", {}, [text("title", "Verified")]),
+          text("span", "Ada Lovelace"),
+        ]),
+        hiddenRun("• 1st"),
+        hiddenRun("Head of Widgets at Acme"),
+        hiddenRun("18h •"),
+      ],
+    };
+
+    expect(fieldsOf(SCRAPE_FEED_SCRIPT, svgTitled).name).toBe("Verified");
+    expect(fieldsOf(BASELINE_FEED_SCRIPT, svgTitled).name).toBe("Ada Lovelace");
+    // Confined to the name here, as in the badge-terminated variant: the badge
+    // ends the name region, so the headline survives.
+    expect(fieldsOf(SCRAPE_FEED_SCRIPT, svgTitled).headline).toBe("Head of Widgets at Acme");
+  });
+
+  it("#940 (b) falsifier: preferring the first RUN returns the connection badge as the name", () => {
+    // Candidate fix (b) from the block above, asserted rather than described.
+    // It keeps every row of this corpus green, so nothing else here can reject
+    // it; this shape can, and it is `B5`'s own construction — the polarity the
+    // corpus already commits to — given an OPAQUE slug, which is the one
+    // combination `FIELD_SHAPES` does not hold.
+    //
+    // What is asserted is the CURRENT script's answer on that shape.  That is
+    // deliberate and it is what makes this a falsifier rather than a note:
+    // apply (b) and this assertion fails, reporting "• 1st".  A reader who
+    // wants to overturn the accepted cost has to get past this line, which is
+    // the whole point of naming the candidate instead of alluding to it.
+    const b5UnderOpaqueSlug = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "B5's construction under an opaque slug",
+      href: "/in/x7k2m9q4/",
+      children: () => [
+        hiddenBareBesideRun("Ada Lovelace", "• 1st"),
+        hiddenRun("Head of Widgets at Acme"),
+        hiddenRun("18h •"),
+      ],
+    });
+
+    expect(b5UnderOpaqueSlug.name).toBe("Ada Lovelace");
+    expect(b5UnderOpaqueSlug.headline).toBe("Head of Widgets at Acme");
   });
 });

@@ -103,28 +103,38 @@ export interface RawDomPost {
  *   so a role or brand slug (`/in/head-of-widgets/`) cannot promote the
  *   headline into the name slot.  Falsified by a slug the fields do not
  *   corroborate at all — an opaque one, or a transliterated non-Latin name —
- *   and there this read declines and the anchor's own FIRST FIELD is used
- *   instead — since #903 that is `rootFields(visibleRoot(a))[0]`, which may be
- *   bare text rather than a run — so the signal degrades rather than inventing.
- *   A slug that merely omits part of the display name ("Ada Lovelace, PhD" under
- *   `/in/ada-lovelace/`) does NOT decline: it corroborates a prefix of the
- *   name's own field, and the whole field is returned.  Across a field
- *   boundary the same generosity needs evidence, because the boundary is
- *   LinkedIn's own statement that the two things are separate: a further field
- *   is taken only when it folds away to nothing, a connection badge terminates
- *   the name region, and the slug still carries characters the accepted prefix
- *   does not explain — the transliterated-surname shape ("Alex" / "Петренко"
- *   under `/in/alex-petrenko/`), which returned the given name alone until
- *   issue #902.  A further field carrying text the slug does not corroborate
- *   at all is NOT taken; see `MAX_NAME_TAIL`, whose cost is a slug too short
- *   to reach the rest of a split name.  Its accepted cost, measured rather than
- *   predicted: on the decline path that first field is whatever the wrapper
- *   renders FIRST, so leading chrome inside the name's OWN wrapper — "Dr. ", or
- *   avatar initials, before the name run — is returned AS the name, and where no
- *   badge terminates the region the real name is emitted as the HEADLINE.  A
- *   regression against the pre-#860 read, pinned rather than repaired: the
- *   opposite polarity — bare text that IS the name, beside a badge run — is the
- *   same markup, so one predicate cannot serve both (#940).
+ *   and there this read declines and the first field of the anchor's VISIBLE
+ *   root is used instead — since #903 that is `rootFields(visibleRoot(a))[0]`,
+ *   which may be bare text rather than a run, and which is NOT the anchor's own
+ *   first field when a run-less wrapper precedes it (`B8`) — so the signal
+ *   degrades rather than inventing.  A slug that merely omits part of the
+ *   display name ("Ada Lovelace, PhD" under `/in/ada-lovelace/`) does NOT
+ *   decline: it corroborates a prefix of the name's own field, and the whole
+ *   field is returned.  Across a field boundary the same generosity needs
+ *   evidence, because the boundary is LinkedIn's own statement that the two
+ *   things are separate: a further field is taken only when it folds away to
+ *   nothing, a connection badge terminates the name region, and the slug still
+ *   carries characters the accepted prefix does not explain — the
+ *   transliterated-surname shape ("Alex" / "Петренко" under
+ *   `/in/alex-petrenko/`), which returned the given name alone until issue
+ *   #902.  A further field carrying text the slug does not corroborate at all
+ *   is NOT taken; see `MAX_NAME_TAIL`, whose cost is a slug too short to reach
+ *   the rest of a split name.
+ *
+ *   The DECLINE above carries an accepted cost of its own — not
+ *   `MAX_NAME_TAIL`'s, and measured rather than predicted.  On that path the
+ *   first field is whatever the wrapper renders FIRST, so leading chrome inside
+ *   the name's OWN wrapper is returned AS the name, and where no badge
+ *   terminates the region the real name is emitted as the HEADLINE.  Three
+ *   forms of that chrome are pinned: a "Dr. " honorific and avatar initials,
+ *   which reach the field walk as a TEXT NODE, and an icon's `<title>`, which
+ *   reaches it by RECURSIVE DESCENT instead and regresses even under a
+ *   corroborating slug.  A regression against the pre-#860 read, pinned rather
+ *   than repaired: the opposite polarity — bare text that IS the name, beside a
+ *   badge run — is the same markup, so one predicate cannot serve both.  That
+ *   is measured, not argued: the two candidate fixes and the shape that
+ *   falsifies each are named and asserted in the `#940` block of
+ *   `get-feed-author-anchor.test.ts` (#940).
  * - **Author profile URL**: `href` of that same author anchor.
  * - **Author headline**: the first field that is none of a relative time, a
  *   badge that is wholly a connection degree, the actor header's own chrome, or
@@ -912,9 +922,19 @@ const SCRAPE_FEED_POSTS_SCRIPT = `(() => {
 
   // Does \`haystack\` carry \`needle\` as a whole PHRASE — bounded at both ends by
   // something that is neither a letter nor a digit?  The boundary is what keeps
-  // a short name from swallowing an unrelated headline: "Ada" occurs inside
-  // "Adaptive Systems Lead", and without the guard that headline would be
-  // discarded as the name's own field and the post would report none at all.
+  // a short name from being found in an EARLIER field than its own: "Ada"
+  // occurs inside "Adaptive Systems Lead".
+  //
+  // The DIRECTION of that was stated backwards here until #940, which said the
+  // unrelated headline "would be discarded and the post would report none at
+  // all".  \`nameFieldSpan\` withholds a LEADING span: \`from\` is 0 on all four
+  // of its exits, and \`to\` is the matched index + 1 — widened to the name
+  // region's end when a badge terminates it, never narrowed.  So matching too
+  // early makes the span too SHORT, and the field it stops short of is the
+  // name's OWN, which then wins the headline race.  A bare \`indexOf\`
+  // therefore withholds strictly FEWER fields than this does, and can only ever
+  // report a WRONG headline, never a missing one: on \`B11\` it reports the
+  // name, "Ada", in place of the real headline.
   //
   // That boundary is LOAD-BEARING, and until issue #940 nothing in the corpus
   // exercised it — which is why an earlier reading of this comment called it
