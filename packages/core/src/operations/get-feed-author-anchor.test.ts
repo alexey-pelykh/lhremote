@@ -2126,9 +2126,10 @@ describe("get-feed resolves the name from the author anchor's field sequence (#8
   //
   // KEPT DELIBERATELY, and this is the one group here that is redundant in
   // FULL: the five rows above render fixtures structurally identical to
-  // `S1`-`S5`, in that order, and assert `name` and `url` where those rows
-  // assert `headline` and `timestamp` besides -- so no mutation fails a case
-  // here without also failing its corpus row.  What the corpus cannot carry is
+  // `S1`-`S5`, in that order, and assert `name` and `url` -- both of which
+  // every one of those rows asserts too, four of the five adding `headline`
+  // and/or `timestamp` on top -- so no mutation fails a case here without also
+  // failing its corpus row.  What the corpus cannot carry is
   // this INDEX.  It is organised by SHAPE; this loop is organised by #860's
   // acceptance criteria, and AC-1 and AC-2 have no other home -- where AC-4 and
   // AC-5 below are named blocks of their own.  Deleting these would leave a
@@ -2460,13 +2461,16 @@ describe("get-feed skips actor-header chrome in the badge position", () => {
   ] as const;
 
   // KEPT DELIBERATELY, though 6 of the 14 cases this cross-product generates
-  // are redundant against the corpus: every bareP case has a row -- `R4` for
-  // "• 1st degree connection", `R8`-`R12` for the five follow / promotion
-  // tokens -- and each asserts a subset of what its row asserts.  Only the
-  // wrapP half is independent.  Dropping the bareP half means special-casing
-  // one whole dialect out of a cross-product whose point is that the token set
-  // is answered identically in BOTH, which is the claim this loop exists to
-  // make.
+  // are redundant against the corpus: SIX OF THE SEVEN bareP cases have a row
+  // -- `R4` for "• 1st degree connection", `R8`-`R12` for five of the six
+  // follow / promotion tokens -- and each asserts a subset of what its row
+  // asserts.  The independent 8 are the whole wrapP half PLUS bareP
+  // "• Following", which has no row of its own: the only corpus shape carrying
+  // that token is `R3`, a COMPANY header under a different href, name and
+  // headline.  So dropping the bareP half would not merely duplicate-trim, it
+  // would drop that case outright -- and it would also mean special-casing one
+  // whole dialect out of a cross-product whose point is that the token set is
+  // answered identically in BOTH, which is the claim this loop exists to make.
   for (const dialect of P_DIALECTS) {
     for (const token of CHROME) {
       it(`${dialect.label}: "${token}" is chrome, so the real headline survives`, () => {
