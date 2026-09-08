@@ -689,10 +689,15 @@ describe("getFeed", () => {
   it("carries a year-old post's timestamp through the whole seam", async () => {
     // `parseTimestamp` and the extractor are asserted separately, and the JOIN
     // between them -- `mapRawPosts` -- is what actually decides what a caller
-    // receives. Both halves can stay green while the seam drops the unit, so
-    // the year unit is driven end to end here as well. `mapRawPosts` is shared
-    // with `searchPosts` and `getProfileActivity`, so this covers their reads
-    // of the same field too.
+    // receives, so the year unit is driven end to end here as well. Scope the
+    // claim precisely: every mutation of the join that is NOT unit-aware --
+    // nulling the field, dropping it, mis-sourcing it, skipping the parse --
+    // also fails the `2h` seam case below, so this case does not catch that
+    // class on its own. What it does catch alone is a join fault keyed on the
+    // year unit specifically (a `=== "1y"` special case, a year-only branch);
+    // nothing else here would fail on that. `mapRawPosts` is shared with
+    // `searchPosts` and `getProfileActivity`, but this test drives only
+    // `getFeed`, so it says nothing about their reads of the same field.
     const now = Date.now();
     setupMocks([rawPost({ timestamp: "1y" })]);
 
