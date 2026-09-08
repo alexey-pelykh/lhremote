@@ -700,8 +700,10 @@ describe("getFeed", () => {
     // Those two are caught for DIFFERENT reasons, and only the second is about
     // age: a clamp does not read the unit token at all, so move its threshold
     // under two hours and the `2h` case starts failing too.  The first is
-    // genuinely unit-keyed, which is why swapping this case's `1y` for another
-    // old-enough token would not preserve it.
+    // genuinely unit-keyed, so it is the token and not the age that has to be
+    // held: swapping `1y` for a DIFFERENT unit (`1mo`) drops both of its
+    // examples, while swapping it for another year spelling (`2y`, `11yr`)
+    // still catches a year-only branch and loses only the `=== "1y"` literal.
     // `mapRawPosts` is shared with `searchPosts` and `getProfileActivity`,
     // but this test drives only `getFeed`, so it says nothing about their
     // reads of the same field.
