@@ -2123,6 +2123,18 @@ describe("get-feed resolves the name from the author anchor's field sequence (#8
   // string.  AC-2's general claim — a badge, a timestamp or a headline is NEVER
   // the name — is bought instead by the breadth of the corpus at the end of
   // this file, which grades that same claim across every shape in it.
+  //
+  // KEPT DELIBERATELY, and this is the one group here that is redundant in
+  // FULL: the five rows above render fixtures structurally identical to
+  // `S1`-`S5`, in that order, and assert `name` and `url` where those rows
+  // assert `headline` and `timestamp` besides -- so no mutation fails a case
+  // here without also failing its corpus row.  What the corpus cannot carry is
+  // this INDEX.  It is organised by SHAPE; this loop is organised by #860's
+  // acceptance criteria, and AC-1 and AC-2 have no other home -- where AC-4 and
+  // AC-5 below are named blocks of their own.  Deleting these would leave a
+  // suite in which two of #860's four reproduced criteria are traceable to a
+  // test and two are not.  The cost is the ordinary one: a behaviour change
+  // here needs the matching `S` row edited too.
   for (const shape of NAME_REPRODUCTIONS) {
     it(`#860 ${shape.ac}: ${shape.label}`, () => {
       const scraped = scrapeAuthor(anchorItem(shape.href, shape.children()));
@@ -2220,6 +2232,12 @@ describe("get-feed reads headline and timestamp from that same sequence (#898)",
     // these posts, so there is no headline and no time field to find.  Null is
     // the truth here, and asserting it is what stops the fix being "populate
     // these fields from somewhere else in the item".
+    //
+    // KEPT DELIBERATELY, and only HALF of it is redundant: the `span` pass
+    // drives `S8 single-run`'s exact fixture and asserts a subset of what that
+    // row asserts, but `S8` is span-only, so the `p` pass is this file's one
+    // single-run case in the SDUI dialect and has no row at all.  Deleting the
+    // block to keep the corpus entry would drop that dialect outright.
     for (const tag of ["span", "p"] as const) {
       const scraped = scrapeAuthor(
         anchorItem("/in/solo-author/", [nameRun(tag, "Solo Author")]),
@@ -2350,6 +2368,14 @@ describe("get-feed keeps a genuine headline that contains the actor's name", () 
     "Lovelace Analytics",
   ] as const;
 
+  // KEPT DELIBERATELY, though 3 of the 16 cases this cross-product generates
+  // are redundant against the corpus: bareP "Ada Lovelace Consulting" is `R1`,
+  // bareP "Ada Lovelace | Speaker & Author" is `R2`, and wrapP "Founder at Ada
+  // Lovelace Studio" is `R6`, each asserting a subset of what its row asserts.
+  // Dropping them means special-casing three cells, which turns the rule this
+  // loop states -- every eponymous headline in every dialect -- into a
+  // hand-maintained exclusion list that would itself go stale.  The remaining
+  // 13 are independent.
   for (const dialect of P_DIALECTS) {
     for (const headline of EPONYMOUS) {
       it(`${dialect.label}: "${headline}" is the headline, not null`, () => {
@@ -2433,6 +2459,14 @@ describe("get-feed skips actor-header chrome in the badge position", () => {
     "• 1st degree connection",
   ] as const;
 
+  // KEPT DELIBERATELY, though 6 of the 14 cases this cross-product generates
+  // are redundant against the corpus: every bareP case has a row -- `R4` for
+  // "• 1st degree connection", `R8`-`R12` for the five follow / promotion
+  // tokens -- and each asserts a subset of what its row asserts.  Only the
+  // wrapP half is independent.  Dropping the bareP half means special-casing
+  // one whole dialect out of a cross-product whose point is that the token set
+  // is answered identically in BOTH, which is the claim this loop exists to
+  // make.
   for (const dialect of P_DIALECTS) {
     for (const token of CHROME) {
       it(`${dialect.label}: "${token}" is chrome, so the real headline survives`, () => {
@@ -2478,6 +2512,10 @@ describe("get-feed skips actor-header chrome in the badge position", () => {
   // merely intended: an unanchored match would eat both of these.
   const NOT_CHROME = ["Following the Money at Acme", "Premium Support Lead"] as const;
 
+  // KEPT DELIBERATELY: "Following the Money at Acme" is `R5`, which asserts
+  // `timestamp` and `url` besides.  The pair is the claim -- a chrome word
+  // opening a headline, and a chrome word inside one -- so removing the first
+  // half leaves a single example standing for a two-sided rule.
   for (const headline of NOT_CHROME) {
     it(`"${headline}" is a headline, not chrome`, () => {
       const scraped = scrapeAuthor(
@@ -2519,6 +2557,10 @@ describe("get-feed classifies a year-old relative time as a timestamp", () => {
   // remained unhandled, so "1y •" became the HEADLINE and the timestamp was
   // null.  `parseTimestamp` in the same module accepts both units too, so the
   // token this now emits is one the parser reads rather than drops.
+  // KEPT DELIBERATELY: the "1y" case is `R7`, which asserts `url` besides.  It
+  // is the anchor of the set the other three widen from one unit spelling to
+  // four, so dropping it would leave the loop testing only the variants of a
+  // case it no longer states.
   for (const token of ["1y", "2y", "1yr", "11yr"] as const) {
     it(`"${token} •" is the timestamp, not the headline`, () => {
       const scraped = scrapeAuthor(
