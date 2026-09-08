@@ -106,6 +106,37 @@ describe("extraction errors surfaced through MCP", () => {
     expect(text).toContain("the search legitimately matched nothing");
   });
 
+  /**
+   * The extraction-time refusal cause (#923).  This is the case the whole
+   * item turns on: the class's own message asserts *no adapter matched*, and
+   * at an extraction-time raise the readiness gate has already established
+   * that one did — so the agent reading this response is being told the half
+   * of ADR-008 § 5's criterion that is NOT the reachable one, unless the
+   * cause reaches it.
+   *
+   * The cause text is a SHAPE FIXTURE, shortened from the production string.
+   * That wording is pinned where it is built, in the core package's
+   * `dom-variant.test.ts`, and its attachment at each site in that site's own
+   * suite; this asserts only that such a cause reaches the tool response.
+   */
+  it("carries the extraction-time refusal's second reading", () => {
+    const text = textOf(
+      new DOMVariantUnsupportedError("reactions-modal", ["sdui", "legacy"], {
+        cause: new Error(
+          "Resolved no reactions-modal root. That surface's readiness gate " +
+            "went green earlier in this operation. So the message above " +
+            "states one of TWO readings: that no adapter matches, OR that " +
+            "the adapter which claimed it resolved neither its own `scopes` " +
+            "candidates nor its own resolver.",
+        ),
+      }),
+    );
+
+    expect(text).toContain("register an adapter");
+    expect(text).toContain("Caused by: Resolved no reactions-modal root.");
+    expect(text).toContain("nor its own resolver");
+  });
+
   it("is flagged as an error rather than returned as success", () => {
     const result = mcpCatchAll(
       new DOMVariantUnsupportedError("post-detail", []),

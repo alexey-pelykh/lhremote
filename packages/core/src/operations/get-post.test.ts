@@ -36,6 +36,7 @@ import {
   DOMVariantUnsupportedError,
   ExtractionFailedError,
 } from "../services/errors.js";
+import { unreadableAfterReadinessCause } from "../linkedin/dom-variant.js";
 import { getPost } from "./get-post.js";
 
 describe("getPost", () => {
@@ -260,6 +261,33 @@ describe("getPost", () => {
     await expect(rejection).rejects.toThrow(DOMVariantUnsupportedError);
     await expect(rejection).rejects.toThrow(
       /No DOM adapter matched the post-detail page/,
+    );
+  });
+
+  it("attaches the disjunction its own message cannot state (#923)", async () => {
+    // The message asserts *no adapter matched*.  `waitForPostLoad` went green
+    // moments earlier, and that gate passes only when exactly one adapter's
+    // detect anchor matched — so the reachable reading here is the OTHER half
+    // of ADR-008 § 5's criterion, and only the `cause` can say so.
+    //
+    // The whole message is pinned, and against the producer rather than a
+    // look-alike literal: a substring would let a producer append page
+    // content unnoticed (ADR-008 § 2026-09-04 Amendment), and a literal would
+    // strand a stale expectation the next time the wording moves.  The
+    // falsifier that defines this pin: delete `{ cause: … }` from this site
+    // and exactly this test goes red.
+    setupMocks({ postDetail: null });
+
+    const error = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(DOMVariantUnsupportedError);
+    const cause = (error as DOMVariantUnsupportedError).cause;
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe(
+      unreadableAfterReadinessCause("post-detail").message,
     );
   });
 

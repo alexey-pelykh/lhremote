@@ -37,6 +37,7 @@ export {
   SEARCH_RESULT_CARD_MENU_BUTTON,
   type SearchResultsVariantAdapter,
   type Surface,
+  unreadableAfterReadinessCause,
   type VariantAdapter,
   type VariantDetection,
   variantNamesFor,

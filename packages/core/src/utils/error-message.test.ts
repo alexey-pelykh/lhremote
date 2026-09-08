@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Oleksii PELYKH
 
 import { describe, expect, it } from "vitest";
-import { formatVariantProbes } from "../linkedin/dom-variant.js";
+import {
+  formatVariantProbes,
+  type Surface,
+  unreadableAfterReadinessCause,
+} from "../linkedin/dom-variant.js";
 import {
   DOMVariantAmbiguousError,
   DOMVariantUnsupportedError,
@@ -375,5 +379,35 @@ describe("errorMessage on the errors the readiness gates raise", () => {
     expect(rendered).toContain("TWO readings");
     expect(rendered).toContain("the search legitimately matched nothing");
     expect(rendered).toContain("sdui: 0, legacy: 0");
+  });
+
+  /**
+   * The extraction-time refusal cause (#923) — the longest this codebase
+   * produces, and the one `MAX_CAUSE_LENGTH` is sized against.
+   *
+   * Pinned END TO END, un-elided, rather than by asserting a character
+   * count: the bound and the producer are in different modules and neither
+   * imports the other, so a cause that grew past it would truncate a
+   * diagnosis at the one surface that exists to carry it, and nothing else
+   * would notice.  `…` is what elision leaves behind.
+   */
+  it("renders the extraction-time refusal cause without eliding it", () => {
+    for (const surface of [
+      "post-detail",
+      "search-results",
+      "reactions-modal",
+    ] satisfies readonly Surface[]) {
+      const cause = unreadableAfterReadinessCause(surface);
+      const rendered = errorMessage(
+        new DOMVariantUnsupportedError(surface, ["sdui", "legacy"], { cause }),
+      );
+
+      expect(rendered, surface).toContain("register an adapter");
+      expect(rendered, surface).toBe(
+        `No DOM adapter matched the ${surface} page (tried: sdui, legacy). ` +
+          "LinkedIn has changed its markup — register an adapter for the new " +
+          `variant.\nCaused by: ${cause.message}`,
+      );
+    }
   });
 });

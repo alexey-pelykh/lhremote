@@ -18,6 +18,8 @@ import {
   KNOWN_DOM_VARIANTS,
   type PostDetailVariantAdapter,
   SEARCH_RESULT_CARD_MENU_BUTTON,
+  type Surface,
+  unreadableAfterReadinessCause,
   variantNamesFor,
 } from "./dom-variant.js";
 
@@ -2791,6 +2793,67 @@ describe("reactions-modal emitted-source escaping", () => {
     // emitted source, including the ones no fixture reaches.
     for (const [name, source] of Object.entries(sources)) {
       expect(() => new Function(source), `${name} does not parse`).not.toThrow();
+    }
+  });
+});
+
+/**
+ * The disjunction ADR-008 § 5 fires this class on, said where the class's own
+ * message cannot say it (#923).
+ *
+ * The message asserts only *no adapter matched*; four assertions pin that
+ * wording and § 5 assigns the same operator action to both halves, so the
+ * remedy is the `cause` rather than a reword — the move ADR-008 § Decision 4
+ * already settled for the search-results gate.  What is graded here is the
+ * text itself; that each site attaches it is graded at each site.
+ */
+describe("unreadableAfterReadinessCause", () => {
+  const surfaces: readonly Surface[] = [
+    "post-detail",
+    "search-results",
+    "reactions-modal",
+  ];
+
+  it("names both readings on every surface, neither presented as settled", () => {
+    // Every surface, not only the two that have a call site today: the record
+    // behind this is total over `Surface` so a new surface must state its own
+    // stage count, and an entry that named no second reading would satisfy
+    // that type check while saying nothing.
+    for (const surface of surfaces) {
+      const { message } = unreadableAfterReadinessCause(surface);
+
+      expect(message, surface).toContain("TWO readings");
+      // Reading 1 — what the class's own message asserts, here qualified by
+      // what the readiness gate already established.
+      expect(message, surface).toContain("no adapter matches");
+      expect(message, surface).toContain("changed dialect since that gate");
+      // Reading 2 — the half the message cannot state.
+      expect(message, surface).toContain("the adapter which claimed it");
+      // And the instrument that separates them, which is gated.
+      expect(message, surface).toContain("LHREMOTE_CAPTURE_DIAGNOSTICS=1");
+    }
+  });
+
+  it("names every stage the reactions modal has, not just its scopes", () => {
+    // ADR-008 § 5: that surface resolves through its own `scopes` candidates
+    // AND then its own resolver, and BOTH must miss before this class is
+    // raised — so a cause naming only `scopes` sends a reader to repair the
+    // stage that was not the one that missed.
+    const { message } = unreadableAfterReadinessCause("reactions-modal");
+
+    expect(message).toContain("`scopes` candidates");
+    expect(message).toContain("nor its own resolver");
+  });
+
+  it("names one stage where the surface has one", () => {
+    // The inverse, and not redundant: a cause that named a resolver on post
+    // detail would send a reader to look for a stage that does not exist
+    // there.  The stage count is a property of the surface.
+    for (const surface of ["post-detail", "search-results"] as const) {
+      expect(
+        unreadableAfterReadinessCause(surface).message,
+        surface,
+      ).not.toContain("resolver");
     }
   });
 });
