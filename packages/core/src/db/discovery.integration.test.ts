@@ -68,6 +68,14 @@ describe("discovery (integration)", () => {
 
   afterAll(() => {
     vi.restoreAllMocks();
+    // `vi.stubGlobal` survives both reset and restore, so the `process` stub in
+    // `beforeAll` above otherwise outlives this file (#935).  Released here and
+    // not in an `afterEach`, deliberately: that stub is installed once and is
+    // meant to hold for the whole file — every test below reads the linux
+    // layout — so releasing it per test breaks four of the nine.  Same
+    // exception class as the module-scope `WebSocket` stub in
+    // `cdp/client.test.ts`, one hook further out.
+    vi.unstubAllGlobals();
     rmSync(tmpBase, { recursive: true, force: true });
   });
 
