@@ -426,6 +426,14 @@ describe("reactToPost", () => {
         reactToPost({ postUrl: POST_URL, cdpPort: 9222 }),
       ).rejects.toThrow(BudgetExceededError);
 
+      // `gateOnLoggedInState` is named FIRST because it is the step this
+      // assertion is blindest to. It is module-mocked here, so the target
+      // discovery and CDP connections it performs internally
+      // (`InstanceService.connect`) never run — which means the four
+      // assertions below all hold with the budget check moved after it, and
+      // the refusal would have cost a CDP session anyway. Measured: without
+      // this line, relocating the call past the gate leaves 27 of 27 green.
+      expect(gateOnLoggedInState).not.toHaveBeenCalled();
       expect(discoverTargets).not.toHaveBeenCalled();
       expect(mockClient.connect).not.toHaveBeenCalled();
       expect(mockClient.navigate).not.toHaveBeenCalled();
