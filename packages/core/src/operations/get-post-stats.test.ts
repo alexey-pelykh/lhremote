@@ -25,6 +25,7 @@ import { CDPClient } from "../cdp/client.js";
 import {
   DOMVariantAmbiguousError,
   DOMVariantUnsupportedError,
+  ExtractionFailedError,
 } from "../services/errors.js";
 import {
   adaptersFor,
@@ -245,8 +246,19 @@ describe("getPostStats", () => {
   });
 
   it("handles zero counts gracefully", async () => {
+    // `countsRootNarrowed: false` is what makes this the LEGAL empty rather
+    // than the contradicted one (#852), and it is stated rather than left to
+    // the field's absence: on a captured legacy page with no engagement the
+    // counts row is simply not there (`socialCounts: 0`), and on `sdui` the
+    // adapter declares `counts: []` so the flag can never be anything else.
     setupMocks({
-      postStats: { reactionCount: 0, commentCount: 0, shareCount: 0 },
+      postStats: {
+        variant: "legacy",
+        reactionCount: 0,
+        commentCount: 0,
+        shareCount: 0,
+        countsRootNarrowed: false,
+      },
     });
 
     const result = await getPostStats({
@@ -374,6 +386,63 @@ describe("getPostStats", () => {
       buildPostDetailExtractionSource(adaptersFor("post-detail")),
     );
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // #852 — an all-zero read is corroborated against the row it was read from
+  //
+  // The gate `getPostStats` waits on polls the selected adapter's author link,
+  // which attests a different REGION of the page from the one this operation
+  // reads.  Requiring the counts row AT THE GATE is refuted rather than
+  // untried: `__fixtures__/legacy/post-zero-comments` is a captured page whose
+  // readiness predicate returns `true` with `socialCounts: 0`, so a gate
+  // demanding that row would poll to the deadline on every post with no
+  // engagement.  What is decidable is the pairing, and it is decided here.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  it("refuses an all-zero read the counts row contradicts", async () => {
+    setupMocks({
+      postStats: {
+        variant: "legacy",
+        reactionCount: 0,
+        commentCount: 0,
+        shareCount: 0,
+        countsRootNarrowed: true,
+      },
+    });
+
+    const rejection = getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+    await expect(rejection).rejects.toThrow(ExtractionFailedError);
+    // The dialect the SCRIPT reported, and the terms an operator needs to act:
+    // which field to repair, and what contradicted its emptiness.
+    await expect(rejection).rejects.toThrow(
+      /adapter "legacy" .*field "engagementCounts" came back empty while countsRoot=rendered/,
+    );
+  });
+
+  it.each([
+    ["reactions", { reactionCount: 2, commentCount: 0, shareCount: 0 }],
+    ["comments", { reactionCount: 0, commentCount: 41, shareCount: 0 }],
+    ["reposts", { reactionCount: 0, commentCount: 0, shareCount: 1 }],
+  ])(
+    "returns a read the row corroborates through %s alone",
+    async (_label, counts) => {
+      // Any one counter reading non-zero proves the patterns still match this
+      // row, so the check is on the SUM.  Per-counter it would report a post
+      // carrying comments but no reactions as a stale-counter failure — the
+      // ordinary shape of most posts.
+      setupMocks({
+        postStats: { variant: "legacy", ...counts, countsRootNarrowed: true },
+      });
+
+      const result = await getPostStats({
+        postUrl: POST_URL,
+        cdpPort: CDP_PORT,
+      });
+
+      expect(result.stats).toMatchObject(counts);
+    },
+  );
 
   it("never reads the counts off the whole page body", async () => {
     // The defect itself, stated independently of the builder above so that it

@@ -561,6 +561,94 @@ describe("DOM variant adapters (integration)", { timeout: INSTALL_TEST_TIMEOUT_M
       expect(result.commentCount).toBe(41);
     });
 
+    // ─────────────────────────────────────────────────────────────────────
+    // #852 — `countsRootNarrowed`, the flag the corroboration check consults.
+    //
+    // The captured legacy fixtures grade it against real markup
+    // (`fixture-oracle.integration.test.ts`), which is the stronger tier and
+    // the one that grounds the rule.  What they cannot reach is the `sdui`
+    // arm: no SDUI page has been captured, and it is the arm that decides
+    // whether the check can ever fire on that dialect.
+    // ─────────────────────────────────────────────────────────────────────
+
+    it("reports the counts root as narrowed when the declared row resolves", async () => {
+      await buildPage([LEGACY_CONTAINER]);
+      await client.evaluate(`(() => {
+        const container = document.querySelector('[data-urn^="urn:li:activity:"]');
+        const row = document.createElement('div');
+        row.className = 'social-details-social-counts';
+        const reactions = document.createElement('button');
+        reactions.setAttribute('aria-label', '2 reactions');
+        reactions.textContent = '2';
+        const comments = document.createElement('button');
+        comments.textContent = '41 comments';
+        row.appendChild(reactions);
+        row.appendChild(comments);
+        container.appendChild(row);
+        return true;
+      })()`);
+
+      const result = await client.evaluate<{ countsRootNarrowed: boolean }>(
+        script,
+      );
+
+      expect(result.countsRootNarrowed).toBe(true);
+    });
+
+    it("reports the counts root as unnarrowed when no declared row resolves", async () => {
+      // The legal-empty shape: `post-zero-comments` renders no counts row at
+      // all, and this is what the extraction says about such a page.  Without
+      // it the corroboration check would fire on every post with no
+      // engagement.
+      await buildPage([LEGACY_CONTAINER]);
+
+      const result = await client.evaluate<{ countsRootNarrowed: boolean }>(
+        script,
+      );
+
+      expect(result.countsRootNarrowed).toBe(false);
+    });
+
+    it("reports an sdui counts root as unnarrowed even beside a rendered row", async () => {
+      // `counts: []` is a recorded absence of measurement, not a decision that
+      // no row exists — so the flag stays false however the page renders, and
+      // the corroboration check is unreachable on this dialect.  Stated as a
+      // test rather than only in prose because it is what bounds the fix: the
+      // legacy row below is present, matched by a selector the OTHER adapter
+      // declares, and still does not narrow this one.
+      await buildPage([SDUI_CONTAINER]);
+      await client.evaluate(`(() => {
+        const container = document.querySelector('[componentkey^="expanded"]');
+        const row = document.createElement('div');
+        row.className = 'social-details-social-counts';
+        const comments = document.createElement('button');
+        comments.textContent = '41 comments';
+        row.appendChild(comments);
+        container.appendChild(row);
+        return true;
+      })()`);
+
+      // Guard on the premise, or the false below is vacuous: the row really is
+      // on the page and really is inside the selected adapter's scope.
+      expect(
+        await client.evaluate<boolean>(
+          `document.querySelector('[componentkey^="expanded"] .social-details-social-counts') !== null`,
+        ),
+      ).toBe(true);
+
+      const result = await client.evaluate<{
+        countsRootNarrowed: boolean;
+        commentCount: number;
+      }>(script);
+
+      expect(result.countsRootNarrowed).toBe(false);
+      // And the counter is still READ — the flag gates only the loose
+      // fallback, so an unnarrowed root is a precision loss, never a blind
+      // one.  A `0` here would mean this dialect returns zeroes for a page
+      // that plainly renders 41, which is the defect, not the fix.
+      expect(result.commentCount).toBe(41);
+    });
+
     it("ignores a counter rendered outside the selected adapter's scope", async () => {
       // The whole-page read took the first "<N> comments"-shaped run anywhere
       // in the document, chrome and sibling modules included.  A count from
