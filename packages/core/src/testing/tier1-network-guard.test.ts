@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 /**
  * The guard in `vitest.setup.ts` is what stops a Tier-1 suite depending on
@@ -233,60 +241,120 @@ describe("Tier-1 diagnostic-capture pin", () => {
 });
 
 /**
- * The third property this file grades, and the only one that is about neither
- * guard's contents but about its SURVIVAL: that a suite which displaces a
- * guard gets it back before the next test runs.
+ * The third property this file grades, and the only one about a guard's
+ * SURVIVAL rather than its contents: that a suite which displaces a guard gets
+ * it back before the next test runs.
  *
  * `vi.stubGlobal` is undone by neither `vi.resetAllMocks()` nor
  * `vi.restoreAllMocks()` — only `vi.unstubAllGlobals()`, or the `unstubGlobals`
- * config key this repo deliberately does not set (it fires from the runner's
- * `onBeforeTryTask`, i.e. before every test attempt, so it would tear down the
- * module-scope `WebSocket` stub `cdp/client.test.ts` holds on purpose).  A
- * suite that stubs `fetch` and never releases it therefore replaces the guard
- * for the remainder of its file, and the replacement fails open and silently:
- * the guard both throws and records, and the drain hooks fail the test on a
- * surviving recording, but a leftover `vi.fn()` does neither — after a reset it
- * returns `undefined`, and `await undefined` resolves (#935).
+ * config key this repo deliberately does not set: vitest runs it from
+ * `onBeforeTryTask`, before every test attempt, so it would tear down the
+ * module-scope `WebSocket` stub `cdp/client.test.ts` holds on purpose.  A suite
+ * that stubs `fetch` and never releases it therefore replaces the guard for the
+ * rest of its file, and the replacement fails open and silently (#935).
  *
- * The two tests below are deliberately IDENTICAL and deliberately
- * order-INdependent, which is the whole design.  Each displaces the guard
- * itself and asserts the guard is live at its own entry, so whichever runs
- * second is the one grading the `afterEach` — and no ordering can change that
- * one of them runs second.  Contrast the pair at the end of the suite above,
- * which needs its two members adjacent and in order: #937 wants
- * `sequence.shuffle` on by default and already names THAT pair as a blocker, so
- * a second ordered pair here would deepen the hole that issue has to dig out
- * of.  Measured both ways: with the `afterEach` below these pass at seeds 909,
- * 1, 42 and 1234; with it deleted, one of them fails at every one of those
- * seeds.
+ * WHAT THIS DOES NOT COVER, stated because a green here reads as if it did:
+ * these tests grade THIS file's own hooks.  Delete the `vi.unstubAllGlobals()`
+ * from `cdp/discovery.test.ts` tomorrow and every test below stays green —
+ * nothing here reaches into another suite.  The enforcement for that is
+ * `.github/instructions/tests.instructions.md`, a review rule, not a test.
+ *
+ * The pair is deliberately SYMMETRIC rather than ordered: each test displaces
+ * the guard itself and asserts it is live at its own entry, so whichever runs
+ * second grades the `afterEach`, and no ordering can change that one of them
+ * runs second.  That matters beyond tidiness — #937 wants `sequence.shuffle` on
+ * by default and already names this file as its blocker for the ORDERED pair in
+ * the suite above, so a second ordered pair would deepen the hole that issue has
+ * to dig out of.  The `afterAll` count is what makes symmetry sufficient; it is
+ * offered to #937 as a template for replacing that pair's `dirtiedByPreviousTest`
+ * order flag, since a cardinality assertion needs neither ordering nor a scoped
+ * shuffle exemption.
  */
 describe("Tier-1 guard release between tests", () => {
+  /**
+   * How many of the pair actually ran.  Symmetry alone does not save this suite
+   * from the failure the pin's pair documents above: `vitest run -t` on one
+   * member executes it ALONE, nothing displaced the guard beforehand, the entry
+   * assertion is satisfied by the pristine guard, and it passes whether or not
+   * the `afterEach` exists.  Measured — it does, which is why this counter is
+   * here rather than a comment saying it should be.
+   */
+  let entriesObserved = 0;
+
   afterEach(() => {
-    // The line under test.  Every suite in the repo that stubs a global calls
-    // this; `services/app.test.ts` was the first (#934).
+    // The line under test.
     vi.unstubAllGlobals();
   });
 
-  it.each([1, 2])(
-    "has the guard back at entry, whatever ran before it (%i)",
-    async () => {
-      // The assertion that goes red when the release is dropped: the sibling
-      // test displaced the guard too, so reaching this line with a live guard
-      // is only possible if something put it back in between.
-      expect(() => fetch("http://127.0.0.1:9222/json/list")).toThrow(
-        "http://127.0.0.1:9222/json/list",
-      );
-      expect(guard().drain()).toHaveLength(1);
+  afterAll(() => {
+    expect(
+      entriesObserved,
+      "both members of this pair must run: each is the other's predecessor, " +
+        "so with only one of them the entry assertion grades nothing. Run the " +
+        "whole file rather than a `-t` filter — either order is fine.",
+    ).toBe(2);
+  });
 
-      // Displace it exactly as `cdp/discovery.test.ts` and
-      // `utils/cdp-port.test.ts` do, so this test actually leaves a stub behind
-      // for the `afterEach` to clear rather than asserting into an empty room.
-      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
-      await expect(fetch("http://127.0.0.1:9222/json/list")).resolves.toEqual({
-        ok: true,
-      });
-      // Nothing recorded — the guard is genuinely gone, not merely quiet.
-      expect(guard().drain()).toHaveLength(0);
-    },
-  );
+  /**
+   * Shared body, called from two longhand `it()`s rather than written as an
+   * `it.each`.  The COUNT is the mechanism here — two is the minimum that puts
+   * one of them second — and a data-driven form invites trimming to one or
+   * padding to three, both of which break the `afterAll` above.
+   */
+  async function displaceAndAssertRestored(): Promise<void> {
+    entriesObserved += 1;
+
+    // The assertion that goes red when the release is dropped.  When it does
+    // fail, the body aborts before its own `drain()` below, so the setup file's
+    // drain hook reports a second failure on the same test: two reds, one cause.
+    expect(() => fetch("http://127.0.0.1:9222/json/list")).toThrow(
+      "http://127.0.0.1:9222/json/list",
+    );
+    expect(guard().drain()).toHaveLength(1);
+
+    // Displace it exactly as `cdp/discovery.test.ts` and `utils/cdp-port.test.ts`
+    // do, so this test leaves a real stub behind for the `afterEach` to clear
+    // rather than asserting into an empty room.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    await expect(fetch("http://127.0.0.1:9222/json/list")).resolves.toEqual({
+      ok: true,
+    });
+    // Nothing recorded — the guard is genuinely gone, not merely quiet.
+    expect(guard().drain()).toHaveLength(0);
+  }
+
+  it("has the guard back at entry, whatever ran before it (first)", async () => {
+    await displaceAndAssertRestored();
+  });
+
+  it("has the guard back at entry, whatever ran before it (second)", async () => {
+    await displaceAndAssertRestored();
+  });
+});
+
+/**
+ * A separate property from the pair above, and separate from it on purpose: it
+ * needs no predecessor, so it is non-vacuous under a `-t` filter and must not
+ * sit under that suite's cardinality assertion.
+ *
+ * What it grades is the IDENTITY of what comes back.  `vitest.setup.ts` installs
+ * the guard by plain assignment (its § 3), so `vi.stubGlobal` saves THE GUARD as
+ * the original and `vi.unstubAllGlobals()` puts THE GUARD back — not the
+ * platform's own `fetch`.  Convert that install to `vi.stubGlobal` and this test
+ * fails pointing at the install decision, where the pair above would fail
+ * complaining about a leaked stub.
+ */
+describe("Tier-1 guard restore identity", () => {
+  it("puts back this guard, not the platform's own fetch", () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    vi.unstubAllGlobals();
+
+    expect(() => fetch("http://127.0.0.1:9222/json/list")).toThrow(
+      "http://127.0.0.1:9222/json/list",
+    );
+    // Reaching a recording at all also shows the test handle survived: it is
+    // plain-assigned too (not stubbed), so `unstubAllGlobals` cannot delete it.
+    // Convert the handle to a stub and `guard()` throws here instead.
+    expect(guard().drain()).toHaveLength(1);
+  });
 });
