@@ -7,24 +7,31 @@
 // inside `runStdioBin`, because a static import here is evaluated before the
 // catch below exists and a throw during that evaluation escapes into the ESM
 // loader (#959).  Adding an `import` at the top of this file silently re-opens
-// that hole; see {@link runStdioBin}.
+// that hole; see {@link runStdioBin}.  The same applies to
+// `packages/mcp/src/index.ts`, which is why it imports this module and nothing
+// else — and which no test can guard, since importing it starts the server.
 
 /**
  * Written when nothing renders a message, so a non-zero exit is never silent.
  *
- * `errorMessage` renders `""` for an `Error` carrying an empty message and for
- * a prototype-less rejection value, and it renders the value UNTRIMMED for
- * anything that is not an `Error` — so a rejected `"   "` comes back as three
- * spaces, which is blank to a reader but not to `length`.  All measured.  Every
- * other write in `runStdioServer` that renders one of these hides the case
- * behind a prefix of its own; this one has none, so it tests what a reader
- * would see rather than what was returned.
+ * `errorMessage` renders `""` for an `Error` whose own message is empty AND
+ * that carries no renderable cause — an empty head with a live cause still
+ * renders `Caused by: …`, measured — and for a prototype-less rejection value.
+ * It renders the value UNTRIMMED for anything that is not an `Error`, so a
+ * rejected `"   "` comes back as three spaces, which is blank to a reader but
+ * not to `length`.  All measured.  Every other write in `runStdioServer` that
+ * renders one of these hides the case behind a prefix of its own; this one has
+ * none, so it tests what a reader would see rather than what was returned.
  *
- * {@link lastResortMessage} funnels into the same stand-in and does not widen
- * what it claims: it returns `""` only when the value's own text is empty or
- * when rendering it threw, both of which *are* "carried no message".  A
- * formatter that could not be loaded is not reported as one that rendered
- * nothing, because on that path there is still the error's own text to print.
+ * {@link lastResortMessage} funnels into the same stand-in, and on the
+ * degraded path this line is very slightly wider than it says: that function
+ * reads only the value's own text, so an empty head whose diagnosis lives in a
+ * `cause` reports as carrying no message when `errorMessage` would have
+ * printed the cause.  Reaching that needs the formatter to be unavailable AND
+ * such a value, and the two are close to mutually exclusive — if
+ * `@lhremote/core` failed to evaluate then `./stdio.js` failed with it, and
+ * what arrives here is the loader's own error, which carries a message.  It is
+ * recorded rather than fixed because the fix is a second formatter.
  */
 const UNREPORTABLE =
   "MCP server failed to start, and the error carried no message";
@@ -33,11 +40,13 @@ const UNREPORTABLE =
  * Render `error` using nothing this module could have failed to load.
  *
  * Reachable, not defensive padding.  `@lhremote/core` is inside the graph the
- * catch in {@link runStdioBin} now covers — `./stdio.js` imports it, and so
- * does everything under `./tools/` — so a throw while that graph evaluates is
- * caught with the formatter unavailable, and the re-import in {@link render}
- * fails identically because ESM caches a module's instantiation error and
- * re-throws it rather than re-running the module.
+ * catch in {@link runStdioBin} now covers — `./stdio.js` imports it directly,
+ * and so does all but a handful of the modules under `./tools/` — so a throw
+ * while that graph evaluates is caught with the formatter unavailable, and the
+ * re-import in {@link render} fails identically: a module that threw while
+ * evaluating keeps its evaluation error and re-throws it rather than re-running
+ * (and the sub-cases that are not evaluation errors — a resolution failure, a
+ * parse error — fail again on the same inputs).
  *
  * It renders less than `errorMessage` does and that is the whole cost of this
  * path: no `Caused by:` chain, no elision note.  Duplicating that logic here
@@ -46,15 +55,23 @@ const UNREPORTABLE =
  * names the failure; the chain is what explains it, and an unloadable module
  * has no chain worth the duplication.
  *
+ * Both branches go through `String()`, and the `Error` branch needs it as much
+ * as the other one: `message` is typed `string` but nothing enforces that at
+ * runtime, and an `Error` carrying a non-string message would otherwise be
+ * returned as-is and throw on the caller's `.trim()` — inside the catch, with
+ * no handler left, which is this bug one level up.  Measured: `errorMessage`
+ * itself throws `TypeError` on that input, which is why {@link render}'s catch
+ * covers the formatter throwing and not only failing to load.
+ *
  * `String()` is inside the `try` because it is a call, not a coercion that
  * always succeeds: it throws `TypeError` on a prototype-less value and
  * propagates whatever a hostile `toString` throws.  Returning `""` there is
  * correct rather than lossy — the value genuinely rendered no text, which is
- * exactly what {@link UNREPORTABLE} stands in for.
+ * what {@link UNREPORTABLE} stands in for.
  */
 function lastResortMessage(error: unknown): string {
   try {
-    return error instanceof Error ? error.message : String(error);
+    return String(error instanceof Error ? error.message : error);
   } catch {
     return "";
   }
@@ -65,14 +82,15 @@ function lastResortMessage(error: unknown): string {
  * {@link lastResortMessage} when the formatter is itself what failed.
  *
  * `errorMessage` is loaded here rather than at module scope for the reason the
- * header comment gives, and *inside the catch* rather than beside the server
- * load so that the success path never pays for it — `./stdio.js` pulls
+ * header comment gives, and in the *catch* rather than beside the server load
+ * so that the success path never pays for it — `./stdio.js` pulls
  * `@lhremote/core` in anyway, so on a normal start this import is a cache hit
  * that never happens.
  *
- * The `catch` covers the formatter throwing as well as failing to load.  It is
- * written not to, but this is the one function in the package whose own failure
- * has nowhere to be reported, so the guard is on the call rather than on trust.
+ * The `catch` covers the formatter throwing as well as failing to load; the
+ * non-string-message case above is a measured instance of the former.  This is
+ * the one function in the package whose own failure has nowhere to be
+ * reported, so the guard is on the call rather than on trust.
  */
 async function render(error: unknown): Promise<string> {
   try {
@@ -101,8 +119,9 @@ async function render(error: unknown): Promise<string> {
  * the MCP SDK, `zod`, `@lhremote/core` — happened before this function was
  * ever entered and produced exactly the crash dump #945 was filed against.
  * Measured on the built bin, that read forced to fail: byte-for-byte the same
- * dump the old entrypoint gave.  Both imports below are therefore dynamic, and
- * both are inside the `try`.
+ * dump the pre-#945 entrypoint gave.  Neither import below is at module scope
+ * therefore; each is inside a `try` — the server's in this function's, the
+ * formatter's in {@link render}'s, reached from this function's catch.
  *
  * The formatter is deferred for the same reason and not merely for symmetry.
  * Keeping `errorMessage` a static import would leave `@lhremote/core`'s whole
@@ -135,16 +154,19 @@ async function render(error: unknown): Promise<string> {
  *    unguarded: an EPIPE there escapes before the `process.exit(1)` beneath it
  *    runs, and arrives here as a fourth thing to absorb.  (Absorbed correctly,
  *    but the connect diagnosis is lost with the stderr that would have carried
- *    it, which is the degraded case the second bullet below describes.)
+ *    it, which is the degraded case the *third* bullet below describes — the
+ *    stderr-is-gone one, not the formatter one.)
  *
  * A `connect()` failure itself is caught and reported inside that function, so
  * it does not reach here — unless that report is what fails, which is (4).
+ * Items (3) and (4) are exclusive branches of the same `connect()` settlement,
+ * so the ordering above is the happy path's, not a total order.
  *
  * The decision, in five parts:
  *
- * - **Both imports are dynamic and both are inside the `try`.**  Nothing this
- *   module needs may be reachable from its own module scope, or the graph is
- *   uncovered again.  The header comment says so where an author adding an
+ * - **Neither import is at module scope; each is inside a `try`.**  Nothing
+ *   this module needs may be reachable from its own module scope, or the graph
+ *   is uncovered again.  The header comment says so where an author adding an
  *   `import` will see it.
  * - **Reported on stderr** through `errorMessage`, the stream and formatter
  *   `runStdioServer` already uses for both of its own failure paths — degraded
@@ -167,7 +189,12 @@ async function render(error: unknown): Promise<string> {
  *   worse failure — indistinguishable from a server running normally, which is
  *   exactly what this bin looks like when it is working.  This is also
  *   `runStdioServer`'s own idiom, which calls `process.exit` on both of its
- *   failure paths.
+ *   failure paths.  The `await` this catch now contains does not reopen that
+ *   listener's window: a dynamic import of an already-cached module settles
+ *   entirely in the microtask queue — measured, resolving ahead of a
+ *   `setImmediate` queued before it, with the same probe canaried against a
+ *   real macrotask — and microtasks drain before the loop reaches the poll
+ *   phase, so no queued request is dispatched between the failure and the exit.
  * - **Kept in this package rather than shared.**  The only home both packages
  *   already reach is `@lhremote/core`, and no non-test source under
  *   `packages/core/src/` calls `process.exit` or writes to `process.stderr` —
@@ -183,27 +210,35 @@ async function render(error: unknown): Promise<string> {
  * That last part has a cost, and this is the half of it that has to be paid
  * here: **the same contract is stated twice, and as of #959 the two statements
  * deliberately differ.**  `packages/cli/src/run.ts` is the other statement of
- * it — same stderr-and-`errorMessage` reporting, same trim-before-the-
- * emptiness-test, same guarded write, same `process.exit` over
- * `process.exitCode`, reached there for a different reason it documents
- * itself.  A fix to either *reporting* body — a new silent-value shape, a
- * change in what `errorMessage` renders — is still owed to the other.
+ * it — same stderr reporting, same trim-before-the-emptiness-test, same
+ * guarded write, same `process.exit` over `process.exitCode`, reached there
+ * for a different reason it documents itself.  The two catch bodies are no
+ * longer identical: that one calls `errorMessage` directly, this one goes
+ * through {@link render}.  A fix to either *reporting* body — a new
+ * silent-value shape, a change in what `errorMessage` renders — is still owed
+ * to the other.
  *
  * What is **not** owed, and is now the recorded divergence: the graph coverage
  * above does not exist on that side, and closing it there is a strictly larger
  * change than this one rather than a transcription of it.  `runProgram` takes
- * the program as a *parameter*, so `packages/cli/src/cli.ts` calls
- * `createProgram()` — which carries the same module-scope
- * `require("../package.json")` `./server.js` does — outside the `try`
- * altogether; covering it needs a new entry function, an edit to that bin, a
- * NEW `@lhremote/cli` export subpath (its `exports["."]` is `dist/program.js`,
+ * the program as a *parameter*, so the CLI bins call `createProgram()`
+ * themselves, outside that `try` altogether — and `packages/cli/src/program.ts`
+ * carries the same module-scope `require("../package.json")` `./server.js`
+ * does.  Covering it needs a new entry function, an edit to each bin, and a
+ * NEW `@lhremote/cli` export subpath: its `exports["."]` is `dist/program.js`,
  * so `packages/lhremote` cannot reach `run.js` today without statically
- * importing the very graph it would be deferring), and edits to
- * `packages/lhremote/src/{cli,program}.ts`.  Four files across two packages
- * and a public export surface, on a graph measured at roughly twice this
- * one's.  Tracked separately rather than done in passing; nothing mechanical
- * enforces the pairing either way, since both files carry their own green
- * suite and a one-sided edit lands green.
+ * importing the very graph it would be deferring.
+ *
+ * Read that as a gap this fix does not reach, not as one it made smaller.
+ * `packages/lhremote/src/program.ts` statically imports `@lhremote/mcp/stdio`,
+ * so the `lhremote` bin evaluates THIS package's graph at its own module scope
+ * — and `npx lhremote mcp` is the invocation the README, `packages/mcp`'s
+ * README and `.mcp.json` all give an MCP client, none of which mentions
+ * `lhremote-mcp`.  Measured with the same `require("../package.json")` fault
+ * forced: three diagnosed lines out of this bin, a full crash dump out of that
+ * one.  Tracked as #963, which covers both bins; nothing mechanical enforces
+ * the pairing either way, since both files carry their own green suite and a
+ * one-sided edit lands green.
  * (`packages/lhremote/src/cli-parity.test.ts` is not the instrument for it —
  * these two are legitimately not byte-identical.)
  */

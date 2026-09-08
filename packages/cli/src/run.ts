@@ -65,10 +65,12 @@ const UNREPORTABLE = "Command failed, and the error carried no message";
  * packages already reach is `@lhremote/core`, where no non-test source calls
  * `process.exit` or writes to `process.stderr`, and `@lhremote/mcp` must not
  * take a dependency on this package to borrow one (#945).  The two catch
- * bodies are identical: same `errorMessage` on stderr, same trim before the
- * emptiness test, same guarded write, same `process.exit` over
- * `process.exitCode` — reached there for a reason of its own, which it
- * documents.  A fix to either *reporting* body is owed to the other, and
+ * bodies share what matters: same trim before the emptiness test, same guarded
+ * write, same `process.exit` over `process.exitCode` — reached there for a
+ * reason of its own, which it documents.  They stopped being *identical* in
+ * #959: this one calls `errorMessage` directly, that one reaches it through a
+ * lazy load that degrades to a built-in rendering when the formatter is what
+ * failed.  A fix to either *reporting* body is still owed to the other, and
  * nothing mechanical enforces that: both files carry their own green suite, so
  * a one-sided edit lands green.  (`packages/lhremote/src/cli-parity.test.ts`
  * is not the instrument for it — these two are legitimately not
@@ -76,29 +78,39 @@ const UNREPORTABLE = "Command failed, and the error carried no message";
  *
  * **Where the two now deliberately differ (#959).**  That side wraps the
  * *import graph* as well as the call: its bin's only static import is a module
- * with no imports of its own, and both the server and the formatter are loaded
- * dynamically inside its `try`, so a throw at module scope under it is
- * reported rather than escaping into the ESM loader as a crash dump.  This
- * side does not do that, and the gap is real here rather than absent: a static
- * import is evaluated to completion before the importing module's body runs,
- * so a throw at module scope anywhere under `./program.js` — including the
- * `require("../package.json")` it does itself, on the same shape as the read
- * that motivated #959 — reaches Node's default handling.  It is also *wider*
- * here in a way that is this signature's doing: `runProgram` takes the program
- * as a parameter, so `createProgram()` is called by the bin, outside this
- * `try` altogether.
+ * with no imports of its own, and neither the server nor the formatter is
+ * loaded at module scope — each sits inside a `try` — so a throw while that
+ * graph evaluates is reported rather than escaping into the ESM loader as a
+ * crash dump.  This side does not do that, and the gap is real here rather
+ * than absent: a static import is evaluated to completion before the importing
+ * module's body runs, so a throw at module scope anywhere under `./program.js`
+ * — including the `require("../package.json")` it does itself, on the same
+ * shape as the read that motivated #959 — reaches Node's default handling.  It
+ * is also *wider* here in a way that is this signature's doing: `runProgram`
+ * takes the program as a parameter, so `createProgram()` is called by the bin,
+ * outside this `try` altogether.
  *
- * Recorded rather than closed, and the reason is size, not preference.  This
- * side needs a new entry function, an edit to `packages/cli/src/cli.ts`, a new
- * export subpath on this package (`exports["."]` is `dist/program.js`, so
- * `packages/lhremote` cannot reach this file without statically importing the
- * very graph it would be deferring), and edits to
- * `packages/lhremote/src/{cli,program}.ts` — four files across two packages
- * and a public export surface, on a graph measured at roughly twice the mcp
- * bin's.  Tracked as its own item rather than done in passing.  Until it
- * lands, do not read the two files as stating one contract about startup
- * coverage: they state one contract about *reporting*, and two different ones
- * about *reach*.
+ * Recorded rather than closed, and the reason is shape, not size — the CLI's
+ * graph is in fact the smaller of the two.  This side needs a new entry
+ * function, an edit to `packages/cli/src/cli.ts`, a new export subpath on this
+ * package (`exports["."]` is `dist/program.js`, so `packages/lhremote` cannot
+ * reach this file without statically importing the very graph it would be
+ * deferring), and edits to `packages/lhremote/src/{cli,program}.ts` — four
+ * files across two packages and a public export surface, where #959 moved two
+ * statements in one file.
+ *
+ * The `lhremote` bin is why this is worth more than symmetry.
+ * `packages/lhremote/src/program.ts` statically imports `@lhremote/mcp/stdio`,
+ * so that bin evaluates the whole MCP graph at module scope — and
+ * `npx lhremote mcp` is the invocation the README, `packages/mcp`'s README and
+ * `.mcp.json` all give an MCP client, none of which mentions `lhremote-mcp`.
+ * Measured with the same `require("../package.json")` fault forced: three
+ * diagnosed lines out of `lhremote-mcp`, a full crash dump out of `lhremote`.
+ * So #959's guarantee does not hold on the documented MCP entrypoint, and it
+ * is this side that owns the reason.  Tracked as #963, which covers both bins.
+ * Until it lands, do not read the two files as stating one contract about
+ * startup coverage: they state one contract about *reporting*, and two
+ * different ones about *reach*.
  */
 export async function runProgram(program: Command): Promise<void> {
   try {
