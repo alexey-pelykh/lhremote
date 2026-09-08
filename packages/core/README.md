@@ -114,7 +114,7 @@ npm install @lhremote/core
 
 ### Error Types
 
-Every error below extends one of the layer base classes — `CDPError`, `DatabaseError`, `FormatError` or `ServiceError` — each of which extends `Error`. [ADR-005](https://github.com/alexey-pelykh/lhremote/blob/main/docs/adr/005-error-hierarchy-design.md) records why the hierarchy is split per layer rather than sharing a single root.
+Four layer base classes — `CDPError`, `DatabaseError`, `FormatError` and `ServiceError` — extend `Error` directly; every other error below descends from one of them. [ADR-005](https://github.com/alexey-pelykh/lhremote/blob/main/docs/adr/005-error-hierarchy-design.md) records why the hierarchy is split per layer rather than sharing a single root.
 
 | Export | Description |
 |--------|-------------|
