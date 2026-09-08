@@ -295,9 +295,10 @@ export async function getPostStats(
       if (!raw) {
         // ADR-008 § 5's criterion has two halves — zero adapters claimed the
         // page, or the claiming adapter could not resolve its own scope — and
-        // on THIS surface only the first is reachable, for the registry reason
-        // `get-post.ts` states at the same raise and `dom-variant.test.ts`
-        // pins (#923).  Either way nothing read the page.
+        // on THIS surface only the first is reachable, for the two reasons
+        // `get-post.ts` states at the same raise — the registry shape and the
+        // single page read — both pinned in `dom-variant.test.ts` (#923).
+        // Either way nothing read the page.
         //
         // The `cause` says that outright rather than repeating the disjunction:
         // `waitForPostLoad` above went green, so a dialect DID match moments

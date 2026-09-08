@@ -2808,13 +2808,28 @@ describe("reactions-modal emitted-source escaping", () => {
  * that each site attaches it is graded at each site.
  */
 describe("unreadableAfterReadinessCause", () => {
-  const surfaces: readonly Surface[] = [
-    "post-detail",
-    "search-results",
-    "reactions-modal",
-  ];
+  /**
+   * How many of § 5's two halves each surface leaves REACHABLE.
+   *
+   * Total over `Surface` deliberately, and that totality is the whole point of
+   * the shape.  `REFUSAL_READINGS` is already a total record, so the type
+   * checker forces a new surface to add an entry — but nothing forced that
+   * entry to be GRADED.  A fourth surface could ship with post-detail's text
+   * copied onto it, telling an operator the refusal "can only mean" one thing
+   * on a surface where both halves fire, and every test below would stay
+   * green because each enumerated its own surfaces by hand.  Declaring the
+   * class HERE does not compile until the author says which one it is.
+   */
+  const READINGS_LIVE: Readonly<Record<Surface, "one" | "two">> = {
+    "post-detail": "one",
+    "search-results": "two",
+    "reactions-modal": "two",
+  };
+  const surfaces = Object.keys(READINGS_LIVE) as readonly Surface[];
+  const surfacesWith = (live: "one" | "two"): readonly Surface[] =>
+    surfaces.filter((surface) => READINGS_LIVE[surface] === live);
 
-  it("says which readings are live, per surface, and never asserts a probe", () => {
+  it("every surface names the observation, the instrument, and its limit", () => {
     for (const surface of surfaces) {
       const { message } = unreadableAfterReadinessCause(surface);
 
@@ -2835,7 +2850,10 @@ describe("unreadableAfterReadinessCause", () => {
     // cannot say which did.  On the reactions modal that holds — `detect` is
     // the trigger on the post page, `scopes` are the modal — and on search
     // results the card loop can come back empty from a resolved scope.
-    for (const surface of ["reactions-modal", "search-results"] as const) {
+    const twoReadingSurfaces = surfacesWith("two");
+    expect(twoReadingSurfaces.length).toBeGreaterThan(0);
+
+    for (const surface of twoReadingSurfaces) {
       const { message } = unreadableAfterReadinessCause(surface);
 
       expect(message, surface).toContain("TWO readings");
@@ -2843,17 +2861,26 @@ describe("unreadableAfterReadinessCause", () => {
     }
   });
 
-  it("names ONE reading on post detail, where the second cannot fire", () => {
+  it("names ONE reading where the second one cannot fire", () => {
     // The half the message asserts is the ONLY half reachable here, so the
     // cause confirms it rather than qualifying it — and converts the refusal
     // into the sharper reading the bare message cannot give.  Telling an
     // operator to go looking for stale `scopes` on this surface sends them to
     // repair selectors that are working.
-    const { message } = unreadableAfterReadinessCause("post-detail");
+    const oneReadingSurfaces = surfacesWith("one");
+    expect(oneReadingSurfaces.length).toBeGreaterThan(0);
 
-    expect(message).not.toContain("TWO readings");
-    expect(message).toContain("can only mean no adapter's detect anchor matched");
-    expect(message).toContain("the page stopped matching between the two reads");
+    for (const surface of oneReadingSurfaces) {
+      const { message } = unreadableAfterReadinessCause(surface);
+
+      expect(message, surface).not.toContain("TWO readings");
+      expect(message, surface).toContain(
+        "can only mean no adapter's detect anchor matched",
+      );
+      expect(message, surface).toContain(
+        "the page stopped matching between the two reads",
+      );
+    }
   });
 
   it("names every stage the reactions modal has, not just its scopes", () => {
@@ -2893,6 +2920,55 @@ describe("unreadableAfterReadinessCause", () => {
       expect([...members].sort(), adapter.variant).toEqual(
         [...adapter.scopes].sort(),
       );
+    }
+  });
+
+  /**
+   * The post-detail entailment's OTHER premise, pinned beside it.
+   *
+   * The registry shape above is only half of what licenses "can only mean no
+   * adapter's detect anchor matched".  It buys the entailment only while
+   * `detect` and `scopes` are read against the SAME page state — split the
+   * generated script into two `client.evaluate` calls, or land a
+   * settle-and-retry between selection and the scope loop, and a dialect flip
+   * lands in the gap.  `if (!scope) return null` becomes reachable, the
+   * registry test above stays green because the registry did not move, and
+   * the cause starts telling an operator the one thing that is now false.
+   *
+   * The premise was stated in four places and asserted in none of them.
+   */
+  it("post-detail selection and scope resolution are one page read", () => {
+    const source = buildPostDetailExtractionSource(adaptersFor("post-detail"));
+
+    // Both steps emitted into the same script...
+    expect(source).toContain("const selection = __lhSelect();");
+    expect(source).toContain("for (const candidate of adapter.scopes)");
+    // ...with nothing in it that can yield the page between them.
+    expect(source).not.toContain("await");
+  });
+
+  /**
+   * The reactions modal's mirror premise: its `detect` anchor is NOT among its
+   * scope candidates, which is what keeps its second reading reachable and so
+   * licenses that surface's cause to name TWO.
+   *
+   * The asymmetry with post detail is deliberate and load-bearing, not an
+   * accident of authoring: `detect` here is the reactions TRIGGER on the post
+   * page while `scopes` are the MODAL, so a matched trigger promises no
+   * resolvable modal root.  Register an adapter that detects on the modal
+   * wrapper itself and the second reading dies — the cause would keep naming
+   * it, sending a reader to inspect a resolver that is working.
+   */
+  it("reactions-modal detect anchors are not among its own scopes", () => {
+    const adapters = adaptersFor("reactions-modal");
+    expect(adapters.length).toBeGreaterThan(0);
+
+    for (const adapter of adapters) {
+      const members = adapter.detect.split(",").map((part) => part.trim());
+
+      for (const member of members) {
+        expect(adapter.scopes, adapter.variant).not.toContain(member);
+      }
     }
   });
 });

@@ -398,15 +398,18 @@ describe("errorMessage on the errors the readiness gates raise", () => {
       "reactions-modal",
     ] satisfies readonly Surface[]) {
       const cause = unreadableAfterReadinessCause(surface);
-      const rendered = errorMessage(
-        new DOMVariantUnsupportedError(surface, ["sdui", "legacy"], { cause }),
-      );
+      const error = new DOMVariantUnsupportedError(surface, ["sdui", "legacy"], {
+        cause,
+      });
+      const rendered = errorMessage(error);
 
+      // The message's own substance stays pinned here as a substring — the
+      // whole-output comparison below derives BOTH halves through their
+      // producers, per #883, so it grades this renderer rather than stranding
+      // a copy of a message it does not own.
       expect(rendered, surface).toContain("register an adapter");
       expect(rendered, surface).toBe(
-        `No DOM adapter matched the ${surface} page (tried: sdui, legacy). ` +
-          "LinkedIn has changed its markup — register an adapter for the new " +
-          `variant.\nCaused by: ${cause.message}`,
+        `${error.message}\nCaused by: ${cause.message}`,
       );
     }
   });
