@@ -180,6 +180,16 @@ that most needs an artifact produced none.
    > #911. No new site and no new trigger — an existing site's remaining
    > branch. Nothing above changes. See § 2026-09-06 Amendment (#911).
 
+   > **Extended on 2026-09-08** — *"`ExtractionFailedError` from cardinal
+   > corroboration"* above is read as *from corroboration*, whichever tier
+   > raises it: `getPostStats` now captures at a CONTAINER-tier raise as well
+   > (#852). No new site, no new trigger class and no new artifact name — a
+   > third branch of an existing site, reaching the helper the other two
+   > already use. What it adds is a failure SHAPE the sentence above did not
+   > cover: the two branches it describes are selection outcomes, whereas this
+   > one arrives from a WELL-FORMED record whose own region contradicts it.
+   > Nothing above changes. See § 2026-09-08 Amendment (#852).
+
 2. **Trigger-derived artifact names.** The filename rule stated in the
    2026-04-29 amendment (`navigate-to-{profile,company}-{timestamp}-{slug}`,
    where the kind tag identifies which navigator timed out) is joined by
@@ -694,6 +704,41 @@ cancellation cap, and the rule that a capture-side failure never masks the
 caller's error all carry over untouched. The capture is written before the
 `throw`, and therefore before the `finally` that disconnects the client.
 
+
+### 2026-09-08 — `getPostStats` captures at its counts-row corroboration branch (#852)
+
+A third branch of a site the § 2026-09-05 Amendment already opened, added for the same reason
+that one was: it refuses to hand back a reading of a LinkedIn page, and without this it wrote
+nothing while doing so.
+
+**What is new about it, and it is not the site.** The two branches #890 covered are *selection*
+outcomes — no adapter claimed the page, or two did — so the scrape produced no usable record.
+This one runs on a record that is entirely well-formed: an adapter claimed the page, resolved its
+scope, resolved its own engagement-counts row, and read zero out of all three counters.
+`getPostStats` raises `ExtractionFailedError` on that pairing (ADR-008 § 2026-09-08 Amendment),
+because a row LinkedIn renders only when it has something to render is contradicting the read
+taken from it.
+
+**Why that shape needs the capture more, not less.** A selection failure at least names the page's
+dialect problem in its own error. Here every input looks healthy, so the artifact is the only
+thing that can say WHICH of them was not: `variantAnchors` carries a per-selector match count for
+every declared `counts` candidate, which is precisely the layer the error implicates and the layer
+no operator can reconstruct after the fact. It is also deadline-free in the same way the other two
+are — the gate went green milliseconds earlier — so no timeout-bound capture could ever see it.
+
+**What it does NOT change.** No new trigger class: the bundle's `trigger` reads
+`extraction-failure`, the same value the sibling branches write, so the § 2026-09-01 artifact-name
+table gains no row. No new helper: it calls the same `capturePostDetailExtractionFailure` that
+moved to `wait-for-post-load.ts` for #890, from its own `catch`, before the `finally` disconnects
+the client — pinned by `get-post-stats-extraction-diagnostics.test.ts`, *"captures before the
+client disconnects on the corroboration branch"*, which exists separately from the selection
+branch's equivalent because the two capture from different call sites.
+
+**One arm deliberately writes nothing**, and it is the one that would have made this expensive: an
+all-zero read whose counts row did NOT resolve is an ordinary post with no engagement, returns
+normally, and captures nothing. Capturing there would write a bundle of LinkedIn page content — a
+personal-data artifact — on every zero-engagement post. Pinned by the same file's *"writes no
+bundle for an all-zero read the row does not contradict"*.
 ## Related
 
 - Code: `packages/core/src/operations/navigate-to-profile.ts`,
