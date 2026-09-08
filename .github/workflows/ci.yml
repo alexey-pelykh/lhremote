@@ -36,20 +36,33 @@ jobs:
       # construction, which is exactly why #942 stayed green in CI while
       # failing nightly on any developer machine at a non-zero offset.
       #
-      # Two fixed-offset zones, because the seam has two directions and each
-      # only opens for part of the day: UTC+14 has already rolled over for UTC
-      # hours 10-23, UTC-11 has not yet rolled over for hours 00-10.  Their
-      # union is every hour of every day (neither observes DST, so the windows
-      # do not move seasonally), so this step cannot pass vacuously whenever CI
-      # happens to run.
+      # Two fixed-offset zones, because the seam only opens for part of a day
+      # and which part depends on the sign of the offset: a machine at UTC+14
+      # has already rolled over for UTC hours 10-23, one at UTC-11 has not yet
+      # rolled over for hours 00-10.  Their union is every hour of every day,
+      # so the pair cannot pass vacuously whenever CI happens to run.
+      #
+      # That argument holds only while both zones resolve to the offsets it
+      # assumes, so the step asserts them rather than trusting them.  Missing
+      # tzdata makes `tzset()` fall back to UTC, which would quietly reduce
+      # this step to a second copy of the UTC run above and still exit 0; the
+      # same assertion also catches either zone acquiring DST or being
+      # re-pointed by a future tzdata release, both of which would move the
+      # windows out from under the union above.  It reads the offset through
+      # the C library because that is the resolver SQLite's `localtime`
+      # modifier calls, and only a *two-sided* fallback can pass vacuously: if
+      # just one of Node and the C library resolves the zone, the fixture and
+      # the query disagree and the test fails loudly on its own.
       #
       # Invoked as the package script rather than `pnpm test`: the root script
-      # is `turbo run test`, which would serve a cache hit from the step above
-      # and evaluate nothing.
+      # is `turbo run test` across all four packages and cannot target a single
+      # file, and only this one file is at stake here.
       #
-      # ubuntu-only: an IANA zone name in `TZ` is honoured by both Node and the
-      # C library that SQLite's `localtime` modifier calls on Linux and macOS,
-      # but not on Windows, where the two would disagree for reasons that have
+      # One platform is enough — the seam is in how the fixture derives a date,
+      # not in the OS — and ubuntu is where the rest of the coverage already
+      # runs.  It must not be Windows in any case: an IANA zone name in `TZ` is
+      # honoured by both Node and the C library on Linux and macOS, but not by
+      # the Windows CRT, where the two would disagree for reasons that have
       # nothing to do with this code.
       - name: Timezone regression guard (action-budget)
         if: matrix.os == 'ubuntu-latest'
@@ -59,11 +72,20 @@ jobs:
           # without this a failure in the first zone would be masked by a pass
           # in the second.
           set -euo pipefail
-          for tz in Pacific/Kiritimati Pacific/Midway; do
-            echo "::group::TZ=$tz"
+          for spec in Pacific/Kiritimati:+1400 Pacific/Midway:-1100; do
+            tz="${spec%%:*}"
+            want="${spec##*:}"
+            got="$(TZ="$tz" date +%z)"
+            if [ "$got" != "$want" ]; then
+              echo "::error::TZ=$tz resolved to UTC offset $got, expected $want."
+              echo "The two zones no longer cover every hour, so this step would"
+              echo "evaluate nothing rather than guard anything. Check tzdata."
+              exit 1
+            fi
+            echo "--- TZ=$tz (UTC$want) ---"
             TZ="$tz" pnpm --filter @lhremote/core test src/db/repositories/action-budget.test.ts
-            echo "::endgroup::"
           done
+
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v6
