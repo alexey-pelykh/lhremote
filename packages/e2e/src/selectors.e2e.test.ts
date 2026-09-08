@@ -179,7 +179,10 @@ describeE2E("LinkedIn selectors registry", () => {
       expect(count, `Selector "${REACTION_TRIGGER}" matched 0 elements`).toBeGreaterThan(0);
     });
 
-    it("FEED_POST_MENU_BUTTON matches at least one element", async () => {
+    // The 15 s poll below outlives vitest's 5 s default test timeout, which
+    // would abort it a third of the way through and report a timeout instead
+    // of the assertion's own message.
+    it("FEED_POST_MENU_BUTTON matches at least one element", { timeout: 30_000 }, async () => {
       // Read off the aggregate rather than imported by name: the package
       // barrel re-exports a subset of the registry and does not currently
       // include this constant.  SELECTORS is exported, so this reaches it
