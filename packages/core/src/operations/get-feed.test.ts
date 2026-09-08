@@ -195,6 +195,39 @@ describe("getFeed", () => {
     expect(post?.hashtags).toEqual(["linkedin", "tech"]);
   });
 
+  it("addresses the three-dot menu with the registry's menu-button selector", async () => {
+    // Spelled out rather than imported from the registry on purpose:
+    // importing FEED_POST_MENU_BUTTON would compare the constant with itself
+    // and pass through any change to it.  Spelled out, a change to the
+    // registry value fails HERE -- which is exactly what get-feed lacked.
+    // Its URL capture degrades silently when the selector goes stale (no
+    // match -> clicked false -> url: null, no throw), so unlike its three
+    // siblings nothing went red for it (lhremote#856).
+    const EXPECTED_MENU_BUTTON_SELECTOR =
+      '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]';
+
+    const { evaluate } = setupMocks([
+      rawPost({ url: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }),
+    ]);
+
+    await getFeed({ cdpPort: CDP_PORT, count: 1 });
+
+    const scripts = evaluate.mock.calls.map(([script]) => String(script));
+    const embedded = JSON.stringify(EXPECTED_MENU_BUTTON_SELECTOR);
+
+    // Both consumers in capturePostUrl: the scroll-into-view fallback and
+    // the indexed click.
+    expect(
+      scripts.some((script) => script.includes("scrollIntoView") && script.includes(embedded)),
+    ).toBe(true);
+
+    const clickScripts = scripts.filter((script) => script.includes("btn.click()"));
+    expect(clickScripts.length).toBeGreaterThan(0);
+    for (const script of clickScripts) {
+      expect(script).toContain(embedded);
+    }
+  });
+
   it("returns null URL when raw post has null url", async () => {
     setupMocks([rawPost({ url: null })]);
 
