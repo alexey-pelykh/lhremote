@@ -100,6 +100,14 @@ describe("getPost extraction-failure diagnostics (#835)", () => {
 
   const DETECTION = { matched: ["sdui"], probes: { sdui: 1, legacy: 0 } };
 
+  // The counts-row branch (#951) is reachable on `legacy` alone — `sdui`
+  // declares `counts: []` and so never narrows its counts root (#950) — so
+  // its bundle must report the dialect that branch can actually fire on.
+  const LEGACY_DETECTION = {
+    matched: ["legacy"],
+    probes: { sdui: 0, legacy: 1 },
+  };
+
   const CAPTURE_PROBE = {
     href: POST_URL,
     title: "Post | LinkedIn",
@@ -411,12 +419,17 @@ describe("getPost extraction-failure diagnostics (#835)", () => {
     evaluateMock.mockResolvedValueOnce(true); // readiness
     evaluateMock.mockResolvedValueOnce({
       ...CONTRADICTED_POST_DETAIL,
+      // Overrides the shared fixture's `sdui`: that adapter declares
+      // `counts: []` and can never narrow its counts root (#950), so
+      // `sdui` beside `countsRootNarrowed: true` is a record no page
+      // produces.  `legacy` is the only dialect this branch is reachable on.
+      variant: "legacy",
       reactionCount: 0,
       commentCount: 0,
       shareCount: 0,
       countsRootNarrowed: true,
     });
-    evaluateMock.mockResolvedValueOnce(DETECTION);
+    evaluateMock.mockResolvedValueOnce(LEGACY_DETECTION);
     evaluateMock.mockResolvedValueOnce(CAPTURE_PROBE);
 
     const disconnect = vi.fn();
@@ -471,6 +484,73 @@ describe("getPost extraction-failure diagnostics (#835)", () => {
     ).rejects.toThrow(ExtractionFailedError);
 
     expect(vi.mocked(writeFile)).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Drive `getPost` PAST the counts-row corroboration: the row did not
+   * resolve, so all-zero counters are an ordinary post with no engagement
+   * rather than a reading contradicting itself.
+   *
+   * Five evaluates, the whole operation: readiness, the post-detail scrape,
+   * the comment count for the load-more loop, one load-more probe reporting
+   * nothing left, and the comment scrape.
+   */
+  function setupUncontradictedCountsRow() {
+    vi.mocked(discoverTargets).mockResolvedValue([
+      {
+        id: "target-1",
+        type: "page",
+        title: "LinkedIn",
+        url: "https://www.linkedin.com/feed/",
+        description: "",
+        devtoolsFrontendUrl: "",
+      },
+    ]);
+
+    const evaluateMock = vi.fn();
+    evaluateMock.mockResolvedValueOnce(true); // readiness
+    evaluateMock.mockResolvedValueOnce({
+      ...CONTRADICTED_POST_DETAIL,
+      variant: "legacy",
+      reactionCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      countsRootNarrowed: false,
+    });
+    evaluateMock.mockResolvedValueOnce(0); // comment count for the loop
+    evaluateMock.mockResolvedValueOnce(false); // nothing left to load
+    evaluateMock.mockResolvedValueOnce([]); // comment scrape
+
+    vi.mocked(CDPClient).mockImplementation(function () {
+      return {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect: vi.fn(),
+        navigate: vi.fn().mockResolvedValue(undefined),
+        evaluate: evaluateMock,
+        send: vi.fn().mockResolvedValue({ data: "aGVsbG8=" }),
+      } as unknown as CDPClient;
+    });
+
+    return { evaluateMock };
+  }
+
+  it("writes no bundle when the counts row did not resolve", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    const { evaluateMock } = setupUncontradictedCountsRow();
+
+    // The arm that must stay silent, asserted rather than left entailed by
+    // the capture sitting inside a `catch`: an all-zero read whose row never
+    // resolved is an ordinary post with no engagement, and capturing there
+    // would write a bundle of LinkedIn page content — personal data — for
+    // every one of them.  Diagnostics are ON here, so a capture would be
+    // observed if one were written.
+    const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+    expect(result.post.commentCount).toBe(0);
+    expect(vi.mocked(writeFile)).not.toHaveBeenCalled();
+    // Five, against the refusal path's four: the operation ran to the end
+    // rather than short-circuiting somewhere quieter.
+    expect(evaluateMock).toHaveBeenCalledTimes(5);
   });
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -444,6 +444,12 @@ describe("getPost", () => {
       reactionCount: 0,
       commentCount: 0,
       shareCount: 0,
+      // Named rather than left to the `|| "unknown"` fallback: `legacy` is
+      // the only dialect that can reach this tier at all, because `sdui`
+      // declares `counts: []` and so never narrows its counts root (#950).
+      // A record built here without a variant would exercise a shape no live
+      // page produces.
+      variant: "legacy",
     };
 
     it("throws when the counts row resolved and every counter read zero", async () => {
@@ -500,6 +506,50 @@ describe("getPost", () => {
       expect(result.comments).toEqual([]);
     });
 
+    it("does NOT throw when the counts row resolved and only reposts are non-zero", async () => {
+      setupMocks({
+        postDetail: {
+          ...ZERO_COUNTERS,
+          shareCount: 7,
+          countsRootNarrowed: true,
+        },
+        comments: [],
+      });
+
+      // The sum's second term.  Sibling to the case above, and both exist
+      // because the check reads `reactionCount + commentCount + shareCount`:
+      // a mutant dropping any one term survives every case that only ever
+      // makes a DIFFERENT term non-zero.  Covered for `getPostStats` by that
+      // operation's own `it.each`, over the same shared binding — but the
+      // cross-suite dependency is invisible from here, so it is not relied on.
+      const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+      expect(result.post.shareCount).toBe(7);
+      expect(result.post.reactionCount).toBe(0);
+      expect(result.comments).toEqual([]);
+    });
+
+    it("does NOT throw when the counts row resolved and only comments are non-zero", async () => {
+      setupMocks({
+        postDetail: {
+          ...ZERO_COUNTERS,
+          commentCount: 7,
+          countsRootNarrowed: true,
+        },
+        comments: DEFAULT_COMMENTS,
+      });
+
+      // The sum's third term, and the one that cannot be posed against an
+      // empty list: `commentCount: 7` beside `comments: []` is precisely what
+      // the CARDINAL tier refuses (#834).  Supplying the comments keeps this
+      // case about the container tier and nothing else.
+      const result = await getPost({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+      expect(result.post.commentCount).toBe(7);
+      expect(result.post.reactionCount).toBe(0);
+      expect(result.comments).toHaveLength(1);
+    });
+
     it("throws even when comment loading was skipped", async () => {
       setupMocks({
         postDetail: { ...ZERO_COUNTERS, countsRootNarrowed: true },
@@ -522,9 +572,15 @@ describe("getPost", () => {
         comments: DEFAULT_COMMENTS,
       });
 
-      // Structurally out of the cardinal tier's reach: it returns early on any
-      // non-empty extraction, so a row reading zero next to a comment that was
-      // actually scraped is a contradiction only this tier can see.
+      // Pins the OUTCOME of the ADR's row 2 — a resolved-but-zero row refuses
+      // whatever the comment list would have held — and not a distinct code
+      // path.  The queued `comments` are never consumed: the refusal lands
+      // before the comment scrape runs, so this record reaches the tier
+      // exactly as the empty-list case above does.  That is itself the point
+      // of the ordering.  The cardinal tier could not reach this shape in any
+      // arrangement, because it returns early on a non-empty extraction; only
+      // the container tier can refuse it, and under this ordering it does so
+      // without ever learning whether comments exist.
       await expect(
         getPost({ postUrl: POST_URL, cdpPort: CDP_PORT }),
       ).rejects.toThrow(ExtractionFailedError);
