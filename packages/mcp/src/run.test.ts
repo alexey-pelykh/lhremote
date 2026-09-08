@@ -15,11 +15,15 @@ vi.mock("./stdio.js", () => ({ runStdioServer }));
  * program instead of testing it — which is why the rejection path lives in
  * `run.ts` and not there (#945).  This measures it.
  *
- * `runStdioServer` is mocked rather than driven for real: the genuine one
- * attaches a `data` listener to `process.stdin` and never returns under normal
- * operation, so a real call would hang the worker.  What is under test is not
- * that function — it has its own suite — but what this module does with the
- * three failures that can escape it.
+ * `runStdioServer` is mocked rather than driven for real, and not because it
+ * never returns — it resolves, once the server is serving and the signal
+ * handlers are registered, which is what the last test here pins.  It is that
+ * `StdioServerTransport.start()` has by then attached a ref'd `data` listener
+ * to `process.stdin`, and that handle would keep the worker alive.  What is
+ * under test is not that function but what this module does with the three
+ * failures that can escape it.  (`stdio.ts` itself is measured at zero — no
+ * suite drives it, in any tier.  A separate gap, named here so this file is
+ * not read as covering it.)
  */
 describe("runStdioBin", () => {
   const originalExitCode = process.exitCode;
@@ -137,10 +141,15 @@ describe("runStdioBin", () => {
     const lines = new Set<string>();
 
     for (const empty of silent) {
+      // Both handles cleared per iteration, not just `write`: asserting `exit`
+      // once after the loop would be satisfied by a regression that exited for
+      // the first value and not the rest.
       write.mockClear();
+      exit.mockClear();
       runStdioServer.mockRejectedValue(empty);
 
       await runStdioBin();
+      expect(exit).toHaveBeenCalledWith(1);
 
       // Asserted BEFORE the argument is read, and the argument is read with no
       // `String()` around it.  Both halves matter, and the reason is the same
@@ -223,15 +232,25 @@ describe("runStdioBin", () => {
  * `vi.mock` above: the mock has to differ per test, and the module under test
  * has to be evaluated fresh under each one.
  *
- * One vitest property shapes what may be asserted here.  A `vi.doMock` factory
- * that throws does NOT reject with the thrown value — vitest catches it and
- * substitutes an error of its own, whose text is about mocking and not about
- * the failure being simulated.  So a broken graph is used only where its
- * *shape* is what matters, and every case that asserts on rendered TEXT drives
- * the value through `runStdioServer` instead, which delivers it verbatim.  The
- * real loader's rendering is demonstrated against the built bin, which is the
- * only place it can be: no in-process mock reproduces an ESM instantiation
- * failure.
+ * Two vitest properties shape what is written here.
+ *
+ * A `vi.doMock` factory that throws does not reject with the thrown value:
+ * `createHelpfulError` wraps it in an error about mocking — but it assigns the
+ * original as `cause`, which `errorMessage` renders as a `Caused by:` line.  So
+ * the thrown text IS assertable through a broken graph, as long as the
+ * formatter is left intact, and the case below that does so asserts on it.
+ * Where the formatter is deliberately broken too, only the report's shape can
+ * be asserted, because `lastResortMessage` reads the head and the head is
+ * vitest's.
+ *
+ * And `vi.resetModules()` does not clear the mocker registry, so teardown has
+ * to unmock deliberately — but only one of the two specifiers.  See the
+ * `afterEach` below; getting that asymmetry wrong is what a bare shape
+ * assertion cannot see, and it cost one round here.
+ *
+ * What none of this reproduces is a real ESM instantiation failure — no
+ * in-process mock can. That was measured against the built bin and recorded in
+ * the commit, and it is not re-run by this suite.
  */
 describe("runStdioBin — import-graph coverage", () => {
   const originalExitCode = process.exitCode;
@@ -265,20 +284,34 @@ describe("runStdioBin — import-graph coverage", () => {
 
   afterEach(() => {
     process.exitCode = originalExitCode;
-    vi.doUnmock("./stdio.js");
+    // Asymmetric on purpose, and both halves were measured. `@lhremote/core`
+    // MUST be unmocked: `vi.resetModules()` does not clear the mocker
+    // registry, so a `breakFormatter()` from one test otherwise leaves the
+    // formatter broken for every test after it — which silently turns the
+    // undegraded cases into degraded ones that still pass on shape.
+    // `./stdio.js` is RE-REGISTERED rather than unmocked: unmocking it deletes
+    // the hoisted `vi.mock` on line 9 from the suite's registry for the rest of
+    // the file, and leaving this block's per-test mock standing was measured to
+    // fail the FIRST block under `--sequence.shuffle`.  Re-registering puts the
+    // file back the way it started on both counts — and it is what makes a
+    // per-test `vi.doUnmock("./stdio.js")` safe, which the causal case needs.
     vi.doUnmock("@lhremote/core");
+    vi.doMock("./stdio.js", () => ({ runStdioServer }));
     vi.resetModules();
     vi.restoreAllMocks();
   });
 
   it("evaluates with its whole graph broken, so a throw cannot outrun the catch", async () => {
-    // The structural falsifier for the entire fix, and the only test here that
-    // asserts on the *import* rather than on a call.  Restore either specifier
-    // to a static `import` at the top of `run.ts` and THIS line rejects: the
-    // module never finishes evaluating, `runStdioBin` never exists to be
-    // called, and the throw is back in the loader's hands.  Deliberately not
-    // written as "the source has no static imports" — that is a fact about
-    // text, and what has to hold is a fact about loading it.
+    // A structural falsifier for the fix, and the only test here that asserts
+    // on the *import* rather than on a call.  Restore either specifier to a
+    // static `import` at the top of `run.ts` and THIS line rejects: the module
+    // never finishes evaluating, `runStdioBin` never exists to be called, and
+    // the throw is back in the loader's hands.  Deliberately not written as
+    // "the source has no static imports" — that is a fact about text, and what
+    // has to hold is a fact about loading it.
+    //
+    // Every edit that reddens this also reddens a sibling below, so it earns
+    // its place as a statement of the invariant rather than as unique cover.
     vi.doMock("./stdio.js", () => {
       throw new Error("server graph failed");
     });
@@ -290,13 +323,42 @@ describe("runStdioBin — import-graph coverage", () => {
   });
 
   it("reports a rejecting server import rather than letting it escape", async () => {
-    // #959's own case, in the only shape a mock can produce it.  The text is
-    // vitest's, so only the report's shape is asserted; what makes this a real
-    // falsifier is the `await` above — with a static import the module load
-    // rejects and no report happens at all.
+    // #959's own case. The formatter is left intact, which is also what makes
+    // the thrown text assertable: vitest's wrapper carries it as `cause` and
+    // `errorMessage` renders the chain. Without that assertion a `render` that
+    // returned "" unconditionally would still pass — UNREPORTABLE is non-blank,
+    // newline-terminated and exits 1 like any other report.
     vi.doMock("./stdio.js", () => {
       throw new Error("server graph failed");
     });
+
+    await (await load())();
+
+    expect(write).toHaveBeenCalledTimes(1);
+    const reported = write.mock.calls[0]?.[0] as string;
+    expect(reported).toContain("server graph failed");
+    expect(reported.endsWith("\n")).toBe(true);
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+
+  it("degrades when the formatter is the module that failed, not only when told to", async () => {
+    // The causal case, and the one the arranged cases below cannot make. Only
+    // `@lhremote/core` is broken here; `./stdio.js` is REAL, so it is the
+    // genuine `import { errorMessage } from "@lhremote/core"` at the top of
+    // `stdio.ts` that fails, and `render`'s re-import then hits the same
+    // failure rather than succeeding.
+    //
+    // This is what the `lastResortMessage` docstring claims and what every
+    // other test here assumes: break the formatter and the server import
+    // breaks with it, so the degraded path is reached by cause and not by
+    // construction. If the re-import could somehow succeed, this test would
+    // report through `errorMessage` and the whole fallback would be dead code.
+    //
+    // The unmock is the whole test: without it `./stdio.js` is the hoisted
+    // mock, whose factory imports nothing, and breaking the formatter would
+    // not break the server import at all. `afterEach` re-registers it.
+    vi.doUnmock("./stdio.js");
+    breakFormatter();
 
     await (await load())();
 
@@ -308,11 +370,8 @@ describe("runStdioBin — import-graph coverage", () => {
   });
 
   it("keeps the error's own text when the formatter is what failed", async () => {
-    // The path `lastResortMessage` exists for, and the reason it is reachable
-    // rather than defensive padding: `@lhremote/core` is inside the graph the
-    // catch now covers, so its own failure arrives with the formatter
-    // unloadable.  Printing the no-message stand-in here would be a false
-    // statement about an error that plainly carried one.
+    // The path `lastResortMessage` exists for. Printing the no-message stand-in
+    // here would be a false statement about an error that plainly carried one.
     breakFormatter();
     rejectWith(new Error("EPIPE"));
 
@@ -332,12 +391,31 @@ describe("runStdioBin — import-graph coverage", () => {
     expect(exit).toHaveBeenCalledWith(1);
   });
 
+  it("survives an Error whose message is not a string", async () => {
+    // `Error.message` is typed `string` and nothing enforces it at runtime.
+    // Returning it unconverted would throw on the caller's `.trim()` — inside
+    // the catch, with no handler left — so the rejection would escape
+    // `runStdioBin` and reach the bin as the crash dump this file exists to
+    // prevent. `errorMessage` throws on this input for the same reason
+    // (measured: `ownText(...).trim is not a function`), which is why the
+    // formatter is NOT broken here: the degraded path is reached by
+    // `render`'s catch absorbing the formatter's own failure.
+    const hostile = new Error("placeholder");
+    Object.defineProperty(hostile, "message", { value: 42 });
+    rejectWith(hostile);
+
+    await expect((await load())()).resolves.toBeUndefined();
+
+    expect(write).toHaveBeenCalledWith("42\n");
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+
   it("drops the cause chain when the formatter is unavailable, and says the head", async () => {
     // The documented cost of the degraded path, pinned so it is a decision and
     // not a surprise: `errorMessage` renders `Caused by:` lines and
     // `lastResortMessage` cannot, because recovering them would mean a second
-    // formatter in a tree that refuses one.  The sibling test above holds the
-    // undegraded behaviour, so the two together say which half is lost.
+    // formatter in a tree that refuses one. The undegraded behaviour is held by
+    // the first block, so the two together say which half is lost.
     breakFormatter();
     rejectWith(new Error("could not start", { cause: new Error("EADDRINUSE") }));
 
@@ -348,13 +426,19 @@ describe("runStdioBin — import-graph coverage", () => {
   });
 
   it("still says something when the formatter is gone and the value renders nothing", async () => {
-    // The degraded twin of the `errorMessage` loop above.  The last two are
-    // reachable only here: `String()` is a call, not a coercion that always
-    // succeeds, so a prototype-less value and a throwing `toString` take
-    // `lastResortMessage`'s own catch — which returns "" precisely because the
-    // value really did render no text, which is what the stand-in says.
+    // The degraded twin of the `errorMessage` loop above, and not a copy of it.
+    // `new Error("   ")` is here and not there because it is the one value the
+    // two formatters treat differently: `errorMessage` trims its own head,
+    // `lastResortMessage` does not, so this is the only case where the caller's
+    // `.trim()` is load-bearing on the Error branch. The last two are the only
+    // values in this file that reach `lastResortMessage`'s own catch —
+    // `String()` is a call, not a coercion that always succeeds, so a
+    // prototype-less value and a throwing `toString` both land there.
+    // (`Object.create(null)` also appears in the first loop, where it takes
+    // `errorMessage`'s catch instead. Same value, different guard.)
     const silent: unknown[] = [
       new Error(""),
+      new Error("   "),
       "   ",
       "\n\t",
       { toString: () => "  " },
@@ -366,13 +450,14 @@ describe("runStdioBin — import-graph coverage", () => {
       },
     ];
 
-    // One stand-in for all six, so a degraded report that merely happened to
-    // render something is distinguishable from the stand-in itself.
+    // One stand-in for all of them, so a degraded report that merely happened
+    // to render something is distinguishable from the stand-in itself.
     const lines = new Set<string>();
 
     for (const empty of silent) {
       vi.resetModules();
       write.mockClear();
+      exit.mockClear();
       breakFormatter();
       rejectWith(empty);
 
@@ -387,34 +472,47 @@ describe("runStdioBin — import-graph coverage", () => {
 
       expect(reported.trim().length).toBeGreaterThan(0);
       expect(reported.endsWith("\n")).toBe(true);
+      // Per iteration, not once after the loop: a regression that exited for
+      // the first value and not the rest would satisfy a trailing assertion.
+      expect(exit).toHaveBeenCalledWith(1);
       lines.add(reported);
     }
 
     expect(lines.size).toBe(1);
     expect([...lines][0]).toContain("MCP server");
-    expect(exit).toHaveBeenCalledWith(1);
   });
 
   it("does not reach for the formatter on the success path", async () => {
     // The falsifier for hoisting the `@lhremote/core` import out of the catch —
     // the shape that looks tidier and puts the formatter back in front of the
-    // failure it is meant to describe.  A normal start must not ask for it at
+    // failure it is meant to describe. A normal start must not ask for it at
     // all: `./stdio.js` pulls it in anyway, so asking early saves nothing and
     // costs the coverage.
     const loaded = vi.fn();
+    const runStdioServer = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("boom"));
 
     vi.doMock("@lhremote/core", () => {
       loaded();
       return { errorMessage: (error: unknown) => String(error) };
     });
-    vi.doMock("./stdio.js", () => ({
-      runStdioServer: vi.fn().mockResolvedValue(undefined),
-    }));
+    vi.doMock("./stdio.js", () => ({ runStdioServer }));
 
-    await (await load())();
+    const fresh = await load();
+    await fresh();
 
     expect(loaded).not.toHaveBeenCalled();
     expect(write).not.toHaveBeenCalled();
     expect(exit).not.toHaveBeenCalled();
+
+    // The positive control, without which "never called" would also pass for a
+    // mock that never registered — a renamed or mis-resolved specifier looks
+    // exactly like a formatter that was not reached.
+    await fresh();
+
+    expect(loaded).toHaveBeenCalledTimes(1);
+    expect(exit).toHaveBeenCalledWith(1);
   });
 });

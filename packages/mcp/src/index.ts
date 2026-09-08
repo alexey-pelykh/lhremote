@@ -4,6 +4,14 @@
 
 import { runStdioBin } from "./run.js";
 
+// That import is the whole of this file's graph, and it has to stay that way.
+// `./run.js` has no static imports of its own precisely so that nothing is
+// evaluated before its catch exists; a second `import` here would be evaluated
+// the same way and put its throw back in the ESM loader's hands as a crash
+// dump (#959).  Nothing detects that: this file is excluded from the coverage
+// gate as a bin entrypoint, and the test that pins the invariant imports
+// `./run.js`, not this module — importing this one starts the server.
+//
 // `void`, not top-level await.  `runStdioBin` handles its own rejection, so
 // there is nothing here to await for correctness, and leaving this module
 // synchronous costs nothing.
