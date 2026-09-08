@@ -7,6 +7,34 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DatabaseClient } from "../client.js";
 import { ActionBudgetRepository } from "./action-budget.js";
 
+/**
+ * Today's date in the **local** calendar, formatted `YYYY-MM-DD`.
+ *
+ * The repository filters on `date('now', 'localtime')` — the operator's own
+ * calendar day — so the fixture has to build that same day.  `toISOString()`
+ * yields the *UTC* day instead, and the two disagree for one offset-width of
+ * every day, in both directions: ahead of UTC once local has rolled over and
+ * UTC has not, behind UTC once UTC has rolled over and local has not.  Inside
+ * either window the fixture seeds rows the query then refuses to count, so the
+ * suite fails nightly off-UTC while CI — which runs in UTC, where the two days
+ * coincide by construction — stays green (#942).
+ *
+ * @param offsetDays  Whole days to shift, in local calendar terms.
+ */
+function localDate(offsetDays = 0): string {
+  const d = new Date();
+  // Anchor at local noon before shifting: `setDate` moves whole calendar days,
+  // and noon is far enough from either edge that a DST transition cannot push
+  // the result into an adjacent day.
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + offsetDays);
+
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function createBudgetDb(): DatabaseSync {
   const db = new DatabaseSync(":memory:");
 
@@ -66,7 +94,7 @@ function createBudgetDb(): DatabaseSync {
   `);
 
   // Insert today's results
-  const today = new Date().toISOString().split("T")[0] ?? "";
+  const today = localDate();
   db.exec(`
     INSERT INTO action_results (action_version_id, person_id, result, created_at)
     VALUES
@@ -77,7 +105,7 @@ function createBudgetDb(): DatabaseSync {
   `);
 
   // Insert yesterday's results (should NOT be counted)
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().split("T")[0] ?? "";
+  const yesterday = localDate(-1);
   db.exec(`
     INSERT INTO action_results (action_version_id, person_id, result, created_at)
     VALUES

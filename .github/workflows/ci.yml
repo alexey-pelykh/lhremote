@@ -29,6 +29,41 @@ jobs:
       - run: pnpm lint
       - run: pnpm license-check
       - run: pnpm test ${{ matrix.os == 'ubuntu-latest' && '-- -- --coverage' || '' }}
+
+      # The action-budget query filters on `date('now', 'localtime')`, so its
+      # fixture must build the same local calendar day.  A UTC runner cannot
+      # observe a disagreement — there the local and UTC days coincide by
+      # construction, which is exactly why #942 stayed green in CI while
+      # failing nightly on any developer machine at a non-zero offset.
+      #
+      # Two fixed-offset zones, because the seam has two directions and each
+      # only opens for part of the day: UTC+14 has already rolled over for UTC
+      # hours 10-23, UTC-11 has not yet rolled over for hours 00-10.  Their
+      # union is every hour of every day (neither observes DST, so the windows
+      # do not move seasonally), so this step cannot pass vacuously whenever CI
+      # happens to run.
+      #
+      # Invoked as the package script rather than `pnpm test`: the root script
+      # is `turbo run test`, which would serve a cache hit from the step above
+      # and evaluate nothing.
+      #
+      # ubuntu-only: an IANA zone name in `TZ` is honoured by both Node and the
+      # C library that SQLite's `localtime` modifier calls on Linux and macOS,
+      # but not on Windows, where the two would disagree for reasons that have
+      # nothing to do with this code.
+      - name: Timezone regression guard (action-budget)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # Explicit, rather than leaning on the runner's default `bash -e`: a
+          # `for` loop reports the exit status of its *last* iteration, so
+          # without this a failure in the first zone would be masked by a pass
+          # in the second.
+          set -euo pipefail
+          for tz in Pacific/Kiritimati Pacific/Midway; do
+            echo "::group::TZ=$tz"
+            TZ="$tz" pnpm --filter @lhremote/core test src/db/repositories/action-budget.test.ts
+            echo "::endgroup::"
+          done
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v6
