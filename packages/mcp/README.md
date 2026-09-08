@@ -2,7 +2,7 @@
 
 MCP server for [lhremote](https://github.com/alexey-pelykh/lhremote) — LinkedHelper automation toolkit.
 
-This package exposes the full LinkedHelper automation surface as a [Model Context Protocol](https://modelcontextprotocol.io) server. AI assistants (Claude, etc.) connect over stdio and use the 68 registered tools to control LinkedHelper.
+This package exposes the full LinkedHelper automation surface as a [Model Context Protocol](https://modelcontextprotocol.io) server. AI assistants (Claude, etc.) connect over stdio and use the registered tools listed below to control LinkedHelper.
 
 Built on [`@lhremote/core`](../core).
 
@@ -49,14 +49,14 @@ await runStdioServer();
 | Category | Tools |
 |----------|-------|
 | App Management | `find-app`, `launch-app`, `quit-app` |
-| Account & Instance | `list-accounts`, `start-instance`, `stop-instance`, `check-status` |
+| Account & Instance | `list-accounts`, `list-workspaces`, `start-instance`, `stop-instance`, `check-status` |
 | Campaigns | `campaign-list`, `campaign-create`, `campaign-get`, `campaign-export`, `campaign-update`, `campaign-delete`, `campaign-erase`, `campaign-start`, `campaign-stop` |
 | Campaign Status | `campaign-status`, `campaign-statistics`, `campaign-retry` |
 | Campaign Actions | `campaign-add-action`, `campaign-remove-action`, `campaign-update-action`, `campaign-reorder-actions`, `campaign-move-next` |
 | Campaign Targeting | `campaign-exclude-list`, `campaign-exclude-add`, `campaign-exclude-remove`, `campaign-list-people`, `campaign-remove-people`, `import-people-from-urls`, `collect-people` |
 | Collections | `list-collections`, `create-collection`, `delete-collection`, `add-people-to-collection`, `remove-people-from-collection`, `import-people-from-collection` |
-| LinkedIn Actions | `visit-profile`, `endorse-skills`, `enrich-profile`, `follow-person`, `like-person-posts`, `message-person`, `send-invite`, `send-inmail`, `remove-connection` |
-| Feed & Posts | `get-feed`, `get-post`, `get-post-stats`, `get-post-engagers`, `get-profile-activity`, `search-posts`, `comment-on-post`, `react-to-post` |
+| LinkedIn Actions | `visit-profile`, `endorse-skills`, `enrich-profile`, `follow-person`, `unfollow-profile`, `like-person-posts`, `message-person`, `send-invite`, `send-inmail`, `remove-connection` |
+| Feed & Posts | `get-feed`, `get-post`, `get-post-stats`, `get-post-engagers`, `get-profile-activity`, `search-posts`, `comment-on-post`, `react-to-post`, `react-to-comment`, `dismiss-feed-post`, `hide-feed-author`, `hide-feed-author-profile`, `unfollow-from-feed` |
 | LinkedIn Search & Reference | `build-linkedin-url`, `resolve-linkedin-entity`, `list-linkedin-reference-data` |
 | Profiles & Messaging | `query-profile`, `query-profiles`, `query-profiles-bulk`, `query-messages`, `check-replies`, `scrape-messaging-history` |
 | Utilities | `describe-actions`, `get-errors`, `dismiss-errors`, `get-action-budget`, `get-throttle-status` |
