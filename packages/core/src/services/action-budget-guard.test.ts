@@ -60,7 +60,15 @@ function setupMocks(entries: ActionBudgetEntry[]) {
 
 describe("assertActionBudget", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // reset, not clear: every test here builds its own budget through
+    // `setupMocks`, and `clearAllMocks` would keep the previous test's
+    // implementations, so one that forgot the call would silently inherit a
+    // budget instead of failing. Same reasoning as `instance-context.test.ts`
+    // (#846). Its sibling in `operations/react-to-post.test.ts` deliberately
+    // does NOT do this — that file's `vi.mock` factories install defaults at
+    // module scope which `setupMocks` never re-establishes, and resetting
+    // wipes them: measured, 5 of its 27 fail.
+    vi.resetAllMocks();
   });
 
   describe("refuses", () => {
