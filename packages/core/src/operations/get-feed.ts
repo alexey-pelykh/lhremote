@@ -7,6 +7,7 @@ import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import { humanizedScrollY, humanizedScrollToByIndex, retryInteraction } from "../linkedin/dom-automation.js";
 import type { HumanizedMouse } from "../linkedin/humanized-mouse.js";
+import { FEED_POST_MENU_BUTTON } from "../linkedin/selectors.js";
 import { delay as utilsDelay, gaussianDelay, gaussianBetween, maybeHesitate, maybeBreak, simulateReadingTime } from "../utils/delay.js";
 import type { ConnectionOptions } from "./types.js";
 import { navigateAwayIf } from "./navigate-away.js";
@@ -1211,10 +1212,6 @@ export { SCRAPE_FEED_POSTS_SCRIPT as SCRAPE_FEED_SCRIPT };
 // URL capture via three-dot menu → "Copy link to post"
 // ---------------------------------------------------------------------------
 
-/** CSS selector for feed post menu buttons. */
-const FEED_MENU_BUTTON_SELECTOR =
-  '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]';
-
 /**
  * Capture the post URL for a single feed item by opening its three-dot
  * menu and clicking "Copy link to post".
@@ -1238,12 +1235,12 @@ async function capturePostUrl(
     await client.evaluate(`window.__capturedClipboard = null;`);
 
     // Scroll the menu button into view (humanized when mouse available)
-    await humanizedScrollToByIndex(client, FEED_MENU_BUTTON_SELECTOR, postIndex, mouse);
+    await humanizedScrollToByIndex(client, FEED_POST_MENU_BUTTON, postIndex, mouse);
 
     // Click the menu button
     const clicked = await client.evaluate<boolean>(`(() => {
       const btns = document.querySelectorAll(
-        ${JSON.stringify(FEED_MENU_BUTTON_SELECTOR)}
+        ${JSON.stringify(FEED_POST_MENU_BUTTON)}
       );
       const btn = btns[${postIndex}];
       if (!btn) return false;
