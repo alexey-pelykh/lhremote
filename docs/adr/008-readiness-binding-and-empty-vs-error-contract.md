@@ -512,13 +512,18 @@ not a measurement, and chasing it is out of this decision's scope.
   lists all three subclasses added here, alongside the carried fields § 5 names.
 - **Probe the profile surface for the same flip**: currently an inference, not a measurement
   (§ Disposition of ADR-007).
-- **Measure an SDUI engagement-counts row** (§ 2026-09-08 Amendment). While
+- **Measure an SDUI engagement-counts row** (#950, § 2026-09-08 Amendment). While
   `PostDetailVariantAdapter.counts` is `[]` for that dialect, `getPostStats`'s container-tier
   corroboration is unreachable on the dialect LinkedIn serves more often, and the loose fallback
   `__lhReadCount` gates on the same flag is unreachable with it.
-- **Carry the container tier to `get-post`'s counters**: it consumes the same record and treats an
-  unrendered counts row as `commentCount: 0`, which its cardinal tier then reads as a legal empty
-  (§ 2026-09-08 Amendment). Left out of #852 because it changes a different operation's behaviour.
+- **Carry the container tier to `get-post`'s counters** (#951): it consumes the same record and
+  treats an unrendered counts row as `commentCount: 0`, which its cardinal tier then reads as a
+  legal empty (§ 2026-09-08 Amendment). Left out of #852 because it changes a different
+  operation's behaviour.
+- **Widen the counter patterns past English** (#952, § 2026-09-08 Amendment). `__LH_COUNTERS` is
+  English-only while the counts-row anchor is a CSS class, so on a non-English interface the row
+  resolves and no counter matches — which the container tier now turns into a refusal rather than
+  a silent zero. Better, and complete for those users until the patterns are measured per locale.
 
 ## Amendments
 
@@ -1401,6 +1406,16 @@ empty list already carried, now with something to gain by closing it: measuring 
 would extend the check to the dialect LinkedIn serves more often. Nothing here guesses one, for
 the reason § Decision 2's table gives about `detect` — an anchor asserted rather than measured is
 the failure this design exists to remove.
+
+**One consequence found by review, recorded because it is complete rather than marginal.** The
+counts-row anchor is a CSS class and resolves whatever the interface language is; `__LH_COUNTERS`
+is English-only. On a non-English interface serving legacy markup the row therefore resolves, no
+counter matches, and this tier raises where the operation previously returned a silent `{0, 0, 0}`
+— on *every* post, not only broken ones. That is this ADR's contract working as intended rather
+than a regression to revert: a locale mismatch genuinely is *"the field's selectors no longer match
+this page"*, and the error's own remediation line names the right repair. It is tracked as #952
+because the right fix is to measure the patterns per locale, never to translate the English word
+(§ Decision 2's rule about asserted-versus-measured anchors covers the counter patterns too).
 
 **`get-post` reads the same record and is deliberately untouched.** Its counters feed
 `assertCardinalCorroboration` as the CARDINAL, so a counts region that never rendered gives it
