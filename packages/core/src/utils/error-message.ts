@@ -115,11 +115,12 @@ function elide(text: string): string {
  * ADR-008 § Decision 5 requires the error to name the variant and the field
  * at all.  The DOM variant errors reach both surfaces through this one
  * function, so this is where the last hop belongs.  (Not *every* operator
- * path renders through here: a handful of CLI branches and the three
- * classes `mapErrorToMcpResponse` maps by hand read `.message` directly.
- * None of those classes is ever constructed with a `cause` today, so
- * nothing is lost on them — but they are not covered by this, and a cause
- * added to one later would not travel.)
+ * path renders through here: a handful of CLI branches bypass it, and every
+ * class `mapErrorToMcpResponse` maps by hand bypasses it too — some by
+ * reading `.message`, the rest by building a fresh string, which drops a
+ * `cause` just as completely.  None of those classes is ever constructed
+ * with a `cause` today, so nothing is lost on them — but they are not
+ * covered by this, and a cause added to one later would not travel.)
  *
  * **What is rendered.**  The value's own text, then one `Caused by:` line
  * per link of the chain:
