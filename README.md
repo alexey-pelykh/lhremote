@@ -75,7 +75,7 @@ Add to your Claude Desktop configuration (`claude_desktop_config.json`):
 }
 ```
 
-Once configured, Claude can use all 68 tools directly. A typical workflow:
+Once configured, Claude can use every registered tool directly. A typical workflow:
 
 1. **`find-app`** — Detect a running LinkedHelper instance (or **`launch-app`** to start one)
 2. **`list-accounts`** — See available LinkedIn accounts
@@ -258,6 +258,14 @@ Quit the LinkedHelper application.
 #### `list-accounts`
 
 List available LinkedHelper accounts. Returns account ID, LinkedIn ID, name, and email for each account.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `list-workspaces`
+
+List LinkedHelper workspaces the current LH user belongs to. Each workspace includes the user's role and a `selected` flag indicating the currently active workspace. Returns an empty list on LinkedHelper versions that predate workspaces (pre-2.113.x).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -731,6 +739,16 @@ Follow or unfollow a LinkedIn profile via an ephemeral campaign. Deducts from th
 | `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
 | `cdpPort` | number | No | 9222 | CDP port |
 
+#### `unfollow-profile`
+
+Unfollow a LinkedIn member profile or organization page by navigating to it and clicking the Following → Unfollow toggle. Accepts both profile URLs and company URLs — LinkedIn renders the same Follow/Following toggle on both surfaces. Prefer this over `unfollow-from-feed` for bulk feed-hygiene workflows: feed-based tools are limited to one action per feed fetch because the feed DOM refreshes after each hide/unfollow, invalidating other indexes; this tool works regardless of whether the author is currently in the home feed. For org-level feed-volume escalation it is also the substitute for a mute, since LinkedIn does not expose a Mute action on company pages. Returns the detected prior follow state and target kind (profile vs company), so bulk workflows can distinguish actual unfollows from no-op calls on already-unfollowed targets and from inaccessible targets (private/blocked profiles, restricted/unavailable companies).
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `profileUrl` | string | Yes | — | LinkedIn profile URL (`https://www.linkedin.com/in/{publicId}/`) or company URL (`https://www.linkedin.com/company/{slug}/`) |
+| `dryRun` | boolean | No | `false` | When true, detect the follow state but do not click Unfollow (the dialog is opened and dismissed) |
+| `cdpPort` | number | No | 9222 | CDP port |
+
 #### `like-person-posts`
 
 Like and optionally comment on posts and articles by a LinkedIn profile via an ephemeral campaign. Deducts from the daily action budget.
@@ -898,6 +916,46 @@ React to a specific LinkedIn comment with a specific reaction type. Use this for
 | `commentUrn` | string | Yes | — | Comment URN (e.g. `urn:li:comment:(activity:1234567890,9876543210)`) |
 | `reactionType` | string | No | `like` | `like`, `celebrate`, `support`, `love`, `insightful`, or `funny` |
 | `dryRun` | boolean | No | `false` | When true, detects current reaction state without clicking |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `dismiss-feed-post`
+
+Dismiss a post from the LinkedIn feed by clicking “Not interested” in its three-dot menu. Operates on the home feed by position index (pair with `get-feed` to identify posts).
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `feedIndex` | number | Yes | — | Zero-based index of the post in the visible LinkedIn feed (pair with `get-feed` to identify posts) |
+| `dryRun` | boolean | No | `false` | When true, locate the menu item but do not click it |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `hide-feed-author`
+
+Click “Hide posts by {Name}” in a feed post's three-dot menu. Operates on the home feed by position index (pair with `get-feed` to identify posts). The hidden person may differ from the original author (e.g. a reposter).
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `feedIndex` | number | Yes | — | Zero-based index of the post in the visible LinkedIn feed (pair with `get-feed` to identify posts) |
+| `dryRun` | boolean | No | `false` | When true, locate the menu item but do not click it |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `hide-feed-author-profile`
+
+Mute a LinkedIn profile's posts in the home feed by navigating to the profile page and invoking “Mute {Name}” from the More menu. Prefer this over `hide-feed-author` for bulk feed-hygiene workflows: feed-based tools are limited to one action per feed fetch because the feed DOM refreshes after each hide/unfollow, invalidating other indexes. Works regardless of whether the author is currently in the feed. Returns structured results: success when muted; `{ success: false, reason: "mute_not_available" }` for non-connections or profiles where Mute is not exposed; `{ success: false, reason: "already_muted" }` when the profile is already muted.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `profileUrl` | string | Yes | — | LinkedIn profile URL (`https://www.linkedin.com/in/{publicId}/`) |
+| `dryRun` | boolean | No | `false` | When true, open the More menu and detect mute availability but do not click Mute |
+| `cdpPort` | number | No | 9222 | CDP port |
+
+#### `unfollow-from-feed`
+
+Unfollow the author of a LinkedIn feed post via its three-dot menu. Operates on the home feed by position index (pair with `get-feed` to identify posts). For bulk feed-hygiene workflows prefer `unfollow-profile`, which is not limited to one action per feed fetch.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `feedIndex` | number | Yes | — | Zero-based index of the post in the visible LinkedIn feed (pair with `get-feed` to identify posts) |
+| `dryRun` | boolean | No | `false` | When true, locate the menu item but do not click it |
 | `cdpPort` | number | No | 9222 | CDP port |
 
 ### LinkedIn Search & Reference
