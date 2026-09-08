@@ -13,6 +13,7 @@ import {
   capturePostDetailExtractionFailure,
   waitForPostLoad,
 } from "../cdp/wait-for-post-load.js";
+import { assertRegionCorroboration } from "../linkedin/corroboration.js";
 import {
   adaptersFor,
   buildPostDetailExtractionSource,
@@ -80,14 +81,20 @@ export function resolvePostDetailUrl(input: string): string {
  * The subset of the post-detail extraction record this operation reads.
  *
  * The script returns the whole record — author, text, timestamp and the three
- * counters.  Only the counters are named here, because only they are read:
- * declaring the rest would advertise fields this operation neither uses nor
- * grades.
+ * counters.  Only what is read is named here: declaring the rest would
+ * advertise fields this operation neither uses nor grades.
+ *
+ * `variant` and `countsRootNarrowed` joined the counters in #852.  Neither is
+ * an output — they are the terms of the corroboration check below, which names
+ * the dialect in its diagnosis and consults whether that dialect's own counts
+ * row rendered.
  */
 interface RawPostStats {
+  variant: string;
   reactionCount: number;
   commentCount: number;
   shareCount: number;
+  countsRootNarrowed: boolean;
 }
 
 /**
@@ -148,22 +155,34 @@ const POST_DETAIL_SURFACE = "post-detail" as const;
  * operation discards, which is a handful of in-page `querySelector` calls on a
  * page it has just navigated to.
  *
- * ## What this does NOT settle
+ * ## The gate seam, and how #852 closed it
  *
- * The readiness gate is untouched — `waitForPostLoad` still polls the selected
- * post-detail adapter's own anchor — and #852, the seam between that gate and
- * this extraction, stays open.  Both of its directions are worth naming,
- * because binding the parse moved one of them and not the other:
+ * The readiness gate is still `waitForPostLoad`, still polling the selected
+ * post-detail adapter's own anchor, and that is now the settled answer rather
+ * than an open question.  ADR-008 § Decision 1 binds a gate to *the adapter*
+ * that performs the extraction, and binding this parse to the registry
+ * satisfied it: gate and extraction resolve the same adapter from the same
+ * table.  What #852 found left over is one level down — `ready` is the author
+ * link, and this operation reads only the counts row, so a green gate attests
+ * a DIFFERENT REGION of the page from the one being read.
  *
- * - **False readiness** survives unchanged.  A green gate says nothing about
- *   whether the counts region rendered, and where no element renders a counter
- *   the read still returns 0 rather than refusing.
- * - **False refusal** is now enforced here as well as at the gate.  The
- *   extraction resolves adapters itself, so a page no post-detail adapter
- *   claims raises instead of yielding whatever a whole-page regex found.  That
- *   narrows #852's remedy space rather than deciding it: relaxing the gate
- *   ALONE would no longer let counts through from such a page, because this
- *   read refuses independently.  Which remedy #852 takes is still its call.
+ * **Requiring the counts region at the gate is refuted, not merely untried.**
+ * `__fixtures__/legacy/post-zero-comments.measured.json` records
+ * `socialCounts: 0` on a captured legacy page whose post body rendered fine,
+ * and `fixture-oracle.integration.test.ts` asserts the readiness predicate
+ * returns `true` on it.  The counts row's ABSENCE is a legitimate page state,
+ * so a gate that demanded it would poll to the deadline on every post with no
+ * engagement — reintroducing the false-refusal direction #852 names as the
+ * other half of its own seam.
+ *
+ * So the region gap closes where it is decidable, at the extraction: a counts
+ * root that DID resolve, beside three counters that read zero, is one
+ * observation contradicting itself, and {@link assertRegionCorroboration}
+ * below raises on it.  The remaining direction — nothing resolved, zeroes
+ * returned — is the shape of a post with no engagement, and stays a normal
+ * return.  On `sdui` that is the only reachable branch, because `counts: []`
+ * leaves it no anchor to resolve; the same recorded absence of measurement
+ * that field already carried, now with something to gain by closing it.
  *
  * One behaviour delta the trade carries, recorded because it is not free.  The
  * old read was loose over the whole body; this one is strict per element, with
@@ -175,13 +194,14 @@ const POST_DETAIL_SURFACE = "post-detail" as const;
  * read returned 41.  Unmeasured in both directions, and the net is still
  * strongly favourable: the shapes measured live are the ones this fixes.
  *
- * A diagnostic bundle IS written at the two failure branches below (#890).
- * #857 deliberately left that undone — adding a capture site is a behaviour
- * change with its own acceptance, not part of fixing a parse — and the gap it
- * declared was closed on its own terms.  Both branches now call the same
- * {@link capturePostDetailExtractionFailure} `get-post` calls, which is why
- * that helper moved to `wait-for-post-load.ts`: two operations failing at the
- * same two outcomes of the same script on the same surface would otherwise
+ * A diagnostic bundle IS written at the three failure branches below — the two
+ * selection outcomes since #890, and the corroboration raise since #852.
+ * #857 deliberately left the first two undone — adding a capture site is a
+ * behaviour change with its own acceptance, not part of fixing a parse — and
+ * the gap it declared was closed on its own terms.  All three branches call
+ * the same {@link capturePostDetailExtractionFailure} `get-post` calls, which
+ * is why that helper moved to `wait-for-post-load.ts`: two operations failing
+ * at the same outcomes of the same script on the same surface would otherwise
  * have kept two copies of one rule.  See ADR-007 § 2026-09-05 Amendment.
  */
 const SCRAPE_POST_DETAIL_SCRIPT = buildPostDetailExtractionSource(
@@ -280,6 +300,40 @@ export async function getPostStats(
         POST_DETAIL_SURFACE,
         raw.ambiguousVariants,
       );
+    }
+
+    // Corroborate an all-zero read before trusting it (#852).  The counters
+    // ARE this operation's output, so there is no list beside them for the
+    // cardinal tier to consult; what there is instead is the row they render
+    // in, read off the very page this scrape ran against.  A row that resolved
+    // and yielded nothing is one observation contradicting itself — see
+    // `contradictsEmptyRegion` for the two captured fixtures that ground it,
+    // and for why a row that did NOT resolve is the ordinary shape of a post
+    // with no engagement rather than a failure.
+    //
+    // Summed rather than checked per counter deliberately: any one counter
+    // reading non-zero proves the patterns still match this row, so a post
+    // carrying comments but no reactions must not be reported as stale.
+    try {
+      assertRegionCorroboration({
+        surface: POST_DETAIL_SURFACE,
+        variant: raw.variant || "unknown",
+        field: "engagementCounts",
+        regionName: "countsRoot",
+        regionResolved: raw.countsRootNarrowed,
+        extractedCount:
+          raw.reactionCount + raw.commentCount + raw.shareCount,
+      });
+    } catch (error) {
+      // Capture on the way out, for the reason `get-post` captures at its own
+      // corroboration raise: this failure never reaches a deadline.  The gate
+      // went green milliseconds ago and the scrape returned a well-formed
+      // record, so no timeout-bound capture can see it — and past this throw
+      // the `finally` disconnects the client and the DOM that would have
+      // explained it is gone.  Swallows its own errors, so `error` propagates
+      // unchanged either way.
+      await capturePostDetailExtractionFailure(client);
+      throw error;
     }
 
     const stats: PostStats = {

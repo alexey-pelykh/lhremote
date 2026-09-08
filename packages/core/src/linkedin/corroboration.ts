@@ -46,11 +46,14 @@ export interface CardinalObservation {
  * The complementary tier is CONTAINER corroboration — did the region's own
  * anchor match at all? That tier is what keeps an absent post body legal (an
  * image-only or link-only post has no text and a perfectly good container),
- * and on the post-detail surface it is already enforced upstream: an adapter
- * that cannot resolve its own scope yields no record at all and raises
- * `DOMVariantUnsupportedError`. The two tiers are deliberately not collapsed
- * into one — a single "empty implies stale" rule false-positives on every
- * image-only and link-only post.
+ * and on the post-detail surface it is already enforced upstream for the POST
+ * container: an adapter that cannot resolve its own scope yields no record at
+ * all and raises `DOMVariantUnsupportedError`. It is NOT enforced for every
+ * region inside that container, and the engagement-counts row was the one left
+ * unenforced — see {@link contradictsEmptyRegion}, which is that tier written
+ * out for a region the scope check cannot speak for (#852). The two tiers are
+ * deliberately not collapsed into one — a single "empty implies stale" rule
+ * false-positives on every image-only and link-only post.
  *
  * Split into a PREDICATE and an assertion because one caller has to know the
  * verdict *before* the raise: `get-post-engagers` resolves which dialect is on
@@ -192,5 +195,108 @@ export function assertCardinalCorroboration(
     variant: observation.variant,
     field: observation.field,
     corroborator: `${observation.cardinalName}=${String(observation.cardinal)}`,
+  });
+}
+
+/**
+ * One empty REGION read, and whether that region's own anchor rendered.
+ *
+ * Deliberately a separate shape from {@link CardinalObservation}: that one
+ * consults a count LinkedIn rendered, this one consults whether the element
+ * the read was rooted in was there at all.  It carries the same four terms an
+ * {@link ExtractionFailedError} prints, because unlike
+ * {@link CollectionObservation} it does raise.
+ */
+export interface RegionObservation {
+  /** The page kind being read (e.g. `post-detail`). */
+  readonly surface: string;
+  /** Which markup dialect — or which scraper — produced the record. */
+  readonly variant: string;
+  /** The field that came back empty (e.g. `engagementCounts`). */
+  readonly field: string;
+  /** Name of the region being consulted, as it appears in the diagnosis. */
+  readonly regionName: string;
+  /** Did the selected adapter's own anchor for that region resolve? */
+  readonly regionResolved: boolean;
+  /** What the extraction read out of it — zero means it read nothing. */
+  readonly extractedCount: number;
+}
+
+/**
+ * CONTAINER corroboration — the tier {@link contradictsEmptyExtraction} names
+ * as its complement, written out for a region the upstream scope check cannot
+ * speak for.
+ *
+ * The cardinal tier consults a number the page rendered.  Post-detail's
+ * engagement counters have no such second number: they ARE the extraction, so
+ * there is no list beside them to contradict.  What there is instead is the
+ * ROW they render in, and whether the selected adapter's own declared anchor
+ * for it resolved:
+ *
+ * - region absent — nothing rooted the read, and on the only pages anyone has
+ *   measured that is what a post with no engagement looks like.  Legitimately
+ *   empty; return normally.  This is the case that keeps the check off every
+ *   ordinary zero-engagement post, and it is why this is corroboration rather
+ *   than a blanket "empty means broken".
+ * - region present, read empty — the row LinkedIn renders only when it has
+ *   something to render rendered nothing this parse could read.  The two
+ *   halves of one observation contradict each other, so the record is not
+ *   evidence the post has no engagement; it is evidence the counter patterns
+ *   no longer match what the row says.  Raise.
+ *
+ * **What the second bullet rests on, stated because it is the whole warrant.**
+ * Two captured legacy post-detail pages are committed, and they measure the
+ * row in both directions: `socialCounts: 1` rendering `"2 41 comments"` beside
+ * two reactions and forty-one comments, and `socialCounts: 0` rendering `""`
+ * beside neither (`linkedin/__fixtures__/legacy/*.measured.json`, asserted
+ * against the live DOM by `__tests__/fixture-oracle.integration.test.ts`).
+ * Two pages is not a law, and a dialect that renders an empty counts row would
+ * falsify it — which is exactly what the raise would report, pointing at the
+ * counter patterns rather than at this premise.  The `sdui` adapter declares
+ * `counts: []`, so `regionResolved` is unconditionally false there and this
+ * tier never fires: the same recorded absence of measurement that field
+ * already carries, now with a payoff for closing it.
+ *
+ * Split into a predicate and an assertion for the reason its sibling is: one
+ * rule, one spelling, and a caller that needs the verdict before the raise can
+ * read it without re-deriving the rule.
+ *
+ * @param observation - What was read, and whether its region rendered.
+ * @returns Whether the region's presence contradicts an empty read.
+ */
+export function contradictsEmptyRegion(observation: {
+  readonly regionResolved: boolean;
+  readonly extractedCount: number;
+}): boolean {
+  // `!== 0` rather than the sibling's `> 0`, and the difference is load-bearing
+  // in the same direction its comment argues.  There, every unusable value had
+  // to fall through as "no contradiction"; here the guard runs the other way
+  // round — it decides what counts as EMPTY — so a `> 0` test would send `NaN`
+  // and negatives past it and let `regionResolved` alone decide, reporting a
+  // parse regression somewhere upstream as a stale-counter diagnosis pointing
+  // at these patterns.  A strict inequality against zero admits only a genuine
+  // zero, which is the only reading that means "this read found nothing".
+  if (observation.extractedCount !== 0) return false;
+
+  return observation.regionResolved;
+}
+
+/**
+ * Container corroboration as an assertion — {@link contradictsEmptyRegion}
+ * plus the error it warrants.  The rule itself lives on that predicate; this
+ * is the only place it becomes a raise.
+ *
+ * @param observation - What was read, and whether its region rendered.
+ * @throws {ExtractionFailedError} When the read is empty and the region's
+ *   presence contradicts it.
+ */
+export function assertRegionCorroboration(observation: RegionObservation): void {
+  if (!contradictsEmptyRegion(observation)) return;
+
+  throw new ExtractionFailedError({
+    surface: observation.surface,
+    variant: observation.variant,
+    field: observation.field,
+    corroborator: `${observation.regionName}=rendered`,
   });
 }
