@@ -2029,16 +2029,6 @@ function scrapeAuthor(item: FakeElement): {
   };
 }
 
-/** The four fields an actor anchor renders, in the tag its dialect uses. */
-function dialectFields(tag: RunTag, name: string): FakeElement[] {
-  return [
-    nameRun(tag, name),
-    nameRun(tag, "• 1st"),
-    nameRun(tag, "Head of Widgets at Acme"),
-    nameRun(tag, "18h •"),
-  ];
-}
-
 interface NameReproduction {
   readonly ac: string;
   readonly label: string;
@@ -2211,12 +2201,26 @@ describe("get-feed resolves the name from the author anchor's field sequence (#8
 
 describe("get-feed reads headline and timestamp from that same sequence (#898)", () => {
   it("CANARY: each dialect fixture renders four fields in its OWN tag only", () => {
-    const legacy = anchorItem("/in/legacy-author/", dialectFields("span", "Legacy Author"));
-    const sdui = anchorItem("/in/sdui-author/", dialectFields("p", "Sdui Author"));
+    const legacy = anchorItem(
+      "/in/legacy-author/",
+      bareFields("span", "Legacy Author", "• 1st", "Head of Widgets at Acme", "18h •"),
+    );
+    const sdui = anchorItem(
+      "/in/sdui-author/",
+      bareFields("p", "Sdui Author", "• 1st", "Head of Widgets at Acme", "18h •"),
+    );
 
-    // The instrument: the two fixtures must actually differ in tag, or AC-6
-    // would be graded against an anchor that is secretly the SDUI shape and
-    // would pass without the legacy dialect ever being exercised.
+    // The instrument, and what it now guards: these two fixtures are the ones
+    // `S6 legacy-4-span` and `S7 sdui-4-p` render, and the whole point of that
+    // PAIR is that the same four fields resolve under BOTH dialects.  If
+    // `bareFields` ever collapsed the tags, the two rows would quietly become
+    // one shape tested twice and both would still pass -- so the difference is
+    // asserted here rather than assumed.  This block used to name the
+    // standalone `#898 AC-6` / `AC-7` tests instead; those were retired as
+    // duplicates of `S6` / `S7`, so the check follows the shapes to where they
+    // now live.  It builds them through `bareFields` for that reason: canarying
+    // a parallel construction of the same markup would say nothing about the
+    // helper the surviving rows actually call.
     const legacyAnchor = legacy.querySelectorAll("a")[0];
     const sduiAnchor = sdui.querySelectorAll("a")[0];
     expect(legacyAnchor?.querySelectorAll("span")).toHaveLength(4);
@@ -2236,9 +2240,12 @@ describe("get-feed reads headline and timestamp from that same sequence (#898)",
     //
     // KEPT DELIBERATELY, and only HALF of it is redundant: the `span` pass
     // drives `S8 single-run`'s exact fixture and asserts a subset of what that
-    // row asserts, but `S8` is span-only, so the `p` pass is this file's one
-    // single-run case in the SDUI dialect and has no row at all.  Deleting the
-    // block to keep the corpus entry would drop that dialect outright.
+    // row asserts, but `S8` is span-only, so the `p` pass is the only single-run
+    // case ANYWHERE that is graded for headline and timestamp, and it has no row
+    // at all.  (Single `p`-run anchors do appear elsewhere in this file -- the
+    // `#859` blocks above -- but those grade `name` and `url` only, so none of
+    // them covers what this pass covers.)  Deleting the block to keep the corpus
+    // entry would drop that dialect outright.
     for (const tag of ["span", "p"] as const) {
       const scraped = scrapeAuthor(
         anchorItem("/in/solo-author/", [nameRun(tag, "Solo Author")]),

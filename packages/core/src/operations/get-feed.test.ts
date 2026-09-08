@@ -697,8 +697,11 @@ describe("getFeed", () => {
     // fault that only bites at long ages: keyed on the unit token (a
     // `=== "1y"` special case, a year-only branch), or on the resulting
     // magnitude (a max-age clamp whose threshold sits between 2h and 1y).
-    // Age, not unit-awareness, is the discriminator -- move such a clamp's
-    // threshold under two hours and the `2h` case starts failing too.
+    // Those two are caught for DIFFERENT reasons, and only the second is about
+    // age: a clamp does not read the unit token at all, so move its threshold
+    // under two hours and the `2h` case starts failing too.  The first is
+    // genuinely unit-keyed, which is why swapping this case's `1y` for another
+    // old-enough token would not preserve it.
     // `mapRawPosts` is shared with `searchPosts` and `getProfileActivity`,
     // but this test drives only `getFeed`, so it says nothing about their
     // reads of the same field.
@@ -841,7 +844,7 @@ describe("parseTimestamp", () => {
     //
     // What this does NOT pin, stated so nobody reads it as more than it is:
     // the ORDER of `yr` and `y` in the alternation. Measured by swapping them
-    // — all 42 tests still pass, because the regex is anchored and `$` forces
+    // — the suite still passes, because the regex is anchored and `$` forces
     // the engine to backtrack out of a `y` that leaves `r` unconsumed. What
     // these three tests do catch is the year units being dropped or lost
     // altogether, which fails all three.
