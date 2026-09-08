@@ -530,7 +530,7 @@ not a measurement, and chasing it is out of this decision's scope.
   lists all three subclasses added here, alongside the carried fields § 5 names.
 - **Probe the profile surface for the same flip**: currently an inference, not a measurement
   (§ Disposition of ADR-007).
-- **Measure an SDUI engagement-counts row** (#950, § 2026-09-08 Amendment). While
+- **Measure an SDUI engagement-counts row** (#950, § 2026-09-08 Amendment (#852)). While
   `PostDetailVariantAdapter.counts` is `[]` for that dialect, `getPostStats`'s container-tier
   corroboration is unreachable on `sdui` entirely, and the loose fallback `__lhReadCount` gates on
   the same flag is unreachable with it. The dialect mix is not measured anywhere and no claim
@@ -542,14 +542,14 @@ not a measurement, and chasing it is out of this decision's scope.
   left undecided, and unconditionally, because `post` carries the counters whatever
   `commentCount` was asked for. The `sdui` bound (#950) and the three residuals below are
   inherited unchanged — a second surface reaching the same tier does not narrow any of them.
-- **Fix the counter patterns' locale and abbreviation coverage** (#952, § 2026-09-08 Amendment).
+- **Fix the counter patterns' locale and abbreviation coverage** (#952, § 2026-09-08 Amendment (#852)).
   `__LH_COUNTERS` is English-only and admits only `\d[\d,]*` while the counts-row anchor is a CSS
   class, so the row can resolve over text this parse cannot read. Three measured classes, not one:
   de/es and abbreviated ENGLISH raise; fr/it match on a prefix collision (`comment` inside
   `commentaires`) and return a fabricated count SILENTLY, which the container tier cannot see.
   Closing the prefix collision is separable from the locale work and converts the silent case into
   the loud one.
-- **Bound the counts-root narrowing to this post** (#954, § 2026-09-08 Amendment). Any element
+- **Bound the counts-root narrowing to this post** (#954, § 2026-09-08 Amendment (#852)). Any element
   matching the counts anchor anywhere inside the resolved scope narrows the root, including one
   belonging to a nested reshare — which since #852 can refuse a correct zero read. Mechanism
   reproduced; no captured page nests the row, so measuring real markup is step one.
@@ -1506,6 +1506,15 @@ than an observed page — recorded so a future reader meets it here rather than 
 level up. Adding this tier there would change `get-post`'s behaviour on its own acceptance
 criteria and is tracked separately rather than absorbed here.
 
+> **Superseded the same day, by the amendment below.** `get-post` is no longer untouched: #951 took
+> the deferral this paragraph declared, and its counters now reach the container tier — ahead of the
+> cardinal one, which is the part the deferral left open. The rest still stands: the false negative
+> described here is exactly the one that was closed, and the reason given for tracking it separately
+> is why there are two amendments rather than one. See § Amendments → *`get-post`'s counters are
+> corroborated before its cardinal reads one* (#951). Left in place rather than rewritten:
+> amendments are append-only, and the order in which the two operations reached the tier is itself
+> the record.
+
 ### 2026-09-08 — `get-post`'s counters are corroborated before its cardinal reads one (#951)
 
 The amendment above closed the counts-row seam on `getPostStats` and deliberately did not carry
@@ -1596,7 +1605,7 @@ engagement is unaffected: its counts row does not resolve, and that is the row t
   `packages/core/src/operations/get-post-stats.ts` (engagement counts read through the
   post-detail adapter's own counts root, #857; both refusal branches write a diagnostic
   bundle through the shared post-detail helper, #890 — see ADR-007 § 2026-09-05 Amendment;
-  its readiness seam stays open as #852),
+  its readiness seam closed as #852 — see § 2026-09-08 Amendment (#852)),
   `packages/core/src/operations/search-posts.ts` (§ 2026-09-02 Amendment, #841;
   engagement counts read anchored per § 2026-09-03 Amendment, #869)
 - ADRs: [ADR-005](005-error-hierarchy-design.md) (error hierarchy this extends),
@@ -1613,8 +1622,8 @@ engagement is unaffected: its counts row does not resolve, and that is the row t
   § 2026-09-03 Amendment), #870 (diagnostic capture for this surface — CLOSED; the half
   § 2026-09-03 Amendment left, landed as ADR-007 § 2026-09-04 Amendment (#870)), #857 (`get-post-stats`
   engagement counts read anchored, third and last instance of the count-concatenation class on a
-  post-detail page), #852 (`get-post-stats` readiness seam — OPEN, deliberately not decided by
-  #857), #890 (`get-post-stats`'s extraction-failure branches now capture — CLOSED; the boundary
+  post-detail page), #852 (`get-post-stats` readiness seam — CLOSED; taken in
+  § 2026-09-08 Amendment (#852), and deliberately not decided by #857), #890 (`get-post-stats`'s extraction-failure branches now capture — CLOSED; the boundary
   #857 declared rather than crossed, recorded in full as ADR-007 § 2026-09-05 Amendment), #867 (`errorMessage` renders the cause chain, so
   the gates' probe counts reach the CLI and MCP text surfaces, § 2026-09-04 Amendment), #883 (the
   attachment of those causes is pinned at all six sites, § 2026-09-04 Amendment), #951 (`get-post`'s
