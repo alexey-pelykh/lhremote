@@ -304,6 +304,24 @@ check** — an adapter that cannot resolve its own scope yields no record and ra
 The cardinal tier is a per-field check and is where the shared helper lives
 (`packages/core/src/linkedin/corroboration.ts`).
 
+> **Superseded in its scope, and INVERTED in polarity for one region** — 2026-09-08. Two
+> corrections, both left inline because this is the text a reader would otherwise copy.
+>
+> *Scope.* "No separate container-corroboration call exists" was true of the post CONTAINER and
+> only ever of it. `getPostStats` now calls `assertRegionCorroboration` for the engagement-counts
+> ROW — a separate container-tier call, and a per-field one (`field: "engagementCounts"`), living
+> in the same shared helper as the cardinal tier. So the last clause above and the sentence after
+> it are each half-true: the structural enforcement still holds for the scope anchor, and the
+> per-field column is no longer the cardinal tier's alone.
+>
+> *Polarity.* The table's Container row reads its failure condition as *the scope did not
+> resolve*. For a region whose rendering is CONDITIONAL that inverts: LinkedIn renders the counts
+> row only when there is engagement to render, so it is the row's PRESENCE beside an empty read
+> that contradicts, and its absence that is legal. The rule is unchanged — *does the region's own
+> anchor corroborate what was read out of it?* — but a reader instantiating the table's polarity
+> directly onto a conditional region would get it backwards. See § Amendments →
+> *`get-post-stats` gets the container tier for its counts row* (#852).
+
 ### 5. Error taxonomy
 
 > **Three distinct new `ServiceError` subclasses, because they demand three different
@@ -514,8 +532,10 @@ not a measurement, and chasing it is out of this decision's scope.
   (§ Disposition of ADR-007).
 - **Measure an SDUI engagement-counts row** (#950, § 2026-09-08 Amendment). While
   `PostDetailVariantAdapter.counts` is `[]` for that dialect, `getPostStats`'s container-tier
-  corroboration is unreachable on the dialect LinkedIn serves more often, and the loose fallback
-  `__lhReadCount` gates on the same flag is unreachable with it.
+  corroboration is unreachable on `sdui` entirely, and the loose fallback `__lhReadCount` gates on
+  the same flag is unreachable with it. The dialect mix is not measured anywhere and no claim
+  about it is made here; what motivates this is § The drift is non-monotonic — SDUI has been
+  served on this surface before and the swing back is what this design exists to survive.
 - **Carry the container tier to `get-post`'s counters** (#951): it consumes the same record and
   treats an unrendered counts row as `commentCount: 0`, which its cardinal tier then reads as a
   legal empty (§ 2026-09-08 Amendment). Left out of #852 because it changes a different
@@ -1375,8 +1395,11 @@ predicate can only be strengthened on a signal whose absence is itself an error.
 is not one.
 
 **The remedy taken is the CONTAINER tier, applied to a region the scope check cannot speak for.**
-§ Decision 4 already names it — *"did the region's own anchor match at all?"* — and
-`corroboration.ts` already recorded it as enforced upstream on this surface. That was true for the
+§ Decision 4 names that tier's corroborator as *"did the adapter resolve its own scope anchor?"*
+— the post container, and the generalisation to a region INSIDE it is made here rather than
+found there, which is why § Decision 4 now carries an inline note recording both the widened
+scope and the polarity inversion a conditionally-rendered region forces. `corroboration.ts`
+already recorded the tier as enforced upstream on this surface. That was true for the
 post CONTAINER, whose absence yields no record at all, and false for every region inside it. The
 counts row was the one region left unenforced, and `getPostStats` was the one extraction surface
 with no corroboration branch of any kind.
@@ -1399,13 +1422,25 @@ falsify it — which is what the raise would report, pointing at the counter pat
 this premise. The fixture oracle grades the rule against both captured pages directly: it must be
 silent on each, and it is.
 
-**The residual, stated so it is not read as closed.** The `sdui` adapter declares `counts: []` —
-its counts row has never been measured — so `countsRootNarrowed` is unconditionally false there
-and this tier can never fire on that dialect. That is the same recorded absence of evidence the
-empty list already carried, now with something to gain by closing it: measuring an SDUI counts row
-would extend the check to the dialect LinkedIn serves more often. Nothing here guesses one, for
-the reason § Decision 2's table gives about `detect` — an anchor asserted rather than measured is
-the failure this design exists to remove.
+**Two residuals, stated so neither is read as closed.**
+
+*The dialect.* The `sdui` adapter declares `counts: []` — its counts row has never been measured —
+so `countsRootNarrowed` is unconditionally false there and this tier can never fire on that
+dialect. That is the same recorded absence of evidence the empty list already carried, now with
+something to gain by closing it (#950). **No claim is made here about which dialect LinkedIn
+serves more often**: nothing in this repository measures the mix, and the two observations that
+do exist point the other way — § Context records legacy markup returning on the same URLs,
+plausibly per-session, and the fixture oracle records that an SDUI post-detail page could not be
+harvested because legacy was being served. What motivates #950 is § The drift is non-monotonic,
+not a frequency. Nothing here guesses an anchor either, for the reason § Context and the § 872
+amendment give: an anchor asserted rather than measured is the failure this design exists to
+remove.
+
+*The counters.* The check is row-level and SUMMED, so it closes the all-zero case and not the
+partial one. A non-zero counter proves only its own pattern matched; one counter's pattern going
+stale while another still reads passes this check and returns a zero for the dead one, exactly as
+before. Closing that needs a per-counter corroborator the row does not offer, and none is
+invented here — `get-post-stats.ts` states the same bound at the line that makes the check.
 
 **One consequence found by review, recorded because it is complete rather than marginal.** The
 counts-row anchor is a CSS class and resolves whatever the interface language is; `__LH_COUNTERS`
