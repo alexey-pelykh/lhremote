@@ -132,16 +132,42 @@ describe("runStdioBin", () => {
       { toString: () => "  " },
     ];
 
+    // Every value must produce the SAME line, so a stand-in that has gone
+    // missing is distinguishable from one that merely rendered something.
+    const lines = new Set<string>();
+
     for (const empty of silent) {
       write.mockClear();
       runStdioServer.mockRejectedValue(empty);
 
       await runStdioBin();
 
-      const reported = String(write.mock.calls[0]?.[0]);
+      // Asserted BEFORE the argument is read, and the argument is read with no
+      // `String()` around it.  Both halves matter, and the reason is the same
+      // one the loop is about: dropping the stand-in in the write-NOTHING
+      // direction — keeping the `process.exit(1)` but skipping the write when
+      // the message is empty — leaves `mock.calls` empty, and
+      // `String(undefined)` is the nine-character "undefined", which is
+      // non-blank to `.trim().length`.  The coercion would pass the test that
+      // exists to fail.  Without it the matcher rejects a non-string outright,
+      // and the call-count assertion catches it before that.
+      expect(write).toHaveBeenCalledTimes(1);
+      const reported = write.mock.calls[0]?.[0] as string;
+
       expect(reported.trim().length).toBeGreaterThan(0);
+      // Held here and nowhere else: every exact-value assertion in this file
+      // is on the non-empty path, so a refactor moving the newline inside the
+      // ternary would drop it on this branch alone.
+      expect(reported.endsWith("\n")).toBe(true);
+      lines.add(reported);
     }
 
+    // One stand-in, not five values that each happened to render non-blank,
+    // and it names this program: the sibling contract in
+    // `packages/cli/src/run.ts` has a stand-in of the same shape, so a
+    // copy-across would otherwise report a failed CLI command here.
+    expect(lines.size).toBe(1);
+    expect([...lines][0]).toContain("MCP server");
     expect(exit).toHaveBeenCalledWith(1);
   });
 

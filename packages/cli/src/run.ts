@@ -57,6 +57,21 @@ const UNREPORTABLE = "Command failed, and the error carried no message";
  * A handler that sets `process.exitCode` and returns normally — the shape
  * nearly every handler in `./handlers/` uses — never enters the catch at all,
  * and its exit code survives.
+ *
+ * **This contract is stated twice, and this is the other half of that.**
+ * `packages/mcp/src/run.ts` states it for the `lhremote-mcp` bin, whose
+ * entrypoint has no commander in it, so there was nothing here for it to
+ * call.  It was kept there rather than shared because the only home both
+ * packages already reach is `@lhremote/core`, where no non-test source calls
+ * `process.exit` or writes to `process.stderr`, and `@lhremote/mcp` must not
+ * take a dependency on this package to borrow one (#945).  The two catch
+ * bodies are identical: same `errorMessage` on stderr, same trim before the
+ * emptiness test, same guarded write, same `process.exit` over
+ * `process.exitCode` — reached there for a reason of its own, which it
+ * documents.  A fix to either is owed to the other, and nothing mechanical
+ * enforces that: both files carry their own green suite, so a one-sided edit
+ * lands green.  (`packages/lhremote/src/cli-parity.test.ts` is not the
+ * instrument for it — these two are legitimately not byte-identical.)
  */
 export async function runProgram(program: Command): Promise<void> {
   try {
