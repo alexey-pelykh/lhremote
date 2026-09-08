@@ -212,6 +212,12 @@ describe("errorMessage cause chain", () => {
    * This runs inside a catch block at the process boundary — the CLI handler
    * and the MCP catch-all both call it while handling a failure.  A throw
    * here destroys the report instead of writing it.
+   *
+   * These three pin specific rendered output for values whose rendering
+   * THROWS.  They do not establish totality, and were green throughout the
+   * period when `errorMessage` was not total — § `errorMessage totality`
+   * below is what pins the property, and says why enumerating shapes here
+   * is what missed it.
    */
   it("never throws on a cause it cannot render", () => {
     expect(errorMessage(new Error("head", { cause: Object.create(null) }))).toBe(
@@ -425,20 +431,31 @@ describe("errorMessage on the errors the readiness gates raise", () => {
  * the throw escapes with no handler above it.
  *
  * Why a corpus and not another case.  `never throws on a cause it cannot
- * render` above was green while the function was not total: all three of its
+ * render` above was green while the function was not total: two of its three
  * cases attack a value whose *rendering throws*, which `ownText`'s `try` has
- * always caught.  A non-string message throws nothing — it is read
- * successfully, returned as-is in violation of `ownText`'s own `: string`, and
- * raises at the *caller's* `.trim()` one line later.  Enumerating shapes is
- * what missed it, so the shapes are crossed with the positions instead: a
- * shape added below is exercised at the head, at a cause, and below a cause
- * without anyone remembering to add it three times.
+ * always caught, and the third attacks a `cause` getter, which `causeOf`'s
+ * does.  A non-string message throws nothing — it is read successfully,
+ * returned as-is in violation of `ownText`'s own `: string`, and raises at
+ * the `.trim()` applied to the result.  Enumerating shapes is what missed it,
+ * so the shapes are crossed with the positions instead: a shape added below
+ * is exercised at the head, at a cause, and below a cause without anyone
+ * remembering to add it three times.
+ *
+ * Three failure MECHANISMS are represented, because the corpus missed one on
+ * its first pass and the miss reproduced the original defect exactly — a
+ * green totality suite beside a non-total function:
+ *
+ * 1. rendering throws            (`String()` raises)      → `ownText`'s `try`
+ * 2. rendering silently succeeds (a non-string comes back) → the coercion
+ * 3. the guard's own predicate throws (`instanceof` on a hostile `Proxy`)
+ *    → `isError`
  *
  * These are reachable rather than synthetic.  The constructor coerces its
- * argument, so a caller cannot build one this way — but a subclass assigning
- * `this.message`, an error rehydrated across a worker or IPC boundary, one
- * from another realm, and a `Proxy` all can, and `unknown` is what the
- * signature promises to accept.
+ * argument, so a caller cannot build a non-string `message` that way — but a
+ * subclass assigning `this.message`, an error rehydrated across a worker or
+ * IPC boundary, and a `Proxy` all can, and `unknown` is what the signature
+ * promises to accept.  No producer in this repo builds one today; the corpus
+ * pins the contract, not an observed source.
  */
 describe("errorMessage totality", () => {
   /**
@@ -492,6 +509,29 @@ describe("errorMessage totality", () => {
       }),
     ],
     ["symbol value", () => Symbol("s")],
+    // Mechanism 3.  These do not reach `message` at all — `instanceof`
+    // itself raises while deciding which branch to take, which is why
+    // `ownText`'s `try` cannot reach them and `isError` exists.
+    [
+      "revoked Proxy",
+      () => {
+        const { proxy, revoke } = Proxy.revocable({}, {});
+        revoke();
+        return proxy;
+      },
+    ],
+    [
+      "Proxy with a throwing getPrototypeOf trap",
+      () =>
+        new Proxy(
+          {},
+          {
+            getPrototypeOf() {
+              throw new Error("boom-get-prototype-of");
+            },
+          },
+        ),
+    ],
   ];
 
   const positions: readonly (readonly [string, (v: unknown) => unknown])[] = [
@@ -503,28 +543,52 @@ describe("errorMessage totality", () => {
     ],
   ];
 
-  it("renders every hostile shape, in every position, as a string", () => {
-    let exercised = 0;
+  const cells = shapes.flatMap(([shape, build]) =>
+    positions.map(([position, place]) => ({
+      cell: `${shape} ${position}`,
+      build,
+      place,
+    })),
+  );
 
-    for (const [shape, build] of shapes) {
-      for (const [position, place] of positions) {
-        // Totality itself needs no assertion and must not grow a `try`: a
-        // throw here fails the test, which is the property.  What the
-        // assertion adds is the half a throw cannot show — that the value
-        // handed back satisfies the signature, so the `.trim()` every caller
-        // applies to it has something to apply.
-        const rendered = errorMessage(place(build()));
-        expect(typeof rendered, `${shape} ${position}`).toBe("string");
-        exercised++;
-      }
-    }
+  /**
+   * Floors, not counts.  An exact expected cardinality would be noise on
+   * every addition; a floor only ever has to move when someone deliberately
+   * REMOVES coverage, which is the event worth a red.  Asserting `cells`
+   * against the cross-product alone is near-tautological — both sides derive
+   * from the same two arrays — so it catches a future conditional `continue`
+   * and nothing else.  Deleting ten shapes would keep it green, on a block
+   * whose whole premise is that a green over an incomplete corpus is what
+   * let the original defect ship.
+   */
+  const MIN_SHAPES = 15;
+  const MIN_POSITIONS = 3;
 
-    // A green over an empty or partial corpus is not evidence of totality.
-    // Derived from the corpus rather than pinned to a literal, so adding a
-    // shape does not have to remember to move a number.
-    expect(exercised).toBe(shapes.length * positions.length);
-    expect(exercised).toBeGreaterThan(0);
+  it("keeps a corpus that has not silently shrunk", () => {
+    expect(shapes.length).toBeGreaterThanOrEqual(MIN_SHAPES);
+    expect(positions.length).toBeGreaterThanOrEqual(MIN_POSITIONS);
+    expect(cells).toHaveLength(shapes.length * positions.length);
   });
+
+  /**
+   * One registered case per cell, so the cell is in the test NAME.  A single
+   * `it()` looping internally reports a throw — the primary property — at one
+   * call site shared by every cell, naming none of them; a label on an
+   * `expect` only helps when the assertion is what failed.  Registered by a
+   * plain loop rather than `it.each`, whose `$cell` interpolation truncates
+   * around forty characters and rendered two of these cells identically.
+   *
+   * Totality itself needs no assertion and must not grow a `try`: a throw
+   * here fails the case, which IS the property.  What the assertion adds is
+   * the half a throw cannot show — that the value handed back satisfies the
+   * signature, so the `.trim()` every caller applies to it has something to
+   * apply.
+   */
+  for (const { cell, build, place } of cells) {
+    it(`renders ${cell} as a string`, () => {
+      expect(typeof errorMessage(place(build()))).toBe("string");
+    });
+  }
 
   /**
    * Total is the floor, not the whole contract.  Swallowing every non-string
@@ -532,6 +596,9 @@ describe("errorMessage totality", () => {
    * above, while dropping the one thing the operator needed.  `String()` is
    * what separates a message that cannot be read from one that merely is not
    * a `string`, so a shape that renders is pinned rendering.
+   *
+   * This also kills the tempting near-miss repair — type-guarding `message`
+   * and falling back to `""` — which every other test in this file survives.
    */
   it("renders a non-string message rather than discarding it", () => {
     expect(errorMessage(errorWithMessage(42))).toBe("42");

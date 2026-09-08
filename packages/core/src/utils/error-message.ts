@@ -48,6 +48,27 @@ const MAX_CAUSE_LENGTH = 1000;
 const OMISSION_NOTE = "Caused by: … (further causes omitted)";
 
 /**
+ * `value instanceof Error`, without the throw.
+ *
+ * `instanceof` is not a safe question to ask of an arbitrary caught value:
+ * it runs `OrdinaryHasInstance`, which walks the value's prototype, and a
+ * `Proxy` can trap that — a revoked one throws on every internal method.
+ * Every guard in this file asks it, and each ran outside a `try` until a
+ * review of the non-string-message fix walked the same corpus one shape
+ * further (#965).  A value whose class cannot be determined is treated as
+ * not an `Error`, which routes it to {@link ownText}'s own guard and renders
+ * it as no text — the degradation this file already applies to a link it
+ * cannot read, rather than a throw at the process boundary.
+ */
+function isError(value: unknown): value is Error {
+  try {
+    return value instanceof Error;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Render one link of a chain — its own text, without following its `cause`.
  *
  * Mirrors the rule the top-level value has always been rendered by, so a
@@ -56,29 +77,33 @@ const OMISSION_NOTE = "Caused by: … (further causes omitted)";
  * **Total by construction**, which takes both of the guards below and not
  * either one alone.
  *
- * The `try` covers rendering that *throws*: `String()` throws on a value with
- * no `toString` (`Object.create(null)`) or a throwing one, and a `message`
- * getter may throw too.  Before this walked the chain, the only value ever
- * stringified was one the caller already held, so a throw here was the
- * caller's own; now it would be raised from *inside a catch block at the
- * process boundary* — the CLI handler and `mcpCatchAll` both call this while
- * handling a failure, and a formatter that throws there destroys the report
- * instead of writing it.  An unreadable link therefore renders as no text,
- * which the caller already treats as nothing to show.
+ * The `try` covers rendering that *throws*: `String()` throws on a value
+ * with no callable `toString`, `valueOf` or `Symbol.toPrimitive`
+ * (`Object.create(null)`), or a throwing one, and a `message` getter may
+ * throw too.  Before this walked the chain, the only value ever stringified
+ * was one the caller already held, so a throw here was the caller's own; now
+ * it would be raised from *inside a catch block at the process boundary* —
+ * `runProgram` and `mcpCatchAll` both reach this while handling a failure,
+ * and a formatter that throws there destroys the report instead of writing
+ * it.  An unreadable link therefore renders as no text, which the caller
+ * already treats as nothing to show.
  *
- * `String()` sits OUTSIDE the ternary, which is the half the `try` cannot
- * do, and the arrangement is load-bearing rather than stylistic.  `message`
- * is typed `string` but is not one by construction: reading a non-string
- * `message` throws nothing, so with the coercion inside the `Error` branch
- * this returned that value as-is, in violation of its own `: string`, and the
- * `TypeError` surfaced at the *call site* on `.trim()` — measured, and the
- * reason `mcpCatchAll`'s fallback covers the formatter throwing and not only
- * failing to load.  The value arrives from a subclass assigning
- * `this.message`, an error rehydrated across a worker or IPC boundary, one
- * from another realm, or a `Proxy`; `unknown` is what {@link errorMessage}
- * promises to accept, so none of them is out of contract.  Coercing rather
- * than discarding is deliberate: `""` would be total too, and would throw
- * away a message that renders perfectly well.
+ * `String()` wraps the whole ternary rather than sitting in one branch,
+ * which is the half the `try` cannot do, and the arrangement is load-bearing
+ * rather than stylistic.  `message` is typed `string` but is not one by
+ * construction, and reading a non-string one throws NOTHING — so while the
+ * coercion sat in the non-`Error` branch alone, an `Error` returned its
+ * `message` unchanged, in violation of this function's own `: string`, and
+ * the `TypeError` was raised where {@link errorMessage} applies `.trim()` to
+ * the result rather than anywhere in here.  Measured, and the reason
+ * `render`'s catch in `packages/mcp/src/run.ts` covers the formatter
+ * throwing and not only failing to load.  Such a `message` *can* arrive from
+ * a subclass assigning `this.message`, an error rehydrated across a worker
+ * or IPC boundary, or a `Proxy` — no producer in this repo builds one today,
+ * so treat that as the contract `unknown` promises to accept rather than as
+ * an observed source.  Coercing rather than discarding is deliberate: `""`
+ * would be total too, and would throw away a message that renders perfectly
+ * well.
  *
  * `error-message.test.ts` § `errorMessage totality` pins this over a corpus
  * of shapes crossed with positions.  Enumerating shapes one at a time is
@@ -86,7 +111,7 @@ const OMISSION_NOTE = "Caused by: … (further causes omitted)";
  */
 function ownText(value: unknown): string {
   try {
-    return String(value instanceof Error ? value.message : value);
+    return String(isError(value) ? value.message : value);
   } catch {
     return "";
   }
@@ -94,7 +119,7 @@ function ownText(value: unknown): string {
 
 /** Read a link's `cause`, tolerating a getter that throws. */
 function causeOf(value: unknown): unknown {
-  if (!(value instanceof Error)) return undefined;
+  if (!isError(value)) return undefined;
   try {
     return value.cause;
   } catch {
@@ -201,7 +226,7 @@ function elide(text: string): string {
  * @returns The message, plus a `Caused by:` line per rendered cause.
  */
 export function errorMessage(error: unknown): string {
-  if (!(error instanceof Error)) return ownText(error);
+  if (!isError(error)) return ownText(error);
 
   // The head is normalized on the same terms as a cause.  It used to be the
   // whole output, so its surrounding whitespace was invisible; now a second
