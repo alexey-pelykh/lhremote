@@ -10,10 +10,10 @@ import type { PostStats } from "../types/post-analytics.js";
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
 import {
+  assertPostDetailCountsCorroboration,
   capturePostDetailExtractionFailure,
   waitForPostLoad,
 } from "../cdp/wait-for-post-load.js";
-import { assertRegionCorroboration } from "../linkedin/corroboration.js";
 import {
   adaptersFor,
   buildPostDetailExtractionSource,
@@ -311,39 +311,13 @@ export async function getPostStats(
     // and for why a row that did NOT resolve is the ordinary shape of a post
     // with no engagement rather than a failure.
     //
-    // Summed rather than checked per counter, because the corroborator is
-    // ROW-level: `regionResolved` says the row resolved, and there is no
-    // per-counter signal to pair a per-counter check against.  A per-counter
-    // raise would fire on a post carrying comments but no reactions — the
-    // ordinary shape of most posts.
-    //
-    // The cost of that is stated rather than implied away.  A non-zero counter
-    // proves only its OWN pattern matched; it vouches for nothing about the
-    // other two.  So PARTIAL staleness — one counter's pattern dead while
-    // another still reads — passes this check and returns a zero for the dead
-    // one, exactly as before.  Closing it needs a per-counter corroborator
-    // this row does not offer, and none is invented here.
-    try {
-      assertRegionCorroboration({
-        surface: POST_DETAIL_SURFACE,
-        variant: raw.variant || "unknown",
-        field: "engagementCounts",
-        regionName: "countsRoot",
-        regionResolved: raw.countsRootNarrowed,
-        extractedCount:
-          raw.reactionCount + raw.commentCount + raw.shareCount,
-      });
-    } catch (error) {
-      // Capture on the way out, for the reason `get-post` captures at its own
-      // corroboration raise: this failure never reaches a deadline.  The gate
-      // went green milliseconds ago and the scrape returned a well-formed
-      // record, so no timeout-bound capture can see it — and past this throw
-      // the `finally` disconnects the client and the DOM that would have
-      // explained it is gone.  Swallows its own errors, so `error` propagates
-      // unchanged either way.
-      await capturePostDetailExtractionFailure(client);
-      throw error;
-    }
+    // Shared with `get-post` since #951, which reads the same three counters
+    // off the same record and needed the same binding: which counters are
+    // summed, which region name the diagnosis prints, and the capture written
+    // on the way out.  See `assertPostDetailCountsCorroboration` for why the
+    // check is row-level rather than per-counter, and for the partial-staleness
+    // residual that leaves open.
+    await assertPostDetailCountsCorroboration(client, raw);
 
     const stats: PostStats = {
       postUrn,
