@@ -2213,9 +2213,11 @@ describe("get-feed reads headline and timestamp from that same sequence (#898)",
     // The instrument, and what it now guards: these two fixtures are the ones
     // `S6 legacy-4-span` and `S7 sdui-4-p` render, and the whole point of that
     // PAIR is that the same four fields resolve under BOTH dialects.  If
-    // `bareFields` ever collapsed the tags, the two rows would quietly become
-    // one shape tested twice and both would still pass -- so the difference is
-    // asserted here rather than assumed.  This block used to name the
+    // `bareFields` ever collapsed the tags, both rows would quietly land in the
+    // SAME dialect -- still two shapes, but no longer the two dialects the pair
+    // exists to cover -- and both would still pass, because the scraper reads
+    // `p` and `span` runs alike.  So the difference is asserted here rather
+    // than assumed.  This block used to name the
     // standalone `#898 AC-6` / `AC-7` tests instead; those were retired as
     // duplicates of `S6` / `S7`, so the check follows the shapes to where they
     // now live.  It builds them through `bareFields` for that reason: canarying
@@ -2240,8 +2242,8 @@ describe("get-feed reads headline and timestamp from that same sequence (#898)",
     //
     // KEPT DELIBERATELY, and only HALF of it is redundant: the `span` pass
     // drives `S8 single-run`'s exact fixture and asserts a subset of what that
-    // row asserts, but `S8` is span-only, so the `p` pass is the only single-run
-    // case ANYWHERE that is graded for headline and timestamp, and it has no row
+    // row asserts, but `S8` is span-only, so the `p` pass is the only single-`p`-run
+    // case anywhere that is graded for headline and timestamp, and it has no row
     // at all.  (Single `p`-run anchors do appear elsewhere in this file -- the
     // `#859` blocks above -- but those grade `name` and `url` only, so none of
     // them covers what this pass covers.)  Deleting the block to keep the corpus
