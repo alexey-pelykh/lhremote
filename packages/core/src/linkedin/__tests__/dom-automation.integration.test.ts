@@ -77,32 +77,52 @@ describe("DOM automation (integration)", { timeout: INSTALL_TEST_TIMEOUT_MS }, (
       await waitForElement(client, "#existing", { timeout: 2000 });
     });
 
-    // 30 s is `waitForElement`'s own `DEFAULT_TIMEOUT`, so this test now holds
-    // the helper to the budget the product holds it to.  It used to pass 5 s
-    // inside a 15 s outer budget, and that 5 s expired three times on
-    // windows-latest in four days (#936) -- a floor rather than a count, since a
-    // windows failure nobody re-ran leaves nothing an attempts query can see.
-    // 5 s was also below every call site in the product -- the lowest budget any
-    // of them allows is 10 s -- so the test was failing the helper on a deadline
-    // nothing actually asks of it.
+    // The inner budget is `waitForElement`'s own `DEFAULT_TIMEOUT`, and the
+    // outer one is derived from it rather than declared separately.  Both used
+    // to be tightened here -- 5 s inside 15 s -- and 5 s was below every call
+    // site in the product, whose lowest budget is 10 s, so the test held the
+    // helper to a deadline nothing actually asks of it.  Correcting that is the
+    // whole of what this change fixes.
     //
-    // The ORDER of the two budgets is load-bearing, not just their size.  The
-    // inner one expires first, so a genuine hang still fails as `CDPTimeoutError:
-    // Timed out waiting for element "#delayed" after 30000ms`, naming both the
-    // selector and the budget -- which is what makes a recurrence readable rather
-    // than re-diagnosed.  Raising the inner budget PAST the outer would hand the
-    // deadline to vitest, whose abort names only the test; setting the two equal
-    // would race them, which is the failure the `beforeEach` above already
-    // records.  Deriving the outer from the inner keeps that ordering mechanical
-    // across future edits, and the doubled value lands on exactly the 60 s the
-    // `describe` above already declares, so nothing widens.
+    // It is NOT expected to stop the windows flake, and the CI evidence is why.
+    // All three failures behind #936 expired the INNER budget, naming the
+    // selector at 5000ms, and in each run this was the only failing test in the
+    // suite -- `#existing` above passed on the same runner, through the same
+    // `beforeEach`, every time.  The loop polls every 100 ms and returns on the
+    // first `true`, so expiring 5 s means every poll in that window answered
+    // `false`: tens of them, since the peer Chromium suites on those same runs
+    // were averaging a few hundred ms per whole test.  Latency cannot make a
+    // present element answer `false` -- it only buys fewer polls -- so the
+    // element was absent from the document being polled, which is the #908
+    // family rather than a slow box.  `#existing` is immune because its append
+    // and its query leave no gap for the context to change across, which is
+    // also why it kept passing.  Read a recurrence at 30 s as confirmation of
+    // that, not as a fresh puzzle.
     //
-    // It also discriminates on the next occurrence.  Under a contended runner a
-    // larger budget passes -- the element does appear, just late.  A 200 ms
-    // in-page timer that cannot be observed in 30 s is not a contention story at
-    // all, and would point instead at the mechanism #908 is about, where the
-    // document the install gate observed is not the one later evaluations land
-    // on.
+    // Two costs, recorded here rather than left to be rediscovered.  This is the
+    // only wall-clock guard on a poll loop that 17 product call sites share --
+    // every other test touching `waitForElement` mocks `../utils/delay.js`, so
+    // none of them can see cadence at all -- and a regression landing between
+    // 5 s and 30 s is now green.  Re-tightening it with an elapsed-time
+    // assertion would only re-arm the same flake at a new threshold, so that
+    // signal is genuinely traded away, not relocated.
+    //
+    // On the ORDER of the budgets: the inner one expires first, so a wait that
+    // never resolves fails as `CDPTimeoutError: Timed out waiting for element
+    // "#delayed" after 30000ms`, naming both selector and budget, rather than as
+    // vitest's abort, which names only the test.  Raising the inner past the
+    // outer would hand vitest that deadline, and so would equalling it, since
+    // the inner clock starts one round trip later and would always expire
+    // second.  Deriving the outer keeps that ordering across future edits: it is
+    // a no-op while `DELAYED_ELEMENT_TIMEOUT` sits at half the suite budget, and
+    // becomes load-bearing on exactly the edit that raises it.
+    //
+    // A THIRD budget is smaller than both and the ordering above does not cover
+    // it: the client is constructed at `BEFORE_EACH_TIMEOUT` (15 s), which is a
+    // per-REQUEST timeout for the whole file, not just the hook.  One wedged
+    // `Runtime.evaluate` therefore rejects first, with `Timed out waiting for
+    // response to Runtime.evaluate`, naming neither selector nor wait budget.
+    // Rule that message out before reading a failure as either branch above.
     it(
       "should resolve when element appears after a delay",
       { timeout: DELAYED_ELEMENT_TIMEOUT * 2 },
