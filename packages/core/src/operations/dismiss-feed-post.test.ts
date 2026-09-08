@@ -41,6 +41,7 @@ import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
 
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
+import { humanizedScrollToByIndex } from "../linkedin/dom-automation.js";
 import { dismissFeedPost } from "./dismiss-feed-post.js";
 
 const mockClient = {
@@ -142,6 +143,30 @@ describe("dismissFeedPost", () => {
       feedIndex: 0,
       dryRun: false,
     });
+  });
+
+  it("scrolls menu button into view and clicks by index", async () => {
+    setupMocks();
+    setupFeedWithNotInterested();
+
+    await dismissFeedPost({
+      feedIndex: 0,
+      cdpPort: 9222,
+    });
+
+    // The literal is spelled out rather than imported from the registry on
+    // purpose: importing FEED_POST_MENU_BUTTON would compare the constant
+    // with itself and pass through any change to it.  Spelled out, a change
+    // to the registry value fails HERE, loudly, the way it already does for
+    // hide-feed-author and unfollow-from-feed (lhremote#856).
+    expect(humanizedScrollToByIndex).toHaveBeenCalledWith(
+      mockClient,
+      '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]',
+      0,
+      undefined,
+    );
+    // Menu button is clicked via evaluate (by index), not humanizedClick
+    expect(mockClient.evaluate).toHaveBeenCalled();
   });
 
   it("throws when Not interested is not in the menu", async () => {
