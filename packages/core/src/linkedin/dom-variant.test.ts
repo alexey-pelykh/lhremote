@@ -2886,12 +2886,17 @@ describe("unreadableAfterReadinessCause", () => {
   it("names every stage the reactions modal has, not just its scopes", () => {
     // ADR-008 § 5: that surface resolves through its own `scopes` candidates
     // AND then its own resolver, and BOTH must miss before this class is
-    // raised — so a cause naming only `scopes` sends a reader to repair the
+    // raised — so a cause naming only the first sends a reader to repair the
     // stage that was not the one that missed.
+    //
+    // Named by what each stage DOES, not by its field: `scopes` is a registry
+    // key no rendered surface defines, and the second stage has no field of
+    // its own at all — it rides on `extract`, so a reader grepping the word
+    // `resolver` finds nothing to repair.
     const { message } = unreadableAfterReadinessCause("reactions-modal");
 
-    expect(message).toContain("scopes candidates");
-    expect(message).toContain("nor its own resolver");
+    expect(message).toContain("the modal wrappers it looks for");
+    expect(message).toContain("nor anything its own fallback search");
   });
 
   /**

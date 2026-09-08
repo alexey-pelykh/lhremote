@@ -29,8 +29,9 @@ const MAX_LINKS_FOLLOWED = 25;
  * Longest single cause rendered before it is elided.
  *
  * Sized against the longest cause the codebase actually produces — the
- * extraction-time refusal cause, which spells out both readings of a region
- * nothing could read (#923) — with room to spare.  It carries no measured
+ * extraction-time refusal cause, which says what a region nothing could read
+ * establishes, what to do next, and what the diagnostics bundle can and
+ * cannot settle (#923) — with room to spare.  It carries no measured
  * length: the producer and this bound live in modules that do not import
  * each other, so a number here would go stale silently the next time the
  * wording moves.  `error-message.test.ts` pins the render un-elided instead,

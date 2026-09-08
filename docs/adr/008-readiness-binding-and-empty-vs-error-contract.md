@@ -1637,17 +1637,20 @@ It does **not** reassign the operator action, which § 5 still gives as *registe
 both halves. Whether that row should be split into two classes because it carries two repairs is
 #961's question, and is deliberately left open here.
 
-**The criterion has two halves; which of them is REACHABLE is a property of the surface — and that
-is the correction the review gate forced.** This work was first drafted asserting the disjunction
-uniformly, on the strength of #923's own framing that all three sites are the ones where
-*"condition 2 is actually reachable"*. They are not.
+**The criterion has two halves; which of them is REACHABLE is a property of the surface.** #923's
+own framing names all three sites as the ones where *"condition 2 is actually reachable"*. They
+are not, and a cause asserting the disjunction uniformly would relocate the over-claim this item
+exists to remove rather than fix it.
 
 - **Post detail: only the first half can fire.** `buildPostDetailExtractionSource` runs
   `__lhSelect()` and the scope loop inside ONE page read with nothing between them, and every
   post-detail adapter's `scopes` are exactly the members of its own `detect` selector list —
   `LEGACY_POST_DETAIL_ADAPTER` uses one constant for both, `SDUI_POST_DETAIL_ADAPTER` a two-member
   list of the same two. So `querySelector(detect) !== null` entails that some `scopes` candidate
-  matches, and `if (!scope) return null` is unreachable. The cause therefore says so outright and
+  matches, and `if (!scope) return null` is unreachable. That entailment stays in the code and out
+  of the emitted string: it is the warrant for saying *"can only mean"*, not a step either
+  audience can take — neither can check a registry they are not looking at, and `scopes` /
+  `detect` are field names no rendered surface defines. The cause therefore says so outright and
   converts the refusal into the sharper reading the bare message cannot give: readiness matched a
   dialect moments earlier, so **the page stopped matching between the two reads**. Sending an
   operator to hunt stale `scopes` here would send them to repair selectors that are working — the
@@ -1688,9 +1691,18 @@ advice; where they are OFF — the CLI and MCP default, deliberately, because th
 page content — nothing was probed, and the state the post-detail cause describes lasted between
 two reads milliseconds apart and may not reproduce. The helper runs no probe of its own by
 design: it is constructed on a path that is default-off, and a probe there would cost a page read
-on every refusal to serve the runs that are already capturing. So the pointer is the best
-available next step, not a guarantee, and an operator who cannot reproduce a transient has
-reached the limit of what this cause can offer rather than a defect in it.
+on every refusal to serve the runs that are already capturing.
+
+**So the causes lead with the retry, and the bundle comes second.** A failure to reproduce is not
+the limit of what these causes can offer — it is the DISCRIMINATOR, and it is available to both
+audiences where the bundle is not. Retry and the refusal clears: it was the transient the
+post-detail cause describes, and nothing needs registering. Retry and it repeats identically: the
+page really is a variant nothing here registers, and the head message's *register an adapter* was
+right all along. That move costs one read-only navigation, needs no environment change, and is
+the only one of the two an MCP agent can perform at all — `LHREMOTE_CAPTURE_DIAGNOSTICS` is read
+in the server process, which a tool call cannot re-env. The bundle pointer therefore names whose
+process the variable belongs to and says the path is printed on stderr, since an agent never sees
+that line and *"read the bundle"* otherwise names a location nobody was given.
 
 **One site of this shape is deliberately left without a cause**, so a reader does not read the
 asymmetry as an oversight: the extraction-time raise in `search-posts.ts`. § 2026-09-04 Amendment
