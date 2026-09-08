@@ -17,6 +17,7 @@ import {
 import {
   adaptersFor,
   buildPostDetailExtractionSource,
+  unreadableAfterReadinessCause,
   variantNamesFor,
 } from "../linkedin/dom-variant.js";
 import { gaussianDelay } from "../utils/delay.js";
@@ -294,9 +295,15 @@ export async function getPostStats(
       if (!raw) {
         // Zero adapters claimed the page, or the claiming adapter could not
         // resolve its own scope.  Either way nothing read the page.
+        //
+        // The `cause` carries the half of that disjunction the shared message
+        // cannot state, and this is a site where it is the REACHABLE half:
+        // `waitForPostLoad` above went green, so one adapter's detect anchor
+        // matched moments ago (#923).
         throw new DOMVariantUnsupportedError(
           POST_DETAIL_SURFACE,
           variantNamesFor(POST_DETAIL_SURFACE).map(String),
+          { cause: unreadableAfterReadinessCause(POST_DETAIL_SURFACE) },
         );
       }
       throw new DOMVariantAmbiguousError(

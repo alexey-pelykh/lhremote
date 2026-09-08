@@ -2928,3 +2928,114 @@ export function formatVariantProbes(detection: VariantDetection): string {
   if (entries.length === 0) return "none registered";
   return entries.map(([variant, count]) => `${variant}: ${count}`).join(", ");
 }
+
+/**
+ * What "resolved no scope" means on one surface, in the terms an operator
+ * repairs — the per-surface half of § 5's criterion.
+ *
+ * @see {@link unreadableAfterReadinessCause} for why these are per surface.
+ */
+interface ScopeResolutionStages {
+  /** The region the extraction failed to resolve, named as an operator sees it. */
+  readonly region: string;
+  /** Every stage that had to miss, phrased to follow "resolved". */
+  readonly stages: string;
+  /** Which bundle fields separate the two readings, and how far they get. */
+  readonly separator: string;
+}
+
+/**
+ * Per-surface stage counts for {@link unreadableAfterReadinessCause}.
+ *
+ * TOTAL over {@link Surface} on purpose: ADR-008 § 5 records that the stage
+ * count is *"a property of the surface, never a licence to add one"*, so a
+ * new surface must state its own rather than inherit a neighbour's. The type
+ * checker walks the author here, the same way {@link SurfaceAdapterMap} walks
+ * them to every site that binds an adapter.
+ *
+ * `search-results` therefore carries an entry although no site passes it
+ * today. Its extraction-time raise is the fourth site of this exact shape and
+ * deliberately carries no cause — ADR-008 § 2026-09-04 Amendment records it
+ * that way, and § 2026-09-08 (#923) records why that decision is about a
+ * different qualifier and is left standing rather than reversed here.
+ */
+const SCOPE_RESOLUTION_STAGES: Readonly<Record<Surface, ScopeResolutionStages>> = {
+  "post-detail": {
+    region: "post-detail container",
+    stages: "none of its own `scopes` candidates",
+    separator:
+      "the bundle's `variantDetection` beside its `variantAnchors` separates them",
+  },
+  "search-results": {
+    region: "result cards",
+    stages: "no cards from any of its own `scopes` candidates",
+    separator: "the bundle's `variantDetection` separates them",
+  },
+  "reactions-modal": {
+    region: "reactions-modal root",
+    stages: "neither its own `scopes` candidates nor its own resolver",
+    separator: "the bundle's `variantDetection` separates them",
+  },
+};
+
+/**
+ * The `cause` for a `DOMVariantUnsupportedError` raised at EXTRACTION
+ * time — after that surface's readiness gate has already gone green.
+ *
+ * ## What this states that the class's own message cannot
+ *
+ * ADR-008 § 5 fires this class on a disjunction — *no registered adapter
+ * matched the page, or the matching adapter resolved no scope*. The shared
+ * constructor message asserts only the first half, and it is not free to say
+ * more: four assertions pin its wording, and § 5 assigns the same operator
+ * action to both halves, so softening it would lose the action that is right
+ * under either reading. ADR-008 § Decision 4 already settled where the rest
+ * goes — *"the error's `cause` states what was OBSERVED … and names both
+ * readings rather than letting the class's own wording assert the first"* —
+ * and {@link formatVariantProbes}'s readiness-gate callers are the worked
+ * examples. This is that same move at the sites where the SECOND half of the
+ * disjunction is the reachable one (#923).
+ *
+ * **Why the second half is the reachable one here, and not a guess.**
+ * {@link buildReadinessPredicateSource} returns `true` only when exactly one
+ * registered adapter's `detect` anchor matched AND that adapter's own `ready`
+ * anchor is present. Every caller of this helper raises *after* that gate
+ * went green, so an adapter demonstrably claimed the page earlier in the same
+ * operation. For no adapter to match now, the page has to have changed
+ * dialect since — reachable (a re-render mid-collection is exactly what the
+ * reactions-modal scroll path documents) but not the default reading, while
+ * the scope-resolution half needs nothing to have changed at all.
+ *
+ * The cause says which the observation leaves live. It does NOT reassign the
+ * operator action, which § 5 still gives as *register an adapter* for both
+ * halves; whether that row should be split into two classes is #961's
+ * question and is deliberately not answered here.
+ *
+ * ## What it may not contain
+ *
+ * No page content, ever. `errorMessage()` renders a cause with no
+ * `LHREMOTE_CAPTURE_DIAGNOSTICS` gate in front of it, so what a producer
+ * attaches is a disclosure decision — ADR-008 § 2026-09-04 Amendment states
+ * the rule and states outright that holding to it is a property of the
+ * producers. What is interpolated below is a surface name and prose; the
+ * variant names an operator needs are already on the class's own message,
+ * and no probe is run to build this (running one would spend a
+ * `Runtime.evaluate` in the page on every default-off CLI and MCP failure,
+ * which is the cost `capturePostDetailExtractionFailure` avoids for
+ * the bundle's probe).
+ *
+ * @param surface - The surface whose extraction found nothing.
+ * @returns The cause to pass as `{ cause }` to the error's constructor.
+ */
+export function unreadableAfterReadinessCause(surface: Surface): Error {
+  const { region, stages, separator } = SCOPE_RESOLUTION_STAGES[surface];
+  return new Error(
+    `Resolved no ${region}. That surface's readiness gate went green earlier ` +
+      "in this operation, and it passes only when exactly one registered " +
+      "adapter's detect anchor matched. So the message above states one of " +
+      "TWO readings: that no adapter matches, which now needs the page to " +
+      `have changed dialect since that gate, OR that the adapter which ` +
+      `claimed it resolved ${stages}, which needs nothing to have changed. ` +
+      `Re-run under LHREMOTE_CAPTURE_DIAGNOSTICS=1 — ${separator}.`,
+  );
+}

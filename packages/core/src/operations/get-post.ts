@@ -18,6 +18,7 @@ import { assertCardinalCorroboration } from "../linkedin/corroboration.js";
 import {
   adaptersFor,
   buildPostDetailExtractionSource,
+  unreadableAfterReadinessCause,
   variantNamesFor,
 } from "../linkedin/dom-variant.js";
 import { denormalizeCommentUrnToLegacy } from "../linkedin/selectors.js";
@@ -435,9 +436,15 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
         // Zero adapters claimed the page, or the claiming adapter could not
         // resolve its own scope.  Either way nothing read the page, and there
         // is no `<main>` left to pretend otherwise with.
+        //
+        // The `cause` carries the half of that disjunction the shared message
+        // cannot state, and this is a site where it is the REACHABLE half:
+        // `waitForPostLoad` above went green, so one adapter's detect anchor
+        // matched moments ago (#923).
         throw new DOMVariantUnsupportedError(
           POST_DETAIL_SURFACE,
           variantNamesFor(POST_DETAIL_SURFACE).map(String),
+          { cause: unreadableAfterReadinessCause(POST_DETAIL_SURFACE) },
         );
       }
       // Two or more adapters claimed it.  Refuse rather than pick: a record

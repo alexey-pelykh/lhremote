@@ -30,6 +30,7 @@ import {
 import {
   adaptersFor,
   buildPostDetailExtractionSource,
+  unreadableAfterReadinessCause,
 } from "../linkedin/dom-variant.js";
 import {
   extractPostUrn,
@@ -293,6 +294,29 @@ describe("getPostStats", () => {
     await expect(rejection).rejects.toThrow(DOMVariantUnsupportedError);
     await expect(rejection).rejects.toThrow(
       /No DOM adapter matched the post-detail page \(tried: sdui, legacy\)/,
+    );
+  });
+
+  it("attaches the disjunction its own message cannot state (#923)", async () => {
+    // Same criterion, same surface, second site.  Pinned here as well as on
+    // `get-post` because the falsifier is per site: deleting `{ cause: … }`
+    // from either one must turn exactly its own test red, which one shared
+    // test could not establish.
+    setupMocks({ postStats: null });
+
+    const error = await getPostStats({
+      postUrl: POST_URL,
+      cdpPort: CDP_PORT,
+    }).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(DOMVariantUnsupportedError);
+    const cause = (error as DOMVariantUnsupportedError).cause;
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe(
+      unreadableAfterReadinessCause("post-detail").message,
     );
   });
 

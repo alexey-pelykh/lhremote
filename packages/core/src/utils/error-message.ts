@@ -29,8 +29,12 @@ const MAX_LINKS_FOLLOWED = 25;
  * Longest single cause rendered before it is elided.
  *
  * Sized against the longest cause the codebase actually produces — the
- * search-results zero-match cause, which spells out both readings of a zero
- * match and measures 448 characters — with better than 2x headroom.
+ * extraction-time refusal cause, which spells out both readings of a region
+ * nothing could read (#923) — with room to spare.  It carries no measured
+ * length: the producer and this bound live in modules that do not import
+ * each other, so a number here would go stale silently the next time the
+ * wording moves.  `error-message.test.ts` pins the render un-elided instead,
+ * which fails when a cause outgrows this rather than when a comment does.
  *
  * This bounds the OUTPUT; it is not a privacy control and must not be read
  * as one.  Truncating page content would still print page content.  What

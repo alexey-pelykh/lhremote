@@ -25,6 +25,7 @@ import {
   buildReactionsModalScrollSource,
   buildReactionsModalTotalSource,
   buildReactionsTriggerSource,
+  unreadableAfterReadinessCause,
   variantNamesFor,
 } from "../linkedin/dom-variant.js";
 import {
@@ -536,9 +537,15 @@ export async function getPostEngagers(
           refusal.ambiguousVariants,
         );
       }
+      // The `cause` carries the half of ADR-008 § 5's disjunction the shared
+      // message cannot state, and here it is the REACHABLE half twice over:
+      // `waitForReactionsModal` above went green, so one adapter's detect
+      // anchor matched; and this surface has TWO resolution stages, so a
+      // reader repairing `scopes` alone has not covered the condition (#923).
       return new DOMVariantUnsupportedError(
         REACTIONS_MODAL_SURFACE,
         variantNamesFor(REACTIONS_MODAL_SURFACE).map(String),
+        { cause: unreadableAfterReadinessCause(REACTIONS_MODAL_SURFACE) },
       );
     };
 

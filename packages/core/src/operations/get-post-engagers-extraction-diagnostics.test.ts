@@ -69,6 +69,7 @@ import {
   buildReactionsModalScrollSource,
   buildReactionsModalTotalSource,
   buildReactionsTriggerSource,
+  unreadableAfterReadinessCause,
 } from "../linkedin/dom-variant.js";
 import {
   DOMVariantAmbiguousError,
@@ -756,6 +757,38 @@ describe("getPostEngagers extraction-failure diagnostics (#835)", () => {
     // Refused before the scroll, before the detect probe, before the capture:
     // 1 readiness + 1 find + 1 modal ready + 1 total + 1 scrape.
     expect(evaluateMock).toHaveBeenCalledTimes(5);
+  });
+
+  it("attaches the disjunction its own message cannot state (#923)", async () => {
+    // The message asserts *no adapter matched*.  `waitForReactionsModal` went
+    // green moments earlier, so one adapter's detect anchor matched — and on
+    // THIS surface the other half of ADR-008 § 5's criterion is two stages,
+    // not one: the claiming adapter resolved neither its own `scopes`
+    // candidates nor its own resolver.  A reader shown only the message, or
+    // only a `scopes` diagnosis, repairs the stage that was not the one that
+    // missed.
+    //
+    // The whole message is pinned, and against the producer rather than a
+    // look-alike literal, for the reasons the post-detail sites state.  The
+    // falsifier: delete `{ cause: … }` from `unreadableModalError` and
+    // exactly this test goes red.
+    delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
+    primeUpToScrape(null, 0);
+
+    const error = await getPostEngagers({
+      postUrl: POST_URL,
+      cdpPort: CDP_PORT,
+    }).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(DOMVariantUnsupportedError);
+    const cause = (error as DOMVariantUnsupportedError).cause;
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe(
+      unreadableAfterReadinessCause("reactions-modal").message,
+    );
   });
 
   it("refuses at the CARDINAL tier with ExtractionFailedError when the container resolved and held no rows", async () => {
