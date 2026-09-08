@@ -53,8 +53,11 @@ const OMISSION_NOTE = "Caused by: … (further causes omitted)";
  * Mirrors the rule the top-level value has always been rendered by, so a
  * cause and the error carrying it are treated identically.
  *
- * **Total by construction.**  `String()` throws on a value with no
- * `toString` (`Object.create(null)`) or a throwing one, and a `message`
+ * **Total by construction**, which takes both of the guards below and not
+ * either one alone.
+ *
+ * The `try` covers rendering that *throws*: `String()` throws on a value with
+ * no `toString` (`Object.create(null)`) or a throwing one, and a `message`
  * getter may throw too.  Before this walked the chain, the only value ever
  * stringified was one the caller already held, so a throw here was the
  * caller's own; now it would be raised from *inside a catch block at the
@@ -62,10 +65,28 @@ const OMISSION_NOTE = "Caused by: … (further causes omitted)";
  * handling a failure, and a formatter that throws there destroys the report
  * instead of writing it.  An unreadable link therefore renders as no text,
  * which the caller already treats as nothing to show.
+ *
+ * `String()` sits OUTSIDE the ternary, which is the half the `try` cannot
+ * do, and the arrangement is load-bearing rather than stylistic.  `message`
+ * is typed `string` but is not one by construction: reading a non-string
+ * `message` throws nothing, so with the coercion inside the `Error` branch
+ * this returned that value as-is, in violation of its own `: string`, and the
+ * `TypeError` surfaced at the *call site* on `.trim()` — measured, and the
+ * reason `mcpCatchAll`'s fallback covers the formatter throwing and not only
+ * failing to load.  The value arrives from a subclass assigning
+ * `this.message`, an error rehydrated across a worker or IPC boundary, one
+ * from another realm, or a `Proxy`; `unknown` is what {@link errorMessage}
+ * promises to accept, so none of them is out of contract.  Coercing rather
+ * than discarding is deliberate: `""` would be total too, and would throw
+ * away a message that renders perfectly well.
+ *
+ * `error-message.test.ts` § `errorMessage totality` pins this over a corpus
+ * of shapes crossed with positions.  Enumerating shapes one at a time is
+ * what let the gap sit under a green suite.
  */
 function ownText(value: unknown): string {
   try {
-    return value instanceof Error ? value.message : String(value);
+    return String(value instanceof Error ? value.message : value);
   } catch {
     return "";
   }

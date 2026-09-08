@@ -414,3 +414,129 @@ describe("errorMessage on the errors the readiness gates raise", () => {
     }
   });
 });
+
+/**
+ * Totality, pinned as a property over a corpus rather than as a case list.
+ *
+ * `errorMessage` takes *any caught value*, and it is called from inside catch
+ * blocks at the process boundary — `runProgram`'s CLI handler renders through
+ * it, and `mcpCatchAll` does too.  A throw there destroys the report instead
+ * of writing it, and at the CLI site the call is not itself inside a `try`, so
+ * the throw escapes with no handler above it.
+ *
+ * Why a corpus and not another case.  `never throws on a cause it cannot
+ * render` above was green while the function was not total: all three of its
+ * cases attack a value whose *rendering throws*, which `ownText`'s `try` has
+ * always caught.  A non-string message throws nothing — it is read
+ * successfully, returned as-is in violation of `ownText`'s own `: string`, and
+ * raises at the *caller's* `.trim()` one line later.  Enumerating shapes is
+ * what missed it, so the shapes are crossed with the positions instead: a
+ * shape added below is exercised at the head, at a cause, and below a cause
+ * without anyone remembering to add it three times.
+ *
+ * These are reachable rather than synthetic.  The constructor coerces its
+ * argument, so a caller cannot build one this way — but a subclass assigning
+ * `this.message`, an error rehydrated across a worker or IPC boundary, one
+ * from another realm, and a `Proxy` all can, and `unknown` is what the
+ * signature promises to accept.
+ */
+describe("errorMessage totality", () => {
+  /**
+   * An `Error` whose `message` is `value`.  `new Error(value)` would coerce
+   * it, which is the very step under test.
+   */
+  const errorWithMessage = (value: unknown): Error => {
+    const error = new Error("placeholder");
+    Object.defineProperty(error, "message", { value, configurable: true });
+    return error;
+  };
+
+  /** Built fresh per cell, so no cell can be perturbed by an earlier one. */
+  const shapes: readonly (readonly [string, () => unknown])[] = [
+    ["object message", () => errorWithMessage({ nope: 1 })],
+    ["numeric message", () => errorWithMessage(42)],
+    ["null message", () => errorWithMessage(null)],
+    ["undefined message", () => errorWithMessage(undefined)],
+    ["bigint message", () => errorWithMessage(BigInt(10))],
+    ["symbol message", () => errorWithMessage(Symbol("s"))],
+    ["array message", () => errorWithMessage(["a", "b"])],
+    ["prototype-less message", () => errorWithMessage(Object.create(null))],
+    [
+      "throwing-toString message",
+      () =>
+        errorWithMessage({
+          toString() {
+            throw new Error("boom-message-tostring");
+          },
+        }),
+    ],
+    [
+      "throwing message getter",
+      () => {
+        const error = new Error("placeholder");
+        Object.defineProperty(error, "message", {
+          get() {
+            throw new Error("boom-message-getter");
+          },
+        });
+        return error;
+      },
+    ],
+    ["prototype-less value", () => Object.create(null)],
+    [
+      "throwing-toString value",
+      () => ({
+        toString() {
+          throw new Error("boom-value-tostring");
+        },
+      }),
+    ],
+    ["symbol value", () => Symbol("s")],
+  ];
+
+  const positions: readonly (readonly [string, (v: unknown) => unknown])[] = [
+    ["as the value itself", (value) => value],
+    ["as a cause", (value) => new Error("head", { cause: value })],
+    [
+      "as a cause below a cause",
+      (value) => new Error("head", { cause: new Error("mid", { cause: value }) }),
+    ],
+  ];
+
+  it("renders every hostile shape, in every position, as a string", () => {
+    let exercised = 0;
+
+    for (const [shape, build] of shapes) {
+      for (const [position, place] of positions) {
+        // Totality itself needs no assertion and must not grow a `try`: a
+        // throw here fails the test, which is the property.  What the
+        // assertion adds is the half a throw cannot show — that the value
+        // handed back satisfies the signature, so the `.trim()` every caller
+        // applies to it has something to apply.
+        const rendered = errorMessage(place(build()));
+        expect(typeof rendered, `${shape} ${position}`).toBe("string");
+        exercised++;
+      }
+    }
+
+    // A green over an empty or partial corpus is not evidence of totality.
+    // Derived from the corpus rather than pinned to a literal, so adding a
+    // shape does not have to remember to move a number.
+    expect(exercised).toBe(shapes.length * positions.length);
+    expect(exercised).toBeGreaterThan(0);
+  });
+
+  /**
+   * Total is the floor, not the whole contract.  Swallowing every non-string
+   * message into `""` would also never throw and would also pass the property
+   * above, while dropping the one thing the operator needed.  `String()` is
+   * what separates a message that cannot be read from one that merely is not
+   * a `string`, so a shape that renders is pinned rendering.
+   */
+  it("renders a non-string message rather than discarding it", () => {
+    expect(errorMessage(errorWithMessage(42))).toBe("42");
+    expect(
+      errorMessage(new Error("head", { cause: errorWithMessage(42) })),
+    ).toBe("head\nCaused by: 42");
+  });
+});
