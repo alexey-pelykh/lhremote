@@ -38,6 +38,12 @@ describe("discoverTargets", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    // `vi.stubGlobal` is undone by neither reset nor restore, so without this
+    // the `fetch` stub above stays installed over the Tier-1 network guard for
+    // the rest of the file — including past this suite's last test (#935).
+    // Every test here sets its own resolved value, so nothing depends on
+    // inheriting the stub.
+    vi.unstubAllGlobals();
   });
 
   it("should return targets from /json/list endpoint", async () => {
