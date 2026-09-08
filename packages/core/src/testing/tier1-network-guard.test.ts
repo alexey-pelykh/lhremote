@@ -247,9 +247,8 @@ describe("Tier-1 diagnostic-capture pin", () => {
  *
  * `vi.stubGlobal` is undone by neither `vi.resetAllMocks()` nor
  * `vi.restoreAllMocks()` — only `vi.unstubAllGlobals()`, or the `unstubGlobals`
- * config key this repo deliberately does not set: vitest runs it from
- * `onBeforeTryTask`, before every test attempt, so it would tear down the
- * module-scope `WebSocket` stub `cdp/client.test.ts` holds on purpose.  A suite
+ * config key this repo deliberately does not set — CLAUDE.md § Testing carries
+ * why, and is not restated here.  A suite
  * that stubs `fetch` and never releases it therefore replaces the guard for the
  * rest of its file, and the replacement fails open and silently (#935).
  *
@@ -289,9 +288,11 @@ describe("Tier-1 guard release between tests", () => {
   afterAll(() => {
     expect(
       entriesObserved,
-      "both members of this pair must run: each is the other's predecessor, " +
-        "so with only one of them the entry assertion grades nothing. Run the " +
-        "whole file rather than a `-t` filter — either order is fine.",
+      "both members of this pair must run exactly once: each is the other's " +
+        "predecessor, so with only one the entry assertion grades nothing. " +
+        "Fewer than two means a `-t` filter or a `.skip` — run the whole file, " +
+        "either order is fine. More than two means `--retry`, which re-enters " +
+        "the body; the count above says which happened.",
     ).toBe(2);
   });
 
@@ -304,9 +305,10 @@ describe("Tier-1 guard release between tests", () => {
   async function displaceAndAssertRestored(): Promise<void> {
     entriesObserved += 1;
 
-    // The assertion that goes red when the release is dropped.  When it does
-    // fail, the body aborts before its own `drain()` below, so the setup file's
-    // drain hook reports a second failure on the same test: two reds, one cause.
+    // The assertion that goes red when the release is dropped.  Exactly one
+    // red, not two: the leftover stub never calls the guard, so nothing is
+    // recorded and the setup file's drain hook stays quiet.  A guard that threw
+    // the WRONG message would produce two, since that path does record.
     expect(() => fetch("http://127.0.0.1:9222/json/list")).toThrow(
       "http://127.0.0.1:9222/json/list",
     );
