@@ -1969,7 +1969,8 @@ function extractionHelpersSource(): string {
  * Selects the adapter, resolves its scope from its own ordered candidates,
  * and runs its extractor.  Returns:
  *
- * - the field bag plus the selected `variant`, on success
+ * - the field bag plus the selected `variant` and `countsRootNarrowed`, on
+ *   success
  * - `null` when no adapter claimed the page, or when the claiming adapter's
  *   scope anchors did not resolve — both are "no usable adapter", which the
  *   caller raises as unsupported
@@ -1988,6 +1989,30 @@ function extractionHelpersSource(): string {
  * live evidence for the first is `reactionCount: 0` returned for a post
  * carrying two reactions, whose count LinkedIn renders as a bare "2" with the
  * words only in the control's `aria-label`.
+ *
+ * ## `countsRootNarrowed` — reported, not computed (#852)
+ *
+ * The record carries `__lhCountsRoot`'s own `narrowed` flag out to the caller.
+ * Nothing new is measured for it: the flag already exists because
+ * `__lhReadCount` gates its loose fallback on it, and this only stops throwing
+ * it away.
+ *
+ * Read it as `__lhCountsRootOf` insists — the CALLER'S WARRANT, not a property
+ * of the element — and on this surface that warrant is exactly *the selected
+ * adapter's own declared counts anchor resolved inside the resolved scope*.
+ * That is what makes it usable as a corroborator rather than as trivia: on the
+ * only pages anyone has measured, the legacy counts row renders when and only
+ * when there is engagement to render — `socialCounts: 1` with
+ * `"2 41 comments"` on `post-with-comments`, `socialCounts: 0` with `""` on
+ * `post-zero-comments` (`__fixtures__/legacy/*.measured.json`, asserted by
+ * `__tests__/fixture-oracle.integration.test.ts`).  So a `true` here beside
+ * three zero counters is a page contradicting itself, and `get-post-stats`
+ * raises on it (ADR-008 § Decision 4, § 2026-09-08 Amendment).
+ *
+ * A `false` carries no such claim and must not be read as one.  It means the
+ * anchor did not resolve, which on `post-zero-comments` is the ordinary shape
+ * of a post with no engagement — and on the `sdui` adapter it is unconditional,
+ * because that adapter declares `counts: []` and has no anchor to resolve.
  */
 export function buildPostDetailExtractionSource(
   adapters: readonly PostDetailVariantAdapter[],
@@ -2024,6 +2049,7 @@ export function buildPostDetailExtractionSource(
     reactionCount: __lhReadCount(countsRoot, __LH_COUNTERS.reactionCount),
     commentCount: __lhReadCount(countsRoot, __LH_COUNTERS.commentCount),
     shareCount: __lhReadCount(countsRoot, __LH_COUNTERS.shareCount),
+    countsRootNarrowed: countsRoot.narrowed,
   };
 })()`;
 }
