@@ -196,19 +196,28 @@ describeE2E("LinkedIn selectors registry", () => {
       // "selector is stale" -- and a gate that cannot tell its own failure
       // modes apart is worse than none, which is the same standard applied
       // to the five entries recorded below.
+      //
+      // The poll WAITS; it does not decide. Nothing is caught here, so a CDP
+      // or evaluate failure propagates verbatim instead of collapsing into a
+      // zero — a transport fault must not be reportable as a stale selector,
+      // which is the same conflation this whole block exists to avoid.
       const count = await retryAsync(
         async () => {
           const n = await queryCount(linkedInClient, selector);
-          if (n === 0) throw new Error("menu button not hydrated yet");
+          if (n === 0) {
+            throw new Error(
+              `Selector "${selector}" matched 0 elements — either the selector is stale, or the feed never hydrated`,
+            );
+          }
           return n;
         },
         { retries: 15, delay: 1_000 },
-      ).catch(() => 0);
+      );
 
-      expect(
-        count,
-        `Selector "${selector}" matched 0 elements after 15 s of polling — either the selector is stale, or the feed never hydrated`,
-      ).toBeGreaterThan(0);
+      // Not redundant with the throw above: it pins retryAsync's contract of
+      // rethrowing its last error once the retries are exhausted. Were that
+      // to change, this test would otherwise pass on a zero.
+      expect(count, `Selector "${selector}" matched 0 elements`).toBeGreaterThan(0);
     });
   });
 
