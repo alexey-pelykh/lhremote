@@ -153,35 +153,15 @@ describeE2E("LinkedIn selectors registry", () => {
   }, 60_000);
 
   // -- Module export sanity checks -----------------------------------------
-
-  describe("module exports", () => {
-    it("SELECTORS object contains all expected keys", () => {
-      const expectedKeys: string[] = [
-        "FEED_POST_CONTAINER",
-        "COMMENT_INPUT",
-        "REACTION_TRIGGER",
-        "REACTION_LIKE",
-        "REACTION_CELEBRATE",
-        "REACTION_SUPPORT",
-        "REACTION_LOVE",
-        "REACTION_INSIGHTFUL",
-        "REACTION_FUNNY",
-        "COMMENT_SUBMIT_BUTTON",
-      ];
-
-      for (const key of expectedKeys) {
-        expect(SELECTORS).toHaveProperty(key);
-        expect(
-          typeof SELECTORS[key as keyof typeof SELECTORS],
-          `${key} should be a non-empty string`,
-        ).toBe("string");
-        expect(
-          (SELECTORS[key as keyof typeof SELECTORS] as string).length,
-          `${key} should not be empty`,
-        ).toBeGreaterThan(0);
-      }
-    });
-  });
+  //
+  // Moved to Tier 1: packages/core/src/linkedin/selectors.test.ts.
+  //
+  // They have no live-DOM dependency, so behind this suite's LinkedHelper
+  // launch they were a gate CI never fired.  The version that replaced them
+  // is also strictly wider: it derives its cases from the SELECTORS aggregate
+  // instead of a hand-maintained `expectedKeys` array, which had drifted to
+  // covering 10 of 16 entries (lhremote#856).  What stays here is what
+  // genuinely needs a browser: liveness.
 
   // -- Feed page selectors -------------------------------------------------
 
@@ -195,6 +175,33 @@ describeE2E("LinkedIn selectors registry", () => {
       const count = await queryCount(linkedInClient, REACTION_TRIGGER);
       expect(count, `Selector "${REACTION_TRIGGER}" matched 0 elements`).toBeGreaterThan(0);
     });
+
+    it("FEED_POST_MENU_BUTTON matches at least one element", async () => {
+      // Read off the aggregate rather than imported by name: the package
+      // barrel re-exports a subset of the registry and does not currently
+      // include this constant.  SELECTORS is exported, so this reaches it
+      // without widening the public API from a test.
+      const selector = SELECTORS.FEED_POST_MENU_BUTTON;
+      const count = await queryCount(linkedInClient, selector);
+      expect(count, `Selector "${selector}" matched 0 elements`).toBeGreaterThan(0);
+    });
+  });
+
+  // -- Registry entries with no liveness assertion in THIS suite -----------
+  //
+  // The remaining five uncovered aggregate entries (lhremote#856) are left
+  // deliberately unasserted here rather than bolted on, because this suite
+  // loads /feed/ and never leaves it.  Against that page state a red would
+  // mean "wrong page", not "stale selector" -- a gate that cannot tell its
+  // own failure modes apart is worse than none.  Each needs the page state
+  // named below; all five are covered structurally in Tier 1.
+
+  describe("selectors needing a page state this suite does not reach", () => {
+    it.todo("COMMENT_REPLY_BUTTON — needs a post-detail page with comments");
+    it.todo("COMMENT_REACTION_TRIGGER — needs a post-detail page with comments");
+    it.todo("COMMENT_REACTIONS_MENU — needs a post-detail page with comments");
+    it.todo("MENTION_TYPEAHEAD — needs `@` typed into the comment editor");
+    it.todo("MENTION_OPTION — needs a typeahead that returned results");
   });
 
   // -- Reactions popup selectors (hover-triggered) -------------------------
