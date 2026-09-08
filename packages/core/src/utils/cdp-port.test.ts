@@ -7,6 +7,14 @@ import { isCdpPort } from "./cdp-port.js";
 describe("isCdpPort", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    // Each test below stubs `fetch` in its own body, and `vi.stubGlobal` is
+    // undone by neither reset nor restore — so without this the previous
+    // test's stub is what a test that set none would receive, and the Tier-1
+    // network guard stays displaced for the rest of the file (#935).
+    // `isCdpPort()` is the `catch { return false; }` shape that guard records
+    // blocked calls for, so displacing it here loses the one mechanism that
+    // would report a real call.
+    vi.unstubAllGlobals();
   });
 
   it("should return true when the port responds with ok", async () => {
