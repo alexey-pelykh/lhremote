@@ -2798,14 +2798,14 @@ describe("reactions-modal emitted-source escaping", () => {
 });
 
 /**
- * The disjunction ADR-008 § 5 fires this class on, said where the class's own
- * message cannot say it (#923).
+ * What the extraction-time refusal ACTUALLY establishes, said where the
+ * class's own message cannot say it (#923).
  *
- * The message asserts only *no adapter matched*; four assertions pin that
- * wording and § 5 assigns the same operator action to both halves, so the
- * remedy is the `cause` rather than a reword — the move ADR-008 § Decision 4
- * already settled for the search-results gate.  What is graded here is the
- * text itself; that each site attaches it is graded at each site.
+ * ADR-008 § 5 fires `DOMVariantUnsupportedError` on a disjunction and the
+ * message asserts only its first half.  The remedy is the `cause` rather than
+ * a reword — assertions in several packages pin the message, and § 5 assigns
+ * the same operator action to both halves.  What is graded here is the text;
+ * that each site attaches it is graded at each site.
  */
 describe("unreadableAfterReadinessCause", () => {
   const surfaces: readonly Surface[] = [
@@ -2814,24 +2814,46 @@ describe("unreadableAfterReadinessCause", () => {
     "reactions-modal",
   ];
 
-  it("names both readings on every surface, neither presented as settled", () => {
-    // Every surface, not only the two that have a call site today: the record
-    // behind this is total over `Surface` so a new surface must state its own
-    // stage count, and an entry that named no second reading would satisfy
-    // that type check while saying nothing.
+  it("says which readings are live, per surface, and never asserts a probe", () => {
     for (const surface of surfaces) {
       const { message } = unreadableAfterReadinessCause(surface);
 
-      expect(message, surface).toContain("TWO readings");
-      // Reading 1 — what the class's own message asserts, here qualified by
-      // what the readiness gate already established.
-      expect(message, surface).toContain("no adapter matches");
-      expect(message, surface).toContain("changed dialect since that gate");
-      // Reading 2 — the half the message cannot state.
-      expect(message, surface).toContain("the adapter which claimed it");
-      // And the instrument that separates them, which is gated.
+      // What was observed, on every surface.
+      expect(message, surface).toContain("detect anchor");
+      // The instrument, and the one thing it cannot say — `probeVariantDetection`
+      // degrades to `null`, which is NOT the claim that no adapter matched, and
+      // a reader who takes it that way registers a second adapter for a dialect
+      // already covered.
       expect(message, surface).toContain("LHREMOTE_CAPTURE_DIAGNOSTICS=1");
+      expect(message, surface).toContain("`variantDetection`");
+      expect(message, surface).toContain("the probe failing to run");
     }
+  });
+
+  it("names TWO readings only where the second one is reachable", () => {
+    // The disjunction is worth stating where BOTH halves can fire and the DOM
+    // cannot say which did.  On the reactions modal that holds — `detect` is
+    // the trigger on the post page, `scopes` are the modal — and on search
+    // results the card loop can come back empty from a resolved scope.
+    for (const surface of ["reactions-modal", "search-results"] as const) {
+      const { message } = unreadableAfterReadinessCause(surface);
+
+      expect(message, surface).toContain("TWO readings");
+      expect(message, surface).toContain("needs nothing to have changed");
+    }
+  });
+
+  it("names ONE reading on post detail, where the second cannot fire", () => {
+    // The half the message asserts is the ONLY half reachable here, so the
+    // cause confirms it rather than qualifying it — and converts the refusal
+    // into the sharper reading the bare message cannot give.  Telling an
+    // operator to go looking for stale `scopes` on this surface sends them to
+    // repair selectors that are working.
+    const { message } = unreadableAfterReadinessCause("post-detail");
+
+    expect(message).not.toContain("TWO readings");
+    expect(message).toContain("can only mean no adapter's detect anchor matched");
+    expect(message).toContain("the page stopped matching between the two reads");
   });
 
   it("names every stage the reactions modal has, not just its scopes", () => {
@@ -2841,19 +2863,36 @@ describe("unreadableAfterReadinessCause", () => {
     // stage that was not the one that missed.
     const { message } = unreadableAfterReadinessCause("reactions-modal");
 
-    expect(message).toContain("`scopes` candidates");
+    expect(message).toContain("scopes candidates");
     expect(message).toContain("nor its own resolver");
   });
 
-  it("names one stage where the surface has one", () => {
-    // The inverse, and not redundant: a cause that named a resolver on post
-    // detail would send a reader to look for a stage that does not exist
-    // there.  The stage count is a property of the surface.
-    for (const surface of ["post-detail", "search-results"] as const) {
-      expect(
-        unreadableAfterReadinessCause(surface).message,
-        surface,
-      ).not.toContain("resolver");
+  /**
+   * The registry property the post-detail cause ASSERTS, pinned so it cannot
+   * quietly stop being true.
+   *
+   * `buildPostDetailExtractionSource` runs `__lhSelect()` and the scope loop
+   * inside one page read with nothing between them, so if every adapter's
+   * `scopes` are exactly the members of its own `detect` selector list, a
+   * matched `detect` entails a resolved scope and `if (!scope) return null`
+   * cannot fire.  That is what licenses the cause to say this refusal "can
+   * only mean no adapter's detect anchor matched".
+   *
+   * It is a property of THESE adapters, not of the class — ADR-008 § 5's
+   * criterion still has two halves — so an adapter registered with `scopes`
+   * narrower than its `detect` turns this red, and the cause's post-detail
+   * text has to change in the same pass.
+   */
+  it("post-detail scopes are exactly the members of the adapter's own detect", () => {
+    const adapters = adaptersFor("post-detail");
+    expect(adapters.length).toBeGreaterThan(0);
+
+    for (const adapter of adapters) {
+      const members = adapter.detect.split(",").map((part) => part.trim());
+
+      expect([...members].sort(), adapter.variant).toEqual(
+        [...adapter.scopes].sort(),
+      );
     }
   });
 });

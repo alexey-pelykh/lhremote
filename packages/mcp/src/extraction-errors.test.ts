@@ -123,10 +123,9 @@ describe("extraction errors surfaced through MCP", () => {
     const text = textOf(
       new DOMVariantUnsupportedError("reactions-modal", ["sdui", "legacy"], {
         cause: new Error(
-          "Resolved no reactions-modal root. That surface's readiness gate " +
-            "went green earlier in this operation. So the message above " +
-            "states one of TWO readings: that no adapter matches, OR that " +
-            "the adapter which claimed it resolved neither its own `scopes` " +
+          "Resolved no reactions-modal root. The message above states one of " +
+            "TWO readings: that no adapter's detect anchor matched, OR that " +
+            "the adapter which claimed it resolved neither its own scopes " +
             "candidates nor its own resolver.",
         ),
       }),

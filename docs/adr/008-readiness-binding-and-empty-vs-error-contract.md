@@ -1607,44 +1607,71 @@ it previously returned a success on a post whose engagement counters all read ze
 resolved counts row — CLI exits `1`, MCP returns `isError: true`. A post with genuinely no
 engagement is unaffected: its counts row does not resolve, and that is the row this tier reads.
 
-### 2026-09-08 — The extraction-time refusal carries its own disjunction as a `cause` (#923)
+### 2026-09-08 — The extraction-time refusal says which half of § 5's criterion fired (#923)
 
 § 5 fires `DOMVariantUnsupportedError` on a disjunction. Its shared constructor message asserts
 only the first half — *"No DOM adapter matched the {surface} page"* — and § 5's #922 note above
 corrected the class DOC to state both, leaving the runtime MESSAGE untouched. The message is read
 by the party the doc is not: an operator's CLI stderr, and an MCP agent that, in this repo's own
 words, *"cannot open devtools, read the page, or inspect a selector"*. So the surface that most
-needs the disjunction was the one still asserting the narrower half of it.
+needed the disjunction was the one still asserting the narrower half of it.
 
 **The remedy is a `cause`, and this ADR had already chosen it.** § Decision 4's search-results
 paragraph settled the shape — *"the error's `cause` states what was observed … and names both
 readings rather than letting the class's own wording assert the first"* — because rewording the
-message is not available: four assertions pin it, and § 5 assigns the SAME operator action to both
-halves, so softening it would lose the action that is right under either reading. `zeroMatchCause`
-is the worked example. `unreadableAfterReadinessCause` in `dom-variant.ts` is that same move at
-the three extraction-time raises that had no cause at all — `get-post.ts`, `get-post-stats.ts`,
-and `get-post-engagers.ts`'s shared `unreadableModalError`.
+message is not available: assertions in several packages pin it, and § 5 assigns the SAME operator
+action to both halves, so softening it would lose the action that is right under either reading.
+`zeroMatchCause` is the worked example. `unreadableAfterReadinessCause` in `dom-variant.ts` is
+that same move at the three extraction-time raises that had no cause at all — `get-post.ts`,
+`get-post-stats.ts`, and `get-post-engagers.ts`'s shared `unreadableModalError`.
 
-**What the cause states, and why it is an observation rather than a guess.**
-`buildReadinessPredicateSource` returns `true` only when exactly one registered adapter's `detect`
-anchor matched AND that adapter's own `ready` anchor is present. All three raises happen after
-that gate went green, so an adapter demonstrably claimed the page earlier in the same operation.
-The first half of the criterion therefore needs the page to have changed dialect *since* that gate
-— reachable, and the reactions-modal scroll path documents that mid-collection re-render — while
-the second half needs nothing to have changed. The cause says which the observation leaves live,
-names the stages that must have missed, and names the instrument that separates the two: re-run
-under `LHREMOTE_CAPTURE_DIAGNOSTICS=1` and read the bundle's `variantDetection`, beside
-`variantAnchors` where post detail carries one.
+**What it observes.** `buildReadinessPredicateSource` returns `true` only when exactly one
+registered adapter's `detect` anchor matched AND that adapter's own `ready` anchor is present, and
+all three raises happen after that gate went green, so an adapter demonstrably claimed the page
+earlier in the same operation. The cause reports what that leaves live, names the instrument that
+would settle it — re-run under `LHREMOTE_CAPTURE_DIAGNOSTICS=1` — and names the one thing that
+instrument cannot say, since `probeVariantDetection` degrades to `null` and a reader who takes
+that for *"nothing matched"* registers a second adapter for a dialect already covered.
 
 It does **not** reassign the operator action, which § 5 still gives as *register an adapter* for
 both halves. Whether that row should be split into two classes because it carries two repairs is
 #961's question, and is deliberately left open here.
 
-**Per-surface, from a record that is total over `Surface`.** § 5's #922 note records that the
-stage count is *"a property of the surface, never a licence to add one"*, so the reactions modal
-names two stages (its `scopes` candidates, then its own resolver) and post detail names one. The
-record behind the helper is total, so a new surface must state its own rather than inherit a
-neighbour's — the same discipline `SurfaceAdapterMap` applies to adapters.
+**The criterion has two halves; which of them is REACHABLE is a property of the surface — and that
+is the correction the review gate forced.** This work was first drafted asserting the disjunction
+uniformly, on the strength of #923's own framing that all three sites are the ones where
+*"condition 2 is actually reachable"*. They are not.
+
+- **Post detail: only the first half can fire.** `buildPostDetailExtractionSource` runs
+  `__lhSelect()` and the scope loop inside ONE page read with nothing between them, and every
+  post-detail adapter's `scopes` are exactly the members of its own `detect` selector list —
+  `LEGACY_POST_DETAIL_ADAPTER` uses one constant for both, `SDUI_POST_DETAIL_ADAPTER` a two-member
+  list of the same two. So `querySelector(detect) !== null` entails that some `scopes` candidate
+  matches, and `if (!scope) return null` is unreachable. The cause therefore says so outright and
+  converts the refusal into the sharper reading the bare message cannot give: readiness matched a
+  dialect moments earlier, so **the page stopped matching between the two reads**. Sending an
+  operator to hunt stale `scopes` here would send them to repair selectors that are working — the
+  same failure this item exists to prevent, arriving from the other direction. The entailment is a
+  property of THESE adapters rather than of the class, so `dom-variant.test.ts` pins it: an
+  adapter registered with `scopes` narrower than its `detect` turns that test red, and the
+  post-detail wording has to change in the same pass.
+- **The reactions modal: both halves stay live, which is why the disjunction is worth stating at
+  all.** Its `detect` is the reactions TRIGGER on the post page while its `scopes` are the MODAL,
+  so a matched trigger promises nothing about a resolvable root; SDUI's `scopes` are recorded as
+  known-insufficient and `SDUI_REACTIONS_MODAL_RESOLVE` is free to return nothing. Both stages
+  must miss before the class is raised, per § 5, so the cause names both.
+- **Search results: reachable for a third reason** — what comes back empty there is the CARD LOOP,
+  which filters an enumerated scope rather than failing to resolve one.
+
+The pre-existing comments at the two post-detail raises read *"Zero adapters claimed the page, or
+the claiming adapter could not resolve its own scope"*, which overstates what is reachable there
+and is where #923's framing came from. They are corrected in the same pass.
+
+**From a record that is total over `Surface`.** § 5's #922 note records that the stage count is
+*"a property of the surface, never a licence to add one"*, and the paragraph above extends that to
+reachability. The record behind the helper is total, so a new surface must state its own reading
+rather than inherit a neighbour's — the discipline `SurfaceAdapterMap` already applies to
+adapters.
 
 **Read this against § Decision 4's extraction-time clause, which is about a different qualifier.**
 That clause says the search-results *zero-result-search* reading is confined to the readiness gate
@@ -1660,15 +1687,15 @@ argument for extending it is the same argument in a fourth place rather than a n
 `search-results` entry in the helper's record exists because the record is total, not because a
 call site passes it.
 
-**What is pinned.** The cause's own text, per surface, in `dom-variant.test.ts` — both readings
-named, the modal's two stages named, and no `resolver` claimed on a surface that has none. Its
-attachment at each of the three sites, in that site's own suite, as a WHOLE-message comparison
-against the producer rather than a look-alike literal, for the reasons § 2026-09-04 Amendment
-gives. The falsifier that defines those three: deleting `{ cause: … }` from any one site turns
-exactly its own test red, verified one site at a time. And the render END TO END, un-elided,
-through `errorMessage` — which replaces the character count `MAX_CAUSE_LENGTH`'s own comment used
-to carry, since the producer and that bound sit in modules that do not import each other and a
-number there goes stale silently.
+**What is pinned.** The cause's own text, per surface, in `dom-variant.test.ts` — two readings
+named where the second is reachable, ONE where it is not, the modal's two stages named, and the
+registry entailment that licenses the post-detail wording. Its attachment at each of the three
+sites, in that site's own suite, as a WHOLE-message comparison against the producer rather than a
+look-alike literal, for the reasons § 2026-09-04 Amendment gives. The falsifier that defines those
+three: deleting `{ cause: … }` from any one site turns exactly its own test red, verified one site
+at a time. And the render END TO END, un-elided, through `errorMessage` — which replaces the
+character count `MAX_CAUSE_LENGTH`'s own comment used to carry, since the producer and that bound
+sit in modules that do not import each other and a number there goes stale silently.
 
 ## Related
 
@@ -1718,6 +1745,7 @@ number there goes stale silently.
   recorded in full as ADR-007 § 2026-09-04 Amendment (#853), which owns the capture pattern),
   #922 (the class doc states both halves of § 5's criterion, and the criterion is widened past
   post-detail — recorded as § 5's own note rather than an amendment), #923 (the runtime raise
-  carries that same disjunction as a `cause`, § 2026-09-08 Amendment (#923)), #961 (OPEN —
-  whether § 5's `DOMVariantUnsupportedError` row should be split into two classes, since it
-  carries two operator repairs; deliberately not answered by #922 or #923)
+  says which half of § 5's criterion fired, and which half each surface leaves reachable,
+  § 2026-09-08 Amendment (#923)), #961 (OPEN — whether § 5's `DOMVariantUnsupportedError` row
+  should be split into two classes, since it carries two operator repairs; deliberately not
+  answered by #922 or #923)

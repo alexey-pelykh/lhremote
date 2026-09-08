@@ -264,11 +264,13 @@ describe("getPost", () => {
     );
   });
 
-  it("attaches the disjunction its own message cannot state (#923)", async () => {
-    // The message asserts *no adapter matched*.  `waitForPostLoad` went green
-    // moments earlier, and that gate passes only when exactly one adapter's
-    // detect anchor matched — so the reachable reading here is the OTHER half
-    // of ADR-008 § 5's criterion, and only the `cause` can say so.
+  it("attaches the reading its own message cannot give (#923)", async () => {
+    // The message asserts *no adapter matched*, and on this surface that is
+    // the only half of ADR-008 § 5's criterion that can fire — a matched
+    // `detect` entails a resolved scope here.  What the message cannot give is
+    // what `waitForPostLoad` going green moments earlier adds: a dialect DID
+    // match, so the page stopped matching between the two reads.  Only the
+    // `cause` can say that.
     //
     // The whole message is pinned, and against the producer rather than a
     // look-alike literal: a substring would let a producer append page
