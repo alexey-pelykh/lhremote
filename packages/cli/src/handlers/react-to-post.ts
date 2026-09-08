@@ -17,6 +17,7 @@ export async function handleReactToPost(
     cdpPort?: number;
     cdpHost?: string;
     allowRemote?: boolean;
+    accountId?: number;
     dryRun?: boolean;
     json?: boolean;
   },
@@ -34,6 +35,7 @@ export async function handleReactToPost(
           cdpPort: options.cdpPort,
           cdpHost: options.cdpHost,
           allowRemote: options.allowRemote,
+          accountId: options.accountId,
           dryRun: options.dryRun,
         }),
     );

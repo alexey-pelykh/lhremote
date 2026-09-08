@@ -879,7 +879,7 @@ Post a comment on a LinkedIn post. Checks action budget before attempting.
 
 #### `react-to-post`
 
-React to a LinkedIn post with a specific reaction type.
+React to a LinkedIn post with a specific reaction type. Checks action budget before attempting — refused when the PostLike limit is reached, including under `dryRun`.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|

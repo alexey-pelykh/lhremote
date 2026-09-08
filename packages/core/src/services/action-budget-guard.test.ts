@@ -109,6 +109,12 @@ describe("assertActionBudget", () => {
     });
 
     it("refuses on a negative remaining, not only on exactly zero", async () => {
+      // Also unreachable from the real producer: `getActionBudget` computes
+      // `Math.max(0, dailyLimit - totalUsed)`, so a non-null `remaining` is
+      // never below zero. Pinned anyway, because `<= 0` reading as `=== 0`
+      // against every real row is exactly what makes the comparison look
+      // over-broad to a later reader — and narrowing it would silently couple
+      // this guard to that clamp staying in place.
       setupMocks([
         entry({ dailyLimit: 10, totalUsed: 14, remaining: -4 }),
       ]);

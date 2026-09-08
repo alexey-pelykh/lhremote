@@ -148,6 +148,11 @@ describe("reactToPost", () => {
   });
 
   it("throws when no LinkedIn page is found", async () => {
+    // setupMocks() first: without it the budget mocks carry no implementation
+    // after `restoreAllMocks`, so `withDatabase` returns undefined, the guard's
+    // callback never runs, and this test would pass for a reason that has
+    // nothing to do with its subject.
+    setupMocks();
     vi.mocked(discoverTargets).mockResolvedValue([
       { id: "target-1", type: "page", title: "Example", url: "https://example.com", description: "", devtoolsFrontendUrl: "" },
     ]);
