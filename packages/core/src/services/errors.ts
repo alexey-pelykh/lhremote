@@ -187,12 +187,23 @@ export class ExtractionTimeoutError extends ServiceError {
 
 /**
  * Thrown when no registered `VariantAdapter` matched the page, or the
- * matching adapter could not resolve its scope.
+ * matching adapter resolved no scope — its own `scopes` candidates, and on
+ * `reactions-modal` its own resolver too.
  *
  * This is the "LinkedIn changed" signal. It is deliberately distinct from
- * {@link ExtractionFailedError}: nothing is stale here, the page simply
- * speaks a dialect no adapter knows, and the operator action is to register
- * a new adapter rather than repair an existing one.
+ * {@link ExtractionFailedError}: nothing is stale here, there is no usable
+ * adapter for the page, and the operator action is to register a new adapter
+ * rather than repair an existing one.
+ *
+ * "No usable adapter" is ADR-008 § Decision 3's own framing, and it is
+ * deliberately not a claim about the page's dialect. Under the second
+ * condition an adapter's `detect` DID match, so a diagnostic bundle's
+ * `variantDetection` reports exactly one — which this repo reads as *our
+ * adapter matched and that field's selectors went stale*. Saying instead that
+ * the page speaks a dialect no adapter knows sends an operator to register a
+ * redundant adapter whose `detect` overlaps the existing one, and that is the
+ * {@link DOMVariantAmbiguousError} precondition: one diagnosable failure
+ * traded for a different failure on every page of that dialect.
  *
  * It is also deliberately NOT {@link ExtractionTimeoutError} — nothing timed
  * out. The whole defect class this models is a gate going green promptly on

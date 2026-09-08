@@ -208,9 +208,11 @@ An adapter binds four anchors, and their non-interchangeability is the point:
 | zero | `DOMVariantUnsupportedError` — LinkedIn changed; register an adapter |
 | two or more | `DOMVariantAmbiguousError` — transitional or hybrid page; refuse to guess |
 
-An adapter that matches but **cannot resolve its own `scopes`** has not read the page, and
-is treated as "no usable adapter" — the same `DOMVariantUnsupportedError`. It does not
-widen to `<main>`.
+An adapter that matches but **cannot resolve a scope** has not read the page, and is
+treated as "no usable adapter" — the same `DOMVariantUnsupportedError`. It does not widen
+to `<main>`. Which stages it has to try is a property of the surface: its own `scopes`
+candidates everywhere, plus that adapter's own resolver on `reactions-modal` — § 5 states
+the disjunction, and why the count is not a licence to add a stage.
 
 Ambiguity fails loud rather than picking a winner because a record assembled from two
 dialects is wrong in a way nothing downstream can detect. This is the same reason a
@@ -329,12 +331,30 @@ The cardinal tier is a per-field check and is where the shared helper lives
 
 | Class | Fires when | Operator action |
 |---|---|---|
-| `DOMVariantUnsupportedError` | no registered adapter matched the page, or the matching adapter could not resolve its scope | **LinkedIn changed.** Register an adapter for the new dialect |
+| `DOMVariantUnsupportedError` | no registered adapter matched the page, or the matching adapter resolved no scope — its own `scopes` candidates, and on `reactions-modal` its own resolver too | **LinkedIn changed.** Register an adapter for the new dialect |
 | `ExtractionFailedError` | an adapter matched, but a field's emptiness is contradicted by its corroborator | **This adapter is partially stale.** Repair that field's selectors |
 | `DOMVariantAmbiguousError` | two or more adapters claimed the same page | **Transitional or hybrid page.** Inspect the diagnostics and tighten the `detect` anchors |
 
 Collapsing these into one class discards the most useful information the system now has —
 the three are not severities of one condition, they are three different repairs.
+
+> **"Resolved no scope" is one criterion over a per-surface number of stages, and this row was
+> written when that number was one** — 2026-09-08 (#922). On post-detail and search-results an
+> adapter has exactly one way to reach its scope, its own `scopes` candidates, so the original
+> wording — *"could not resolve its scope"* — was complete for every surface then bound. The
+> reactions modal, bound later by the § 2026-09-02 Amendment (#840), has **two**: the `scopes`
+> candidates, each accepted only if it holds that adapter's `rootSignal`, and then the adapter's
+> own resolver, which `extract` is reinterpreted as on that surface. BOTH must miss before this
+> class is raised — the generated source states the disjunction in those terms, *"the claiming
+> adapter resolved neither its own `scopes` candidates nor its own resolver"* — so on that
+> surface a reader who repairs `scopes` alone has not covered the condition.
+>
+> **Which stage is load-bearing is per-dialect, and one of them is deliberately empty.** SDUI's
+> `scopes` are recorded as known-insufficient and `SDUI_REACTIONS_MODAL_RESOLVE` is what actually
+> reaches the modal. Legacy's resolver is a literal `null` **by measurement** — the 2026-09-02
+> probe recorded its walk's anchor matching 0 with the modal open — so there `scopes` really is
+> the only stage, and writing a walk into it would reinstate the dead code that amendment
+> removed. The stage count is a property of the surface, never a licence to add one.
 
 **Why ADR-005's existing classes were insufficient.** ADR-005 established the four-tier
 hierarchy and the principle that *errors carry domain context*; these three extend it
