@@ -8,7 +8,8 @@ import type { DatabaseClient } from "../client.js";
 import { ActionBudgetRepository } from "./action-budget.js";
 
 /**
- * Today's date in the **local** calendar, formatted `YYYY-MM-DD`.
+ * A **local** calendar date, formatted `YYYY-MM-DD`, shifted by `offsetDays`
+ * (`0` for today, `-1` for yesterday).
  *
  * The repository filters on `date('now', 'localtime')` — the operator's own
  * calendar day — so the fixture has to build that same day.  `toISOString()`
