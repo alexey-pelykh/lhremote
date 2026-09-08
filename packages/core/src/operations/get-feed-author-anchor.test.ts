@@ -3799,6 +3799,44 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     headline: "Head of Widgets at Acme",
     timestamp: "18h",
   },
+  {
+    // The ordering that makes `phraseContains`' boundary load-bearing, and the
+    // only shape here that reaches it.  `anchorFields` reads EVERY wrapper, so
+    // field 0 is the leading chrome; `visibleRoot` SKIPS that wrapper — it
+    // renders no name-bearing run — so `anchorName` answers "Ada" from the next
+    // one.  The opaque slug declines, and the decline loop then scans from
+    // field 0, where "Ada" occurs inside "Adaptive Systems Lead".  Only the
+    // phrase boundary stops that field being taken as the name's own and the
+    // real headline being dropped into the name's span with it.
+    //
+    // `F8g` pairs the same two strings and cannot reach the guard, for two
+    // independent reasons: its slug corroborates, so the read accepts and the
+    // loop is never entered; and its containing field FOLLOWS the name rather
+    // than preceding it, so even on the decline path the loop stops at the
+    // name's own field either way.  Measured: with `phraseContains` replaced by
+    // a bare `indexOf`, this row's headline becomes "Ada" — the name itself —
+    // while every other row in this corpus is byte-identical.  That is the
+    // whole of issue #940's second finding: the guard was reachable and the
+    // corpus was blind to it, so its comment offered a green as evidence.
+    //
+    // The declared truth is INHERITED, not invented: `B8` already commits this
+    // corpus to reading the RUN as the name when a bare-chrome wrapper precedes
+    // it, and this row changes only what that chrome says.  Hand-built like
+    // every shape here (#897 — no captured feed markup exists), and built
+    // deliberately out of the two strings `phraseContains`' own comment names,
+    // so the fixture and the claim cannot drift apart.
+    label: "B11 short name contained in an EARLIER field than the one it is read from",
+    href: "/in/x7k2m9q4/",
+    children: () => [
+      hiddenBare("Adaptive Systems Lead"),
+      hiddenRun("Ada"),
+      hiddenRun("Head of Widgets at Acme"),
+      hiddenRun("18h •"),
+    ],
+    name: "Ada",
+    headline: "Head of Widgets at Acme",
+    timestamp: "18h",
+  },
 ];
 
 /**
@@ -3807,7 +3845,7 @@ const FIELD_SHAPES: readonly FieldShape[] = [
  * regression list is evidence rather than an artefact of a degenerate
  * comparison; raise it when the corpus grows.
  */
-const BASELINE_CORRECT_FIELDS = 114;
+const BASELINE_CORRECT_FIELDS = 115;
 
 /**
  * A wrapper whose runs are all EMPTY, carrying its real text as a bare text
@@ -4457,5 +4495,123 @@ describe("#860/#898 accepted costs", () => {
 
     expect(corroborated.name).toBe("Ada Lovelace");
     expect(corroborated.headline).toBe("Head of Widgets at Acme");
+  });
+
+  it("#940 (accepted cost, regression): leading chrome in the NAME'S OWN wrapper is returned as the name", () => {
+    // `rootFields` walks one root and emits a field per name-bearing leaf run,
+    // FLUSHING the bare text accumulated before it first — so a wrapper
+    // rendering `TEXT<span>TEXT</span>` yields [bare, run] in that order, and
+    // `anchorName` takes index 0.  Where the bare slot holds chrome and the run
+    // holds the name, the chrome is returned AS the name.
+    //
+    // Why it is a cost and not a defect to fix here — the fix's own price,
+    // not a claim that the shape cannot occur.  The same construction with the
+    // OPPOSITE polarity is committed row `B5`: bare text that IS the name,
+    // beside a badge run.  The two are the same markup, so one predicate cannot
+    // serve both — #860's own premise, one level up — and `fieldRoots`' own
+    // comment already says what would separate them: "evidence from OUTSIDE the
+    // wrappers, which `slugName` supplies".  `slugName` declines here, because
+    // its candidates must be PREFIXES of a region that starts at "Dr.", and
+    // letting a candidate start elsewhere is the generalisation it refuses by
+    // construction — a role, brand or nickname slug then matches the HEADLINE
+    // better than the name and the two swap places, which is the regression
+    // #860 records.  Candidate fixes were enumerated, applied to the script and
+    // driven through this corpus.  Some regress committed rows — `B5` and `B6`
+    // among them, which are #903's own shapes.  Those that keep every row green
+    // are each falsified by a constructed shape whose truth is INHERITED from
+    // committed rows: they return the HEADLINE as the name under a role, brand
+    // or nickname slug, or the connection BADGE as the name under an opaque
+    // slug with a short name.  What makes those greens uninformative is that
+    // this corpus holds no role-, brand- or nickname-slugged shape in the
+    // `hiddenBareBesideRun` construction at all.
+    //
+    // Cost vs regression: the pinned pre-#860 baseline reads this shape
+    // CORRECTLY, so this is a REGRESSION rather than a pre-existing cost.  The
+    // baseline assertions below are that claim, measured rather than asserted
+    // about.
+    //
+    // What is pinned is a violation of AC-5 of the PRD
+    // `linkedin-dom-variant-tolerance` (FR-5, carried in the solution design as
+    // Cap-4.2).  Its mechanism half HOLDS — FR-5 requires the name and the URL
+    // to be "read from the same author element", and they still are — while
+    // AC-5's Then-clause, "`authorProfileUrl` resolves to the person named by
+    // `authorName`", is VIOLATED: the URL resolves to Ada Lovelace while the
+    // name reads "Dr.".
+    //
+    // Asserted as the OBSERVED answer, not the ideal one, so that a later
+    // change which fixes any of these fails here and has to say so.
+    const badgeTerminated: ScrapeInput = {
+      label: "honorific bare text before the name run, badge-terminated",
+      href: "/in/ada-lovelace/",
+      children: () => [
+        hiddenBareBesideRun("Dr. ", "Ada Lovelace"),
+        hiddenRun("• 1st"),
+        hiddenRun("Head of Widgets at Acme"),
+        hiddenRun("18h •"),
+      ],
+    };
+    const got = fieldsOf(SCRAPE_FEED_SCRIPT, badgeTerminated);
+
+    expect(got.name).toBe("Dr.");
+    // On THIS variant the cost is confined to the name: the badge terminates
+    // the name region, so the headline and the timestamp are still right.
+    expect(got.headline).toBe("Head of Widgets at Acme");
+    expect(got.timestamp).toBe("18h");
+    expect(fieldsOf(BASELINE_FEED_SCRIPT, badgeTerminated).name).toBe("Ada Lovelace");
+
+    // The variant #940 did not trace, and it is strictly worse.  With no badge
+    // to terminate the name region the real name is not merely lost — it is
+    // emitted AS THE HEADLINE, so the post reports a headline no human wrote.
+    const timestampTerminated: ScrapeInput = {
+      label: "honorific bare text before the name run, timestamp-terminated",
+      href: "/in/ada-lovelace/",
+      children: () => [
+        hiddenBareBesideRun("Dr. ", "Ada Lovelace"),
+        hiddenRun("Head of Widgets at Acme"),
+        hiddenRun("18h •"),
+      ],
+    };
+    const unterminated = fieldsOf(SCRAPE_FEED_SCRIPT, timestampTerminated);
+
+    expect(unterminated.name).toBe("Dr.");
+    expect(unterminated.headline).toBe("Ada Lovelace");
+    expect(fieldsOf(BASELINE_FEED_SCRIPT, timestampTerminated).name).toBe("Ada Lovelace");
+
+    // The family is not the honorific.  Avatar initials in the name's OWN
+    // wrapper read identically — `B8` covers only the SIBLING-wrapper variant,
+    // where `visibleRoot` skips the chrome and the name survives.  Nothing here
+    // is specific to a vocabulary of titles, which is why a classifier for one
+    // would not close the family.
+    const initials: ScrapeInput = {
+      label: "avatar initials before the name run, same wrapper",
+      href: "/in/ada-lovelace/",
+      children: () => [
+        hiddenBareBesideRun("AL", "Ada Lovelace"),
+        hiddenRun("• 1st"),
+        hiddenRun("Head of Widgets at Acme"),
+        hiddenRun("18h •"),
+      ],
+    };
+
+    expect(fieldsOf(SCRAPE_FEED_SCRIPT, initials).name).toBe("AL");
+    expect(fieldsOf(BASELINE_FEED_SCRIPT, initials).name).toBe("Ada Lovelace");
+
+    // The falsifier, asserted rather than asserted-about: the SAME builder with
+    // the polarity reversed — the bare slot holding the name and the run
+    // holding the badge — reads correctly.  That is what bounds the cost to
+    // the chrome-first ordering, and it is also why the two cannot be told
+    // apart from inside the wrapper: this is `B5`'s construction.
+    const reversed = fieldsOf(SCRAPE_FEED_SCRIPT, {
+      label: "same builder, name in the bare slot",
+      href: "/in/ada-lovelace/",
+      children: () => [
+        hiddenBareBesideRun("Ada Lovelace", "• 1st"),
+        hiddenRun("Head of Widgets at Acme"),
+        hiddenRun("18h •"),
+      ],
+    });
+
+    expect(reversed.name).toBe("Ada Lovelace");
+    expect(reversed.headline).toBe("Head of Widgets at Acme");
   });
 });
