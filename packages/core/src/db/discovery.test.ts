@@ -27,8 +27,9 @@ afterEach(() => {
   // Every test below stubs `process` in its own body, and `vi.stubGlobal` is
   // undone by neither reset nor restore — so without this a test that set no
   // `platform` of its own would silently inherit the previous test's, and the
-  // last one would outlive the file (#935).  Not the Tier-1 network guard
-  // here, but the same leak.
+  // last one would stay installed for the rest of the file (#935).  Bounded
+  // there, not beyond it: `isolate` defaults to true, so nothing crosses into
+  // the next file.  Not the Tier-1 network guard here, but the same leak.
   vi.unstubAllGlobals();
 });
 

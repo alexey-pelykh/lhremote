@@ -69,10 +69,13 @@ describe("discovery (integration)", () => {
   afterAll(() => {
     vi.restoreAllMocks();
     // `vi.stubGlobal` survives both reset and restore, so the `process` stub in
-    // `beforeAll` above otherwise outlives this file (#935).  Released here and
+    // `beforeAll` above otherwise stays installed to the end of this file
+    // (#935; `isolate` defaults to true, so it cannot reach the next one).
+    // Released here and
     // not in an `afterEach`, deliberately: that stub is installed once and is
     // meant to hold for the whole file — every test below reads the linux
-    // layout — so releasing it per test breaks four of the nine.  Same
+    // layout — so releasing it per test breaks four of the nine, measured on a
+    // non-linux runner; on linux the stub matches reality and none break.  Same
     // exemption `cdp/client.test.ts` relies on for its module-scope
     // `WebSocket` stub — though that one never releases at all, where this
     // releases late.
