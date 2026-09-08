@@ -3915,9 +3915,16 @@ interface AuthorFields {
  * The truth fields (`name`, `headline`, `timestamp`) are graded by the corpus
  * loop against what the scripts return, so they are live on a `FIELD_SHAPES`
  * row and dead on an ad-hoc call.  Leaving them out here turns that invariant
- * into a type error rather than a convention: an ad-hoc caller CANNOT declare
- * a `name` nothing checks.  `label` stays -- it describes the shape under test
- * and claims nothing about the answer, so it cannot contradict one.
+ * into a type error rather than a convention -- with the reach TypeScript
+ * actually gives it: excess-property checking fires on a FRESH object literal,
+ * so an ad-hoc call written inline, or through a `const` annotated
+ * `ScrapeInput`, cannot declare a `name` nothing checks.  An UN-annotated
+ * intermediate variable still can, its freshness having been lost, so write
+ * ad-hoc shapes one of those two ways -- as every site below does.  A
+ * `FIELD_SHAPES` row keeps passing either way: it arrives as a variable, never
+ * a literal, which is what lets its live truth fields through.  `label` stays
+ * -- it describes the shape under test and claims nothing about the answer, so
+ * it cannot contradict one.
  */
 interface ScrapeInput {
   readonly label?: string;
@@ -4261,7 +4268,8 @@ describe("#860/#898 accepted costs", () => {
     // (measured, not predicted).
     //
     // The falsifier is a slug that reaches the second field: `/in/ada-lovelace/`
-    // over the same fields returns the whole name, which the corpus pins.
+    // over the same fields returns the whole name, which the `reached` case at
+    // the foot of this block pins -- it has no `FIELD_SHAPES` row of its own.
     // Asserted as the OBSERVED answer so that a later change which fixes it
     // fails here and has to say so.
     const truncated = fieldsOf(SCRAPE_FEED_SCRIPT, {
@@ -4341,9 +4349,13 @@ describe("#860/#898 accepted costs", () => {
     // are unobserved: this repository holds no captured feed markup at all
     // (#897), and its two legacy post captures were searched and contain no
     // relative-time field of any form. `FIELD_TIMESTAMP` also drives the
-    // timestamp READ, which `mapRawPosts` shares with `searchPosts` and
-    // `getProfileActivity`, so guessing here risks three operations' timestamps
-    // to fix one operation's headline. Tracked for a capture-backed decision.
+    // timestamp READ, but only THIS operation's: it is declared inside the feed
+    // scrape script and never exported, and `searchPosts` and
+    // `getProfileActivity` each build their own extractor -- what those two
+    // share through `mapRawPosts` is the downstream `parseTimestamp`, not this
+    // classifier. So the blast radius is one operation's timestamp against one
+    // operation's headline, and what defers the fix is the missing evidence
+    // above, not a wide reach. Tracked for a capture-backed decision.
     const got = fieldsOf(SCRAPE_FEED_SCRIPT, {
       label: "headline opening with a time-like token",
       href: "/in/ada-lovelace/",
