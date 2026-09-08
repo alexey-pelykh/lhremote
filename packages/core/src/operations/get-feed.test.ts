@@ -199,10 +199,18 @@ describe("getFeed", () => {
     // Spelled out rather than imported from the registry on purpose:
     // importing FEED_POST_MENU_BUTTON would compare the constant with itself
     // and pass through any change to it.  Spelled out, a change to the
-    // registry value fails HERE -- which is exactly what get-feed lacked.
-    // Its URL capture degrades silently when the selector goes stale (no
-    // match -> clicked false -> url: null, no throw), so unlike its three
-    // siblings nothing went red for it (lhremote#856).
+    // registry value fails HERE.  get-feed most needed that: its URL capture
+    // degrades silently when the selector goes stale (no match -> clicked
+    // false -> url: null, no throw), so unlike its three siblings nothing
+    // went red for it at all (lhremote#856).
+    //
+    // Scope of this pin: the two consumers that go through the constant.
+    // Three further occurrences of the same aria-label prefix are hardcoded
+    // inside in-page scripts in get-feed.ts -- the author-header scan, the
+    // scrape post-detection predicate, and waitForFeedLoad's readiness poll.
+    // Those are item-relative queries carrying no mainFeed/listitem ancestor,
+    // so they are not the byte-identical named copy this pin covers, and
+    // they remain unpinned.
     const EXPECTED_MENU_BUTTON_SELECTOR =
       '[data-testid="mainFeed"] div[role="listitem"] button[aria-label^="Open control menu for post"]';
 
