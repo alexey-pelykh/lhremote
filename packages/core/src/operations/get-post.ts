@@ -435,12 +435,14 @@ export async function getPost(input: GetPostInput): Promise<GetPostOutput> {
       if (!rawPost) {
         // ADR-008 § 5's criterion has two halves — zero adapters claimed the
         // page, or the claiming adapter could not resolve its own scope — and
-        // on THIS surface only the first is reachable: the generated script
-        // selects and resolves in one page read, and every post-detail
-        // adapter's `scopes` are the members of its own `detect` list, so a
-        // matched detect entails a resolved scope (#923; pinned in
-        // `dom-variant.test.ts`).  Either way nothing read the page, and there
-        // is no `<main>` left to pretend otherwise with.
+        // on THIS surface only the first is reachable.  That rests on TWO
+        // premises, both pinned in `dom-variant.test.ts` (#923): every
+        // post-detail adapter's `scopes` are the members of its own `detect`
+        // list, AND `buildPostDetailExtractionSource` selects and resolves in
+        // ONE page read, so nothing can flip the dialect between them.  A
+        // matched detect therefore entails a resolved scope.  Either way
+        // nothing read the page, and there is no `<main>` left to pretend
+        // otherwise with.
         //
         // The `cause` says that outright rather than repeating the disjunction,
         // and turns it into the sharper reading the message cannot give:

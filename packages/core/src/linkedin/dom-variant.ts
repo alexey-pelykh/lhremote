@@ -2037,6 +2037,17 @@ export function buildPostDetailExtractionSource(
   }
   // No terminal fallback: an adapter that cannot resolve its own scope has
   // not read the page, and saying so is the whole point.
+  //
+  // This branch is UNREACHABLE for the registered adapters, and the runtime
+  // cause at both post-detail raise sites says so to operators (#923).  Two
+  // properties buy that, and this function owns the second: every adapter's
+  // scopes are the members of its own detect list, and selection and
+  // resolution happen in ONE page read -- this script is synchronous, with no
+  // suspension point and no second evaluate, so no dialect flip lands between
+  // them.
+  // Splitting it, or adding a settle-and-retry here, makes this branch
+  // reachable and makes that cause false.  Both premises are pinned in
+  // dom-variant.test.ts; change one and fix the cause in the same pass.
   if (!scope) return null;
 
   const fields = adapter.extract(scope);

@@ -1680,6 +1680,18 @@ result-less page out. That still holds and is untouched. What it says nothing ab
 condition-1-vs-condition-2 disjunction, which did not exist as a distinct concept until #922
 widened the criterion. The two qualifiers are independent.
 
+**The instrument the cause names does not settle every case it is offered for, and that residual
+is recorded rather than resolved.** Each cause closes by pointing at `variantDetection` under
+`LHREMOTE_CAPTURE_DIAGNOSTICS=1`. All three sites already write a capture immediately before the
+throw, so where diagnostics are ON the bundle for THIS failure exists and "re-run" is redundant
+advice; where they are OFF — the CLI and MCP default, deliberately, because the artifacts carry
+page content — nothing was probed, and the state the post-detail cause describes lasted between
+two reads milliseconds apart and may not reproduce. The helper runs no probe of its own by
+design: it is constructed on a path that is default-off, and a probe there would cost a page read
+on every refusal to serve the runs that are already capturing. So the pointer is the best
+available next step, not a guarantee, and an operator who cannot reproduce a transient has
+reached the limit of what this cause can offer rather than a defect in it.
+
 **One site of this shape is deliberately left without a cause**, so a reader does not read the
 asymmetry as an oversight: the extraction-time raise in `search-posts.ts`. § 2026-09-04 Amendment
 records it as causeless, #923's acceptance criteria name three files and not that one, and the
@@ -1688,8 +1700,16 @@ argument for extending it is the same argument in a fourth place rather than a n
 call site passes it.
 
 **What is pinned.** The cause's own text, per surface, in `dom-variant.test.ts` — two readings
-named where the second is reachable, ONE where it is not, the modal's two stages named, and the
-registry entailment that licenses the post-detail wording. Its attachment at each of the three
+named where the second is reachable, ONE where it is not, and the modal's two stages named. Which
+surface belongs to which class is declared there in a record total over `Surface`, so a surface
+added later does not compile until its class is stated: the type checker already forced an entry
+to EXIST, and this is what forces it to be graded. Both premises the post-detail wording rests on
+are pinned beside it — that every post-detail adapter's `scopes` are exactly the members of its
+own `detect`, and that `buildPostDetailExtractionSource` emits selection and scope resolution into
+ONE synchronous page read. Neither is sufficient alone, and the second was stated in four places
+and asserted in none until this pass. The reactions modal's mirror premise, that its `detect`
+anchors are NOT among its own scope candidates, is pinned for the same reason in the other
+direction. Its attachment at each of the three
 sites, in that site's own suite, as a WHOLE-message comparison against the producer rather than a
 look-alike literal, for the reasons § 2026-09-04 Amendment gives. The falsifier that defines those
 three: deleting `{ cause: … }` from any one site turns exactly its own test red, verified one site
