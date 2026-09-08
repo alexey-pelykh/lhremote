@@ -1610,31 +1610,30 @@ engagement is unaffected: its counts row does not resolve, and that is the row t
 ### 2026-09-08 — The extraction-time refusal carries its own disjunction as a `cause` (#923)
 
 § 5 fires `DOMVariantUnsupportedError` on a disjunction. Its shared constructor message asserts
-only the first half — *"No DOM adapter matched the {surface} page"* — and the § 2026-09-08
-Amendment (#922) above corrected the class DOC to state both, leaving the runtime MESSAGE
-untouched. The message is read by the party the doc is not: an operator's CLI stderr, and an MCP
-agent that, in this repo's own words, *"cannot open devtools, read the page, or inspect a
-selector"*. So the surface that most needs the disjunction was the one still asserting the
-narrower half of it.
+only the first half — *"No DOM adapter matched the {surface} page"* — and § 5's #922 note above
+corrected the class DOC to state both, leaving the runtime MESSAGE untouched. The message is read
+by the party the doc is not: an operator's CLI stderr, and an MCP agent that, in this repo's own
+words, *"cannot open devtools, read the page, or inspect a selector"*. So the surface that most
+needs the disjunction was the one still asserting the narrower half of it.
 
 **The remedy is a `cause`, and this ADR had already chosen it.** § Decision 4's search-results
 paragraph settled the shape — *"the error's `cause` states what was observed … and names both
 readings rather than letting the class's own wording assert the first"* — because rewording the
-message is not available: four assertions pin it, and § 5 assigns the SAME operator action to
-both halves, so softening it would lose the action that is right under either reading. `zeroMatchCause`
-is the worked example. `unreadableAfterReadinessCause` in `dom-variant.ts` is that same move at the
-three extraction-time raises that had no cause at all — `get-post.ts`, `get-post-stats.ts`, and
-`get-post-engagers.ts`'s shared `unreadableModalError`.
+message is not available: four assertions pin it, and § 5 assigns the SAME operator action to both
+halves, so softening it would lose the action that is right under either reading. `zeroMatchCause`
+is the worked example. `unreadableAfterReadinessCause` in `dom-variant.ts` is that same move at
+the three extraction-time raises that had no cause at all — `get-post.ts`, `get-post-stats.ts`,
+and `get-post-engagers.ts`'s shared `unreadableModalError`.
 
 **What the cause states, and why it is an observation rather than a guess.**
 `buildReadinessPredicateSource` returns `true` only when exactly one registered adapter's `detect`
 anchor matched AND that adapter's own `ready` anchor is present. All three raises happen after
 that gate went green, so an adapter demonstrably claimed the page earlier in the same operation.
 The first half of the criterion therefore needs the page to have changed dialect *since* that gate
-— reachable, and the reactions-modal scroll path documents exactly that mid-collection re-render —
-while the second half needs nothing to have changed. The cause says which the observation leaves
-live, names the stages that must have missed, and names the instrument that separates the two:
-re-run under `LHREMOTE_CAPTURE_DIAGNOSTICS=1` and read the bundle's `variantDetection`, beside
+— reachable, and the reactions-modal scroll path documents that mid-collection re-render — while
+the second half needs nothing to have changed. The cause says which the observation leaves live,
+names the stages that must have missed, and names the instrument that separates the two: re-run
+under `LHREMOTE_CAPTURE_DIAGNOSTICS=1` and read the bundle's `variantDetection`, beside
 `variantAnchors` where post detail carries one.
 
 It does **not** reassign the operator action, which § 5 still gives as *register an adapter* for
@@ -1670,7 +1669,6 @@ exactly its own test red, verified one site at a time. And the render END TO END
 through `errorMessage` — which replaces the character count `MAX_CAUSE_LENGTH`'s own comment used
 to carry, since the producer and that bound sit in modules that do not import each other and a
 number there goes stale silently.
-
 
 ## Related
 
@@ -1717,8 +1715,9 @@ number there goes stale silently.
   declared rather than crossed, § 2026-09-08 Amendment), #853 (the
   post-detail diagnostic capture's per-dialect anchor readings are generated from this registry
   rather than hand-maintained beside it; discharges the stale-comment follow-up above, and
-  recorded in full as ADR-007 § 2026-09-04 Amendment (#853), which owns the capture pattern), #922 (the class doc states both halves of § 5's criterion, and the criterion
-  is widened past post-detail, § 2026-09-08 Amendment), #923 (the runtime raise carries that same
-  disjunction as a `cause`, § 2026-09-08 Amendment), #961 (OPEN — whether § 5's
-  `DOMVariantUnsupportedError` row should be split into two classes, since it carries two operator
-  repairs; deliberately not answered by #922 or #923)
+  recorded in full as ADR-007 § 2026-09-04 Amendment (#853), which owns the capture pattern),
+  #922 (the class doc states both halves of § 5's criterion, and the criterion is widened past
+  post-detail — recorded as § 5's own note rather than an amendment), #923 (the runtime raise
+  carries that same disjunction as a `cause`, § 2026-09-08 Amendment (#923)), #961 (OPEN —
+  whether § 5's `DOMVariantUnsupportedError` row should be split into two classes, since it
+  carries two operator repairs; deliberately not answered by #922 or #923)
