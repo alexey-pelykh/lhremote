@@ -13,11 +13,15 @@ import { ActionBudgetRepository } from "./action-budget.js";
  * The repository filters on `date('now', 'localtime')` — the operator's own
  * calendar day — so the fixture has to build that same day.  `toISOString()`
  * yields the *UTC* day instead, and the two disagree for one offset-width of
- * every day, in both directions: ahead of UTC once local has rolled over and
- * UTC has not, behind UTC once UTC has rolled over and local has not.  Inside
- * either window the fixture seeds rows the query then refuses to count, so the
- * suite fails nightly off-UTC while CI — which runs in UTC, where the two days
- * coincide by construction — stays green (#942).
+ * every day: on a machine ahead of UTC once local has rolled over and UTC has
+ * not, on one behind UTC once UTC has rolled over and local has not.  Inside
+ * that window the fixture seeds rows the query then refuses to count, so the
+ * suite failed nightly off-UTC while CI — which runs in UTC, where the two
+ * days coincide by construction — stayed green (#942).
+ *
+ * Do not reach for `vi.setSystemTime()` to make this deterministic: it moves
+ * Node's clock only, while SQLite's `'now'` reads the OS clock, so freezing
+ * one side re-opens the very disagreement this closes.
  *
  * @param offsetDays  Whole days to shift, in local calendar terms.
  */
