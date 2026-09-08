@@ -536,10 +536,12 @@ not a measurement, and chasing it is out of this decision's scope.
   the same flag is unreachable with it. The dialect mix is not measured anywhere and no claim
   about it is made here; what motivates this is § The drift is non-monotonic — SDUI has been
   served on this surface before and the swing back is what this design exists to survive.
-- **Carry the container tier to `get-post`'s counters** (#951): it consumes the same record and
-  treats an unrendered counts row as `commentCount: 0`, which its cardinal tier then reads as a
-  legal empty (§ 2026-09-08 Amendment). Left out of #852 because it changes a different
-  operation's behaviour.
+- ~~**Carry the container tier to `get-post`'s counters**~~ — **done** (#951,
+  § 2026-09-08 Amendment → *`get-post`'s counters are corroborated before its cardinal reads
+  one*). The tier runs BEFORE the cardinal one, which is the substance of what that follow-up
+  left undecided, and unconditionally, because `post` carries the counters whatever
+  `commentCount` was asked for. The `sdui` bound (#950) and the three residuals below are
+  inherited unchanged — a second surface reaching the same tier does not narrow any of them.
 - **Fix the counter patterns' locale and abbreviation coverage** (#952, § 2026-09-08 Amendment).
   `__LH_COUNTERS` is English-only and admits only `\d[\d,]*` while the counts-row anchor is a CSS
   class, so the row can resolve over text this parse cannot read. Three measured classes, not one:
@@ -1504,6 +1506,77 @@ than an observed page — recorded so a future reader meets it here rather than 
 level up. Adding this tier there would change `get-post`'s behaviour on its own acceptance
 criteria and is tracked separately rather than absorbed here.
 
+### 2026-09-08 — `get-post`'s counters are corroborated before its cardinal reads one (#951)
+
+The amendment above closed the counts-row seam on `getPostStats` and deliberately did not carry
+it to `get-post`, because doing so changes a different operation's behaviour against its own
+acceptance criteria. #951 is that deferral, taken.
+
+**The defect is the same one, arriving one level down, and the level is what makes it worse.**
+`get-post` evaluates the same registry-generated script, publishes the same three counters, and —
+since #852 — receives the same `countsRootNarrowed` flag beside them. It read that flag not at
+all. Its `commentCount` is then handed to `assertCardinalCorroboration` as the CARDINAL:
+the number consulted to decide whether an empty `comments: []` is a legitimate reading. So a
+counts row that resolved and yielded nothing did not merely return a wrong count. It returned a
+corroborator that agrees with anything:
+
+| counts root | `commentCount` | `comments` | before #951 | after |
+|---|---|---|---|---|
+| resolved | `0` (unread) | `[]` | corroborated empty — **returns** | **failed** — `ExtractionFailedError` |
+| resolved | `0` (unread) | 41 rows | returns | **failed** — the cardinal tier cannot see this at all |
+| not resolved | `0` | `[]` | returns | returns — the legitimate zero-engagement post |
+| resolved | `41` | `[]` | failed (#834) | failed, unchanged |
+
+Row 2 is worth reading twice. The cardinal tier returns early on any non-empty extraction, so a
+row reading zero beside comments that were actually scraped is a contradiction it is
+*structurally* unable to reach. Only the container tier can.
+
+**The ordering is the decision, and the container tier goes first.** The issue framed it as the
+open question and it resolves on provenance: `commentCount` is a number read OUT OF the counts
+row, so it is worth consulting only once that row has been vouched for. The diagnosis follows
+the same order — `field "engagementCounts"` against `countsRoot=rendered` sends the next reader
+to the counter patterns, where the repair is, rather than to the comment selectors, which are
+fine.
+
+*What that ordering does NOT currently buy, stated because the honest version is narrower than
+the argument.* On the live counter domain the two tiers are disjoint: the patterns capture
+`\d[\d,]*` and coerce a failed parse to `0`, so `commentCount > 0` implies a non-zero sum and
+the region tier returns before the cardinal tier could have fired. Ordering them is therefore
+unobservable on any page LinkedIn can serve today. That disjointness is derived from the
+counters' domain, not designed into either predicate, so the precedence is written down — and
+pinned by a test built on a record no page produces, which is the only construction that makes
+both predicates true at once — to keep a later per-counter corroborator from silently changing
+which diagnosis a page yields.
+
+**The check is unconditional, unlike the cardinal check it precedes.** `commentCount: 0` on the
+input skips comment LOADING, not counter reading, and the returned `post` carries the same three
+counters `getPostStats` grades off the identical record. Gating this on the input would have left
+`getPost({ commentCount: 0 })` a way to obtain counters `getPostStats` would have refused.
+
+**The binding is shared rather than copied.** Both operations sum the same three counters of the
+same record, print the same region name in the diagnosis, and write the same capture on the way
+out, so `assertPostDetailCountsCorroboration` now lives in `wait-for-post-load.ts` beside
+`capturePostDetailExtractionFailure` — for the reason that helper is already there, recorded in
+its own doc comment: two callers would otherwise have written the same body line for line, and
+this repository's evidence is that hand-maintained copies of a rule drift apart. The RULE stays
+one level down on `contradictsEmptyRegion`; what is shared here is its BINDING to this surface,
+which is the half that would drift. `getPostStats`'s behaviour is unchanged by the move.
+
+**Every residual above is inherited, not narrowed.** `sdui` stays out of reach because that
+adapter declares `counts: []` (#950); the check stays row-level and summed, so partial staleness
+still passes; the locale and abbreviation classes (#952) reach `get-post` exactly as they reach
+`getPostStats`, and the fr/it row is the same silent fabrication here — a corroborator cannot
+corroborate a number that was fabricated rather than missed, and on this surface that fabricated
+`commentCount` then goes on to corroborate the comment list. The nested-reshare narrowing (#954)
+likewise now has a second operation that can refuse on it. A second surface reaching one tier
+does not close any of them; it doubles the blast radius of each, which is why they are restated
+here rather than cited.
+
+**This is a live behaviour flip**, and the third on this operation. `get-post` now raises where
+it previously returned a success on a post whose engagement counters all read zero beside a
+resolved counts row — CLI exits `1`, MCP returns `isError: true`. A post with genuinely no
+engagement is unaffected: its counts row does not resolve, and that is the row this tier reads.
+
 ## Related
 
 - Code: `packages/core/src/linkedin/dom-variant.ts` (also generates the post-detail
@@ -1512,10 +1585,13 @@ criteria and is tracked separately rather than absorbed here.
   `packages/core/src/linkedin/corroboration.ts`,
   `packages/core/src/cdp/wait-for-post-load.ts` (its diagnostic capture reports each
   registered adapter's own `ready` / `scopes` / `counts` anchors, #853; the constants it still
-  hand-maintains are markers no adapter binds to — see ADR-007 § 2026-09-04 Amendment (#853)),
+  hand-maintains are markers no adapter binds to — see ADR-007 § 2026-09-04 Amendment (#853);
+  also home to `assertPostDetailCountsCorroboration`, the counts-row binding both post-detail
+  operations share, #951),
   `packages/core/src/cdp/wait-for-reactions-modal.ts` (§ 2026-09-02 Amendment, #840),
   `packages/core/src/services/errors.ts`,
-  `packages/core/src/operations/get-post.ts`,
+  `packages/core/src/operations/get-post.ts` (its counters are corroborated by the container
+  tier BEFORE its cardinal tier consults `commentCount`, #951 — § 2026-09-08 Amendment),
   `packages/core/src/operations/get-post-engagers.ts`,
   `packages/core/src/operations/get-post-stats.ts` (engagement counts read through the
   post-detail adapter's own counts root, #857; both refusal branches write a diagnostic
@@ -1541,7 +1617,9 @@ criteria and is tracked separately rather than absorbed here.
   #857), #890 (`get-post-stats`'s extraction-failure branches now capture — CLOSED; the boundary
   #857 declared rather than crossed, recorded in full as ADR-007 § 2026-09-05 Amendment), #867 (`errorMessage` renders the cause chain, so
   the gates' probe counts reach the CLI and MCP text surfaces, § 2026-09-04 Amendment), #883 (the
-  attachment of those causes is pinned at all six sites, § 2026-09-04 Amendment), #853 (the
+  attachment of those causes is pinned at all six sites, § 2026-09-04 Amendment), #951 (`get-post`'s
+  counters get the container tier, ordered ahead of its cardinal tier — CLOSED; the deferral #852
+  declared rather than crossed, § 2026-09-08 Amendment), #853 (the
   post-detail diagnostic capture's per-dialect anchor readings are generated from this registry
   rather than hand-maintained beside it; discharges the stale-comment follow-up above, and
   recorded in full as ADR-007 § 2026-09-04 Amendment (#853), which owns the capture pattern)
