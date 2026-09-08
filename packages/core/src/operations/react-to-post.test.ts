@@ -11,6 +11,23 @@ vi.mock("../cdp/discovery.js", () => ({
   discoverTargets: vi.fn(),
 }));
 
+// The budget pre-flight resolves an account and opens a database.  These three
+// are mocked for the same reason `comment-on-post.test.ts` mocks them: left
+// real, `resolveAccount` reaches `LauncherService`, which builds its own
+// `CDPClient` — the module-mocked one, shared with this file — and consumes
+// the `mockResolvedValueOnce` queue that `detectCurrentReaction` is waiting on.
+vi.mock("../services/account-resolution.js", () => ({
+  resolveAccount: vi.fn(),
+}));
+
+vi.mock("../services/instance-context.js", () => ({
+  withDatabase: vi.fn(),
+}));
+
+vi.mock("../db/index.js", () => ({
+  ActionBudgetRepository: vi.fn(),
+}));
+
 vi.mock("../linkedin/dom-automation.js", () => ({
   waitForElement: vi.fn(),
   waitForDOMStable: vi.fn().mockResolvedValue(undefined),
@@ -36,8 +53,25 @@ import { gateOnLoggedInState } from "./wait-for-logged-in-state.js";
 
 import { CDPClient } from "../cdp/client.js";
 import { discoverTargets } from "../cdp/discovery.js";
+import { ActionBudgetRepository } from "../db/index.js";
 import { waitForElement, humanizedHover, humanizedClick, retryInteraction } from "../linkedin/dom-automation.js";
+import { resolveAccount } from "../services/account-resolution.js";
+import { BudgetExceededError } from "../services/errors.js";
+import type { DatabaseContext } from "../services/instance-context.js";
+import { withDatabase } from "../services/instance-context.js";
+import type { ActionBudgetEntry } from "../types/action-budget.js";
 import { reactToPost, REACTION_TYPES } from "./react-to-post.js";
+
+/** A PostLike budget entry with ample headroom — the default for every test. */
+const POST_LIKE_BUDGET: ActionBudgetEntry = {
+  limitTypeId: 18,
+  limitType: "PostLike",
+  dailyLimit: 100,
+  campaignUsed: 4,
+  directUsed: 0,
+  totalUsed: 4,
+  remaining: 96,
+};
 
 const mockClient = {
   connect: vi.fn().mockResolvedValue(undefined),
@@ -46,7 +80,19 @@ const mockClient = {
   disconnect: vi.fn(),
 };
 
-function setupMocks() {
+function setupMocks(budgetEntries: ActionBudgetEntry[] = [POST_LIKE_BUDGET]) {
+  vi.mocked(resolveAccount).mockResolvedValue(1);
+  vi.mocked(withDatabase).mockImplementation(
+    async (_accountId, callback) =>
+      callback({ db: {} } as unknown as DatabaseContext),
+  );
+  vi.mocked(ActionBudgetRepository).mockImplementation(function () {
+    return {
+      getActionBudget: vi.fn().mockReturnValue(budgetEntries),
+      getLimitTypes: vi.fn().mockReturnValue([]),
+    } as unknown as ActionBudgetRepository;
+  });
+
   vi.mocked(CDPClient).mockImplementation(function () {
     return mockClient as unknown as CDPClient;
   });
@@ -341,6 +387,136 @@ describe("reactToPost", () => {
     });
 
     expect(discoverTargets).toHaveBeenCalledWith(35000, "127.0.0.1");
+  });
+
+  describe("action budget", () => {
+    const POST_URL = "https://www.linkedin.com/feed/update/urn:li:activity:123/";
+
+    /** The same entry, exhausted. */
+    const EXHAUSTED: ActionBudgetEntry = {
+      ...POST_LIKE_BUDGET,
+      campaignUsed: 100,
+      totalUsed: 100,
+      remaining: 0,
+    };
+
+    it("throws BudgetExceededError when the PostLike limit is reached", async () => {
+      setupMocks([EXHAUSTED]);
+
+      await expect(
+        reactToPost({ postUrl: POST_URL, cdpPort: 9222 }),
+      ).rejects.toThrow(BudgetExceededError);
+    });
+
+    it("names PostLike in the refusal, not some other exhausted limit", async () => {
+      setupMocks([EXHAUSTED]);
+
+      await expect(
+        reactToPost({ postUrl: POST_URL, cdpPort: 9222 }),
+      ).rejects.toThrow(/PostLike/);
+    });
+
+    it("refuses before touching the network or the DOM", async () => {
+      // The point of checking up front: an exhausted budget must not cost a
+      // target discovery, a CDP connection, or a navigation. Asserting the
+      // rejection alone would pass even if the check ran last.
+      setupMocks([EXHAUSTED]);
+
+      await expect(
+        reactToPost({ postUrl: POST_URL, cdpPort: 9222 }),
+      ).rejects.toThrow(BudgetExceededError);
+
+      expect(discoverTargets).not.toHaveBeenCalled();
+      expect(mockClient.connect).not.toHaveBeenCalled();
+      expect(mockClient.navigate).not.toHaveBeenCalled();
+      expect(waitForElement).not.toHaveBeenCalled();
+    });
+
+    it("consults limit type 18, not whichever entry happens to be exhausted", async () => {
+      // 18 is the operation's own identity and the one thing it does not share
+      // with `comment-on-post`. An exhausted PostComment beside a healthy
+      // PostLike is the case that separates "checks its budget" from "checks
+      // a budget".
+      setupMocks([
+        POST_LIKE_BUDGET,
+        {
+          limitTypeId: 19,
+          limitType: "PostComment",
+          dailyLimit: 10,
+          campaignUsed: 10,
+          directUsed: 0,
+          totalUsed: 10,
+          remaining: 0,
+        },
+      ]);
+
+      const result = await reactToPost({ postUrl: POST_URL, cdpPort: 9222 });
+
+      expect(result.success).toBe(true);
+    });
+
+    it("refuses a dry run too, on the same exhausted budget", async () => {
+      // Deliberate, and mirrors `comment-on-post`: the check runs ahead of the
+      // dry-run branch. A dry run answers "what would happen", and with the
+      // budget gone what would happen is this refusal.
+      setupMocks([EXHAUSTED]);
+
+      await expect(
+        reactToPost({ postUrl: POST_URL, cdpPort: 9222, dryRun: true }),
+      ).rejects.toThrow(BudgetExceededError);
+    });
+
+    it("proceeds when PostLike has no daily limit configured", async () => {
+      setupMocks([
+        {
+          ...POST_LIKE_BUDGET,
+          dailyLimit: null,
+          campaignUsed: 0,
+          totalUsed: 0,
+          remaining: null,
+        },
+      ]);
+
+      const result = await reactToPost({ postUrl: POST_URL, cdpPort: 9222 });
+
+      expect(result.success).toBe(true);
+    });
+
+    it("proceeds when PostLike is absent from the budget entirely", async () => {
+      setupMocks([
+        {
+          limitTypeId: 8,
+          limitType: "Invite",
+          dailyLimit: 100,
+          campaignUsed: 5,
+          directUsed: 0,
+          totalUsed: 5,
+          remaining: 95,
+        },
+      ]);
+
+      const result = await reactToPost({ postUrl: POST_URL, cdpPort: 9222 });
+
+      expect(result.success).toBe(true);
+    });
+
+    it("resolves the account with the port and connection options it was given", async () => {
+      setupMocks();
+
+      await reactToPost({
+        postUrl: POST_URL,
+        cdpPort: 9222,
+        cdpHost: "192.168.1.100",
+        allowRemote: true,
+        accountId: 42,
+      });
+
+      expect(resolveAccount).toHaveBeenCalledWith(9222, {
+        host: "192.168.1.100",
+        allowRemote: true,
+        accountId: 42,
+      });
+    });
   });
 });
 
