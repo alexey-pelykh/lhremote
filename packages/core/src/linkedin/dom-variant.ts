@@ -2982,6 +2982,15 @@ interface RefusalReading {
  * are narrower than its `detect` turns that test red, and this text has to
  * change with it.
  *
+ * **The entailment stays HERE and out of the emitted string, deliberately.**
+ * It is the warrant for saying "can only mean", not a step anyone receiving
+ * the message can take: neither audience — CLI stderr, or an MCP agent that
+ * cannot open devtools — can check a registry they are not looking at, and
+ * `scopes` / `detect` are field names no rendered surface defines. Putting it
+ * in the string cost the reader the conclusion, which arrived only after two
+ * clauses of proof, and invited the one repair this wording exists to prevent.
+ * Each string now leads with what happened and what to do about it.
+ *
  * The reactions modal is the opposite case and the reason the disjunction is
  * worth stating at all: its `detect` is the reactions TRIGGER on the post page
  * while its `scopes` are the MODAL, so a matched trigger says nothing about a
@@ -3001,37 +3010,44 @@ const REFUSAL_READINGS: Readonly<Record<Surface, RefusalReading>> = {
   "post-detail": {
     region: "post-detail container",
     readings:
-      "On this surface a matched detect anchor entails a resolved scope — " +
-      "every registered post-detail adapter's scopes are the members of its " +
-      "own detect list, and one page read resolves both — so this can only " +
-      "mean no adapter's detect anchor matched. Readiness had already " +
-      "matched exactly one, earlier in this operation: the page stopped " +
-      "matching between the two reads",
+      "This can only mean no adapter's detect anchor matched — the " +
+      "criterion's other half cannot fire on this surface. Readiness had " +
+      "already matched exactly one, earlier in this same operation, so the " +
+      "page stopped matching between the two reads. Retry first: that gap " +
+      "is usually transient, and a second attempt also settles which case " +
+      "this is, because an identical failure means the page really is a " +
+      "variant nothing here registers",
     separator:
-      "read the bundle's `variantDetection` beside its `variantAnchors` for " +
-      "which dialect, if any, the page is now",
+      "read `variantDetection` beside `variantAnchors` for which variant, " +
+      "if any, the page is now",
   },
   "search-results": {
     region: "result cards",
     readings:
       "The message above states one of TWO readings: that no adapter's " +
       "detect anchor matched, which after a green readiness gate needs the " +
-      "page to have changed dialect since, OR that the adapter which claimed " +
+      "page to have changed variant since, OR that the adapter which claimed " +
       "it enumerated no cards from its own scopes, which needs nothing to " +
-      "have changed",
-    separator: "read the bundle's `variantDetection` and its card funnel",
+      "have changed. Retrying separates them: the first usually clears, the " +
+      "second repeats",
+    separator:
+      "read `variantDetection`, then `candidateCardCount`, " +
+      "`cardsClearingHeightFloor`, `cardsWithAuthorLink` and " +
+      "`cardsWithMenuButton` — where that number collapses is the layer " +
+      "that broke",
   },
   "reactions-modal": {
     region: "reactions-modal root",
     readings:
       "The message above states one of TWO readings: that no adapter's " +
       "detect anchor matched, which after a green readiness gate needs the " +
-      "page to have changed dialect since, OR that the adapter which claimed " +
-      "it resolved neither its own scopes candidates nor its own resolver, " +
-      "which needs nothing to have changed — this surface's detect anchor is " +
-      "the reactions trigger, not the modal, so a matched trigger promises no " +
-      "resolvable modal root",
-    separator: "read the bundle's `variantDetection`",
+      "page to have changed variant since, OR that the adapter which claimed " +
+      "it found neither the modal wrappers it looks for nor anything its own " +
+      "fallback search could reach, which needs nothing to have changed. " +
+      "This surface's detect anchor is the reactions trigger, not the modal, " +
+      "so a matched trigger promises no resolvable modal root. Retrying " +
+      "separates them: the first usually clears, the second repeats",
+    separator: "read `variantDetection`",
   },
 };
 
@@ -3085,8 +3101,11 @@ const REFUSAL_READINGS: Readonly<Record<Surface, RefusalReading>> = {
 export function unreadableAfterReadinessCause(surface: Surface): Error {
   const { region, readings, separator } = REFUSAL_READINGS[surface];
   return new Error(
-    `Resolved no ${region}. ${readings}. Re-run under ` +
-      `LHREMOTE_CAPTURE_DIAGNOSTICS=1 and ${separator} — a \`null\` there is ` +
-      "the probe failing to run, never the claim that nothing matched.",
+    `Resolved no ${region}. ${readings}. For more, set ` +
+      "LHREMOTE_CAPTURE_DIAGNOSTICS=1 on the process that runs this: the " +
+      "next failure writes a diagnostics bundle and prints the path on " +
+      "stderr. " +
+      `There, ${separator} — a \`null\` in \`variantDetection\` is the probe ` +
+      "failing to run, never the claim that nothing matched.",
   );
 }
