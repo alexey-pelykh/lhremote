@@ -27,6 +27,13 @@
 // remains is a page that CHANGES between the readiness poll and the extraction
 // `evaluate` — which is exactly what a capture is for, and exactly what no
 // deadline-bound capture can see.
+//
+// A THIRD branch reaches the same capture since #852, and it widens that
+// population rather than sharing it: the corroboration raise fires on a
+// perfectly ordinary page whose counts row rendered and whose counters did not
+// parse, so it needs no flip and no mid-read change.  Same deadline-free shape
+// — the gate went green milliseconds earlier and the scrape returned a
+// well-formed record — which is why it needs the capture for the same reason.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -68,6 +75,7 @@ import { CDPClient } from "../cdp/client.js";
 import {
   DOMVariantAmbiguousError,
   DOMVariantUnsupportedError,
+  ExtractionFailedError,
 } from "../services/errors.js";
 import { adaptersFor } from "../linkedin/dom-variant.js";
 
@@ -125,20 +133,24 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
   const originalEnv = process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
 
   /**
-   * Drive `getPostStats` to a post-detail scrape that fails variant selection.
+   * Drive `getPostStats` to a post-detail scrape that ends in a capture.
    *
    * The evaluate sequence walks the real call order: readiness poll, the
    * stats scrape, then — only on the failure path — the variant-detection
-   * probe and the capture's own DOM probe.
+   * probe and the capture's own DOM probe.  That order is the same for all
+   * three branches, which is why one helper serves them: the corroboration
+   * raise (#852) reaches the capture from a WELL-FORMED record rather than
+   * from a selection outcome, and takes the identical route out.
    *
    * @param scrapeResult - What the extraction script resolves to: `null` for
-   *   "no adapter claimed the page", or an `ambiguousVariants` record for
-   *   "two or more did".
+   *   "no adapter claimed the page", an `ambiguousVariants` record for "two or
+   *   more did", or a record whose counters are all zero beside a
+   *   `countsRootNarrowed: true` for the page contradicting itself.
    * @param detection - What the variant-detection probe resolves to, or an
    *   `Error` to reject with (a probe that throws is non-evidence, not a
    *   verdict).
    */
-  function setupVariantFailure(
+  function setupExtractionFailure(
     scrapeResult: unknown,
     detection: unknown = DETECTION,
   ) {
@@ -201,7 +213,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
   it("captures when no adapter claims the page, and still raises unsupported", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
-    setupVariantFailure(null);
+    setupExtractionFailure(null);
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
@@ -219,7 +231,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
   it("captures when two adapters claim the page, and still raises ambiguous", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
-    setupVariantFailure({ ambiguousVariants: ["sdui", "legacy"] });
+    setupExtractionFailure({ ambiguousVariants: ["sdui", "legacy"] });
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
@@ -239,7 +251,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
     // capture hangs off the same falsiness test as the refusal, so pinning it
     // here keeps the two from being tightened apart: a later `raw === null`
     // would leave this branch raising with no artifact.
-    setupVariantFailure(undefined);
+    setupExtractionFailure(undefined);
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
@@ -252,9 +264,56 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
     warnSpy.mockRestore();
   });
 
+  it("captures when the counts row contradicts an all-zero read", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    // Not a selection outcome: an adapter claimed the page, resolved its
+    // scope, resolved its own counts row, and read nothing out of it (#852).
+    // The bundle is what tells an operator which of those the row actually
+    // rendered — `variantAnchors` carries a per-selector count for every
+    // declared `counts` candidate, which is the layer the error names.
+    setupExtractionFailure({
+      variant: "legacy",
+      reactionCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      countsRootNarrowed: true,
+    });
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    await expect(
+      getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT }),
+    ).rejects.toThrow(ExtractionFailedError);
+
+    expect(writtenBundle()).toMatchObject({ trigger: "extraction-failure" });
+    warnSpy.mockRestore();
+  });
+
+  it("writes no bundle for an all-zero read the row does not contradict", async () => {
+    process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
+    // The legal empty, and the one arm that must stay silent: a captured
+    // legacy page with no engagement renders no counts row at all, and `sdui`
+    // declares `counts: []` so it can never render one.  A capture here would
+    // write a bundle of LinkedIn page content on every ordinary zero-engagement
+    // post — noise that also carries personal data.
+    setupExtractionFailure({
+      variant: "legacy",
+      reactionCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      countsRootNarrowed: false,
+    });
+
+    const result = await getPostStats({ postUrl: POST_URL, cdpPort: CDP_PORT });
+
+    expect(result.stats.commentCount).toBe(0);
+    expect(vi.mocked(writeFile)).not.toHaveBeenCalled();
+  });
+
   it("names the artifact for the failure that actually happened", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
-    setupVariantFailure(null);
+    setupExtractionFailure(null);
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
@@ -278,7 +337,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
   it("records the per-adapter detection probes in the bundle", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
-    setupVariantFailure(null);
+    setupExtractionFailure(null);
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
@@ -306,7 +365,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
   it("records a null detection when the probe yields no usable reading", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
-    setupVariantFailure(null, new Error("evaluate failed"));
+    setupExtractionFailure(null, new Error("evaluate failed"));
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
@@ -324,7 +383,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
   it("reports the real artifact path on the warn line", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
-    setupVariantFailure(null);
+    setupExtractionFailure(null);
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
@@ -351,7 +410,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
   it("is default-off: writes nothing and spends no probe when the env var is unset", async () => {
     delete process.env.LHREMOTE_CAPTURE_DIAGNOSTICS;
-    const { evaluateMock } = setupVariantFailure(null);
+    const { evaluateMock } = setupExtractionFailure(null);
 
     // Still refuses — the empty-vs-error contract (ADR-008) is independent of
     // whether diagnostics are being collected.
@@ -412,7 +471,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
   it("keeps propagating the caller's error when the capture itself fails", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
-    setupVariantFailure({ ambiguousVariants: ["sdui", "legacy"] });
+    setupExtractionFailure({ ambiguousVariants: ["sdui", "legacy"] });
     const { writeFile: wf } = await import("node:fs/promises");
     vi.mocked(wf).mockRejectedValueOnce(new Error("disk full"));
 
@@ -430,7 +489,7 @@ describe("getPostStats extraction-failure diagnostics (#890)", () => {
 
   it("captures before the client disconnects", async () => {
     process.env.LHREMOTE_CAPTURE_DIAGNOSTICS = "1";
-    const { disconnect } = setupVariantFailure(null);
+    const { disconnect } = setupExtractionFailure(null);
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);

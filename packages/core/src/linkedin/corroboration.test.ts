@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { ExtractionFailedError } from "../services/errors.js";
 import {
   assertCardinalCorroboration,
+  assertRegionCorroboration,
   contradictsCompleteCollection,
 } from "./corroboration.js";
 
@@ -232,4 +233,113 @@ describe("contradictsCompleteCollection", () => {
       }),
     ).toBe(false);
   });
+});
+
+// The CONTAINER tier (#852). Tested here rather than only through
+// `getPostStats` for the reason the collection companion above is: the
+// operation reaches this predicate with a `countsRootNarrowed` the in-page
+// script decided, so the false arm is only observable from that side by
+// staging a whole second fixture, while the arms that discriminate a mutant —
+// a negative sum, a `NaN` — are not reachable from it at all. This is the
+// level where the rule is decidable.
+describe("assertRegionCorroboration", () => {
+  const OBSERVATION = {
+    surface: "post-detail",
+    variant: "legacy",
+    field: "engagementCounts",
+    regionName: "countsRoot",
+  };
+
+  it("raises when an empty read is contradicted by a region that rendered", () => {
+    expect(() =>
+      assertRegionCorroboration({
+        ...OBSERVATION,
+        regionResolved: true,
+        extractedCount: 0,
+      }),
+    ).toThrow(ExtractionFailedError);
+  });
+
+  it("names the surface, variant, field and region in the diagnosis", () => {
+    // Same standard the cardinal tier is held to: the operator reading this
+    // line is the least able party to diagnose a stale counter pattern, so
+    // every term needed to act has to be in the message.
+    try {
+      assertRegionCorroboration({
+        ...OBSERVATION,
+        regionResolved: true,
+        extractedCount: 0,
+      });
+      expect.unreachable("expected a contradicted empty region to raise");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExtractionFailedError);
+      const failure = error as ExtractionFailedError;
+      expect(failure.surface).toBe("post-detail");
+      expect(failure.variant).toBe("legacy");
+      expect(failure.field).toBe("engagementCounts");
+      expect(failure.corroborator).toBe("countsRoot=rendered");
+      expect(failure.message).toContain("countsRoot=rendered");
+    }
+  });
+
+  // The arm that keeps this check off every ordinary post. `post-zero-comments`
+  // is a captured legacy page rendering no counts row at all beside genuinely
+  // zero engagement, and the `sdui` adapter declares `counts: []`, so this is
+  // the only branch that dialect can ever reach.
+  it("returns for an empty read whose region never resolved", () => {
+    expect(() =>
+      assertRegionCorroboration({
+        ...OBSERVATION,
+        regionResolved: false,
+        extractedCount: 0,
+      }),
+    ).not.toThrow();
+  });
+
+  // The lower boundary, pinned explicitly: one counter reading 1 proves the
+  // patterns still match this row. Without it an `extractedCount > 1` mutant
+  // survives, and it would report a post carrying exactly one comment as a
+  // stale-counter failure.
+  it("returns at the lower boundary of a non-empty read", () => {
+    expect(() =>
+      assertRegionCorroboration({
+        ...OBSERVATION,
+        regionResolved: true,
+        extractedCount: 1,
+      }),
+    ).not.toThrow();
+  });
+
+  it("returns for a non-empty read, whatever the region says", () => {
+    for (const regionResolved of [true, false]) {
+      expect(() =>
+        assertRegionCorroboration({
+          ...OBSERVATION,
+          regionResolved,
+          extractedCount: 43,
+        }),
+      ).not.toThrow();
+    }
+  });
+
+  // A negative or unparseable sum is a broken read, not a contradiction to
+  // report. `NaN` is the case that discriminates the predicate's
+  // `extractedCount !== 0` from the `extractedCount > 0` spelling its sibling
+  // uses: `NaN > 0` is `false`, so that form would treat a parsing regression
+  // upstream as an empty read and point an operator at these counter patterns.
+  it.each([
+    ["negative", -1],
+    ["NaN", Number.NaN],
+  ])(
+    "returns rather than reporting a contradiction on a %s read",
+    (_label, extractedCount) => {
+      expect(() =>
+        assertRegionCorroboration({
+          ...OBSERVATION,
+          regionResolved: true,
+          extractedCount,
+        }),
+      ).not.toThrow();
+    },
+  );
 });

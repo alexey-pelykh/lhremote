@@ -13,7 +13,10 @@ import {
   launchChromium,
   type ChromiumInstance,
 } from "../../cdp/testing/launch-chromium.js";
-import { assertCardinalCorroboration } from "../corroboration.js";
+import {
+  assertCardinalCorroboration,
+  assertRegionCorroboration,
+} from "../corroboration.js";
 import {
   adaptersFor,
   buildDetectionSource,
@@ -513,6 +516,58 @@ describe("post-detail fixture oracle (integration)", { timeout: INSTALL_TEST_TIM
           // Counts come off the row the canary above pinned to the sidecar.
           expect(record?.commentCount).toBe(fixture.commentCardinal);
           expect(record?.reactionCount).toBe(fixture.reactionCardinal);
+        },
+      );
+
+      // ─────────────────────────────────────────────────────────────────────
+      // #852 — the counts row as a corroborator, graded on the two captured
+      // pages that are the whole of its warrant.
+      //
+      // `contradictsEmptyRegion` raises on an all-zero read when the selected
+      // adapter's own counts anchor resolved, and the ground for treating that
+      // as a contradiction is that on real markup the row renders when and
+      // only when there is engagement to render.  Both directions are in these
+      // fixtures, and this is where the claim is checked against them rather
+      // than asserted in prose: a dialect that rendered an EMPTY counts row
+      // would falsify it, and would land here as a red on the zero fixture.
+      //
+      // Derived from the sidecar rather than declared per fixture, for the
+      // reason every other assertion in this file is: a disagreement is a
+      // finding about the fixture, not a number to adjust.
+      // ─────────────────────────────────────────────────────────────────────
+      it(
+        "reports the counts root as narrowed exactly when the row was measured",
+        async () => {
+          await installFixture(fixture.label);
+
+          const record = await client.evaluate<{
+            variant: string;
+            reactionCount: number;
+            commentCount: number;
+            shareCount: number;
+            countsRootNarrowed: boolean;
+          } | null>(extractionSource);
+
+          expect(record).not.toBeNull();
+          expect(record?.countsRootNarrowed).toBe(measured.socialCounts > 0);
+
+          // And the rule those two inputs feed must be silent on BOTH captured
+          // pages — the one carrying engagement because its counters parsed,
+          // the one carrying none because no row resolved to contradict them.
+          // A check that fired here would fire on every ordinary post.
+          expect(() => {
+            assertRegionCorroboration({
+              surface: "post-detail",
+              variant: record?.variant ?? "unknown",
+              field: "engagementCounts",
+              regionName: "countsRoot",
+              regionResolved: record?.countsRootNarrowed ?? false,
+              extractedCount:
+                (record?.reactionCount ?? 0) +
+                (record?.commentCount ?? 0) +
+                (record?.shareCount ?? 0),
+            });
+          }).not.toThrow();
         },
       );
     });
