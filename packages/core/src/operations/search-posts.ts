@@ -144,6 +144,17 @@ const SCRAPE_SEARCH_RESULTS_SCRIPT = buildSearchResultsExtractionSource(
  * refusal.  See ADR-008 § 2026-09-02 Amendment (#841) — that date carries two
  * amendments, and this is the search-results one.
  *
+ * **This is a second axis, and the class-doc correction did not close it.**
+ * #922 removed the *dialect no adapter knows* gloss from
+ * {@link DOMVariantUnsupportedError}'s class doc, because it is false whenever
+ * that class fires on an adapter that matched and then resolved no scope.
+ * That is a different over-claim from this one and leaves this one standing:
+ * the wording named above is the error's runtime MESSAGE, not its doc, and
+ * the message is right to keep asserting *register an adapter* — ADR-008 § 5
+ * assigns that same operator action to both firing conditions.  What makes it
+ * only one of two readings HERE is the surface, not the condition, so this
+ * `cause` remains the fix rather than a softer message.
+ *
  * @param detection - The deadline classification probe's own reading.
  */
 function zeroMatchCause(detection: VariantDetection): Error {
