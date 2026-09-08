@@ -73,8 +73,9 @@ describe("discovery (integration)", () => {
     // not in an `afterEach`, deliberately: that stub is installed once and is
     // meant to hold for the whole file — every test below reads the linux
     // layout — so releasing it per test breaks four of the nine.  Same
-    // exception class as the module-scope `WebSocket` stub in
-    // `cdp/client.test.ts`, one hook further out.
+    // exemption `cdp/client.test.ts` relies on for its module-scope
+    // `WebSocket` stub — though that one never releases at all, where this
+    // releases late.
     vi.unstubAllGlobals();
     rmSync(tmpBase, { recursive: true, force: true });
   });
