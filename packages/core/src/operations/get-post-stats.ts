@@ -177,8 +177,11 @@ const POST_DETAIL_SURFACE = "post-detail" as const;
  *
  * So the region gap closes where it is decidable, at the extraction: a counts
  * root that DID resolve, beside three counters that read zero, is one
- * observation contradicting itself, and {@link assertRegionCorroboration}
- * below raises on it.  The remaining direction — nothing resolved, zeroes
+ * observation contradicting itself, and
+ * {@link assertPostDetailCountsCorroboration} below raises on it — the
+ * binding this operation has shared with `getPost` since #951, which wraps
+ * the `assertRegionCorroboration` rule and writes the diagnostic capture on
+ * the way out.  The remaining direction — nothing resolved, zeroes
  * returned — is the shape of a post with no engagement, and stays a normal
  * return.  On `sdui` that is the only reachable branch, because `counts: []`
  * leaves it no anchor to resolve; the same recorded absence of measurement

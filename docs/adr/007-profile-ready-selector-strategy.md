@@ -715,7 +715,7 @@ nothing while doing so.
 outcomes — no adapter claimed the page, or two did — so the scrape produced no usable record.
 This one runs on a record that is entirely well-formed: an adapter claimed the page, resolved its
 scope, resolved its own engagement-counts row, and read zero out of all three counters.
-`getPostStats` raises `ExtractionFailedError` on that pairing (ADR-008 § 2026-09-08 Amendment),
+`getPostStats` raises `ExtractionFailedError` on that pairing (ADR-008 § 2026-09-08 Amendment (#852)),
 because a row LinkedIn renders only when it has something to render is contradicting the read
 taken from it.
 
@@ -729,10 +729,18 @@ are — the gate went green milliseconds earlier — so no timeout-bound capture
 **What it does NOT change.** No new trigger class: the bundle's `trigger` reads
 `extraction-failure`, the same value the sibling branches write, so the § 2026-09-01 artifact-name
 table gains no row. No new helper: it calls the same `capturePostDetailExtractionFailure` that
-moved to `wait-for-post-load.ts` for #890, from its own `catch`, before the `finally` disconnects
-the client — pinned by `get-post-stats-extraction-diagnostics.test.ts`, *"captures before the
-client disconnects on the corroboration branch"*, which exists separately from the selection
-branch's equivalent because the two capture from different call sites.
+moved to `wait-for-post-load.ts` for #890, before the `finally` disconnects the client — pinned by
+`get-post-stats-extraction-diagnostics.test.ts`, *"captures before the client disconnects on the
+corroboration branch"*, which exists separately from the selection branch's equivalent because the
+two capture from different call sites.
+
+> **Amended by #951.** This paragraph read *"from its own `catch`"*, and that clause is now false.
+> When `get-post` reached this same branch the `catch` moved out of `getPostStats` into
+> `assertPostDetailCountsCorroboration` in `wait-for-post-load.ts`, which both operations now call.
+> Everything else stands: same capture helper, same `extraction-failure` trigger, same live client,
+> and the same arm below that deliberately writes nothing. What moved is which function holds the
+> `catch` — not where, when, or whether the bundle is written. See ADR-008 § Amendments →
+> *`get-post`'s counters are corroborated before its cardinal reads one* (#951).
 
 **One arm deliberately writes nothing**, and it is the one that would have made this expensive: an
 all-zero read whose counts row did NOT resolve is an ordinary post with no engagement, returns
