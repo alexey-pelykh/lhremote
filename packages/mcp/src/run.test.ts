@@ -432,10 +432,16 @@ describe("runStdioBin — import-graph coverage", () => {
     // Returning it unconverted would throw on the caller's `.trim()` — inside
     // the catch, with no handler left — so the rejection would escape
     // `runStdioBin` and reach the bin as the crash dump this file exists to
-    // prevent. `errorMessage` throws on this input for the same reason
-    // (measured: `ownText(...).trim is not a function`), which is why the
-    // formatter is NOT broken here: the degraded path is reached by
-    // `render`'s catch absorbing the formatter's own failure.
+    // prevent. `errorMessage` threw on this input for the same reason once
+    // (measured: `ownText(...).trim is not a function`), and #965 closed that
+    // by coercing: it renders `"42"` now, so `render` returns from its own
+    // `try` and the formatter is deliberately NOT broken here.  What this
+    // pins end-to-end is therefore the undegraded path — `render`'s catch is
+    // not reached.  The coercion the paragraph above is about,
+    // `lastResortMessage`'s `String()` over a non-string `Error.message`, is
+    // left uncovered here: the cases that do reach `render`'s catch get there
+    // through `breakFormatter()`, which stands in for the formatter failing
+    // to LOAD, and none of them carries such a message.
     const hostile = new Error("placeholder");
     Object.defineProperty(hostile, "message", { value: 42 });
     rejectWith(hostile);
