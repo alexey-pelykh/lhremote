@@ -69,9 +69,12 @@ const UNREPORTABLE =
  * as the other one: `message` is typed `string` but nothing enforces that at
  * runtime, and an `Error` carrying a non-string message would otherwise be
  * returned as-is and throw on the caller's `.trim()` — inside the catch, with
- * no handler left, which is this bug one level up.  Measured: `errorMessage`
- * itself throws `TypeError` on that input, which is why {@link render}'s catch
- * covers the formatter throwing and not only failing to load.
+ * no handler left, which is this bug one level up.  `errorMessage` itself was
+ * measured throwing `TypeError` on that same input once, at its own `.trim()`;
+ * #965 closed that path by coercing the message rather than returning it
+ * unchanged, so it is history and not a live reason for {@link render}'s
+ * catch.  What warrants that catch is the dynamic `import` it wraps, which can
+ * fail to load.
  *
  * `String()` is inside the `try` because it is a call, not a coercion that
  * always succeeds: it throws `TypeError` on a prototype-less value and
@@ -97,10 +100,13 @@ function lastResortMessage(error: unknown): string {
  * `@lhremote/core` in anyway, so on a normal start this import is a cache hit
  * that never happens.
  *
- * The `catch` covers the formatter throwing as well as failing to load; the
- * non-string-message case above is a measured instance of the former.  This is
- * the one function in the package whose own failure has nowhere to be
- * reported, so the guard is on the call rather than on trust.
+ * The `catch` wraps both statements, and the `import` is what makes it
+ * load-bearing: a formatter that fails to load is the case
+ * {@link lastResortMessage} exists for, and no totality in `errorMessage` can
+ * help with it.  The non-string-message case above is history rather than a
+ * live instance of the formatter throwing — #965 closed it.  This is the one
+ * function in the package whose own failure has nowhere to be reported, so the
+ * guard is on the call rather than on trust.
  */
 async function render(error: unknown): Promise<string> {
   try {
