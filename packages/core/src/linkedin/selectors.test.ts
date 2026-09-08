@@ -17,10 +17,25 @@ const { SELECTORS } = selectorsModule;
  * entries; because it was a subset check, the six added since drifted out
  * of coverage without anything going red (lhremote#856).
  *
- * Every assertion below is derived from the aggregate itself, so an entry
- * added tomorrow is covered the day it lands.  Liveness — "does this
- * selector still match anything on the real page" — is inherently Tier 3
- * and stays in the e2e suite.
+ * **What this replacement does and does not do.**  Every case below is
+ * derived from the aggregate, so all 16 entries are checked and a 17th is
+ * checked the day it is added to `SELECTORS` — no list to remember.  That
+ * is a trade, not a strict widening: a subset check fails when a named key
+ * is REMOVED, and a derived one cannot, because a removed entry is simply
+ * one fewer case.
+ *
+ * Removal detection is deliberately not restored here.  Catching it needs
+ * an expectation from outside the aggregate, and every such expectation is
+ * a hand-maintained list — the thing that drifted.  The one form that would
+ * catch both directions without a list is module-to-aggregate parity, and
+ * it fails today: `POST_DETAIL_CONTAINER`, `POST_DETAIL_SDUI_SCREEN`,
+ * `POST_DETAIL_BODY_TEXT_LEAF`, `POST_DETAIL_BODY_COMMENTARY_WRAPPER`,
+ * `POST_REACTIONS_MENU` and `COMMENT_ARTICLE_ANY` are exported selectors
+ * that are not in `SELECTORS`, despite its docstring saying "all
+ * selectors".  Closing that is its own change, not lhremote#856's.
+ *
+ * Liveness — "does this selector still match anything on the real page" —
+ * is inherently Tier 3 and stays in the e2e suite.
  */
 describe("SELECTORS registry", () => {
   const entries = Object.entries(SELECTORS);
@@ -43,7 +58,10 @@ describe("SELECTORS registry", () => {
       // The aggregate is documented as "keyed by name".  Shorthand property
       // syntax makes that true today; this pins it against a future edit to
       // explicit `KEY: OTHER_CONSTANT` form, which would silently make the
-      // aggregate lie about what it holds.
+      // aggregate lie about what it holds.  It compares by VALUE, so it is
+      // blind to an alias onto a constant that happens to carry the same
+      // string — `COMMENT_REACTIONS_MENU` and `POST_REACTIONS_MENU` are
+      // byte-identical today, and swapping one for the other would pass.
       const moduleExports = new Map<string, unknown>(
         Object.entries(selectorsModule),
       );

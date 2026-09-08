@@ -157,11 +157,14 @@ describeE2E("LinkedIn selectors registry", () => {
   // Moved to Tier 1: packages/core/src/linkedin/selectors.test.ts.
   //
   // They have no live-DOM dependency, so behind this suite's LinkedHelper
-  // launch they were a gate CI never fired.  The version that replaced them
-  // is also strictly wider: it derives its cases from the SELECTORS aggregate
-  // instead of a hand-maintained `expectedKeys` array, which had drifted to
-  // covering 10 of 16 entries (lhremote#856).  What stays here is what
-  // genuinely needs a browser: liveness.
+  // launch they were a gate CI never fired.  The replacement derives its
+  // cases from the SELECTORS aggregate instead of the hand-maintained
+  // `expectedKeys` array, which had drifted to covering 10 of 16 entries
+  // (lhremote#856).  That is a trade rather than a strict widening -- it
+  // gains every entry and loses removal detection; the reasoning and the
+  // reason it was not restored are stated in full at the Tier-1 home.
+  //
+  // What stays here is what genuinely needs a browser: liveness.
 
   // -- Feed page selectors -------------------------------------------------
 
@@ -182,8 +185,27 @@ describeE2E("LinkedIn selectors registry", () => {
       // include this constant.  SELECTORS is exported, so this reaches it
       // without widening the public API from a test.
       const selector = SELECTORS.FEED_POST_MENU_BUTTON;
-      const count = await queryCount(linkedInClient, selector);
-      expect(count, `Selector "${selector}" matched 0 elements`).toBeGreaterThan(0);
+
+      // Polled rather than read once off the suite's flat 3 s settle.
+      // Production treats this same element as the feed-readiness signal and
+      // polls 15 s for it (`waitForFeedLoad` in get-feed.ts), so against a
+      // flat sleep a zero here would mean "not hydrated yet" as readily as
+      // "selector is stale" -- and a gate that cannot tell its own failure
+      // modes apart is worse than none, which is the same standard applied
+      // to the it.todo entries below.
+      const count = await retryAsync(
+        async () => {
+          const n = await queryCount(linkedInClient, selector);
+          if (n === 0) throw new Error("menu button not hydrated yet");
+          return n;
+        },
+        { retries: 15, delay: 1_000 },
+      ).catch(() => 0);
+
+      expect(
+        count,
+        `Selector "${selector}" matched 0 elements after 15 s of polling — either the selector is stale, or the feed never hydrated`,
+      ).toBeGreaterThan(0);
     });
   });
 
