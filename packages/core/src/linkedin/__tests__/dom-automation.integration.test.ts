@@ -77,9 +77,12 @@ describe("DOM automation (integration)", { timeout: INSTALL_TEST_TIMEOUT_MS }, (
       await waitForElement(client, "#existing", { timeout: 2000 });
     });
 
-    // The inner budget is `waitForElement`'s own `DEFAULT_TIMEOUT`, and the
-    // outer one is derived from it rather than declared separately.  Both used
-    // to be tightened here -- 5 s inside 15 s -- and 5 s was below every call
+    // The inner budget matches `waitForElement`'s own `DEFAULT_TIMEOUT`, and the
+    // outer one is derived from it rather than declared separately.  That 30 s
+    // is transcribed rather than imported, because the constant is module-
+    // private: if it moves, nothing here fails and this sentence quietly stops
+    // being true, so re-check the pair by hand rather than trusting it.  Both
+    // used to be tightened here -- 5 s inside 15 s -- and 5 s was below every call
     // site in the product, whose lowest budget is 10 s, so the test held the
     // helper to a deadline nothing actually asks of it.  Correcting that is the
     // whole of what this change fixes.
@@ -135,9 +138,9 @@ describe("DOM automation (integration)", { timeout: INSTALL_TEST_TIMEOUT_MS }, (
           }, 200);
         `);
 
-        await waitForElement(client, "#delayed", {
-          timeout: DELAYED_ELEMENT_TIMEOUT,
-        });
+        await expect(
+          waitForElement(client, "#delayed", { timeout: DELAYED_ELEMENT_TIMEOUT }),
+        ).resolves.toBeUndefined();
       },
     );
 
