@@ -1432,9 +1432,9 @@ serves more often**: nothing in this repository measures the mix, and the two ob
 do exist point the other way — § Context records legacy markup returning on the same URLs,
 plausibly per-session, and the fixture oracle records that an SDUI post-detail page could not be
 harvested because legacy was being served. What motivates #950 is § The drift is non-monotonic,
-not a frequency. Nothing here guesses an anchor either, for the reason § Context and the § 872
-amendment give: an anchor asserted rather than measured is the failure this design exists to
-remove.
+not a frequency. Nothing here guesses an anchor either, for the reason § Context and
+§ Amendments → *The legacy detect anchor read the wrong attribute* (#872) give: an anchor
+asserted rather than measured is the failure this design exists to remove.
 
 *The counters.* The check is row-level and SUMMED, so it closes the all-zero case and not the
 partial one. A non-zero counter proves only its own pattern matched; one counter's pattern going
@@ -1449,8 +1449,9 @@ counter matches, and this tier raises where the operation previously returned a 
 — on *every* post, not only broken ones. That is this ADR's contract working as intended rather
 than a regression to revert: a locale mismatch genuinely is *"the field's selectors no longer match
 this page"*, and the error's own remediation line names the right repair. It is tracked as #952
-because the right fix is to measure the patterns per locale, never to translate the English word
-(§ Decision 2's rule about asserted-versus-measured anchors covers the counter patterns too).
+because the right fix is to measure the patterns per locale, never to translate the English word —
+the asserted-versus-measured rule (§ Context, and § Amendments → *The legacy detect anchor read
+the wrong attribute* (#872)) reaches the counter patterns as much as it reaches the anchors.
 
 **`get-post` reads the same record and is deliberately untouched.** Its counters feed
 `assertCardinalCorroboration` as the CARDINAL, so a counts region that never rendered gives it
