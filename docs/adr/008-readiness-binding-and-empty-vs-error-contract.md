@@ -540,10 +540,20 @@ not a measurement, and chasing it is out of this decision's scope.
   treats an unrendered counts row as `commentCount: 0`, which its cardinal tier then reads as a
   legal empty (§ 2026-09-08 Amendment). Left out of #852 because it changes a different
   operation's behaviour.
-- **Widen the counter patterns past English** (#952, § 2026-09-08 Amendment). `__LH_COUNTERS` is
-  English-only while the counts-row anchor is a CSS class, so on a non-English interface the row
-  resolves and no counter matches — which the container tier now turns into a refusal rather than
-  a silent zero. Better, and complete for those users until the patterns are measured per locale.
+- **Fix the counter patterns' locale and abbreviation coverage** (#952, § 2026-09-08 Amendment).
+  `__LH_COUNTERS` is English-only and admits only `\d[\d,]*` while the counts-row anchor is a CSS
+  class, so the row can resolve over text this parse cannot read. Three measured classes, not one:
+  de/es and abbreviated ENGLISH raise; fr/it match on a prefix collision (`comment` inside
+  `commentaires`) and return a fabricated count SILENTLY, which the container tier cannot see.
+  Closing the prefix collision is separable from the locale work and converts the silent case into
+  the loud one.
+- **Bound the counts-root narrowing to this post** (#954, § 2026-09-08 Amendment). Any element
+  matching the counts anchor anywhere inside the resolved scope narrows the root, including one
+  belonging to a nested reshare — which since #852 can refuse a correct zero read. Mechanism
+  reproduced; no captured page nests the row, so measuring real markup is step one.
+- **Make the whole-page-read pins behavioural** (#955). The two Tier-1 tests named for the defect
+  #857 removed assert a SPELLING; a reintroduction spelled `document.documentElement` passes both.
+  Tier 2 catches it, so the property is guarded — but not where the titles claim it is.
 
 ## Amendments
 
@@ -1442,16 +1452,51 @@ stale while another still reads passes this check and returns a zero for the dea
 before. Closing that needs a per-counter corroborator the row does not offer, and none is
 invented here — `get-post-stats.ts` states the same bound at the line that makes the check.
 
-**One consequence found by review, recorded because it is complete rather than marginal.** The
-counts-row anchor is a CSS class and resolves whatever the interface language is; `__LH_COUNTERS`
-is English-only. On a non-English interface serving legacy markup the row therefore resolves, no
-counter matches, and this tier raises where the operation previously returned a silent `{0, 0, 0}`
-— on *every* post, not only broken ones. That is this ADR's contract working as intended rather
-than a regression to revert: a locale mismatch genuinely is *"the field's selectors no longer match
-this page"*, and the error's own remediation line names the right repair. It is tracked as #952
-because the right fix is to measure the patterns per locale, never to translate the English word —
-the asserted-versus-measured rule (§ Context, and § Amendments → *The legacy detect anchor read
-the wrong attribute* (#872)) reaches the counter patterns as much as it reaches the anchors.
+**The third residual: what happens when the row renders counters the patterns cannot read.** The
+counts-row anchor is a CSS class and resolves whatever the interface language is, while
+`__LH_COUNTERS` is English-only and admits only `\d[\d,]*`. So the row can resolve over text this
+parse cannot read, and that is the input this tier was not designed against. An earlier revision of
+this amendment asserted one outcome for it — *"the row resolves, no counter matches, and this tier
+raises on every post"* — and **acceptance verification falsified it**. Measured against the real
+patterns, there are three classes, not one:
+
+| Rendered text | Loose pattern | Outcome |
+|---|---|---|
+| `241 Kommentare`, `241 comentarios` (de, es) | no match | all-zero beside a resolved row → **raises** |
+| `241 commentaires`, `241 commenti` (fr, it) | **matches** — `comment` is a prefix of both | reads the FLATTENED row and returns a fabricated **241**, silently |
+| `1.2K comments`, `1K comments` (abbreviated English) | no match — `\d[\d,]*` admits neither `.` nor `K` | all-zero beside a resolved row → **raises** |
+
+Two things follow, and the second is the one the earlier wording got backwards.
+
+*The refusal rows are this ADR's contract working, not a regression to revert.* The selectors
+genuinely no longer match what the row says, which is exactly what `ExtractionFailedError`'s
+remediation line reports. What is new is that it is now LOUD where it was a silent `{0, 0, 0}`;
+that is the change's whole purpose. The abbreviated-English row is worth naming separately because
+it needs no unusual interface — an ordinary high-engagement post is enough — and nothing before
+this verification recorded it.
+
+*The fr/it row is worse than a refusal and the corroborator cannot see it.* The loose fallback —
+which exists because a counter can render as a bare number with the word only in an `aria-label`,
+and which is gated on `narrowed` for exactly this reason — fires over the row's concatenated text
+and joins the reaction count to the comment count. That is the join artefact #857 removed for
+English, reachable again through a prefix collision. The read is non-zero, so this tier returns
+without complaint: **a corroborator cannot corroborate a number that was fabricated rather than
+missed.** It bounds what the container tier buys, and it is the reason #952 is not merely a
+translation task.
+
+The fix is to measure the patterns per locale and per abbreviation, never to translate the English
+word or guess a suffix — the asserted-versus-measured rule (§ Context, and § Amendments → *The
+legacy detect anchor read the wrong attribute* (#872)) reaches the counter patterns as much as it
+reaches the anchors. Tracked as #952.
+
+**A fourth, whose markup is unmeasured.** Any element matching the adapter's counts anchor INSIDE
+the resolved scope narrows the root, whether or not it belongs to this post. A nested reshare or
+recommendation rendering its own `.social-details-social-counts` with no readable counter turns a
+correct `{0, 0, 0}` into a refusal; one rendering readable counters attributes them to the outer
+post, which is older than this change and not fixed by it. The one captured page carrying
+engagement has exactly one such element, at post level, so this is a demonstrated mechanism rather
+than an observed page — recorded so a future reader meets it here rather than in a bug report
+(#954).
 
 **`get-post` reads the same record and is deliberately untouched.** Its counters feed
 `assertCardinalCorroboration` as the CARDINAL, so a counts region that never rendered gives it
