@@ -690,14 +690,18 @@ describe("getFeed", () => {
     // `parseTimestamp` and the extractor are asserted separately, and the JOIN
     // between them -- `mapRawPosts` -- is what actually decides what a caller
     // receives, so the year unit is driven end to end here as well. Scope the
-    // claim precisely: every mutation of the join that is NOT unit-aware --
-    // nulling the field, dropping it, mis-sourcing it, skipping the parse --
-    // also fails the `2h` seam case below, so this case does not catch that
-    // class on its own. What it does catch alone is a join fault keyed on the
-    // year unit specifically (a `=== "1y"` special case, a year-only branch);
-    // nothing else here would fail on that. `mapRawPosts` is shared with
-    // `searchPosts` and `getProfileActivity`, but this test drives only
-    // `getFeed`, so it says nothing about their reads of the same field.
+    // claim precisely: a join fault whose effect is already visible at two
+    // hours -- nulling the field, dropping it, mis-sourcing it, skipping the
+    // parse, clamping to now -- also fails the `2h` seam case below, so this
+    // case does not catch that class on its own. What it catches ALONE is a
+    // fault that only bites at long ages: keyed on the unit token (a
+    // `=== "1y"` special case, a year-only branch), or on the resulting
+    // magnitude (a max-age clamp whose threshold sits between 2h and 1y).
+    // Age, not unit-awareness, is the discriminator -- move such a clamp's
+    // threshold under two hours and the `2h` case starts failing too.
+    // `mapRawPosts` is shared with `searchPosts` and `getProfileActivity`,
+    // but this test drives only `getFeed`, so it says nothing about their
+    // reads of the same field.
     const now = Date.now();
     setupMocks([rawPost({ timestamp: "1y" })]);
 
