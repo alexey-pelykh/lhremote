@@ -176,6 +176,13 @@ describe("handleBuildUrl", () => {
    * the `process.stderr.write` below interpolates, so it renders the same
    * either way, and the assertion is on the exact bytes written rather than on
    * the absence of a throw -- which nothing here raises.
+   *
+   * Asserted on the spy's raw argument rather than through `getStderr`, which
+   * applies `String()` to every captured call and so cannot tell a string
+   * written to stderr from a non-string written to stderr.  Reading it through
+   * the helper would leave this test green even if the coercion were removed
+   * AND the interpolation at the call site dropped -- the arrangement that
+   * makes `process.stderr.write` raise `ERR_INVALID_ARG_TYPE` in production.
    */
   it("writes a non-string message as the same text, exit code intact", () => {
     vi.mocked(buildLinkedInUrl).mockImplementation(() => {
@@ -185,6 +192,8 @@ describe("handleBuildUrl", () => {
     handleBuildUrl("SearchPage", { keywords: "engineer" });
 
     expect(process.exitCode).toBe(1);
-    expect(getStderr(stderrSpy)).toBe("42\n");
+    const written = stderrSpy.mock.calls.at(-1)?.[0];
+    expect(typeof written).toBe("string");
+    expect(written).toBe("42\n");
   });
 });
