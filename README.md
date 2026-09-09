@@ -224,18 +224,18 @@ lhremote get-throttle-status [--cdp-port <port>] [--json]
 
 ### Common Parameters
 
-Most tools and CLI commands connect to LinkedHelper via the Chrome DevTools Protocol (CDP). In addition to the tool-specific parameters listed below, CDP-connected tools accept:
+Most tools and CLI commands connect to LinkedHelper via the Chrome DevTools Protocol (CDP). In addition to the tool-specific parameters listed below, CDP-connected tools accept the following, except where a tool's own reference section says otherwise:
 
 | Parameter | CLI Flag | Type | Default | Description |
 |-----------|----------|------|---------|-------------|
 | `cdpPort` | `--cdp-port` | number | auto-discovered | CDP debugging port |
 | `cdpHost` | `--cdp-host` | string | `127.0.0.1` | CDP host address |
 | `allowRemote` | `--allow-remote` | boolean | false | Allow connections to non-loopback addresses |
-| `accountId` | see below | number | auto-select if single account | LinkedHelper account to act as |
+| `accountId` | *varies — see below* | number | auto-select if single account | LinkedHelper account to act as |
 
-**`cdpPort` is discovered, not defaulted.** Omit it and lhremote finds the port of the running LinkedHelper itself, whatever that port happens to be; it raises `LinkedHelperNotRunningError` or `LinkedHelperUnreachableError` when no instance is reachable. Pass a port only to target one specific instance — you do *not* need one to reach a LinkedHelper that is not on 9222. The exception is `quit-app`, which does default to 9222.
+**`cdpPort` is discovered, not defaulted.** Omit it and lhremote finds the port of the running LinkedHelper itself, whatever that port happens to be; it raises `LinkedHelperNotRunningError` or `LinkedHelperUnreachableError` when no instance is reachable. Pass a port only to target one specific instance — you do not need one to reach a LinkedHelper that is not on 9222. Two exceptions: `quit-app` takes `cdpPort` alone (no `cdpHost`, `allowRemote` or `accountId`) and does default to 9222; and a port is required whenever `cdpHost` is non-loopback, because discovery scans local processes only.
 
-**`accountId` is required once more than one account is configured.** With a single account it resolves automatically; with several, omitting it raises `AccountResolutionError` (*"Multiple accounts found (…). Specify accountId to select one."*). Every tool that acts on a LinkedIn account accepts it — the app-management tools `find-app`, `launch-app` and `quit-app` do not, since they act on the application rather than on an account. The CLI exposes it per command: as the positional `<accountId>` argument of `start-instance` / `stop-instance`, and as `--account-id` on `comment-on-post` / `react-to-post`.
+**`accountId` is required once more than one account is configured.** With a single account the MCP tools resolve it themselves; with several they cannot, and the call fails — most raise `AccountResolutionError`, while `start-instance` and `stop-instance` answer with their own message. Either way, `list-accounts` gives you the ID. Every tool that connects to a running LinkedHelper accepts `accountId`; the ones that do not are the app-management tools (`find-app`, `launch-app`, `quit-app`), which act on the application rather than on an account, the reference tools (`build-linkedin-url`, `resolve-linkedin-entity`, `list-linkedin-reference-data`, `describe-actions`), which open no connection, and the profile-cache readers (`query-profile`, `query-profiles`, `query-profiles-bulk`), which search every account's local database and cannot be scoped to one. The CLI never auto-resolves, at any account count: `start-instance` / `stop-instance` take a **required** positional `<accountId>`, `comment-on-post` / `react-to-post` take `--account-id`, and no other command exposes it.
 
 > **Security warning:** Enabling `allowRemote` permits CDP connections to remote hosts. CDP is an unsandboxed protocol that grants full control over the target browser — equivalent to remote code execution. Only enable this when the network path between your machine and the target host is fully secured (e.g., SSH tunnel, VPN, or trusted LAN).
 
@@ -1064,9 +1064,9 @@ Check if LinkedIn is currently throttling the account.
 
 ### LinkedHelper is not running
 
-**Error**: `LinkedHelper is not running (no CDP endpoint at port 9222)`
+**Error**: `LinkedHelper is not running (no processes found)` — or `LinkedHelper is not running (no CDP endpoint at port <port>)` when you named a port explicitly.
 
-**Solution**: Use `launch-app` to start LinkedHelper, or start it manually. lhremote communicates with LinkedHelper via the Chrome DevTools Protocol (CDP), which requires the application to be running.
+**Solution**: Use `launch-app` to start LinkedHelper, or start it manually. lhremote communicates with LinkedHelper via the Chrome DevTools Protocol (CDP), which requires the application to be running. The second form means nothing answered on the port you named: drop `--cdp-port` and lhremote will discover the running instance's port itself.
 
 ### LinkedHelper is unreachable
 
