@@ -30,7 +30,16 @@ describe("bin entrypoint parity", () => {
     // path that resolved to two empty files would compare equal and pass.
     expect(lhremote.length).toBeGreaterThan(0);
     expect(cli.length).toBeGreaterThan(0);
-    expect(lhremote).toContain("runProgram");
+
+    // Identifies what was read as a BIN ENTRYPOINT, not merely as non-empty.
+    // This asserted `toContain("runProgram")` until #963, which made it weaker
+    // than it looked: `runProgramBin` contains that token as a substring, so
+    // the assertion survived the whole idiom changing underneath it and would
+    // equally survive a file that had nothing else in common with an
+    // entrypoint. The shebang is what only these two files carry.
+    for (const source of [lhremote, cli]) {
+      expect(source.startsWith("#!/usr/bin/env node\n")).toBe(true);
+    }
   });
 
   it("keeps packages/{cli,lhremote}/src/cli.ts byte-identical", () => {
@@ -42,7 +51,42 @@ describe("bin entrypoint parity", () => {
     // back to commander's synchronous `.parse()`, which is the #933 defect.
     for (const source of [lhremote, cli]) {
       expect(source).not.toMatch(/\.parse\(\)/);
-      expect(source).toContain("runProgram(createProgram())");
+      expect(source).toContain(
+        'runProgramBin(async () => (await import("./program.js")).createProgram())',
+      );
+    }
+  });
+
+  it("keeps createProgram() inside the covered region", () => {
+    // #963 AC-2, at the level where it is actually decided. `runProgramBin`
+    // invokes the thunk inside its own `try`, so the `./program.js` import and
+    // the `createProgram()` call are both reported when they throw. The
+    // superseded idiom — `runProgram(createProgram())` — called it in argument
+    // position, before `runProgram` was entered, which put a throw from either
+    // back in the ESM loader's hands as a crash dump.
+    //
+    // Asserted as the ABSENCE of the old call shape rather than only as the
+    // presence of the new one: a file could contain both, and it is the old one
+    // that reopens the defect. Measured on the built bins with a throw injected
+    // into `createProgram()`: 12-line dump under the old idiom, one diagnosed
+    // line under this one, exit 1 either way — which is why the exit code alone
+    // does not discriminate.
+    for (const source of [lhremote, cli]) {
+      expect(source).not.toContain("runProgram(createProgram())");
+    }
+  });
+
+  it("reaches its program and its runner by relative specifier", () => {
+    // This is the mechanism the byte-identity above RESTS on, so it is worth
+    // stating separately: `./run.js` and `./program.js` resolve per-package, so
+    // one file can be the entrypoint of both packages. Naming either through
+    // its package specifier — `@lhremote/cli/run`, say — would work in exactly
+    // one of the two and end the parity. `packages/lhremote/src/run.ts` exists
+    // to make `./run.js` resolve on this side (#963).
+    for (const source of [lhremote, cli]) {
+      expect(source).toContain('from "./run.js"');
+      expect(source).toContain('import("./program.js")');
+      expect(source).not.toContain("@lhremote/cli");
     }
   });
 });
