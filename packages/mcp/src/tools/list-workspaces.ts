@@ -6,7 +6,7 @@ import { LauncherService, resolveLauncherPort } from "@lhremote/core";
 import { buildCdpOptions, cdpConnectionSchema, mcpCatchAll, mcpSuccess } from "../helpers.js";
 
 /**
- * Register the list-workspaces MCP tool.
+ * Register the {@link https://github.com/alexey-pelykh/lhremote#list-workspaces | list-workspaces} MCP tool.
  *
  * Workspaces are a LinkedHelper 2.113.x feature. Each LH user may
  * belong to multiple workspaces and has a role (owner/admin/member/guest)

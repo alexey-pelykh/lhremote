@@ -121,10 +121,14 @@ lhremote campaign-delete <campaignId> [--cdp-port <port>] [--json]
 lhremote campaign-erase <campaignId> [--cdp-port <port>] [--json]
 lhremote campaign-start <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
 lhremote campaign-stop <campaignId> [--cdp-port <port>] [--json]
+```
+
+### Campaign Status
+
+```sh
 lhremote campaign-status <campaignId> [--include-results] [--limit <n>] [--cdp-port <port>] [--json]
 lhremote campaign-statistics <campaignId> [--action-id <id>] [--max-errors <n>] [--cdp-port <port>] [--json]
 lhremote campaign-retry <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
-lhremote campaign-list-people <campaignId> [--action-id <id>] [--status <status>] [--limit <n>] [--offset <n>] [--cdp-port <port>] [--json]
 ```
 
 ### Campaign Actions
@@ -143,6 +147,7 @@ lhremote campaign-move-next <campaignId> <actionId> --person-ids <ids> | --perso
 lhremote campaign-exclude-list <campaignId> [--action-id <id>] [--cdp-port <port>] [--json]
 lhremote campaign-exclude-add <campaignId> --person-ids <ids> | --person-ids-file <path> [--action-id <id>] [--cdp-port <port>] [--json]
 lhremote campaign-exclude-remove <campaignId> --person-ids <ids> | --person-ids-file <path> [--action-id <id>] [--cdp-port <port>] [--json]
+lhremote campaign-list-people <campaignId> [--action-id <id>] [--status <status>] [--limit <n>] [--offset <n>] [--cdp-port <port>] [--json]
 lhremote campaign-remove-people <campaignId> --person-ids <ids> | --person-ids-file <path> [--cdp-port <port>] [--json]
 lhremote import-people-from-urls <campaignId> --urls <urls> | --urls-file <path> [--cdp-port <port>] [--json]
 lhremote collect-people <campaignId> <sourceUrl> [--limit <n>] [--max-pages <n>] [--page-size <n>] [--source-type <type>] [--cdp-port <port>] [--json]
@@ -396,6 +401,8 @@ Stop a running campaign.
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `cdpPort` | number | No | auto-discovered | CDP port |
+
+### Campaign Status
 
 #### `campaign-status`
 
