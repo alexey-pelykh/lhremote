@@ -127,8 +127,13 @@ export function handleBuildUrl(
     // `String()` wraps the whole ternary rather than sitting in one branch:
     // `message` is typed `string` but is not one by construction, so a coercion
     // in the non-`Error` branch alone leaves an `Error`'s own `message`
-    // un-coerced, in violation of the `string` this local declares.  Contract
-    // and provenance: `utils/error-message.ts` § `ownText` (#965).
+    // un-coerced, in violation of the `string` this local declares.  The
+    // template literal below coerces too -- except for a `Symbol` message,
+    // which it throws on and `String()` renders.  Contract and provenance:
+    // `utils/error-message.ts` § `ownText` (#965), whose totality also takes a
+    // `try` around `String()`; that half is deliberately not adopted here,
+    // because a `message` whose own `toString` throws would take the write
+    // down at the interpolation either way.
     const message = String(error instanceof Error ? error.message : error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
