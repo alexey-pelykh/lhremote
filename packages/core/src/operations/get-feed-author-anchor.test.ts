@@ -1631,30 +1631,40 @@ const ACTOR_HEADER_CAPTURE: readonly ActorHeaderCapture[] = [
 const REDACTED_URL = "https://example.invalid/redacted";
 
 /**
- * The feed script's body marker, as an HTML page renders it — a bare attribute.
- * This is the form searched for in the CAPTURES.
+ * The feed script's body marker, split into the two halves an ELEMENT can be
+ * built from.
+ *
+ * Split rather than restated: the assertion below drives the document double
+ * with a post whose body carries this attribute, and a fixture built by
+ * concatenating the same two constants the capture search reads is what
+ * couples the two.  A single literal could only ever be searched FOR.
  */
-const FEED_BODY_MARKER = 'data-testid="expandable-text-box"';
+const FEED_BODY_ATTR = "data-testid";
+const FEED_BODY_VALUE = "expandable-text-box";
+
+/**
+ * The same marker as an HTML page renders it — a bare attribute.  This is the
+ * form searched for in the CAPTURES, derived from the pair above so that a
+ * fixture and a capture search can never come to mean different strings.
+ */
+const FEED_BODY_MARKER = `${FEED_BODY_ATTR}="${FEED_BODY_VALUE}"`;
 
 /**
  * The same marker as the SELECTOR the script matches on, derived rather than
  * restated so the two cannot drift apart.
  *
  * `get-feed.ts` builds the selector into a template literal instead of
- * exporting it, so the coupling is asserted below rather than assumed — a
- * rename there fails here, instead of silently making the "post-detail carries
- * no feed body marker" finding unfalsifiable.
+ * exporting it, so nothing here can import it and the bracketed form has to be
+ * rebuilt.  What rebuilding it buys is BOUNDED, and stating the bound is the
+ * point: this constant grades THIS file's own derivation — that the bracketed
+ * form still selects an element built from `FEED_BODY_ATTR` and
+ * `FEED_BODY_VALUE` — and it says nothing whatever about `get-feed.ts`.
  *
- * The bracketed form is what gets asserted, and the bare attribute is NOT
- * sufficient for that: `get-feed.ts` also mentions the attribute in a prose
- * comment, so searching for `FEED_BODY_MARKER` alone would still pass if every
- * executable use of the selector were deleted.  Bracketing it is what makes the
- * check track the selector rather than the vocabulary.
- *
- * What it still does NOT prove: that the selector is REACHED at runtime — the
- * script's own doc comment carries the bracketed form too.  It pins the string,
- * which is the drift this constant exists to catch; the region behaviour itself
- * is measured by the document-double cases above.
+ * It used to be asserted against the script's SOURCE TEXT instead, on the
+ * reasoning that a rename there would then fail here.  Measured, it did not:
+ * the check caught neither drift it was written about.  The coupling to
+ * `get-feed.ts` is bought by a BEHAVIOURAL assertion now, and the block that
+ * carries it records the measurement so the source-text form is not re-added.
  */
 const FEED_BODY_SELECTOR = `[${FEED_BODY_MARKER}]`;
 
@@ -1935,7 +1945,103 @@ describe("#897: what the captured artifacts ground about the actor header", () =
     // That is why the slot located above is evidence about the SLOT and not
     // about what the FEED renders in it — the escalation in #897 turns on
     // exactly this gap.
-    expect(SCRAPE_FEED_SCRIPT).toContain(FEED_BODY_SELECTOR);
+    //
+    // The coupling those rows rest on, bought by an OBSERVATION rather than by
+    // a search of the script's source text.  If `get-feed.ts` renamed its body
+    // marker and `FEED_BODY_MARKER` here were not renamed with it, the
+    // `feedBodyMarker: false` rows below would go on passing while measuring a
+    // string nothing uses, and the finding this test is named for would be
+    // quietly unfalsifiable.  That purpose is legitimate; the INSTRUMENT that
+    // used to serve it was not.
+    //
+    // What stood here was `expect(SCRAPE_FEED_SCRIPT).toContain(
+    // FEED_BODY_SELECTOR)`.  Attribution, because #941 asked whether #903
+    // introduced it: it did not.  `git log -S` over the exact string dates it
+    // to `52bd1f4` (2026-09-05), "(test) core: couple the body-marker check to
+    // the selector, not the vocabulary", which is an ancestor of #903's
+    // branch — PRE-EXISTING, and #903 only inherited it.
+    //
+    // It is gone because it was never DISCRIMINATING, which is a stronger
+    // claim than "redundant" and is the reason not to re-add it.  The literal
+    // occurs at FOUR places in `get-feed.ts` — a doc comment (line 73), the
+    // `HEADER_SCAN_SELECTOR` clause (201), a code comment (1188), and the
+    // post-TEXT `querySelector` (1192), a different concern entirely — and a
+    // `toContain` over the whole script cannot tell them apart.  Measured,
+    // three mutations of `get-feed.ts`:
+    //
+    //   build the `HEADER_SCAN_SELECTOR` clause by concatenation, behaviour
+    //     byte-identical  → the line did NOT fire.  198 passed (198): the
+    //     refactor #941 predicted this line would catch left the file green.
+    //   rename the marker in the `HEADER_SCAN_SELECTOR` clause ONLY
+    //     → the line did NOT fire.  `#859 AC-7 (b)` and `(c)` failed instead,
+    //     returning the mentioned and the resharing person as the author.
+    //   rename it at all FOUR sites
+    //     → the line fired, alongside two CANARIES and those same two
+    //     behavioural tests.
+    //
+    // So it caught neither drift it was written about, and fired only in the
+    // one case four other tests already shout about.  `FEED_BODY_SELECTOR`'s
+    // own docstring conceded half of this ("does NOT prove that the selector
+    // is REACHED at runtime"); the measurement is worse than the concession,
+    // because the EXECUTABLE post-text `querySelector` satisfies the check by
+    // itself — so the line did not discriminate even a rename of the one
+    // clause it was written about.
+    //
+    // The replacement drives the document double instead.  `#859 AC-7 (b)`
+    // already grades this BEHAVIOUR and cannot be what buys the coupling: it
+    // hard-codes the literal, so it cannot notice THIS file's constant drifting
+    // from the script's.  Building the body element out of `FEED_BODY_ATTR` and
+    // `FEED_BODY_VALUE` — the pair `FEED_BODY_MARKER` is derived from — is what
+    // ties the capture rows below to a marker the script demonstrably REACHES.
+    //
+    // It does not fire on the concatenation refactor either, and that is the
+    // right answer rather than a residual gap: that refactor is behaviour
+    // preserving by construction, so a behavioural assertion has nothing to
+    // say about it.  What it does fire on is the clause-only rename — the
+    // mutation the deleted line could not catch.  Verified by mutation: with
+    // the marker renamed in the `HEADER_SCAN_SELECTOR` clause alone, this
+    // reads "Mentioned Person".
+    const markerBounded = el(
+      "div",
+      { role: "listitem" },
+      [
+        // Inside the actor header, because it renders before the body.
+        el("a", { href: "/in/real-author/" }, [nameRun("span", "Real Author")]),
+        // The body, built from the constant pair rather than from a literal.
+        // This element is the whole instrument: it is the only thing here that
+        // couples this file's marker to the script's.
+        el("div", { [FEED_BODY_ATTR]: FEED_BODY_VALUE }, [
+          text("span", "Post body text that is long enough to be real."),
+        ]),
+        // Below the header, and it must stay there.  It renders a name run and
+        // comes LAST, so `pickHeaderAuthor` — which takes the last anchor it
+        // admits — returns IT the moment the region stops closing on the body.
+        el("a", { href: "/in/mentioned-person/" }, [
+          nameRun("span", "Mentioned Person"),
+        ]),
+        // Required for the listitem to be read as a post at all, and it is
+        // also the region's OTHER closing marker.  That double duty is what
+        // makes the assertion sharp rather than merely green: with the body
+        // marker matched the region is [author]; with it unmatched the bound
+        // falls through to this button and the region becomes [author, decoy].
+        text("button", "", { "aria-label": `${MENU_LABEL_PREFIX}Menu Label Person` }),
+      ],
+      "",
+      400,
+    );
+
+    expect(scrapeOne(markerBounded)).toEqual({
+      name: "Real Author",
+      url: "https://www.linkedin.com/in/real-author/",
+    });
+
+    // And the derivation itself, graded on the double rather than on a source
+    // text: the bracketed form still selects an element built from the pair.
+    // A statement about THIS file's three constants and nothing else — the
+    // coupling to `get-feed.ts` is what the assertion above buys, not this one
+    // — but it is the reason `FEED_BODY_SELECTOR` still has to be right, now
+    // that nothing searches the script for it.
+    expect(markerBounded.querySelector(FEED_BODY_SELECTOR)).not.toBeNull();
 
     for (const capture of ACTOR_HEADER_CAPTURE) {
       const html = captureText(capture.label);
@@ -3684,6 +3790,21 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     // file's B4 exercises is gated on "this root produced no field", which a
     // non-empty badge run satisfies.  Before the fix the name was dropped
     // outright and `anchorName` returned the badge: `authorName = "• 2nd"`.
+    //
+    // Verified by mutation: revert mechanism 1 of `f3ed909` — in `rootFields`,
+    // discard the bare text accumulated before the first name-bearing leaf run
+    // instead of flushing it as a field, which is the pre-#903 rule restated
+    // (`anchorFields` contributed a root's bare text only when the root
+    // produced NO field at all) — and this row reads "• 2nd" for the name, the
+    // badge returned AS the name.
+    //
+    // NOT a sole witness, and that distinction is what a later reader deleting
+    // a neighbouring row needs: the mutation fails FOUR tests, 4 failed | 194
+    // passed.  `B6` reads "Head of Widgets at Acme"; `#940 (accepted cost,
+    // regression)` reads "Ada Lovelace" where it asserts "Dr."; `#940 (b)
+    // falsifier` reads "• 1st".  It is also the SAME mutation that block
+    // already names as its candidate fix (a) — cross-referenced rather than
+    // re-analysed here, so the two records cannot drift apart.
     label: "B5 bare name beside a non-empty badge run",
     href: "/in/ada-lovelace/",
     children: () => [
@@ -3721,6 +3842,18 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     //
     // The slug is OPAQUE deliberately — this is the decline path, and a
     // corroborating slug would hide the defect behind `slugName`.
+    //
+    // Verified by mutation: revert mechanism 2 of `f3ed909` — `anchorName`
+    // taking the first of every RUN rather than the first FIELD — and this row
+    // reads "Ada Lovelace• 1st" for the name, the container run answering with
+    // both fields concatenated.  BOTH halves of the paragraph above are
+    // measured and not only the name: with the loop let past the name
+    // assertion, the headline reads "Ada Lovelace" — the name's own field
+    // winning the headline race, because no field contains the concatenated
+    // string and `nameFieldSpan` therefore withholds nothing.
+    //
+    // NOT a sole witness: 3 failed | 195 passed, `#940 (accepted cost,
+    // regression)` and `#940 (b) falsifier` failing with it.
     label: "B7 name and badge nested under one container run, opaque slug",
     href: "/in/x7k2m9q4/",
     children: () => [
@@ -3740,6 +3873,17 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     // as a field BEFORE the name, and the decline path used to start its
     // withholding at the field the name was found in — so "AL" was eligible and
     // won: `authorHeadline` was "AL", displacing the real headline.
+    //
+    // Verified by mutation: revert mechanism 3 of `f3ed909` — in
+    // `nameFieldSpan`'s decline path, `from: i` where it now reads `from: 0`
+    // — and this row's HEADLINE reads "AL", the initials displacing the real
+    // one.  The NAME stays correct under it, which is what the paragraph above
+    // already says and which is what leaves the headline as the only assertion
+    // here that can carry the claim at all.
+    //
+    // NOT a sole witness: 2 failed | 196 passed, `B11 short name contained in
+    // an EARLIER field than the one it is read from` failing with it and
+    // reading "Adaptive Systems Lead" for the headline.
     label: "B8 leading avatar initials ahead of the name",
     href: "/in/ada-lovelace/",
     children: () => [
@@ -3884,7 +4028,30 @@ const BASELINE_CORRECT_FIELDS = 115;
  * nothing at all.  On the capture itself the lost field is the connection
  * degree, which costs nothing; the same construction around the NAME loses the
  * name, which is what the fixture below renders.
+ *
+ * The bare text is rendered AFTER the runs, in `el`'s `tailText` slot, because
+ * that is where the capture renders it: its "• Adi" TRAILS the two
+ * `white-space-pre` spans and the `<svg>`.  This builder used to pass the value
+ * as `ownText` — the opposite position to the markup it names — and the
+ * correction is a fidelity one only.  Measured: rebuilding it this way changes
+ * no verdict in this file, and it could not, because both runs are transparent
+ * and the bare text accumulates to the same single field from either slot.
+ *
+ * Which is exactly why the fidelity is worth having and worth bounding here.
+ * `B4` is NOT evidence that trailing bare text is READ correctly — nothing
+ * about its ordering is observable — and a reader who takes the
+ * capture-shaped fixture as covering that claim has taken a shape for a
+ * constraint.  `hiddenRunThenBare` / `B9` is what constrains it: the same
+ * ordering beside a NON-empty run, where reversing the two changes the fields
+ * and the row goes red.
  */
+function hiddenBareBesideEmptyRuns(value: string): FakeElement {
+  return el("span", { "aria-hidden": "true" }, [
+    text("span", "", { class: "white-space-pre" }),
+    text("span", "", { class: "white-space-pre" }),
+  ], "", 0, value);
+}
+
 /**
  * A wrapper rendering `value` as BARE text with a NON-EMPTY run beside it.
  *
@@ -3921,13 +4088,6 @@ function hiddenRunThenBare(run: string, tail: string): FakeElement {
  */
 function hiddenBareSplitByEmptyRun(head: string, tail: string): FakeElement {
   return el("span", { "aria-hidden": "true" }, [text("span", " ")], head, 0, tail);
-}
-
-function hiddenBareBesideEmptyRuns(value: string): FakeElement {
-  return el("span", { "aria-hidden": "true" }, [
-    text("span", "", { class: "white-space-pre" }),
-    text("span", "", { class: "white-space-pre" }),
-  ], value);
 }
 
 type CompiledScrape = (document: unknown, window: unknown) => ScrapedPost[];
@@ -4029,6 +4189,103 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
       (s) => fieldsOf(BASELINE_FEED_SCRIPT, s).name !== fieldsOf(SCRAPE_FEED_SCRIPT, s).name,
     );
     expect(disagreements.length).toBeGreaterThan(0);
+  });
+
+  it("CANARY: the four #903 builders render the shapes their rows are named for", () => {
+    // The same instrument the wrapper canary earlier in this file carries, for
+    // the family one issue over.  These four builders ARE #903 — `B5`, `B9`,
+    // `B10` and `B4` are nothing but the shapes they render — and until this
+    // block existed, two of the four were pinned by nothing whatsoever.
+    //
+    // Measured, by collapsing each builder's bare text into a `text("span", …)`
+    // run beside the others and running this file:
+    //
+    //   `hiddenRunThenBare`          198 passed (198) — UNCAUGHT.
+    //   `hiddenBareBesideEmptyRuns`  198 passed (198) — UNCAUGHT.
+    //   `hiddenBareSplitByEmptyRun`  caught, and caught genuinely: `B10`'s
+    //     headline reads "Head of", and `#903 (accepted cost, pre-existing)`
+    //     reads "Ada" where it asserts "• 1st".
+    //   `hiddenBareBesideRun`        caught by exactly ONE test, and MIS-HOMED.
+    //     The failure arrives through an assertion on `BASELINE_FEED_SCRIPT`
+    //     inside `#940 (accepted cost, regression)`, whose declared subject is
+    //     #940's cost; it guards this shape only because #940 happened to reuse
+    //     the builder as "`B5`'s construction under an opaque slug".  Nothing
+    //     there NAMES the shape it is incidentally pinning, so a reader editing
+    //     that block switches this guard off without being told they have.
+    //
+    // Two of these rows were therefore named for a bare-text shape that a
+    // collapsed builder would render with no bare text in it at all, and every
+    // verdict they returned would have gone on reading green while saying
+    // nothing about the walk they exist to grade.
+    //
+    // The fourth is here even though it is already constrained behaviourally: a
+    // shape canary and a behavioural row are different instruments — one grades
+    // the FIXTURE, the other the SCRIPT — and leaving one member of a family
+    // out invites the reading that it is somehow different.
+    //
+    // What is asserted is the SEQUENCE, not a count.  `B5` and `B9` differ ONLY
+    // in the order of a text node and a run, so a canary that counted nodes
+    // without ordering them would pass on either construction and the two rows
+    // would be interchangeable — which is the one thing they must not be.
+    const shapeOf = (wrapper: FakeElement) =>
+      wrapper.childNodes.map((node) => ({
+        kind: node.nodeType === 1 ? "run" : "text",
+        text: node.textContent,
+      }));
+
+    const besideRun = hiddenBareBesideRun("Ada Lovelace", "• 2nd");
+    const runThenBare = hiddenRunThenBare("Ada Lovelace", " • Head of Widgets");
+    const splitByEmptyRun = hiddenBareSplitByEmptyRun("Head of", "Widgets at Acme");
+    const besideEmptyRuns = hiddenBareBesideEmptyRuns("Ada Lovelace");
+
+    // The attribute defines the whole family: a builder that lost it would take
+    // its fixture out of `fieldRoots`' reach entirely, and the rows below would
+    // silently grade the anchor's own text instead of a wrapper's.
+    for (const wrapper of [besideRun, runThenBare, splitByEmptyRun, besideEmptyRuns]) {
+      expect(wrapper.getAttribute("aria-hidden")).toBe("true");
+    }
+
+    // `B5` — the bare name FIRST, a non-empty badge run beside it.
+    expect(shapeOf(besideRun)).toEqual([
+      { kind: "text", text: "Ada Lovelace" },
+      { kind: "run", text: "• 2nd" },
+    ]);
+    expect(besideRun.querySelectorAll("p, span")).toHaveLength(1);
+
+    // `B9` — the same two nodes in the OPPOSITE order, which is the ordering
+    // the one real capture uses.  This pair is what makes the sequence
+    // assertion load-bearing rather than decorative.
+    expect(shapeOf(runThenBare)).toEqual([
+      { kind: "run", text: "Ada Lovelace" },
+      { kind: "text", text: " • Head of Widgets" },
+    ]);
+    expect(runThenBare.querySelectorAll("p, span")).toHaveLength(1);
+
+    // `B10` — bare text INTERRUPTED by a run carrying no field.  The run's text
+    // is asserted to be whitespace-only rather than left to the sequence: that
+    // emptiness is the whole of what makes it transparent, and a run that
+    // acquired a character would cut the text in two.
+    expect(shapeOf(splitByEmptyRun)).toEqual([
+      { kind: "text", text: "Head of" },
+      { kind: "run", text: " " },
+      { kind: "text", text: "Widgets at Acme" },
+    ]);
+    expect(splitByEmptyRun.querySelectorAll("p, span")).toHaveLength(1);
+    expect(splitByEmptyRun.querySelectorAll("p, span")[0]?.textContent.trim()).toBe("");
+
+    // `B4` — two EMPTY runs with the bare text AFTER them, the capture's own
+    // ordering.  That position is fidelity here and not a constraint, for the
+    // reason the builder's docstring gives: both runs are transparent, so
+    // either slot yields the same field.  `B9` above is what constrains it.
+    expect(shapeOf(besideEmptyRuns)).toEqual([
+      { kind: "run", text: "" },
+      { kind: "run", text: "" },
+      { kind: "text", text: "Ada Lovelace" },
+    ]);
+    expect(besideEmptyRuns.querySelectorAll("p, span")).toHaveLength(2);
+    expect(
+      besideEmptyRuns.querySelectorAll("p, span").every((run) => run.textContent === ""),
+    ).toBe(true);
   });
 
   for (const shape of FIELD_SHAPES) {
@@ -4667,6 +4924,11 @@ describe("#860/#898 accepted costs", () => {
     // `<svg>` inside this very `aria-hidden` wrapper, contributing whitespace
     // only — so what stands between this and production is the icon carrying
     // accessible text, not the markup shape.
+    //
+    // This shape also closes #941's finding 3, which asked for a fixture
+    // placing a NON-`p`/`span` element inside an `aria-hidden` wrapper.  It
+    // landed here first, and as a measured regression rather than as the
+    // hypothetical that finding described; no second fixture is owed.
     const svgTitled: ScrapeInput = {
       label: "icon <title> before the name run, same wrapper, corroborating slug",
       href: "/in/ada-lovelace/",
