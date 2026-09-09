@@ -124,7 +124,12 @@ export function handleBuildUrl(
       }
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    // `String()` wraps the whole ternary rather than sitting in one branch:
+    // `message` is typed `string` but is not one by construction, so a coercion
+    // in the non-`Error` branch alone leaves an `Error`'s own `message`
+    // un-coerced, in violation of the `string` this local declares.  Contract
+    // and provenance: `utils/error-message.ts` § `ownText` (#965).
+    const message = String(error instanceof Error ? error.message : error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
   }

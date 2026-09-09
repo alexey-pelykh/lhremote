@@ -61,9 +61,15 @@ export async function startInstanceWithRecovery(
   try {
     await launcher.startInstance(accountId);
   } catch (error) {
+    // `instanceof` establishes the value is a `StartInstanceError`; it
+    // establishes NOTHING about `message`, which is typed `string` but is not
+    // one by construction.  Reading `.includes` on a non-string one would raise
+    // `TypeError` from inside this catch, replacing the launcher's own failure
+    // with an unrelated type error.  See `utils/error-message.ts` § `ownText`
+    // for where that contract is stated and where such a `message` comes from.
     if (
       error instanceof StartInstanceError &&
-      error.message.includes("already running")
+      String(error.message).includes("already running")
     ) {
       const existingPort = await discoverInstancePort(launcherPort);
       if (existingPort !== null) {

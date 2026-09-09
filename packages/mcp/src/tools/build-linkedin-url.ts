@@ -127,8 +127,13 @@ export function registerBuildLinkedInUrl(server: McpServer): void {
         const result = buildLinkedInUrl(input);
         return mcpSuccess(JSON.stringify(result, null, 2));
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        // `String()` wraps the whole ternary rather than sitting in one
+        // branch: `message` is typed `string` but is not one by construction,
+        // so a coercion in the non-`Error` branch alone leaves an `Error`'s own
+        // `message` un-coerced -- and `mcpError` declares `text: string`, so
+        // that value reaches an agent as this tool's wire payload.  Contract
+        // and provenance: `utils/error-message.ts` § `ownText` (#965).
+        const message = String(error instanceof Error ? error.message : error);
         return mcpError(message);
       }
     },

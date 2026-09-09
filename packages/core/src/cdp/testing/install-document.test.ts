@@ -39,6 +39,24 @@ const { delay } = await import("../../utils/delay.js");
 
 const FRAME_ID = "FRAME-1";
 
+/**
+ * An `Error` whose `message` is `value`.
+ *
+ * `new Error(value)` would coerce it, which is the very step under test.  The
+ * construction mirrors `error-message.test.ts` § `errorMessage totality`, and
+ * so does its warrant: `message` is typed `string` but is not one by
+ * construction -- a subclass assigning `this.message`, an error rehydrated
+ * across a worker or IPC boundary, and a `Proxy` can each produce one.  No
+ * producer in this repo builds one today; this pins the contract `unknown`
+ * promises to accept, not an observed source.
+ */
+function errorWithMessage(value: unknown): Error {
+  const error = new Error("placeholder");
+  Object.defineProperty(error, "message", { value, configurable: true });
+  return error;
+}
+
+
 /** `url` handed to every `Page.navigate` the helper drove. */
 function navigations(send: ReturnType<typeof vi.fn>): string[] {
   return send.mock.calls
@@ -336,6 +354,24 @@ describe("installDocument", () => {
     expect((failure as Error).message).toMatch(/Execution context was destroyed/);
     expect(failure).toBeInstanceOf(CDPTimeoutError);
     expect((failure as Error).message).toMatch(/sentinel .* never matched/);
+  });
+
+  /**
+   * `describeError` is declared `: string` and its result is interpolated into
+   * the report either way, so what this pins is that the quoted text is
+   * unchanged on a non-string message -- asserted on the rendered report rather
+   * than on the absence of a throw, which nothing here raises.
+   */
+  it("quotes a non-string evaluation-error message as the same text", async () => {
+    const evaluate = vi.fn().mockRejectedValue(errorWithMessage(42));
+    const { client } = stubClient(evaluate);
+
+    const failure = await installDocument(client, "<p>x</p>", {
+      timeout: 0,
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(CDPTimeoutError);
+    expect((failure as Error).message).toContain("last evaluation error: 42");
   });
 
   it("keeps that error even when later attempts merely report the marker absent", async () => {

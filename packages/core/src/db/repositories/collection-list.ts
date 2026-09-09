@@ -77,7 +77,13 @@ export class CollectionListRepository {
         `No li_accounts mapping found for external account ID ${externalAccountId}`,
       );
     } catch (error: unknown) {
-      if (error instanceof Error && error.message.includes("no such table")) {
+      // `instanceof` establishes the value is an `Error`; it establishes
+      // NOTHING about `message`, which is typed `string` but is not one by
+      // construction.  Reading `.includes` on a non-string one would raise
+      // `TypeError` from inside this catch, replacing the driver's own failure
+      // with an unrelated type error.  See `utils/error-message.ts` § `ownText`
+      // for where that contract is stated and where such a `message` comes from.
+      if (error instanceof Error && String(error.message).includes("no such table")) {
         return externalAccountId;
       }
       throw error;
@@ -148,7 +154,8 @@ export class CollectionListRepository {
           stmts.deleteCollectionPeopleVersionsLogs.run(collectionId);
         } catch (err: unknown) {
           // FK violation expected when logs reference still-needed versions; rethrow anything else
-          if (!(err instanceof Error) || !err.message.includes("constraint")) throw err;
+          if (!(err instanceof Error) || !String(err.message).includes("constraint"))
+            throw err;
         }
       }
       if (stmts.deleteCollectionPeopleVersions) {
@@ -156,7 +163,8 @@ export class CollectionListRepository {
           stmts.deleteCollectionPeopleVersions.run(collectionId);
         } catch (err: unknown) {
           // FK violation expected when campaign/action versions still reference these entries
-          if (!(err instanceof Error) || !err.message.includes("constraint")) throw err;
+          if (!(err instanceof Error) || !String(err.message).includes("constraint"))
+            throw err;
         }
       }
       const result = stmts.deleteCollection.run(collectionId);
