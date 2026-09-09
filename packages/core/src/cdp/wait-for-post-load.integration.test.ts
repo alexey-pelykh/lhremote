@@ -195,6 +195,86 @@ describe("post-detail capture probe Tier-2 oracle (integration)", { timeout: INS
     return reading;
   }
 
+  /**
+   * The post-detail adapter registered under `variant`, or a named failure.
+   *
+   * The registry-side twin of {@link readingFor}, failing the same way and for
+   * the same reason: a dialect that left the registry is a regression these
+   * cases exist to catch, and a `.find` returning `undefined` would otherwise
+   * surface as a property read on nothing.
+   */
+  function adapterFor(variant: string) {
+    const adapter = adaptersFor("post-detail").find(
+      (candidate) => String(candidate.variant) === variant,
+    );
+    if (adapter === undefined) {
+      throw new Error(
+        `no post-detail adapter registered for variant ${variant}`,
+      );
+    }
+    return adapter;
+  }
+
+  /**
+   * The one selector `declared` holds, or a named failure.
+   *
+   * Every key of a `variantAnchors` reading is the adapter's OWN declared
+   * selector, so a key written out by hand here was a transcription of a
+   * constant in the registry: widen it, narrow it or merely requote it and the
+   * lookup returned `undefined`, failing with `expected undefined to be 1` —
+   * a message naming neither the anchor nor the change, and green again the
+   * moment someone repointed the literal, widening intact (#919).
+   *
+   * Deriving the KEY is not the circularity ADR-008 § 2026-09-03 forbids.  That
+   * bars authoring MARKUP from the anchor under test, because a page built from
+   * the selector it is graded by cannot witness a mismatch.  A map key is the
+   * probe's own declared output shape; the pages above stay hand-written, and
+   * an anchor that drifts from them still goes red.
+   *
+   * The length check is not ceremony.  A second entry appearing later would
+   * make a bare `[0]` pick silently, and WHICH of the two it picked is the
+   * question these assertions turn on.
+   */
+  function soleSelector(declared: readonly string[], role: string): string {
+    const [only, ...rest] = declared;
+    if (only === undefined || rest.length > 0) {
+      throw new Error(
+        `expected ${role} to declare exactly 1 selector, found ` +
+          `${declared.length.toString()}: [${declared.join(" | ")}]`,
+      );
+    }
+    return only;
+  }
+
+  /**
+   * The one selector in `declared` carrying `marker`, or a named failure.
+   *
+   * For an anchor list holding more than one, where POSITION cannot name the
+   * role: `sdui.scopes` is `[container, screen]` and the case below reads them
+   * in the opposite order, so a bare `[0]`/`[1]` would re-point on a registry
+   * reorder and invert both assertions.
+   *
+   * `marker` is the ATTRIBUTE NAME giving a scope its role, never the
+   * selector's value — the value is the half that widens, narrows and gets
+   * requoted, which is the whole of what {@link soleSelector} explains this
+   * file no longer depends on.
+   */
+  function selectorCarrying(
+    declared: readonly string[],
+    marker: string,
+    role: string,
+  ): string {
+    const hits = declared.filter((selector) => selector.includes(marker));
+    const [only, ...rest] = hits;
+    if (only === undefined || rest.length > 0) {
+      throw new Error(
+        `expected exactly 1 ${role} selector carrying \`${marker}\`, found ` +
+          `${hits.length.toString()} of [${declared.join(" | ")}]`,
+      );
+    }
+    return only;
+  }
+
   it("parses and runs, returning exactly the documented key set", async () => {
     await install(LEGACY_PAGE);
 
@@ -271,25 +351,32 @@ describe("post-detail capture probe Tier-2 oracle (integration)", { timeout: INS
     await install(BARE_PAGE);
     const onBare = await probe();
 
+    // Keyed off the registry's own declaration, not off a copy of it: see
+    // `soleSelector`.  `legacy` declares one of each, so naming the role is
+    // the whole disambiguation needed.
+    const legacy = adapterFor("legacy");
+    const legacyScope = soleSelector(legacy.scopes, "legacy `scopes`");
+    const legacyCounts = soleSelector(legacy.counts, "legacy `counts`");
+
     // Legacy page: its root resolved, its ready anchor followed, its counts
     // row rendered.  This is the reading no field in the pre-#853 bundle could
     // produce — the legacy dialect's own anchors went entirely unprobed.
     const legacyOnLegacy = readingFor(onLegacy, "legacy");
-    expect(legacyOnLegacy.scopes['[data-urn^="urn:li:activity:"]']).toBe(1);
+    expect(legacyOnLegacy.scopes[legacyScope]).toBe(1);
     // Two, not "truthy".  See LEGACY_PAGE_AUTHOR_LINKS: this is the assertion
     // that separates a COUNT from the boolean it replaced, and it is the only
     // one in the suite that can.
     expect(legacyOnLegacy.ready).toBe(LEGACY_PAGE_AUTHOR_LINKS);
-    expect(legacyOnLegacy.counts[".social-details-social-counts"]).toBe(1);
+    expect(legacyOnLegacy.counts[legacyCounts]).toBe(1);
     // ...and the other dialect is silent on it, which is what makes the two
     // readings a diagnosis rather than a pair of numbers.
     expect(readingFor(onLegacy, "sdui").ready).toBe(0);
 
     // Bare page: everything collapses.
     const legacyOnBare = readingFor(onBare, "legacy");
-    expect(legacyOnBare.scopes['[data-urn^="urn:li:activity:"]']).toBe(0);
+    expect(legacyOnBare.scopes[legacyScope]).toBe(0);
     expect(legacyOnBare.ready).toBe(0);
-    expect(legacyOnBare.counts[".social-details-social-counts"]).toBe(0);
+    expect(legacyOnBare.counts[legacyCounts]).toBe(0);
 
     // Canary: the bare page really did install, so the zeros above are a
     // reading rather than a document that never arrived.
@@ -308,18 +395,17 @@ describe("post-detail capture probe Tier-2 oracle (integration)", { timeout: INS
       ),
     );
 
+    // By role, not by position: `sdui.scopes` is `[container, screen]` and the
+    // two assertions below read it screen-first, so an index would invert them
+    // on a registry reorder.  See `selectorCarrying`.
+    const { scopes } = adapterFor("sdui");
+    const screen = selectorCarrying(scopes, "data-sdui-screen", "sdui screen");
+    const container = selectorCarrying(scopes, "componentkey", "sdui container");
+
     const sdui = readingFor(await probe(), "sdui");
 
-    expect(
-      sdui.scopes[
-        '[data-sdui-screen="com.linkedin.sdui.flagshipnav.feed.UpdateDetail"]'
-      ],
-    ).toBe(1);
-    expect(
-      sdui.scopes[
-        '[componentkey^="expanded"][componentkey$="FeedType_FEED_DETAIL"]'
-      ],
-    ).toBe(0);
+    expect(sdui.scopes[screen]).toBe(1);
+    expect(sdui.scopes[container]).toBe(0);
     // The screen half of `ready` follows from the screen root being present.
     expect(sdui.ready).toBe(1);
   });
