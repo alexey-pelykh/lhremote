@@ -18,6 +18,23 @@ const MOCK_RESULT: BuildLinkedInUrlOutput = {
   warnings: [],
 };
 
+/**
+ * An `Error` whose `message` is `value`.
+ *
+ * `new Error(value)` would coerce it, which is the very step under test.  The
+ * construction mirrors `error-message.test.ts` § `errorMessage totality`, and
+ * so does its warrant: `message` is typed `string` but is not one by
+ * construction -- a subclass assigning `this.message`, an error rehydrated
+ * across a worker or IPC boundary, and a `Proxy` can each produce one.  No
+ * producer in this repo builds one today; this pins the contract `unknown`
+ * promises to accept, not an observed source.
+ */
+function errorWithMessage(value: unknown): Error {
+  const error = new Error("placeholder");
+  Object.defineProperty(error, "message", { value, configurable: true });
+  return error;
+}
+
 describe("handleBuildUrl", () => {
   const originalExitCode = process.exitCode;
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
@@ -151,5 +168,23 @@ describe("handleBuildUrl", () => {
 
     expect(process.exitCode).toBe(1);
     expect(getStderr(stderrSpy)).toContain("Unknown source type");
+  });
+
+  /**
+   * The local is declared `string` and is not one by construction.  What this
+   * pins is that the text reaching the operator is unchanged by the coercion:
+   * the `process.stderr.write` below interpolates, so it renders the same
+   * either way, and the assertion is on the exact bytes written rather than on
+   * the absence of a throw -- which nothing here raises.
+   */
+  it("writes a non-string message as the same text, exit code intact", () => {
+    vi.mocked(buildLinkedInUrl).mockImplementation(() => {
+      throw errorWithMessage(42);
+    });
+
+    handleBuildUrl("SearchPage", { keywords: "engineer" });
+
+    expect(process.exitCode).toBe(1);
+    expect(getStderr(stderrSpy)).toBe("42\n");
   });
 });

@@ -66,7 +66,14 @@ export interface WithLoggedInStateRetryOptions {
  */
 function isIncorrectContentStateError(err: unknown): boolean {
   if (!err) return false;
-  const message = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  // `String()` wraps the whole three-branch ternary rather than sitting in one
+  // branch: `message` is typed `string` but is not one by construction, so a
+  // coercion in a single branch leaves an `Error`'s own `message` un-coerced
+  // for the eight `RegExp.test` calls below.  Contract and provenance:
+  // `utils/error-message.ts` § `ownText` (#965).
+  const message = String(
+    err instanceof Error ? err.message : typeof err === "string" ? err : "",
+  );
   const name = err instanceof Error ? err.name : "";
 
   if (!message && !name) return false;

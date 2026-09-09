@@ -24,6 +24,23 @@ import {
   withLoggedInStateRetryAtPort,
 } from "./with-logged-in-state-retry.js";
 
+/**
+ * An `Error` whose `message` is `value`.
+ *
+ * `new Error(value)` would coerce it, which is the very step under test.  The
+ * construction mirrors `error-message.test.ts` § `errorMessage totality`, and
+ * so does its warrant: `message` is typed `string` but is not one by
+ * construction -- a subclass assigning `this.message`, an error rehydrated
+ * across a worker or IPC boundary, and a `Proxy` can each produce one.  No
+ * producer in this repo builds one today; this pins the contract `unknown`
+ * promises to accept, not an observed source.
+ */
+function errorWithMessage(value: unknown): Error {
+  const error = new Error("placeholder");
+  Object.defineProperty(error, "message", { value, configurable: true });
+  return error;
+}
+
 const instance = {} as InstanceService;
 
 describe("withLoggedInStateRetry", () => {
@@ -161,6 +178,30 @@ describe("withLoggedInStateRetry", () => {
 
     await expect(withLoggedInStateRetry(instance, op)).rejects.toBe(gateError);
     expect(op).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * The eight `RegExp.test` calls in the classifier coerce their argument
+   * either way, so what this pins is that classification is unchanged on a
+   * non-string message: the retry still fires and the operation still
+   * succeeds.  Asserted on the outcome rather than on the absence of a throw,
+   * which nothing here raises.
+   */
+  it("classifies a non-string message by its text, and still retries", async () => {
+    const op = vi
+      .fn()
+      .mockRejectedValueOnce(
+        errorWithMessage({
+          toString: () => "Action.IncorrectContentStateError",
+        }),
+      )
+      .mockResolvedValueOnce("ok");
+
+    const result = await withLoggedInStateRetry(instance, op);
+
+    expect(result).toBe("ok");
+    expect(op).toHaveBeenCalledTimes(2);
+    expect(waitForLoggedInState).toHaveBeenCalledTimes(1);
   });
 });
 

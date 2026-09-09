@@ -284,6 +284,74 @@ describe("startInstanceWithRecovery", () => {
     await vi.advanceTimersByTimeAsync(76_000);
     await assertion;
   });
+
+  /**
+   * An `Error` whose `message` is `value`.  The constructor coerces its
+   * argument, so the non-string has to be installed after the fact -- the same
+   * construction `error-message.test.ts` § `errorMessage totality` uses, for
+   * the same reason.
+   */
+  const startInstanceErrorWithMessage = (value: unknown): StartInstanceError => {
+    const error = new StartInstanceError(42, "placeholder");
+    Object.defineProperty(error, "message", { value, configurable: true });
+    return error;
+  };
+
+  /**
+   * `message` is typed `string` but is not one by construction: a subclass
+   * assigning `this.message`, an error rehydrated across a worker or IPC
+   * boundary, and a `Proxy` can each produce one, and the catch below accepts
+   * whatever `startInstance` rejected with.  `instanceof` establishes the
+   * value is a `StartInstanceError`; it establishes NOTHING about `message`,
+   * so reading `.includes` on a non-string one raises `TypeError` from inside
+   * the catch and the real failure never reaches the caller.
+   *
+   * Pinned on the classification's own terms rather than on "does not throw"
+   * alone: what the caller must still receive is the error the launcher
+   * actually rejected with.
+   */
+  it("classifies a non-string message rather than raising from inside the catch", async () => {
+    const rejected = startInstanceErrorWithMessage(42);
+    const launcher = createMockLauncher({
+      startInstance: vi.fn().mockRejectedValue(rejected),
+    });
+
+    const failure = await startInstanceWithRecovery(launcher, 42, 9222).catch(
+      (error: unknown) => error,
+    );
+
+    // The coerced text ("42") does not carry the phrase, so this is the
+    // non-already-running path: the launcher's own error propagates.
+    expect(failure).toBe(rejected);
+    expect(failure).toBeInstanceOf(StartInstanceError);
+    expect(failure).not.toBeInstanceOf(TypeError);
+    expect(launcher.stopInstanceWithDialogDismissal).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The other half of the same coercion: a non-string message whose text DOES
+   * carry the phrase must still be classified as already-running.  Coercing
+   * rather than discarding is what keeps that true -- reading `""` for every
+   * non-string would be total too, and would silently re-route this case to
+   * the rethrow above.
+   */
+  it("still recognises already-running when the phrase arrives on a non-string message", async () => {
+    const launcher = createMockLauncher({
+      startInstance: vi
+        .fn()
+        .mockRejectedValue(
+          startInstanceErrorWithMessage({
+            toString: () => "account is already running",
+          }),
+        ),
+    });
+    vi.mocked(discoverInstancePort).mockResolvedValue(55123);
+    vi.mocked(discoverTargets).mockResolvedValue(BOTH_TARGETS);
+
+    const result = await startInstanceWithRecovery(launcher, 42, 9222);
+
+    expect(result).toEqual({ status: "already_running", port: 55123 });
+  });
 });
 
 describe("waitForInstancePort", () => {

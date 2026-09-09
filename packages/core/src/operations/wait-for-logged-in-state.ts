@@ -143,7 +143,12 @@ export async function waitForLoggedInState(
     try {
       probe = await instance.evaluateLinkedIn<ProbeResult>(PROBE_SCRIPT, false);
     } catch (err) {
-      lastReason = `probe-threw: ${err instanceof Error ? err.message : String(err)}`;
+      // `String()` wraps the whole ternary rather than sitting in one branch:
+      // `message` is typed `string` but is not one by construction, so a
+      // coercion in the non-`Error` branch alone leaves an `Error`'s own
+      // `message` un-coerced, and `lastReason` is declared `string`.  Contract
+      // and provenance: `utils/error-message.ts` § `ownText` (#965).
+      lastReason = `probe-threw: ${String(err instanceof Error ? err.message : err)}`;
       const remaining = deadline - Date.now();
       if (remaining <= 0) break;
       await delay(Math.min(pollInterval, remaining));

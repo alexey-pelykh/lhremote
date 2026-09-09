@@ -101,9 +101,17 @@ export const DEFAULT_INSTALL_ATTEMPTS = 3;
  */
 export const INSTALL_TEST_TIMEOUT_MS = 60_000;
 
-/** Reads a thrown value the way a log line wants it. */
+/**
+ * Reads a thrown value the way a log line wants it.
+ *
+ * `String()` wraps the whole ternary rather than sitting in one branch:
+ * `message` is typed `string` but is not one by construction, so a coercion in
+ * the non-`Error` branch alone leaves an `Error`'s own `message` un-coerced, in
+ * violation of this function's own `: string`.  Contract and provenance:
+ * `utils/error-message.ts` § `ownText` (#965).
+ */
 function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return String(error instanceof Error ? error.message : error);
 }
 
 /**
