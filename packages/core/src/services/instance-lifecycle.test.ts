@@ -145,6 +145,10 @@ describe("startInstanceWithRecovery", () => {
 
     const resultPromise = startInstanceWithRecovery(launcher, 42, 9222);
     // Past CRASH_RECOVERY_DELAY (2_000) — the only timed wait on this path.
+    // That 2_000 is transcribed rather than imported, because the constant is
+    // module-private: if it changes, nothing here fails so long as the advance
+    // above still clears it, and this sentence quietly stops being true — so
+    // re-check the pair by hand rather than trusting it.
     await vi.advanceTimersByTimeAsync(10_000);
     const result = await resultPromise;
 
