@@ -434,12 +434,12 @@ describe("errorMessage on the errors the readiness gates raise", () => {
  * render` above was green while the function was not total: two of its three
  * cases attack a value whose *rendering throws*, which `ownText`'s `try` has
  * always caught, and the third attacks a `cause` getter, which `causeOf`'s
- * does.  A non-string message throws nothing — it is read successfully,
- * returned as-is in violation of `ownText`'s own `: string`, and raises at
- * the `.trim()` applied to the result.  Enumerating shapes is what missed it,
- * so the shapes are crossed with the positions instead: a shape added below
- * is exercised at the head, at a cause, and below a cause without anyone
- * remembering to add it three times.
+ * does.  A non-string message throws nothing — it is read successfully, and
+ * until #965 closed that path it was returned as-is in violation of
+ * `ownText`'s own `: string`, raising at the `.trim()` applied to the result.
+ * Enumerating shapes is what missed it, so the shapes are crossed with the
+ * positions instead: a shape added below is exercised at the head, at a
+ * cause, and below a cause without anyone remembering to add it three times.
  *
  * Three failure MECHANISMS are represented, because the corpus missed one on
  * its first pass and the miss reproduced the original defect exactly — a
