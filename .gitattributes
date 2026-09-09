@@ -1,0 +1,15 @@
+# Pin end-of-line normalization so every checkout is byte-identical across platforms.
+#
+# Without this, git's default converts stored LF to CRLF in the working tree on a
+# Windows checkout. Any test that reads a file off the working tree and asserts on a
+# "\n" literal is then red on windows-latest while green on ubuntu-latest and
+# macos-latest -- a one-platform failure that re-running never clears, and that an
+# author with no local Windows cannot reproduce. That is not hypothetical: the
+# entrypoint-shebang assertion in packages/lhremote/src/cli-parity.test.ts failed
+# exactly that way before it was rewritten to accept either ending (see #997).
+#
+# `text=auto` leaves anything git detects as binary alone -- notably the tracked
+# SQLite fixture -- and `eol=lf` pins the working-tree ending for everything else.
+# This is the checkout-level counterpart to `end_of_line = lf` in .editorconfig,
+# which governs editors and has never governed what git writes to disk.
+* text=auto eol=lf
