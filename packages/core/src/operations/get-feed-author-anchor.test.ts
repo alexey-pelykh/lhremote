@@ -1668,7 +1668,18 @@ const FEED_BODY_MARKER = `${FEED_BODY_ATTR}="${FEED_BODY_VALUE}"`;
  */
 const FEED_BODY_SELECTOR = `[${FEED_BODY_MARKER}]`;
 
-/** Name of the assertion the doc comment above cites for the dialect caveat. */
+/**
+ * The CAPTURE half of the assertion name the doc comment above cites for the
+ * dialect caveat.
+ *
+ * Half, because that assertion grades two claims and is named for both: the
+ * script bounds the actor header on the body marker, and these captures carry
+ * no such marker.  A name stating only the second points a reader triaging its
+ * red at `linkedin/__fixtures__/legacy/*.html` when the cause is the region
+ * bound in `get-feed.ts`.  The doc comment cites the capture claim, so that is
+ * what stays here and the test name composes it with the other — rather than
+ * the two drifting as separate strings.
+ */
 const ACTOR_HEADER_CAPTURE_HAS_NO_FEED_BODY_MARKER =
   "the captures carry no feed body marker, so they bound on the menu alone";
 
@@ -1938,7 +1949,7 @@ describe("#897: what the captured artifacts ground about the actor header", () =
     }
   });
 
-  it(`${ACTOR_HEADER_CAPTURE_HAS_NO_FEED_BODY_MARKER}`, () => {
+  it(`the script bounds the actor header on the feed body marker, and ${ACTOR_HEADER_CAPTURE_HAS_NO_FEED_BODY_MARKER}`, () => {
     // The dialect caveat, asserted rather than asserted-about.  These captures
     // are post-detail: they carry the control-menu marker but not the feed
     // body marker, so `headerLinksIn` would bound the region on the menu alone.
@@ -1962,12 +1973,21 @@ describe("#897: what the captured artifacts ground about the actor header", () =
     // branch — PRE-EXISTING, and #903 only inherited it.
     //
     // It is gone because it was never DISCRIMINATING, which is a stronger
-    // claim than "redundant" and is the reason not to re-add it.  The literal
-    // occurs at FOUR places in `get-feed.ts` — a doc comment (line 73), the
-    // `HEADER_SCAN_SELECTOR` clause (201), a code comment (1188), and the
-    // post-TEXT `querySelector` (1192), a different concern entirely — and a
-    // `toContain` over the whole script cannot tell them apart.  Measured,
-    // three mutations of `get-feed.ts`:
+    // claim than "redundant" and is the reason not to re-add it.  Inside the
+    // template literal `SCRAPE_FEED_SCRIPT` exports, the bracketed form occurs
+    // at exactly TWO places and BOTH are executable code: the
+    // `HEADER_SCAN_SELECTOR` clause, which is the region bound these rows are
+    // about, and the post-TEXT `querySelector` that reads a post's body — a
+    // different concern entirely.  A `toContain` over the whole script cannot
+    // tell the two apart.
+    //
+    // Named by what they are and not by line number, deliberately: nothing
+    // here re-derives a line number in `get-feed.ts`, so a numeral written
+    // down would silently re-point on any edit above it and this block —
+    // whose whole purpose is that the deleted check is not re-added on stale
+    // reasoning — would itself be reasoning from stale numbers.  Both names
+    // are greppable and cannot drift.  Measured, three mutations of
+    // `get-feed.ts`:
     //
     //   build the `HEADER_SCAN_SELECTOR` clause by concatenation, behaviour
     //     byte-identical  → the line did NOT fire.  198 passed (198): the
@@ -1975,7 +1995,7 @@ describe("#897: what the captured artifacts ground about the actor header", () =
     //   rename the marker in the `HEADER_SCAN_SELECTOR` clause ONLY
     //     → the line did NOT fire.  `#859 AC-7 (b)` and `(c)` failed instead,
     //     returning the mentioned and the resharing person as the author.
-    //   rename it at all FOUR sites
+    //   rename it at every occurrence in the file
     //     → the line fired, alongside two CANARIES and those same two
     //     behavioural tests.
     //
@@ -2038,9 +2058,16 @@ describe("#897: what the captured artifacts ground about the actor header", () =
     // And the derivation itself, graded on the double rather than on a source
     // text: the bracketed form still selects an element built from the pair.
     // A statement about THIS file's three constants and nothing else — the
-    // coupling to `get-feed.ts` is what the assertion above buys, not this one
-    // — but it is the reason `FEED_BODY_SELECTOR` still has to be right, now
-    // that nothing searches the script for it.
+    // coupling to `get-feed.ts` is what the assertion above buys, not this one.
+    //
+    // What it grades is the DERIVATION: `FEED_BODY_SELECTOR` brackets
+    // `FEED_BODY_MARKER`, which is concatenated from `FEED_BODY_ATTR` and
+    // `FEED_BODY_VALUE`, and the body element above is built from that same
+    // pair — so the capture search below, and any fixture added later, cannot
+    // come to mean different strings.  With the `toContain` gone this line is
+    // the constant's ONLY remaining consumer, which is a statement of what the
+    // one line of instrument is FOR; it is not an obligation owed to anything
+    // outside this file, and no reading of it should claim one.
     expect(markerBounded.querySelector(FEED_BODY_SELECTOR)).not.toBeNull();
 
     for (const capture of ACTOR_HEADER_CAPTURE) {
@@ -3799,12 +3826,16 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     // badge returned AS the name.
     //
     // NOT a sole witness, and that distinction is what a later reader deleting
-    // a neighbouring row needs: the mutation fails FOUR tests, 4 failed | 194
-    // passed.  `B6` reads "Head of Widgets at Acme"; `#940 (accepted cost,
+    // a neighbouring row needs: the mutation fails this row and the three named
+    // here.  `B6` reads "Head of Widgets at Acme"; `#940 (accepted cost,
     // regression)` reads "Ada Lovelace" where it asserts "Dr."; `#940 (b)
-    // falsifier` reads "• 1st".  It is also the SAME mutation that block
-    // already names as its candidate fix (a) — cross-referenced rather than
-    // re-analysed here, so the two records cannot drift apart.
+    // falsifier` reads "• 1st".  What the record carries is that ENUMERATION
+    // and what each co-failure reads — never a passing-test total, which would
+    // mirror a moving base and go stale on the next test added to this file.
+    //
+    // It is also the SAME mutation that block already names as its candidate
+    // fix (a) — cross-referenced rather than re-analysed here, so the two
+    // records cannot drift apart.
     label: "B5 bare name beside a non-empty badge run",
     href: "/in/ada-lovelace/",
     children: () => [
@@ -3852,8 +3883,8 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     // winning the headline race, because no field contains the concatenated
     // string and `nameFieldSpan` therefore withholds nothing.
     //
-    // NOT a sole witness: 3 failed | 195 passed, `#940 (accepted cost,
-    // regression)` and `#940 (b) falsifier` failing with it.
+    // NOT a sole witness: `#940 (accepted cost, regression)` and `#940 (b)
+    // falsifier` fail with it.
     label: "B7 name and badge nested under one container run, opaque slug",
     href: "/in/x7k2m9q4/",
     children: () => [
@@ -3881,9 +3912,12 @@ const FIELD_SHAPES: readonly FieldShape[] = [
     // already says and which is what leaves the headline as the only assertion
     // here that can carry the claim at all.
     //
-    // NOT a sole witness: 2 failed | 196 passed, `B11 short name contained in
-    // an EARLIER field than the one it is read from` failing with it and
-    // reading "Adaptive Systems Lead" for the headline.
+    // NOT a sole witness: `B11 short name contained in an EARLIER field than
+    // the one it is read from` fails with it, reading "Adaptive Systems Lead"
+    // for the headline, and so does `#941 (accepted cost)`, reading
+    // "VerifiedAda Lovelace" — the icon-fused field that the decline path stops
+    // withholding, winning the headline race for the same reason "AL" wins it
+    // here.
     label: "B8 leading avatar initials ahead of the name",
     href: "/in/ada-lovelace/",
     children: () => [
@@ -4218,6 +4252,15 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
     // verdict they returned would have gone on reading green while saying
     // nothing about the walk they exist to grade.
     //
+    // One of those two has since acquired a second witness, incidentally:
+    // `#941 (accepted cost)` uses `hiddenBareBesideEmptyRuns` as its control,
+    // so collapsing that builder fails it as well as this block.  That is a
+    // weaker instrument for the reason this list already gives about
+    // `hiddenBareBesideRun` — the row's declared subject is an icon's cost, not
+    // the builder's shape — and it does not retire anything here.  The
+    // measurement above stands as the history it is: it describes the tree
+    // before either instrument existed.
+    //
     // The fourth is here even though it is already constrained behaviourally: a
     // shape canary and a behavioural row are different instruments — one grades
     // the FIXTURE, the other the SCRIPT — and leaving one member of a family
@@ -4227,6 +4270,16 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
     // in the order of a text node and a run, so a canary that counted nodes
     // without ordering them would pass on either construction and the two rows
     // would be interchangeable — which is the one thing they must not be.
+    //
+    // And its bound, stated because a canary that says what it cannot see is
+    // worth more than one that does not: `kind` labels ANY element node a
+    // "run" and `querySelectorAll("p, span")` counts DESCENDANTS rather than
+    // direct children, so wrapping a run in a container — `el("div", {},
+    // [text("span", "• 2nd")])` — would pass here unchanged while moving the
+    // fixture into `B7`'s nested-container family.  That is not a defect and
+    // #941's own "Do" carries the same bound; it is the line between pinning
+    // the SHAPE, which this block does, and pinning the markup, which it does
+    // not.
     const shapeOf = (wrapper: FakeElement) =>
       wrapper.childNodes.map((node) => ({
         kind: node.nodeType === 1 ? "run" : "text",
@@ -4252,9 +4305,12 @@ describe("get-feed author fields across the #860 / #898 corpus", () => {
     ]);
     expect(besideRun.querySelectorAll("p, span")).toHaveLength(1);
 
-    // `B9` — the same two nodes in the OPPOSITE order, which is the ordering
-    // the one real capture uses.  This pair is what makes the sequence
-    // assertion load-bearing rather than decorative.
+    // `B9` — the same two node KINDS in the OPPOSITE order, which is the
+    // ordering the one real capture uses.  This pair is what makes the sequence
+    // assertion load-bearing rather than decorative.  The STRINGS differ from
+    // `B5`'s above because each expectation reproduces its own row's arguments
+    // rather than a shared pair; what the two rows are compared on is the order
+    // of the kinds, never the text they happen to carry.
     expect(shapeOf(runThenBare)).toEqual([
       { kind: "run", text: "Ada Lovelace" },
       { kind: "text", text: " • Head of Widgets" },
@@ -4925,10 +4981,20 @@ describe("#860/#898 accepted costs", () => {
     // only — so what stands between this and production is the icon carrying
     // accessible text, not the markup shape.
     //
-    // This shape also closes #941's finding 3, which asked for a fixture
-    // placing a NON-`p`/`span` element inside an `aria-hidden` wrapper.  It
-    // landed here first, and as a measured regression rather than as the
-    // hypothetical that finding described; no second fixture is owed.
+    // This is the INJECTION half of #941's finding 3, and only that half.  The
+    // icon comes FIRST here, before a single non-empty run and with no bare
+    // text around it, so its accessible text becomes a field of its OWN and is
+    // returned AS the name — recursive descent, witnessed and measured rather
+    // than hypothesised.
+    //
+    // The FUSION the finding actually named — an icon BETWEEN the runs of a
+    // capture-shaped wrapper, whose text joins the bare text around it instead
+    // of standing apart from it — is a different mechanism with a different
+    // observable outcome, and this row does not reach it.  `#941 (accepted
+    // cost)` below renders that construction: there the fused field is no
+    // longer name-like, so the name is LOST rather than displaced and the
+    // connection badge is returned in its place.  Two shapes, two costs;
+    // neither subsumes the other.
     const svgTitled: ScrapeInput = {
       label: "icon <title> before the name run, same wrapper, corroborating slug",
       href: "/in/ada-lovelace/",
@@ -4948,6 +5014,100 @@ describe("#860/#898 accepted costs", () => {
     // Confined to the name here, as in the badge-terminated variant: the badge
     // ends the name region, so the headline survives.
     expect(fieldsOf(SCRAPE_FEED_SCRIPT, svgTitled).headline).toBe("Head of Widgets at Acme");
+  });
+
+  it("#941 (accepted cost): a titled icon BETWEEN the capture's runs fuses into the bare text and the name is lost", () => {
+    // The FUSION half of the icon mechanism, which `svgTitled` in the block
+    // above cannot reach.  There the `<svg>` comes first, before a single
+    // non-empty run and with no bare text around it, so its accessible text
+    // becomes a field of its own: the recursive descent is witnessed, the
+    // fusion is not.  #941's finding 3 named the other construction — the icon
+    // BETWEEN the runs of a capture-shaped wrapper, where the walk fuses its
+    // text into the surrounding bare-text field — and that is what this row
+    // renders.
+    //
+    // The shape is the real capture's rather than a hypothetical:
+    // `linkedin/__fixtures__/legacy/post-with-comments.html` (lines 95-103)
+    // renders `<span aria-hidden="true">` around two whitespace-only
+    // `white-space-pre` spans with an `<svg>` BETWEEN them and a bare "• Adi"
+    // trailing.  `hiddenBareBesideEmptyRuns` already builds that wrapper; the
+    // fixture below is that builder's markup with ONE node inserted, hand-built
+    // rather than composed so the difference between the two rows is visible as
+    // a single `<svg>` and nothing else.
+    //
+    // The control is what makes this a statement about the ICON rather than
+    // about the wrapper.  Without the icon the same wrapper reads the name
+    // correctly — that is `B4`, and it is #903's fix WINNING this shape — so
+    // the icon is not riding a wrapper that was already broken.  It takes a
+    // working read away.
+    //
+    // The slug corroborates the name IN FULL, which is what makes the loss
+    // surprising rather than routine: `slugName`'s candidates must be prefixes
+    // of the name region, and that region now STARTS at the fused "Verified",
+    // so the one piece of evidence that could rescue the read is disqualified
+    // by the very fusion it would have to undo.  The three chrome-first shapes
+    // in the block above all need an OPAQUE slug to reach the decline path;
+    // this one, like `svgTitled`, does not.
+    //
+    // An accepted cost and NOT a regression: the pinned baseline reads "• 1st"
+    // for BOTH rows, so nothing that worked before is broken.  The claim the
+    // control buys is narrower than that and worth stating exactly — #903 wins
+    // this shape, and a titled icon inside the wrapper takes the win away.
+    //
+    // The two runs are built EMPTY rather than carrying a single space, to
+    // match `hiddenBareBesideEmptyRuns` and the capture's own whitespace-only
+    // spans.  Measured both ways: byte-identical answers on every reading
+    // below, so the choice is fidelity and not a constraint, and a later reader
+    // should not take it for one.
+    const withIcon: ScrapeInput = {
+      label: "titled icon between the capture's two empty runs, corroborating slug",
+      href: "/in/ada-lovelace/",
+      children: () => [
+        el("span", { "aria-hidden": "true" }, [
+          text("span", "", { class: "white-space-pre" }),
+          el("svg", {}, [text("title", "Verified")]),
+          text("span", "", { class: "white-space-pre" }),
+        ], "", 0, "Ada Lovelace"),
+        hiddenRun("• 1st"),
+        hiddenRun("Head of Widgets at Acme"),
+        hiddenRun("18h •"),
+      ],
+    };
+
+    // The same wrapper with the icon taken out, which is `B4`'s construction.
+    const withoutIcon: ScrapeInput = {
+      label: "the same wrapper with no icon in it",
+      href: "/in/ada-lovelace/",
+      children: () => [
+        hiddenBareBesideEmptyRuns("Ada Lovelace"),
+        hiddenRun("• 1st"),
+        hiddenRun("Head of Widgets at Acme"),
+        hiddenRun("18h •"),
+      ],
+    };
+
+    const icon = fieldsOf(SCRAPE_FEED_SCRIPT, withIcon);
+    const control = fieldsOf(SCRAPE_FEED_SCRIPT, withoutIcon);
+
+    // The cost, and its control beside it: one `<svg>` is the whole difference
+    // between the name and the connection badge.
+    expect(icon.name).toBe("• 1st");
+    expect(control.name).toBe("Ada Lovelace");
+
+    // The rest of the record survives in both, which is what makes the NAME the
+    // whole of the loss rather than one symptom of a wrapper read going wrong.
+    expect(icon.headline).toBe("Head of Widgets at Acme");
+    expect(icon.timestamp).toBe("18h");
+    expect(control.headline).toBe("Head of Widgets at Acme");
+    expect(control.timestamp).toBe("18h");
+
+    // And the baseline, in the form the rows around this one use: pre-#860
+    // reads "• 1st" for both and finds no headline in either, so the icon row
+    // is a cost against #903's win and not a regression against what shipped.
+    expect(fieldsOf(BASELINE_FEED_SCRIPT, withIcon).name).toBe("• 1st");
+    expect(fieldsOf(BASELINE_FEED_SCRIPT, withoutIcon).name).toBe("• 1st");
+    expect(fieldsOf(BASELINE_FEED_SCRIPT, withIcon).headline).toBeNull();
+    expect(fieldsOf(BASELINE_FEED_SCRIPT, withoutIcon).headline).toBeNull();
   });
 
   it("#940 (b) falsifier: preferring the first RUN returns the connection badge as the name", () => {
