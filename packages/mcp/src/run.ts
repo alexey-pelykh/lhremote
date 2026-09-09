@@ -224,39 +224,58 @@ async function render(error: unknown): Promise<string> {
  *   `@lhremote/cli` to borrow one either.
  *
  * That last part has a cost, and this is the half of it that has to be paid
- * here: **the same contract is stated twice, and as of #959 the two statements
- * deliberately differ.**  `packages/cli/src/run.ts` is the other statement of
- * it — same stderr reporting, same trim-before-the-emptiness-test, same
- * guarded write, same `process.exit` over `process.exitCode`, reached there
- * for a different reason it documents itself.  The two catch bodies are no
- * longer identical: that one calls `errorMessage` directly, this one goes
- * through {@link render}.  A fix to either *reporting* body — a new
- * silent-value shape, a change in what `errorMessage` renders — is still owed
- * to the other.
+ * here: **the same contract is stated twice.**  `packages/cli/src/run.ts` is
+ * the other statement of it — same stderr reporting, same
+ * trim-before-the-emptiness-test, same guarded write, same `process.exit` over
+ * `process.exitCode`, reached there for a different reason it documents itself.
+ * A fix to either *reporting* body — a new silent-value shape, a change in what
+ * `errorMessage` renders — is owed to the other, and nothing mechanical
+ * enforces that: both files carry their own green suite, so a one-sided edit
+ * lands green.  (`packages/lhremote/src/cli-parity.test.ts` is not the
+ * instrument for it — these two are legitimately not byte-identical.)
  *
- * What is **not** owed, and is now the recorded divergence: the graph coverage
- * above does not exist on that side, and closing it there is a strictly larger
- * change than this one rather than a transcription of it.  `runProgram` takes
- * the program as a *parameter*, so the CLI bins call `createProgram()`
- * themselves, outside that `try` altogether — and `packages/cli/src/program.ts`
- * carries the same module-scope `require("../package.json")` `./server.js`
- * does.  Covering it needs a new entry function, an edit to each bin, and a
- * NEW `@lhremote/cli` export subpath: its `exports["."]` is `dist/program.js`,
- * so `packages/lhremote` cannot reach `run.js` today without statically
- * importing the very graph it would be deferring.
+ * **The divergence #959 recorded here is CLOSED, and #963 closed it.**  What
+ * this comment used to say — that the graph coverage above did not exist on the
+ * CLI side, that `runProgram` took the program as a *parameter* so the bins
+ * called `createProgram()` outside the `try`, and that
+ * `packages/lhremote/src/program.ts` statically imported `@lhremote/mcp/stdio`
+ * so the `lhremote` bin evaluated THIS package's graph at its own module scope
+ * — was true when written and is not true now.  Do not read it out of the
+ * history as a live gap.
  *
- * Read that as a gap this fix does not reach, not as one it made smaller.
- * `packages/lhremote/src/program.ts` statically imports `@lhremote/mcp/stdio`,
- * so the `lhremote` bin evaluates THIS package's graph at its own module scope
- * — and `npx lhremote mcp` is the invocation the README, `packages/mcp`'s
- * README and `.mcp.json` all give an MCP client, none of which mentions
- * `lhremote-mcp`.  Measured with the same `require("../package.json")` fault
- * forced: three diagnosed lines out of this bin, a full crash dump out of that
- * one.  Tracked as #963, which covers both bins; nothing mechanical enforces
- * the pairing either way, since both files carry their own green suite and a
- * one-sided edit lands green.
- * (`packages/lhremote/src/cli-parity.test.ts` is not the instrument for it —
- * these two are legitimately not byte-identical.)
+ * #963 did there what #959 did here, plus the two things that side needed and
+ * this one did not: a new entry function taking a THUNK, `runProgramBin`, so
+ * that the `./program.js` import and the `createProgram()` call are both inside
+ * its `try`; and a new `@lhremote/cli` export subpath, `./run`, because that
+ * package's `exports["."]` is `dist/program.js` and `packages/lhremote` could
+ * not otherwise reach `run.js` without statically importing the very graph it
+ * was deferring.  The `mcp` subcommand's action now loads
+ * `@lhremote/mcp/stdio` dynamically, inside `parseAsync()`, inside that `try`.
+ * Re-measured on the built bins with the same `require("../package.json")`
+ * fault forced: `npx lhremote mcp` now writes the SAME diagnosed stderr this
+ * bin does, byte-for-byte, where it wrote a 24-line crash dump before; and
+ * `lhremote --version` no longer touches this package's graph at all, so it
+ * prints the version and exits 0 where it used to dump and exit 1.
+ *
+ * So the two files now share what #959 had left one-sided: no value import at
+ * module scope, the entry's whole graph loaded inside its own `try`, and the
+ * {@link render} / {@link lastResortMessage} degradation.  A fix to any of THAT
+ * is owed both ways too, on the same honour system.
+ *
+ * Where the two still genuinely differ, and none of these is a gap:
+ *
+ * - **Two entries there, one here.**  `runProgram` is public API that package
+ *   cannot drop — `packages/cli/src/program.ts` re-exports it and
+ *   `packages/lhremote/src/program.ts` re-exports that — and it still takes a
+ *   built `Command`, so it still covers strictly less than `runProgramBin`.
+ *   This bin has no commander in it and nothing equivalent to export.
+ * - **Different reasons for `process.exit` over `process.exitCode`** — a ref'd
+ *   `data` listener on `process.stdin` here, a CDP socket no `finally` closes
+ *   there.  Same decision, different failure being avoided, and each side
+ *   documents its own.
+ * - **Different {@link UNREPORTABLE} text**, because the two bins fail at
+ *   different things: a server that never started here, a command that failed
+ *   there.
  */
 export async function runStdioBin(): Promise<void> {
   try {
