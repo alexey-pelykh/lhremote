@@ -10,7 +10,7 @@ import {
 
 import { resolvePersonIds } from "./person-ids.js";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-retry} CLI command. */
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-status--retry | campaign-retry} CLI command. */
 export async function handleCampaignRetry(
   campaignId: number,
   options: {

@@ -10,7 +10,7 @@ import {
   type CampaignPersonState,
 } from "@lhremote/core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-list-people} CLI command. */
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-targeting | campaign-list-people} CLI command. */
 export async function handleCampaignListPeople(
   campaignId: number,
   options: {

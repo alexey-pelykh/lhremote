@@ -123,7 +123,7 @@ lhremote campaign-start <campaignId> --person-ids <ids> | --person-ids-file <pat
 lhremote campaign-stop <campaignId> [--cdp-port <port>] [--json]
 ```
 
-### Campaign Status
+### Campaign Status & Retry
 
 ```sh
 lhremote campaign-status <campaignId> [--include-results] [--limit <n>] [--cdp-port <port>] [--json]
@@ -402,7 +402,7 @@ Stop a running campaign.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `cdpPort` | number | No | auto-discovered | CDP port |
 
-### Campaign Status
+### Campaign Status & Retry
 
 #### `campaign-status`
 

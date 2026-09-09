@@ -9,7 +9,7 @@ import {
   type CampaignStatisticsOutput,
 } from "@lhremote/core";
 
-/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaigns | campaign-statistics} CLI command. */
+/** Handle the {@link https://github.com/alexey-pelykh/lhremote#campaign-status--retry | campaign-statistics} CLI command. */
 export async function handleCampaignStatistics(
   campaignId: number,
   options: {
