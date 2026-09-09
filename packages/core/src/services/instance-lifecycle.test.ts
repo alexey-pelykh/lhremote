@@ -144,11 +144,13 @@ describe("startInstanceWithRecovery", () => {
     vi.mocked(discoverTargets).mockResolvedValue(BOTH_TARGETS);
 
     const resultPromise = startInstanceWithRecovery(launcher, 42, 9222);
-    // Past CRASH_RECOVERY_DELAY (2_000) — the only timed wait on this path.
-    // That 2_000 is transcribed rather than imported, because the constant is
-    // module-private: if it changes, nothing here fails so long as the advance
-    // above still clears it, and this sentence quietly stops being true — so
-    // re-check the pair by hand rather than trusting it.
+    // Drive past CRASH_RECOVERY_DELAY (2_000), which these mocks leave as the
+    // path's only timed wait: waitForInstancePort and waitForInstanceTargets
+    // each return on their first poll, so neither reaches its own delay().
+    // The 2_000 is transcribed rather than imported, because the constant is
+    // module-private. If it grows past the advance below nothing fails here —
+    // shouldAdvanceTime pays the remainder in real time, so the test slows
+    // instead — so re-check the pair by hand rather than trusting it.
     await vi.advanceTimersByTimeAsync(10_000);
     const result = await resultPromise;
 
