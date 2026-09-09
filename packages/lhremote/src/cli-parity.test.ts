@@ -4,7 +4,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
+
+const read = (relative: string) =>
+  readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
+
+const lhremote = read("./cli.ts");
+const cli = read("../../cli/src/cli.ts");
 
 /**
  * Acceptance criterion 2 of #933 — "when either is changed, then both use the
@@ -19,12 +26,6 @@ import { describe, expect, it } from "vitest";
  * the two files say, and `dist/` is not published from this test's tree.
  */
 describe("bin entrypoint parity", () => {
-  const read = (relative: string) =>
-    readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
-
-  const lhremote = read("./cli.ts");
-  const cli = read("../../cli/src/cli.ts");
-
   it("reads both entrypoints, so the comparison is not vacuous", () => {
     // Without this, a bad path that threw would be the only signal, and a
     // path that resolved to two empty files would compare equal and pass.
@@ -67,10 +68,12 @@ describe("bin entrypoint parity", () => {
     //
     // Asserted as the ABSENCE of the old call shape rather than only as the
     // presence of the new one: a file could contain both, and it is the old one
-    // that reopens the defect. Measured on the built bins with a throw injected
-    // into `createProgram()`: 12-line dump under the old idiom, one diagnosed
+    // that reopens the defect. Measured on both built bins with a throw
+    // injected into `createProgram()`: 13-line dump under the old idiom, one
     // line under this one, exit 1 either way — which is why the exit code alone
-    // does not discriminate.
+    // does not discriminate. One here and three for the forced
+    // `require("../package.json")` fault elsewhere in this change, because the
+    // after-count is the error's own: this injected message is a single line.
     for (const source of [lhremote, cli]) {
       expect(source).not.toContain("runProgram(createProgram())");
     }
@@ -87,6 +90,98 @@ describe("bin entrypoint parity", () => {
       expect(source).toContain('from "./run.js"');
       expect(source).toContain('import("./program.js")');
       expect(source).not.toContain("@lhremote/cli");
+    }
+  });
+});
+
+/**
+ * The header of `cli.ts` states its own invariant twice — "that import is the
+ * whole of this file's graph, and it has to stay that way", and then again for
+ * the thunk — and until this block nothing held either.  The suite above pins
+ * what the file DOES contain; a second `import` line is invisible to every one
+ * of those assertions, and byte-identity would happily carry it into both
+ * packages at once.
+ *
+ * Same instrument as `packages/cli/src/run.test.ts`'s equivalent block, and
+ * for the same reason: this file's own subject is mostly prose ABOUT imports,
+ * so a regex over it matches comment text.  Read with the TypeScript parser
+ * instead.
+ *
+ * The two invariants are separated deliberately.  A value import is the #963
+ * defect itself — its graph evaluates before `runProgramBin`'s `try` exists.
+ * A type-only import is erased under `verbatimModuleSyntax` and evaluates
+ * nothing, so it is admissible; what makes THIS file's single import the one it
+ * is allowed is that `./run.js` is where the catch lives.
+ */
+describe("bin entrypoint import graph", () => {
+  /** Every static `import` / `export … from` in `text`, with its type-only flag. */
+  function staticSpecifiers(
+    text: string,
+    fileName: string,
+  ): { spec: string; typeOnly: boolean }[] {
+    const file = ts.createSourceFile(
+      fileName,
+      text,
+      ts.ScriptTarget.ESNext,
+      true,
+      ts.ScriptKind.TS,
+    );
+
+    return file.statements.flatMap((statement) => {
+      if (
+        ts.isImportDeclaration(statement) &&
+        ts.isStringLiteral(statement.moduleSpecifier)
+      ) {
+        return [
+          {
+            spec: statement.moduleSpecifier.text,
+            typeOnly: statement.importClause?.isTypeOnly ?? false,
+          },
+        ];
+      }
+
+      if (
+        ts.isExportDeclaration(statement) &&
+        statement.moduleSpecifier !== undefined &&
+        ts.isStringLiteral(statement.moduleSpecifier)
+      ) {
+        return [
+          { spec: statement.moduleSpecifier.text, typeOnly: statement.isTypeOnly },
+        ];
+      }
+
+      return [];
+    });
+  }
+
+  it("parses imports rather than matching them, canaried against a file that has more", () => {
+    // The positive control for the instrument.  `./program.ts` carries two
+    // static imports where `cli.ts` carries one, so a parser that silently
+    // found nothing would be caught here rather than reported as a clean
+    // entrypoint.
+    const program = staticSpecifiers(
+      read("./program.ts"),
+      "program.ts",
+    ).filter((i) => !i.typeOnly);
+
+    expect(program.map((i) => i.spec)).toContain("@lhremote/cli");
+    expect(program.length).toBeGreaterThan(1);
+  });
+
+  it("declares exactly one static import, and it is ./run.js", () => {
+    // Named rather than counted: a red here should tell the author WHICH
+    // specifier they added.  `./run.js` is admissible because it is the file
+    // whose `try` covers everything else, and it carries no value import of
+    // its own — pinned in `packages/cli/src/run.test.ts`, which is the other
+    // half of this invariant and not restated here.
+    for (const [name, source] of [
+      ["lhremote", lhremote],
+      ["cli", cli],
+    ] as const) {
+      expect({ name, specs: staticSpecifiers(source, `${name}/cli.ts`) }).toEqual({
+        name,
+        specs: [{ spec: "./run.js", typeOnly: false }],
+      });
     }
   });
 });
