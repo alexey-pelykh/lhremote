@@ -187,11 +187,14 @@ async function report(error: unknown): Promise<void> {
  * Parse `process.argv` against an ALREADY-BUILT program and await the action
  * handler it resolves to.
  *
- * Public API, and that is why it still exists in this shape: it is re-exported
- * by `packages/cli/src/program.ts`, and again by
- * `packages/lhremote/src/program.ts`, so its signature is part of two packages'
- * surfaces.  {@link runProgramBin} is what the bins call now; this is what a
- * caller holding a `Command` calls.
+ * Public API, and that is why it still exists in this shape: this package's
+ * `exports["."]` is `dist/program.js`, and `packages/cli/src/program.ts`
+ * re-exports this function from there, so the signature is published.
+ * `packages/lhremote/src/program.ts` re-exports it again, but that one is
+ * source-internal — that package's `exports["."]` is its bin, whose `.d.ts` is
+ * `export {}`, so no consumer reaches this function through it.  One published
+ * surface, not two.  {@link runProgramBin} is what the bins call now; this is
+ * what a caller holding a `Command` calls.
  *
  * Bin entrypoints call `parseAsync()` rather than commander's synchronous
  * `.parse()`.  That call does not await an async action, so a handler that
@@ -251,8 +254,15 @@ export async function runProgram(program: Command): Promise<void> {
  * before any catch existed and produced a crash dump: the throwing source line,
  * a caret, the stack, and the ESM loader frames beneath it.  Measured on both
  * built bins with that read forced to fail, before and after: 24 lines of dump
- * before, one diagnosed line after, exit 1 either way — which is why the exit
- * code alone does not discriminate and stderr is the observable.
+ * before, THREE after — exit 1 either way, which is why the exit code alone
+ * does not discriminate and stderr is the observable.
+ *
+ * Three and not one, because the after-count is a property of the ERROR rather
+ * than of this fix: Node renders `MODULE_NOT_FOUND` with its own require stack,
+ * and `errorMessage` renders that message whole.  What the fix decides is that
+ * the report is *only* what the formatter renders — no source line, no caret,
+ * no stack, no loader frames.  A single-line message reports as one line, and
+ * a `createProgram()` throw measured as exactly that.
  *
  * **The `lhremote` bin is why this was worth more than symmetry with
  * `packages/mcp`.**  `packages/lhremote/src/program.ts` used to statically

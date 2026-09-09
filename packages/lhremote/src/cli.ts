@@ -22,9 +22,21 @@ import { runProgramBin } from "./run.js";
 // to module scope silently re-opens the hole.
 //
 // `void`, not top-level await.  `runProgramBin` handles its own rejection, so
-// there is nothing here to await for correctness — and awaiting would make
-// this module async, which breaks `require()` of any package whose `exports`
-// resolve to this file (measured: ERR_REQUIRE_ASYNC_MODULE).  That is a
-// conditional, and `packages/mcp/src/index.ts` records which side of it each
-// package sits on; do not flatten it into a claim about both.
+// there is nothing here to await for correctness — and awaiting would make this
+// module async, which breaks `require()` of it: measured at #963, adding a
+// top-level `await` here and requiring the built `dist/cli.js` by absolute path
+// raises ERR_REQUIRE_ASYNC_MODULE, where the same require of the current file
+// runs the CLI and returns.
+//
+// The scope of that is narrower than this comment used to claim, and the
+// correction is #963's, also measured.  It said `require()` "of any package
+// whose `exports` resolve to this file", and no package's do: `require()` never
+// matches the `import` condition, and neither `packages/lhremote` nor
+// `packages/cli` declares any other, so `require("lhremote")` is refused at
+// RESOLUTION with ERR_PACKAGE_PATH_NOT_EXPORTED — identically with and without
+// the top-level await, so it can never be the thing that surfaces one.  The
+// reachable route is the by-path require above, which bypasses `exports`
+// altogether.  `packages/mcp/src/index.ts` carried the same mis-scoping as a
+// conditional discriminating the two packages; it does not discriminate them,
+// and that file now says so.
 void runProgramBin(async () => (await import("./program.js")).createProgram());

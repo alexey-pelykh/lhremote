@@ -36,7 +36,10 @@ export function createProgram(): ReturnType<typeof createBaseProgram> {
       //
       // This action runs inside `parseAsync()`, which runs inside
       // `runProgramBin`'s `try` (`packages/cli/src/run.ts`), so the import's
-      // failure is now reported as one diagnosed line and exits 1.  Moving this
+      // failure is now reported as whatever `errorMessage` renders and exits 1
+      // — three lines for the forced `require("../package.json")` fault, whose
+      // `MODULE_NOT_FOUND` message carries its own require stack, against the
+      // 24-line dump it produced before.  Moving this
       // specifier back to module scope re-opens exactly that, and nothing else
       // in the repo would notice: `./program.test.ts` pins that it stays here.
       const { runStdioServer } = await import("@lhremote/mcp/stdio");
