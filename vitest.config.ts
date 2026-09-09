@@ -56,23 +56,45 @@ export default defineConfig({
         // Each parses argv or starts a server at module scope,
         // so importing one runs the program instead of testing it and none can
         // be exercised in-process; each delegates in a single statement to an
-        // importable module that is measured normally — the two CLI bins to
-        // their package's own program.ts, the mcp bin to packages/mcp/src/run.ts
-        // (it delegated to stdio.ts until #945 put the rejection path in front
-        // of it).  That delegate being measured is the whole justification for
-        // excluding these three, so it is worth re-checking when one changes.
+        // importable module that is measured normally.  That delegate being
+        // measured is the whole justification for excluding these three, so it
+        // is worth re-checking when one changes — and #963 changed all three
+        // delegates, so here is what they are now.
+        //
+        // The two CLI bins delegate to their package's own run.ts, not to its
+        // program.ts.  They used to call `runProgram(createProgram())`, which
+        // named program.ts directly; they now call `runProgramBin` with a thunk
+        // that imports program.ts inside the covered region, which is the whole
+        // of #963.  packages/cli/src/run.ts is measured by its own suite.
+        // packages/lhremote/src/run.ts is a bare re-export of it, added so that
+        // `./run.js` resolves per-package and the two cli.ts files stay
+        // byte-identical (#933) — its substance is measured in @lhremote/cli,
+        // and it is imported by packages/lhremote/src/run.test.ts so that the
+        // re-export and the new @lhremote/cli/run subpath are exercised at all.
+        // The mcp bin still delegates to packages/mcp/src/run.ts (it delegated
+        // to stdio.ts until #945 put the rejection path in front of it).
+        //
         // Excluded uniformly rather than only where a package would otherwise
         // miss its threshold: the claim is that the measurement does not apply
         // to them, not that a number needed help.  Named by full package path
         // so a bare `src/index.ts` cannot also catch core's public barrel,
         // which is not an entrypoint and stays measured.  These are matched
         // against absolute paths, not against `root`; the `**/` prefix says so
-        // explicitly rather than leaning on substring matching.  Verified by
-        // removing them: cli 77->78, mcp 79->80, lhremote 4/4->4/5 files —
-        // a reading taken when these exclusions landed, not a live invariant.
-        // Both sides move with each package's measured file count (mcp's rose
-        // by one in #945), so re-measure rather than trusting these figures;
-        // what does not go stale is that each exclusion removes exactly one.
+        // explicitly rather than leaning on substring matching.
+        //
+        // The per-package file counts this comment used to cite are dropped
+        // rather than refreshed.  They were read off the text reporter's table,
+        // and that table TRUNCATES: the same tree measured at `bc5578b` yields
+        // 74/76/2 file rows under `pnpm test -- -- --coverage` from the root
+        // and 39/17/0 under `pnpm test -- --coverage` inside each package, so a
+        // row count is not a reproducible reading and a refreshed one would go
+        // stale the same way.  What was re-measured, from the root invocation
+        // CI uses: with these exclusions, cli 93.48/83.09/91.41/93.42, mcp
+        // 94.89/90.85/96.75/94.96, lhremote 100/100/100/100; removing them puts
+        // lhremote at 71.42/100/66.66/83.33, under three of its four
+        // thresholds, with cli.ts entering the table at 0%.  That last figure
+        // is an observation and not the reason — the reason is the paragraph
+        // above — but it is why removing these is not a free experiment.
         "**/packages/cli/src/cli.ts",
         "**/packages/lhremote/src/cli.ts",
         "**/packages/mcp/src/index.ts",
