@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { Command } from "commander";
+import ts from "typescript";
 import {
   afterEach,
   beforeAll,
@@ -166,16 +170,46 @@ describe("runProgram", () => {
       { toString: () => "  " },
     ];
 
+    // Every value must produce the SAME line, so a stand-in that has gone
+    // missing is distinguishable from one that merely rendered something.
+    const lines = new Set<string>();
+
     for (const empty of silent) {
+      // Both handles cleared per iteration, not just `write`: asserting `exit`
+      // once after the loop would be satisfied by a regression that exited for
+      // the first value and not the rest.
       write.mockClear();
+      exit.mockClear();
 
       await runProgram(programRunning(() => Promise.reject(empty)));
 
-      const reported = String(write.mock.calls[0]?.[0]);
+      expect(exit).toHaveBeenCalledWith(1);
+
+      // Asserted BEFORE the argument is read, and the argument is read with no
+      // `String()` around it.  Both halves matter: dropping the stand-in in the
+      // write-NOTHING direction — keeping the `process.exit(1)` but skipping
+      // the write when the message is empty — leaves `mock.calls` empty, and
+      // `String(undefined)` is the nine-character "undefined", non-blank to
+      // `.trim().length`.  The coercion would pass the test that exists to
+      // fail.  (#963 brought this loop up to the discipline the `runProgramBin`
+      // block below and `packages/mcp/src/run.test.ts` already carried; the two
+      // now guard one shared `report` body, and this one becomes the sole guard
+      // for `runProgram` the moment that body is split.)
+      expect(write).toHaveBeenCalledTimes(1);
+      const reported = write.mock.calls[0]?.[0] as string;
+
       expect(reported.trim().length).toBeGreaterThan(0);
+      expect(reported.endsWith("\n")).toBe(true);
+      lines.add(reported);
     }
 
-    expect(exit).toHaveBeenCalledWith(1);
+    // One stand-in, not five values that each happened to render non-blank, and
+    // it names this program: the sibling contract in `packages/mcp/src/run.ts`
+    // has a stand-in of the same shape, so a copy-across would otherwise report
+    // a failed MCP server here.
+    expect(lines.size).toBe(1);
+    expect([...lines][0]).toContain("Command failed");
+    expect([...lines][0]).not.toContain("MCP server");
   });
 
   it("exits non-zero even when reporting to stderr itself fails", async () => {
@@ -292,8 +326,11 @@ describe("runProgram", () => {
  * What none of this reproduces is a real ESM instantiation failure — no
  * in-process mock can.  That was measured against both built bins with a
  * module-scope `require("../package.json")` forced to fail, and recorded in the
- * commit: a 24-line crash dump before, one diagnosed line after, exit 1 either
- * way.  It is not re-run by this suite.
+ * commit: a 24-line crash dump before, three lines after, exit 1 either way.
+ * Three rather than one because Node renders `MODULE_NOT_FOUND` with its own
+ * require stack and `errorMessage` renders that message whole — the fix decides
+ * that the report is only what the formatter renders, not how many lines the
+ * formatter is handed.  It is not re-run by this suite.
  */
 describe("runProgramBin — import-graph coverage", () => {
   const originalArgv = process.argv;
@@ -435,6 +472,21 @@ describe("runProgramBin — import-graph coverage", () => {
     expect(reported.trim().length).toBeGreaterThan(0);
     expect(reported.endsWith("\n")).toBe(true);
     expect(exit).toHaveBeenCalledWith(1);
+
+    // The discriminator, without which this test cannot fail on the thing it
+    // names.  Shape alone — one write, non-blank, newline-terminated, exit 1 —
+    // is satisfied by the UNDEGRADED path just as well, so if the chain above
+    // ever stopped holding, `./program.js` would load, commander would reject
+    // the argv, `errorMessage` would report it, and this would stay green with
+    // `lastResortMessage` dead.  The two formatters differ on exactly one
+    // observable: `errorMessage` renders a `Caused by:` chain and
+    // `lastResortMessage` reads only the value's own head.  A `vi.doMock`
+    // factory that throws arrives wrapped by `createHelpfulError` with the
+    // original as `cause`, so the degraded report must NOT carry the thrown
+    // text, and the sibling below pins the same difference from the arranged
+    // side.
+    expect(reported).not.toContain("core graph failed");
+    expect(reported).not.toContain("Caused by");
   });
 
   it("keeps the error's own text when the formatter is what failed", async () => {
@@ -614,5 +666,114 @@ describe("runProgramBin — import-graph coverage", () => {
 
     expect(loaded).toHaveBeenCalledTimes(1);
     expect(exit).toHaveBeenCalledWith(1);
+  });
+});
+
+/**
+ * The invariant the two blocks above can only state through two named
+ * specifiers.
+ *
+ * `run.ts`'s header says a VALUE `import` at its top silently re-opens #963,
+ * and says it without bound.  The structural falsifier above breaks
+ * `./program.js` and `@lhremote/core` and requires the module to load anyway —
+ * the right SHAPE, a fact about loading rather than about text, but only ever a
+ * fact about the two specifiers it happens to break.  A THIRD value import that
+ * resolves and does not throw leaves that test green while putting its whole
+ * graph back in front of the catch.
+ *
+ * This is the complement, and deliberately the weaker KIND of check on the
+ * wider SUBJECT: a fact about text, over every import the file declares rather
+ * than over two chosen ones.  Neither replaces the other.
+ *
+ * Read with the TypeScript parser rather than a regex, because this file is
+ * mostly prose ABOUT imports and a regex over it matches comment text — the
+ * same reason `run.ts` can write `import { errorMessage }` in a docstring
+ * without that being one.  The parser also settles the `import type` question
+ * the header rests on: a type-only clause is erased under
+ * `verbatimModuleSyntax`, so it is the one import shape that may stay.
+ */
+describe("run.ts declares no value import", () => {
+  const read = (relative: string) =>
+    readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
+
+  const source = read("./run.ts");
+
+  /** Every static `import` / `export … from` in `text`, with its type-only flag. */
+  function staticSpecifiers(
+    text: string,
+    fileName: string,
+  ): { spec: string; typeOnly: boolean }[] {
+    const file = ts.createSourceFile(
+      fileName,
+      text,
+      ts.ScriptTarget.ESNext,
+      true,
+      ts.ScriptKind.TS,
+    );
+
+    return file.statements.flatMap((statement) => {
+      if (
+        ts.isImportDeclaration(statement) &&
+        ts.isStringLiteral(statement.moduleSpecifier)
+      ) {
+        return [
+          {
+            spec: statement.moduleSpecifier.text,
+            typeOnly: statement.importClause?.isTypeOnly ?? false,
+          },
+        ];
+      }
+
+      if (
+        ts.isExportDeclaration(statement) &&
+        statement.moduleSpecifier !== undefined &&
+        ts.isStringLiteral(statement.moduleSpecifier)
+      ) {
+        return [
+          {
+            spec: statement.moduleSpecifier.text,
+            typeOnly: statement.isTypeOnly,
+          },
+        ];
+      }
+
+      return [];
+    });
+  }
+
+  it("reads a source that really is this module, so the check is not vacuous", () => {
+    // Without this, a bad path that threw would be the only signal, and a path
+    // resolving to an empty or unrelated file would report zero imports and
+    // pass — which is exactly the answer this suite is looking for.
+    expect(source).toContain("export async function runProgramBin");
+    expect(source).toContain("export async function runProgram");
+  });
+
+  it("parses imports rather than matching them, canaried against a file that has one", () => {
+    // The positive control for the instrument itself.  `./program.ts` carries
+    // real value imports, so a parser that silently found nothing would be
+    // caught here rather than reported as a clean `run.ts`.
+    const program = staticSpecifiers(read("./program.ts"), "program.ts");
+
+    expect(program.filter((i) => !i.typeOnly).map((i) => i.spec)).toContain(
+      "commander",
+    );
+  });
+
+  it("declares no static import that survives compilation", () => {
+    const value = staticSpecifiers(source, "run.ts").filter((i) => !i.typeOnly);
+
+    // Named in the failure rather than counted: the point of a red here is to
+    // tell the author WHICH specifier they added.
+    expect(value.map((i) => i.spec)).toEqual([]);
+  });
+
+  it("keeps the type-only import the header depends on, and only that", () => {
+    // The other half of the header's claim.  A plain `import { Command }` is
+    // NOT erased and would be a value import, so this pins that the file still
+    // carries the `type` keyword rather than merely that it compiles.
+    expect(staticSpecifiers(source, "run.ts")).toEqual([
+      { spec: "commander", typeOnly: true },
+    ]);
   });
 });
