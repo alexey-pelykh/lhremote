@@ -51,7 +51,7 @@ await runStdioServer();
 | App Management | `find-app`, `launch-app`, `quit-app` |
 | Account & Instance | `list-accounts`, `list-workspaces`, `start-instance`, `stop-instance`, `check-status` |
 | Campaigns | `campaign-list`, `campaign-create`, `campaign-get`, `campaign-export`, `campaign-update`, `campaign-delete`, `campaign-erase`, `campaign-start`, `campaign-stop` |
-| Campaign Status | `campaign-status`, `campaign-statistics`, `campaign-retry` |
+| Campaign Status & Retry | `campaign-status`, `campaign-statistics`, `campaign-retry` |
 | Campaign Actions | `campaign-add-action`, `campaign-remove-action`, `campaign-update-action`, `campaign-reorder-actions`, `campaign-move-next` |
 | Campaign Targeting | `campaign-exclude-list`, `campaign-exclude-add`, `campaign-exclude-remove`, `campaign-list-people`, `campaign-remove-people`, `import-people-from-urls`, `collect-people` |
 | Collections | `list-collections`, `create-collection`, `delete-collection`, `add-people-to-collection`, `remove-people-from-collection`, `import-people-from-collection` |
