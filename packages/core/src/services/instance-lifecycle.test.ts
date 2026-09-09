@@ -143,7 +143,10 @@ describe("startInstanceWithRecovery", () => {
       .mockResolvedValue(55999);
     vi.mocked(discoverTargets).mockResolvedValue(BOTH_TARGETS);
 
-    const result = await startInstanceWithRecovery(launcher, 42, 9222);
+    const resultPromise = startInstanceWithRecovery(launcher, 42, 9222);
+    // Past CRASH_RECOVERY_DELAY (2_000) — the only timed wait on this path.
+    await vi.advanceTimersByTimeAsync(10_000);
+    const result = await resultPromise;
 
     expect(launcher.stopInstanceWithDialogDismissal).toHaveBeenCalledWith(42);
     expect(startInstance).toHaveBeenCalledTimes(2);
