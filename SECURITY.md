@@ -106,10 +106,11 @@ access as a local one, over an unauthenticated CDP connection.
 - **Do not grant MCP access to untrusted AI agents.** Any MCP client
   that can spawn `lhremote mcp` receives full access to all tools,
   including destructive operations.
-- **Review agent tool calls for destructive operations.** When using an
-  AI agent as the MCP client, monitor its actions — especially
-  `campaign-delete`, `campaign-erase`, `delete-collection`,
-  `remove-connection`, and other state-changing tools.
+- **Review every agent tool call that is not read-only.** When using an
+  AI agent as the MCP client, monitor its actions — every tool in the
+  **State-changing** and **Destructive** tiers, and above all
+  `campaign-delete`, `campaign-erase`, `delete-collection`, and
+  `remove-connection`.
 - **Do not combine `--allow-remote` with AI agent MCP clients** unless
   the network path is secured. This combination extends unauthenticated
   tool access to remote CDP endpoints under AI-agent control.
