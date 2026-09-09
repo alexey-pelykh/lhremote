@@ -39,7 +39,14 @@ describe("bin entrypoint parity", () => {
     // equally survive a file that had nothing else in common with an
     // entrypoint. The shebang is what only these two files carry.
     for (const source of [lhremote, cli]) {
-      expect(source.startsWith("#!/usr/bin/env node\n")).toBe(true);
+      // `\r?` because this reads the WORKING TREE and the repo ships no
+      // `.gitattributes`, so a Windows checkout converts to CRLF and a bare
+      // `\n` literal never matches — which is how this landed red on
+      // windows-latest alone while both other runners passed. The newline
+      // stays pinned rather than dropped: the property is that the shebang
+      // is the whole first LINE, and that is what makes this stronger than
+      // the `toContain("runProgram")` it replaced.
+      expect(source).toMatch(/^#!\/usr\/bin\/env node\r?\n/);
     }
   });
 
