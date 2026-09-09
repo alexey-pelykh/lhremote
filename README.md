@@ -224,14 +224,14 @@ lhremote get-throttle-status [--cdp-port <port>] [--json]
 
 ### Common Parameters
 
-Most tools and CLI commands connect to LinkedHelper via the Chrome DevTools Protocol (CDP). In addition to the tool-specific parameters listed below, CDP-connected tools accept the following, except where a tool's own reference section says otherwise:
+Most tools and CLI commands connect to LinkedHelper via the Chrome DevTools Protocol (CDP). In addition to the tool-specific parameters listed below, CDP-connected tools accept the following, except where a tool's own reference section says otherwise. The `Default` column describes the MCP tools; each CLI command exposes its own subset of these flags, and the notes below give the differences that matter:
 
 | Parameter | CLI Flag | Type | Default | Description |
 |-----------|----------|------|---------|-------------|
 | `cdpPort` | `--cdp-port` | number | auto-discovered | CDP debugging port |
 | `cdpHost` | `--cdp-host` | string | `127.0.0.1` | CDP host address |
 | `allowRemote` | `--allow-remote` | boolean | false | Allow connections to non-loopback addresses |
-| `accountId` | *varies — see below* | number | auto-select if single account | LinkedHelper account to act as |
+| `accountId` | *varies — see below* | number | auto-select if single account (MCP) | LinkedHelper account to act as |
 
 **`cdpPort` is discovered, not defaulted.** Omit it and lhremote finds the port of the running LinkedHelper itself, whatever that port happens to be; it raises `LinkedHelperNotRunningError` or `LinkedHelperUnreachableError` when no instance is reachable. Pass a port only to target one specific instance — you do not need one to reach a LinkedHelper that is not on 9222. Two exceptions: `quit-app` takes `cdpPort` alone (no `cdpHost`, `allowRemote` or `accountId`) and does default to 9222; and a port is required whenever `cdpHost` is non-loopback, because discovery scans local processes only.
 
