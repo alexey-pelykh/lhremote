@@ -76,9 +76,12 @@ describe("lhremote meta-package CLI", () => {
     // it — and a module-scope throw under it then escaped into the ESM loader
     // as a crash dump, before `runProgramBin`'s catch existed.  Measured on the
     // built `lhremote` bin with `packages/mcp`'s own
-    // `require("../package.json")` forced to fail: a 24-line dump before, one
-    // diagnosed line after, and `--version` stopped failing at all, because it
-    // no longer loads that graph.
+    // `require("../package.json")` forced to fail: a 24-line dump before, three
+    // lines after — Node renders `MODULE_NOT_FOUND` with its own require stack
+    // and `errorMessage` renders that message whole, so the count belongs to
+    // the error and what the fix decides is that nothing else is printed.
+    // `--version` stopped failing at all, because it no longer loads that
+    // graph.
     //
     // The counter is registered with `vi.doMock` HERE rather than read off the
     // hoisted `vi.mock` above, and that is not a style choice: `vi.resetModules`

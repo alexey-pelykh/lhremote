@@ -17,16 +17,22 @@ import { runStdioBin } from "./run.js";
 // synchronous costs nothing.
 //
 // The reason `packages/{cli,lhremote}/src/cli.ts` give for the same idiom is
-// NOT the reason here, and must not be copied in.  Both state it as a
-// conditional — "any package whose `exports` resolve to this file" — and the
-// condition holds for exactly one of them: `packages/lhremote`'s `exports["."]`
-// and its `bin` are both `./dist/cli.js`, so a top-level await there really
-// does break `require()` of the package (ERR_REQUIRE_ASYNC_MODULE).
-// `packages/cli` points `exports["."]` at `./dist/program.js` and reaches
-// `cli.js` only through `bin` — the same position this file is in.  So does
-// this one: `exports["."]` is `server.js`, `./dist/index.js` is not a declared
-// subpath, and `require()` of it is refused with ERR_PACKAGE_PATH_NOT_EXPORTED
-// (measured).  Do not flatten that conditional into a claim about both files.
+// NOT the reason here, and must not be copied in.  This paragraph used to say
+// the two differed on whether `exports` resolves to the bin — that
+// `packages/lhremote`, whose `exports["."]` and `bin` are both `./dist/cli.js`,
+// could be `require()`d into an ERR_REQUIRE_ASYNC_MODULE where `packages/cli`
+// could not.  #963 measured it and that discriminator does not exist: an
+// `exports` entry declaring only `types` and `import` — which is every entry in
+// this repo — is never matched by `require()`, so `require("lhremote")` is
+// refused at RESOLUTION with ERR_PACKAGE_PATH_NOT_EXPORTED, identically with
+// and without a top-level await, exactly as `require()` of this package's
+// undeclared `./dist/index.js` subpath is.  All three bins sit on the same side.
+//
+// What survives, and it is what those files now state: a top-level await really
+// does make the module un-`require()`able, by the route that bypasses `exports`
+// — `require()` of the built file by absolute path, measured raising
+// ERR_REQUIRE_ASYNC_MODULE with the await and returning without it.  So the
+// idiom is right on all three; it was the conditional that was wrong.
 //
 // What `void` does depend on is the catch inside `runStdioBin`: a `void` over
 // a function that let its own rejection escape would exit 0 with an empty

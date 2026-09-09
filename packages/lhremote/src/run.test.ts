@@ -20,9 +20,14 @@ import { runProgramBin } from "./run.js";
  * re-export compiles to no executable statement for v8 to count.  So the
  * coverage gate is indifferent to this file. What it buys is the two
  * assertions below — that the new `@lhremote/cli/run` subpath resolves at all,
- * and that it yields the same function the bin will run.  Nothing else in the
- * repo would notice if that subpath were dropped from
- * `packages/cli/package.json` until a built bin failed to start.
+ * and that it yields the same function the bin will run.
+ *
+ * It is not the FIRST thing that would notice if the subpath were dropped, and
+ * an earlier draft of this docstring said it was.  `moduleResolution` is
+ * `NodeNext` with no `paths` mapping, so `tsc` resolves `./run.ts`'s bare
+ * specifier through that same `exports` map, and this package stops BUILDING —
+ * a stage before any test runs.  What this file adds is a check at RUNTIME,
+ * against the built artifact, in the package that actually consumes it.
  */
 describe("lhremote bin entry", () => {
   it("re-exports a callable runProgramBin", () => {
