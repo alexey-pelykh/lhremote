@@ -102,7 +102,7 @@ lhremote quit-app
 ### Account & Instance
 
 ```sh
-lhremote list-accounts [--cdp-port <port>] [--json]
+lhremote list-accounts [--all-workspaces] [--cdp-port <port>] [--json]
 lhremote list-workspaces [--cdp-port <port>] [--json]
 lhremote start-instance <accountId> [--cdp-port <port>]
 lhremote stop-instance <accountId> [--cdp-port <port>]
@@ -263,10 +263,11 @@ Quit the LinkedHelper application.
 
 #### `list-accounts`
 
-List available LinkedHelper accounts. Returns account ID, LinkedIn ID, name, and email for each account.
+List available LinkedHelper accounts. Returns account ID, LinkedIn ID, name, and email for each account. Returns accounts in the currently selected workspace by default (LinkedHelper 2.113.x+); set `includeAllWorkspaces` to enumerate every workspace the current LH user belongs to.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
+| `includeAllWorkspaces` | boolean | No | false | When true, enumerates accounts across every workspace the user belongs to, not just the selected workspace |
 | `cdpPort` | number | No | 9222 | CDP port |
 
 #### `list-workspaces`
