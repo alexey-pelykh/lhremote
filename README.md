@@ -224,13 +224,18 @@ lhremote get-throttle-status [--cdp-port <port>] [--json]
 
 ### Common Parameters
 
-Most tools and CLI commands connect to LinkedHelper via the Chrome DevTools Protocol (CDP). In addition to the tool-specific parameters listed below, all CDP-connected tools accept:
+Most tools and CLI commands connect to LinkedHelper via the Chrome DevTools Protocol (CDP). In addition to the tool-specific parameters listed below, CDP-connected tools accept:
 
 | Parameter | CLI Flag | Type | Default | Description |
 |-----------|----------|------|---------|-------------|
-| `cdpPort` | `--cdp-port` | number | 9222 | CDP debugging port |
+| `cdpPort` | `--cdp-port` | number | auto-discovered | CDP debugging port |
 | `cdpHost` | `--cdp-host` | string | `127.0.0.1` | CDP host address |
 | `allowRemote` | `--allow-remote` | boolean | false | Allow connections to non-loopback addresses |
+| `accountId` | see below | number | auto-select if single account | LinkedHelper account to act as |
+
+**`cdpPort` is discovered, not defaulted.** Omit it and lhremote finds the port of the running LinkedHelper itself, whatever that port happens to be; it raises `LinkedHelperNotRunningError` or `LinkedHelperUnreachableError` when no instance is reachable. Pass a port only to target one specific instance — you do *not* need one to reach a LinkedHelper that is not on 9222. The exception is `quit-app`, which does default to 9222.
+
+**`accountId` is required once more than one account is configured.** With a single account it resolves automatically; with several, omitting it raises `AccountResolutionError` (*"Multiple accounts found (…). Specify accountId to select one."*). Every tool that acts on a LinkedIn account accepts it — the app-management tools `find-app`, `launch-app` and `quit-app` do not, since they act on the application rather than on an account. The CLI exposes it per command: as the positional `<accountId>` argument of `start-instance` / `stop-instance`, and as `--account-id` on `comment-on-post` / `react-to-post`.
 
 > **Security warning:** Enabling `allowRemote` permits CDP connections to remote hosts. CDP is an unsandboxed protocol that grants full control over the target browser — equivalent to remote code execution. Only enable this when the network path between your machine and the target host is fully secured (e.g., SSH tunnel, VPN, or trusted LAN).
 
@@ -268,7 +273,7 @@ List available LinkedHelper accounts. Returns account ID, LinkedIn ID, name, and
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `includeAllWorkspaces` | boolean | No | false | When true, enumerates accounts across every workspace the user belongs to, not just the selected workspace |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `list-workspaces`
 
@@ -276,7 +281,7 @@ List LinkedHelper workspaces the current LH user belongs to. Each workspace incl
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `start-instance`
 
@@ -285,7 +290,7 @@ Start a LinkedHelper instance for a LinkedIn account.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `accountId` | number | No | auto-select if single account | Account ID |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `stop-instance`
 
@@ -294,7 +299,7 @@ Stop a running LinkedHelper instance.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `accountId` | number | No | auto-select if single account | Account ID |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `check-status`
 
@@ -302,7 +307,7 @@ Check LinkedHelper connection status, running instances, and database health.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 ### Campaigns
 
@@ -313,7 +318,7 @@ List existing campaigns with summary statistics.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `includeArchived` | boolean | No | false | Include archived campaigns |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-create`
 
@@ -323,7 +328,7 @@ Create a new campaign from YAML or JSON configuration.
 |-----------|------|----------|---------|-------------|
 | `config` | string | Yes | — | Campaign configuration in YAML or JSON format |
 | `format` | string | No | yaml | Configuration format (`yaml` or `json`) |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-get`
 
@@ -332,7 +337,7 @@ Get detailed campaign information including action chain.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-export`
 
@@ -342,7 +347,7 @@ Export campaign configuration as YAML or JSON.
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `format` | string | No | yaml | Export format (`yaml` or `json`) |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-update`
 
@@ -353,7 +358,7 @@ Update a campaign's name and/or description.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `name` | string | No | — | New campaign name |
 | `description` | string | No | — | New description (empty string to clear) |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-delete`
 
@@ -362,7 +367,7 @@ Delete (archive) a campaign.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-erase`
 
@@ -371,7 +376,7 @@ Permanently erase a campaign and all related data from the database. This is irr
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-start`
 
@@ -381,7 +386,7 @@ Start a campaign with specified target persons. Returns immediately (async execu
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `personIds` | number[] | Yes | — | Person IDs to target |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-stop`
 
@@ -390,7 +395,7 @@ Stop a running campaign.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-status`
 
@@ -401,7 +406,7 @@ Check campaign execution status and results.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `includeResults` | boolean | No | false | Include execution results |
 | `limit` | number | No | 20 | Max results to return |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-statistics`
 
@@ -412,7 +417,7 @@ Get per-action statistics for a campaign.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `actionId` | number | No | — | Filter to a specific action |
 | `maxErrors` | number | No | 5 | Max top errors per action |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-retry`
 
@@ -422,7 +427,7 @@ Reset specified people for re-run in a campaign.
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `personIds` | number[] | Yes | — | Person IDs to retry |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 ### Campaign Actions
 
@@ -439,7 +444,7 @@ Add a new action to a campaign's action chain. Use `describe-actions` to explore
 | `coolDown` | number | No | — | Milliseconds between executions |
 | `maxResults` | number | No | — | Max results per iteration (-1 for unlimited) |
 | `actionSettings` | object | No | — | Action-specific settings |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-remove-action`
 
@@ -449,7 +454,7 @@ Remove an action from a campaign's action chain.
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `actionId` | number | Yes | — | Action ID to remove |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-update-action`
 
@@ -464,7 +469,7 @@ Update an existing action's configuration in a campaign. Only provided fields ar
 | `coolDown` | number | No | — | Milliseconds between executions |
 | `maxActionResultsPerIteration` | number | No | — | Max results per iteration (-1 for unlimited) |
 | `actionSettings` | string | No | — | Action-specific settings as JSON (merged with existing) |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-reorder-actions`
 
@@ -474,7 +479,7 @@ Reorder actions in a campaign's action chain.
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `actionIds` | number[] | Yes | — | Action IDs in desired order |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-move-next`
 
@@ -485,7 +490,7 @@ Move people from one action to the next in a campaign.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `actionId` | number | Yes | — | Action ID to move people from |
 | `personIds` | number[] | Yes | — | Person IDs to move |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 ### Campaign Targeting
 
@@ -497,7 +502,7 @@ View the exclude list for a campaign or action.
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `actionId` | number | No | — | Action ID (for action-level list) |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-exclude-add`
 
@@ -508,7 +513,7 @@ Add people to a campaign or action exclude list.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `personIds` | number[] | Yes | — | Person IDs to exclude |
 | `actionId` | number | No | — | Action ID (for action-level list) |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-exclude-remove`
 
@@ -519,7 +524,7 @@ Remove people from a campaign or action exclude list.
 | `campaignId` | number | Yes | — | Campaign ID |
 | `personIds` | number[] | Yes | — | Person IDs to remove from exclude list |
 | `actionId` | number | No | — | Action ID (for action-level list) |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-list-people`
 
@@ -532,7 +537,7 @@ List people assigned to a campaign with their processing status.
 | `status` | string | No | — | Filter by status (`queued`, `processed`, `successful`, `failed`) |
 | `limit` | number | No | 20 | Max results |
 | `offset` | number | No | 0 | Pagination offset |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `campaign-remove-people`
 
@@ -542,7 +547,7 @@ Remove people from a campaign's target list entirely. This is the inverse of `im
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `personIds` | number[] | Yes | — | Person IDs to remove |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `import-people-from-urls`
 
@@ -552,7 +557,7 @@ Import LinkedIn profile URLs into a campaign action target list. Idempotent — 
 |-----------|------|----------|---------|-------------|
 | `campaignId` | number | Yes | — | Campaign ID |
 | `urls` | string[] | Yes | — | LinkedIn profile URLs |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `collect-people`
 
@@ -566,7 +571,7 @@ Collect people from a LinkedIn page into a campaign. Detects the source type fro
 | `maxPages` | number | No | — | Max pages to process |
 | `pageSize` | number | No | — | Results per page |
 | `sourceType` | string | No | — | Explicit source type (bypasses URL detection) |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 ### Collections
 
@@ -576,7 +581,7 @@ List all LinkedHelper collections (Lists) with people counts.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `create-collection`
 
@@ -585,7 +590,7 @@ Create a new named LinkedHelper collection (List).
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `name` | string | Yes | — | Name for the new collection |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `delete-collection`
 
@@ -594,7 +599,7 @@ Delete a LinkedHelper collection (List) and all its people associations.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `collectionId` | number | Yes | — | Collection ID to delete |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `add-people-to-collection`
 
@@ -604,7 +609,7 @@ Add people to a LinkedHelper collection. Idempotent — adding an already-presen
 |-----------|------|----------|---------|-------------|
 | `collectionId` | number | Yes | — | Collection ID |
 | `personIds` | number[] | Yes | — | Person IDs to add |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `remove-people-from-collection`
 
@@ -614,7 +619,7 @@ Remove people from a LinkedHelper collection.
 |-----------|------|----------|---------|-------------|
 | `collectionId` | number | Yes | — | Collection ID |
 | `personIds` | number[] | Yes | — | Person IDs to remove |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `import-people-from-collection`
 
@@ -624,7 +629,7 @@ Import all people from a LinkedHelper collection into a campaign. Large sets are
 |-----------|------|----------|---------|-------------|
 | `collectionId` | number | Yes | — | Collection ID to import from |
 | `campaignId` | number | Yes | — | Campaign ID to import into |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 ### Profiles & Messaging
 
@@ -679,7 +684,7 @@ Check for new message replies from LinkedIn.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `since` | string | No | — | Only show replies after this ISO timestamp |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `scrape-messaging-history`
 
@@ -688,7 +693,7 @@ Scrape messaging history from LinkedIn for specified people into the local datab
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `personIds` | number[] | Yes | — | Person IDs whose messaging history should be scraped |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 ### LinkedIn Actions
 
@@ -701,7 +706,7 @@ Visit a LinkedIn profile via LinkedHelper's VisitAndExtract action and return th
 | `personId` | number | No | — | Internal person ID (provide this or `url`) |
 | `url` | string | No | — | LinkedIn profile URL (provide this or `personId`) |
 | `extractCurrentOrganizations` | boolean | No | false | Extract current company info during visit |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `endorse-skills`
 
@@ -715,7 +720,7 @@ Endorse skills on a LinkedIn profile via an ephemeral campaign. Deducts from the
 | `limit` | number | No | — | Max number of skills to endorse (mutually exclusive with `skillNames`) |
 | `skipIfNotEndorsable` | boolean | No | true | Skip if person has no endorsable skills |
 | `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `enrich-profile`
 
@@ -731,7 +736,7 @@ Enrich a LinkedIn profile by extracting additional data (emails, phones, socials
 | `socials` | object | No | — | Enrich social profiles (`shouldEnrich` required) |
 | `companies` | object | No | — | Enrich company data (`shouldEnrich` required) |
 | `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `follow-person`
 
@@ -744,7 +749,7 @@ Follow or unfollow a LinkedIn profile via an ephemeral campaign. Deducts from th
 | `mode` | string | No | `follow` | `follow` or `unfollow` |
 | `skipIfUnfollowable` | boolean | No | true | Skip if person cannot be unfollowed |
 | `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `unfollow-profile`
 
@@ -754,7 +759,7 @@ Unfollow a LinkedIn member profile or organization page by navigating to it and 
 |-----------|------|----------|---------|-------------|
 | `profileUrl` | string | Yes | — | LinkedIn profile URL (e.g. `https://www.linkedin.com/in/{publicId}/`) or company URL (e.g. `https://www.linkedin.com/company/{slug}/`) |
 | `dryRun` | boolean | No | `false` | When true, detects the follow state but does not click Unfollow (the dialog is opened and dismissed) |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `like-person-posts`
 
@@ -772,7 +777,7 @@ Like and optionally comment on posts and articles by a LinkedIn profile via an e
 | `messageTemplate` | string | No | — | Comment text template as JSON (required when `shouldAddComment` is true) |
 | `skipIfNotLiked` | boolean | No | true | Skip if nothing was liked |
 | `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `message-person`
 
@@ -787,7 +792,7 @@ Send a direct message to a 1st-degree LinkedIn connection via an ephemeral campa
 | `rejectIfReplied` | boolean | No | false | Skip if person already replied |
 | `rejectIfMessaged` | boolean | No | false | Skip if already messaged |
 | `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `send-invite`
 
@@ -800,7 +805,7 @@ Send a LinkedIn connection request via an ephemeral campaign. Deducts from the d
 | `messageTemplate` | string | No | — | Invitation message template as JSON (empty for no message) |
 | `saveAsLeadSN` | boolean | No | false | Save as lead in Sales Navigator |
 | `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `send-inmail`
 
@@ -815,7 +820,7 @@ Send an InMail message to a LinkedIn member (no connection required) via an ephe
 | `rejectIfReplied` | boolean | No | false | Skip if person already replied |
 | `proceedOnOutOfCredits` | boolean | No | false | Continue even when InMail credits are exhausted |
 | `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `remove-connection`
 
@@ -826,7 +831,7 @@ Remove a person from 1st-degree LinkedIn connections (unfriend) via an ephemeral
 | `personId` | number | No | — | Internal person ID (provide this or `url`) |
 | `url` | string | No | — | LinkedIn profile URL (provide this or `personId`) |
 | `keepCampaign` | boolean | No | false | Archive the ephemeral campaign instead of deleting it |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 ### Feed & Posts
 
@@ -838,7 +843,7 @@ Read the LinkedIn home feed. Returns structured post data with cursor-based pagi
 |-----------|------|----------|---------|-------------|
 | `count` | number | No | 10 | Number of posts per page |
 | `cursor` | string | No | — | Cursor token from a previous call for the next page |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `get-post`
 
@@ -848,7 +853,7 @@ Get detailed data for a single LinkedIn post including its comment thread.
 |-----------|------|----------|---------|-------------|
 | `postUrl` | string | Yes | — | LinkedIn post URL or URN |
 | `commentCount` | number | No | 100 | Maximum number of comments to load (0 to skip) |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `get-post-stats`
 
@@ -857,7 +862,7 @@ Get engagement statistics for a LinkedIn post: reaction count (broken down by ty
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `postUrl` | string | Yes | — | LinkedIn post URL or URN |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `get-post-engagers`
 
@@ -868,7 +873,7 @@ List people who engaged with a LinkedIn post (reacted, etc.) with their profile 
 | `postUrl` | string | Yes | — | LinkedIn post URL or URN |
 | `start` | number | No | 0 | Pagination offset |
 | `count` | number | No | 20 | Number of engagers per page |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `get-profile-activity`
 
@@ -879,7 +884,7 @@ Get recent posts/activity from a LinkedIn profile with cursor-based pagination.
 | `profile` | string | Yes | — | LinkedIn profile public ID or URL |
 | `count` | number | No | 10 | Number of posts per page |
 | `cursor` | string | No | — | Cursor token from a previous call for the next page |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `search-posts`
 
@@ -890,7 +895,7 @@ Search LinkedIn for posts by keyword or hashtag. Returns structured post data wi
 | `query` | string | Yes | — | Search query — keywords or hashtag |
 | `count` | number | No | 10 | Number of results per page |
 | `cursor` | number | No | — | Index-based cursor from a previous call for the next page |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `comment-on-post`
 
@@ -900,7 +905,7 @@ Post a comment on a LinkedIn post. Checks action budget before attempting.
 |-----------|------|----------|---------|-------------|
 | `postUrl` | string | Yes | — | LinkedIn post URL |
 | `text` | string | Yes | — | Comment text to post |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `react-to-post`
 
@@ -911,7 +916,7 @@ React to a LinkedIn post with a specific reaction type. Checks action budget bef
 | `postUrl` | string | Yes | — | LinkedIn post URL |
 | `reactionType` | string | No | `like` | `like`, `celebrate`, `support`, `love`, `insightful`, or `funny` |
 | `dryRun` | boolean | No | `false` | When true, detects current reaction state without clicking |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `react-to-comment`
 
@@ -923,7 +928,7 @@ React to a specific LinkedIn comment with a specific reaction type. Use this for
 | `commentUrn` | string | Yes | — | Comment URN (e.g. `urn:li:comment:(activity:1234567890,9876543210)`) |
 | `reactionType` | string | No | `like` | `like`, `celebrate`, `support`, `love`, `insightful`, or `funny` |
 | `dryRun` | boolean | No | `false` | When true, detects current reaction state without clicking |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `dismiss-feed-post`
 
@@ -933,7 +938,7 @@ Dismiss a post from the LinkedIn feed by clicking `Not interested` in its three-
 |-----------|------|----------|---------|-------------|
 | `feedIndex` | number | Yes | — | Zero-based index of the post in the visible LinkedIn feed (pair with `get-feed` to identify posts) |
 | `dryRun` | boolean | No | `false` | When true, locates the menu item but does not click it |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `hide-feed-author`
 
@@ -943,7 +948,7 @@ Click `Hide posts by {Name}` in a feed post's three-dot menu. Operates on the ho
 |-----------|------|----------|---------|-------------|
 | `feedIndex` | number | Yes | — | Zero-based index of the post in the visible LinkedIn feed (pair with `get-feed` to identify posts) |
 | `dryRun` | boolean | No | `false` | When true, locates the menu item but does not click it |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `hide-feed-author-profile`
 
@@ -953,7 +958,7 @@ Mute a LinkedIn profile's posts in the home feed by navigating to the profile pa
 |-----------|------|----------|---------|-------------|
 | `profileUrl` | string | Yes | — | LinkedIn profile URL (e.g. `https://www.linkedin.com/in/{publicId}/`) |
 | `dryRun` | boolean | No | `false` | When true, opens the More menu and detects mute availability but does not click Mute |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `unfollow-from-feed`
 
@@ -963,7 +968,7 @@ Unfollow the author of a LinkedIn feed post via its three-dot menu. Operates on 
 |-----------|------|----------|---------|-------------|
 | `feedIndex` | number | Yes | — | Zero-based index of the post in the visible LinkedIn feed (pair with `get-feed` to identify posts) |
 | `dryRun` | boolean | No | `false` | When true, locates the menu item but does not click it |
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 ### LinkedIn Search & Reference
 
@@ -1021,7 +1026,7 @@ Query current LinkedHelper UI errors, dialogs, and blocking popups.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `dismiss-errors`
 
@@ -1029,7 +1034,7 @@ Dismiss closable error popups in the LinkedHelper instance UI by clicking their 
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `get-action-budget`
 
@@ -1037,7 +1042,7 @@ Get daily action budget showing limit types, thresholds, and today's usage from 
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 #### `get-throttle-status`
 
@@ -1045,7 +1050,7 @@ Check if LinkedIn is currently throttling the account.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `cdpPort` | number | No | 9222 | CDP port |
+| `cdpPort` | number | No | auto-discovered | CDP port |
 
 ## Known Limitations
 
