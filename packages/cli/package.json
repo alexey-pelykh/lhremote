@@ -20,6 +20,10 @@
       "types": "./dist/program.d.ts",
       "import": "./dist/program.js"
     },
+    "./run": {
+      "types": "./dist/run.d.ts",
+      "import": "./dist/run.js"
+    },
     "./handlers": {
       "types": "./dist/handlers/index.d.ts",
       "import": "./dist/handlers/index.js"
