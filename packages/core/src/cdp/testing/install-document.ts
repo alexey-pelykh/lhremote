@@ -107,8 +107,12 @@ export const INSTALL_TEST_TIMEOUT_MS = 60_000;
  * `String()` wraps the whole ternary rather than sitting in one branch:
  * `message` is typed `string` but is not one by construction, so a coercion in
  * the non-`Error` branch alone leaves an `Error`'s own `message` un-coerced, in
- * violation of this function's own `: string`.  Contract and provenance:
- * `utils/error-message.ts` § `ownText` (#965).
+ * violation of this function's own `: string`.  The caller interpolates the
+ * result, which coerces too -- except for a `Symbol` message, which it throws
+ * on and `String()` renders.  Contract and provenance:
+ * `utils/error-message.ts` § `ownText` (#965), whose totality also takes a
+ * `try` around `String()`; that half is deliberately not adopted here, so a
+ * `message` whose own `toString` throws still escapes this helper.
  */
 function describeError(error: unknown): string {
   return String(error instanceof Error ? error.message : error);

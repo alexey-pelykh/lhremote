@@ -146,8 +146,13 @@ export async function waitForLoggedInState(
       // `String()` wraps the whole ternary rather than sitting in one branch:
       // `message` is typed `string` but is not one by construction, so a
       // coercion in the non-`Error` branch alone leaves an `Error`'s own
-      // `message` un-coerced, and `lastReason` is declared `string`.  Contract
-      // and provenance: `utils/error-message.ts` § `ownText` (#965).
+      // `message` un-coerced, and `lastReason` is declared `string`.  The
+      // template literal coerces too -- except for a `Symbol` message, which it
+      // throws on, inside this catch, and `String()` renders.  Contract and
+      // provenance: `utils/error-message.ts` § `ownText` (#965), whose totality
+      // also takes a `try` around `String()`; that half is deliberately not
+      // adopted here, so a `message` whose own `toString` throws still escapes
+      // the poll loop.
       lastReason = `probe-threw: ${String(err instanceof Error ? err.message : err)}`;
       const remaining = deadline - Date.now();
       if (remaining <= 0) break;

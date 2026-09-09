@@ -131,8 +131,13 @@ export function registerBuildLinkedInUrl(server: McpServer): void {
         // branch: `message` is typed `string` but is not one by construction,
         // so a coercion in the non-`Error` branch alone leaves an `Error`'s own
         // `message` un-coerced -- and `mcpError` declares `text: string`, so
-        // that value reaches an agent as this tool's wire payload.  Contract
-        // and provenance: `utils/error-message.ts` § `ownText` (#965).
+        // that value reaches an agent as this tool's wire payload.  Nothing
+        // downstream coerces it, which makes this the one site here where the
+        // un-coerced value is observable rather than merely mistyped.  Contract
+        // and provenance: `utils/error-message.ts` § `ownText` (#965), whose
+        // totality also takes a `try` around `String()`; that half is
+        // deliberately not adopted here, so a `message` whose own `toString`
+        // throws still escapes this handler.
         const message = String(error instanceof Error ? error.message : error);
         return mcpError(message);
       }

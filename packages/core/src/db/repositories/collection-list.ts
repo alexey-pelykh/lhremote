@@ -79,10 +79,14 @@ export class CollectionListRepository {
     } catch (error: unknown) {
       // `instanceof` establishes the value is an `Error`; it establishes
       // NOTHING about `message`, which is typed `string` but is not one by
-      // construction.  Reading `.includes` on a non-string one would raise
-      // `TypeError` from inside this catch, replacing the driver's own failure
-      // with an unrelated type error.  See `utils/error-message.ts` § `ownText`
-      // for where that contract is stated and where such a `message` comes from.
+      // construction.  Calling `.includes` on a non-string one would raise
+      // `TypeError` from inside this catch -- reading the property merely
+      // yields `undefined`; it is the call that throws -- replacing the
+      // driver's own failure with an unrelated type error.  See
+      // `utils/error-message.ts` § `ownText` for where that contract is stated
+      // and where such a `message` comes from; its `try` and `isError` guards
+      // are deliberately not adopted here, so a prototype-less or hostile
+      // `message` still throws, now from `String()` rather than `.includes`.
       if (error instanceof Error && String(error.message).includes("no such table")) {
         return externalAccountId;
       }
@@ -153,7 +157,9 @@ export class CollectionListRepository {
         try {
           stmts.deleteCollectionPeopleVersionsLogs.run(collectionId);
         } catch (err: unknown) {
-          // FK violation expected when logs reference still-needed versions; rethrow anything else
+          // FK violation expected when logs reference still-needed versions; rethrow anything else.
+          // `String()` before `.includes` for the reason given at
+          // `resolveInternalAccountId` above -- same contract, same catch-block hazard.
           if (!(err instanceof Error) || !String(err.message).includes("constraint"))
             throw err;
         }
@@ -162,7 +168,9 @@ export class CollectionListRepository {
         try {
           stmts.deleteCollectionPeopleVersions.run(collectionId);
         } catch (err: unknown) {
-          // FK violation expected when campaign/action versions still reference these entries
+          // FK violation expected when campaign/action versions still reference these entries.
+          // `String()` before `.includes` for the reason given at
+          // `resolveInternalAccountId` above -- same contract, same catch-block hazard.
           if (!(err instanceof Error) || !String(err.message).includes("constraint"))
             throw err;
         }

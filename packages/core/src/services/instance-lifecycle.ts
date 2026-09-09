@@ -63,10 +63,14 @@ export async function startInstanceWithRecovery(
   } catch (error) {
     // `instanceof` establishes the value is a `StartInstanceError`; it
     // establishes NOTHING about `message`, which is typed `string` but is not
-    // one by construction.  Reading `.includes` on a non-string one would raise
-    // `TypeError` from inside this catch, replacing the launcher's own failure
-    // with an unrelated type error.  See `utils/error-message.ts` § `ownText`
-    // for where that contract is stated and where such a `message` comes from.
+    // one by construction.  Calling `.includes` on a non-string one would raise
+    // `TypeError` from inside this catch -- reading the property merely yields
+    // `undefined`; it is the call that throws -- replacing the launcher's own
+    // failure with an unrelated type error.  See `utils/error-message.ts`
+    // § `ownText` for where that contract is stated and where such a `message`
+    // comes from; its `try` and `isError` guards are deliberately not adopted
+    // here, so a prototype-less or hostile `message` still throws, now from
+    // `String()` rather than `.includes`.
     if (
       error instanceof StartInstanceError &&
       String(error.message).includes("already running")
