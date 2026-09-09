@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Oleksii PELYKH
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DatabaseClient } from "../client.js";
 import { CollectionListRepository } from "./collection-list.js";
@@ -40,6 +40,35 @@ interface FakeStatement {
  * tests exist for.  The statements the repository prepares but does not use on
  * these paths answer harmlessly.
  */
+let bindings: Map<string, Set<string>> | null = null;
+
+/**
+ * Every needle must have selected exactly one statement.
+ *
+ * The dispatch is a substring match, so a needle can silently bind the wrong
+ * number of statements, and both directions fail quietly.  Over-matching: drop
+ * the trailing space in `DELETE FROM collection_people_versions ` and it also
+ * matches `..._versions_logs`, so both loop iterations script the SAME catch
+ * and the second site goes untested while all eight tests still pass.
+ * Under-matching: reformat either DELETE across two lines -- which this
+ * repository already does elsewhere -- and the needle stops matching, the
+ * scripted throw never installs, and the tests that assert `toBe(true)` get
+ * that from the inert default having exercised nothing.  Neither is a hazard
+ * today; this is what keeps it that way, and turns a property of a string
+ * literal into a checked one.
+ */
+afterEach(() => {
+  const seen = bindings;
+  bindings = null;
+  if (!seen) return;
+  for (const [needle, sqls] of seen) {
+    expect(
+      sqls.size,
+      `needle ${JSON.stringify(needle)} selected ${sqls.size} statement(s): ${[...sqls].join(" | ")}`,
+    ).toBe(1);
+  }
+});
+
 function fakeClient(
   scripted: Partial<Record<string, Partial<FakeStatement>>>,
 ): DatabaseClient {
@@ -49,10 +78,18 @@ function fakeClient(
     all: () => [],
   };
 
+  const matched = new Map<string, Set<string>>(
+    Object.keys(scripted).map((needle) => [needle, new Set<string>()]),
+  );
+  bindings = matched;
+
   const db = {
     prepare: vi.fn((sql: string): FakeStatement => {
       for (const [needle, overrides] of Object.entries(scripted)) {
-        if (sql.includes(needle)) return { ...inert, ...overrides };
+        if (sql.includes(needle)) {
+          matched.get(needle)?.add(sql);
+          return { ...inert, ...overrides };
+        }
       }
       return { ...inert };
     }),

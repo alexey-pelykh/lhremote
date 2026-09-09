@@ -11,6 +11,7 @@ vi.mock("@lhremote/core", async (importOriginal) => {
   return { ...actual, buildLinkedInUrl: vi.fn(actual.buildLinkedInUrl) };
 });
 
+import * as core from "@lhremote/core";
 import { buildLinkedInUrl } from "@lhremote/core";
 import { registerBuildLinkedInUrl } from "./build-linkedin-url.js";
 import { createMockServer } from "./testing/mock-server.js";
@@ -38,8 +39,16 @@ function extractText(result: unknown): string {
 }
 
 describe("registerBuildLinkedInUrl", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeEach(async () => {
+    // `resetAllMocks`, not `clearAllMocks`: this file carries a file-wide
+    // module mock, and `clear` keeps implementations -- including an unconsumed
+    // `mockImplementationOnce`, which would then leak into the next test.
+    // `reset` drains that queue but also wipes the delegation the mock factory
+    // installed, so the baseline is re-established here rather than assumed.
+    vi.resetAllMocks();
+    const actual =
+      await vi.importActual<typeof import("@lhremote/core")>("@lhremote/core");
+    vi.mocked(core.buildLinkedInUrl).mockImplementation(actual.buildLinkedInUrl);
   });
 
   it("registers a tool named build-linkedin-url", () => {
