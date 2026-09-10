@@ -148,9 +148,10 @@ describe("startInstanceWithRecovery", () => {
     // path's only timed wait: waitForInstancePort and waitForInstanceTargets
     // each return on their first poll, so neither reaches its own delay().
     // The 2_000 is transcribed rather than imported, because the constant is
-    // module-private. If it grows past the advance below nothing fails here —
-    // shouldAdvanceTime pays the remainder in real time, so the test slows
-    // instead — so re-check the pair by hand rather than trusting it.
+    // module-private. If it grows past the advance below, shouldAdvanceTime
+    // pays the remainder in real time — a small overrun slow-passes, a large
+    // one trips the per-test budget — so re-check the pair by hand rather
+    // than trusting it.
     await vi.advanceTimersByTimeAsync(10_000);
     const result = await resultPromise;
 
